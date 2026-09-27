@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Minders member portal">
+  <title>Member Portal | Minders</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="member">
+  <header class="site-header app-header">
+    <a class="brand" href="index.html"><span class="brand-mark">M</span><span>Minders</span></a>
+    <nav class="top-nav" aria-label="Primary navigation"><a class="active" href="member.html">Member portal</a><a href="manager.html">Manager</a><a href="admin.html">Admin</a></nav>
+    <a class="header-user" href="login.html"><span class="avatar avatar-teal">JD</span><span>Jordan Davis</span></a>
+  </header>
+
+  <main class="app-shell member-shell">
+    <section class="page-intro"><div><p class="eyebrow">MEMBER PORTAL / GOOD MORNING</p><h1>Let's get the next job moving.</h1><p class="muted">Your equipment schedule and cooperative activity, all in one place.</p></div><a class="button button-outline" href="login.html#registration">+ Register for access</a></section>
+
+    <section class="dashboard-section" id="dashboard">
+      <div class="section-heading dashboard-heading"><div><p class="eyebrow">YOUR ACTIVITY / LIVE VIEW</p><h2>Rental dashboard</h2></div><span class="sync-label"><span class="status-dot"></span> Synced just now</span></div>
+      <div class="tabs" role="tablist" aria-label="Rental history tabs"><button class="tab active" role="tab" aria-selected="true" data-tab="active">Active <span>2</span></button><button class="tab" role="tab" aria-selected="false" data-tab="upcoming">Upcoming <span>3</span></button><button class="tab" role="tab" aria-selected="false" data-tab="past">Past history <span>12</span></button></div>
+      <div class="rental-list" id="rental-list"></div>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
