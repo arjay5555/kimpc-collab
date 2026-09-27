@@ -10,19 +10,75 @@
 <body data-page="member">
   <header class="site-header app-header">
     <a class="brand" href="index.html"><span class="brand-mark">M</span><span>Minders</span></a>
-    <nav class="top-nav" aria-label="Primary navigation"><a class="active" href="member.html">Member portal</a><a href="manager.html">Manager</a><a href="admin.html">Admin</a></nav>
-    <a class="header-user" href="login.html"><span class="avatar avatar-teal">JD</span><span>Jordan Davis</span></a>
+    <nav class="top-nav" aria-label="Primary navigation"><a class="active" href="member.html">Member portal</a></nav>
+    <button class="header-user profile-trigger" id="open-profile" type="button" aria-haspopup="dialog" aria-label="Open member profile"><span class="avatar avatar-teal" id="profile-avatar">JD</span><span id="header-member-name">Jordan Davis</span></button>
   </header>
 
   <main class="app-shell member-shell">
-    <section class="page-intro"><div><p class="eyebrow">MEMBER PORTAL / GOOD MORNING</p><h1>Let's get the next job moving.</h1><p class="muted">Your equipment schedule and cooperative activity, all in one place.</p></div><a class="button button-outline" href="login.html#registration">+ Register for access</a></section>
+    <section class="page-intro"><div><p class="eyebrow">MEMBER PORTAL / GOOD MORNING</p><h1>Let's get the next job moving.</h1><p class="muted">Your equipment schedule and cooperative activity, all in one place.</p></div><div class="page-intro-actions"><button class="button button-primary" id="open-application" type="button">Apply for equipment <span aria-hidden="true">&#8594;</span></button></div></section>
 
     <section class="dashboard-section" id="dashboard">
-      <div class="section-heading dashboard-heading"><div><p class="eyebrow">YOUR ACTIVITY / LIVE VIEW</p><h2>Rental dashboard</h2></div><span class="sync-label"><span class="status-dot"></span> Synced just now</span></div>
+      <div class="section-heading dashboard-heading"><div><p class="eyebrow">YOUR ACTIVITY / LIVE VIEW</p><h2>Rental dashboard</h2></div><div class="dashboard-actions"><a class="button button-outline" href="applications.html">Your applications</a><button class="button button-outline" id="toggle-available-equipment" type="button" aria-expanded="false" aria-controls="available-equipment">Available equipment</button><span class="sync-label"><span class="status-dot"></span> Synced just now</span></div></div>
       <div class="tabs" role="tablist" aria-label="Rental history tabs"><button class="tab active" role="tab" aria-selected="true" data-tab="active">Active <span>2</span></button><button class="tab" role="tab" aria-selected="false" data-tab="upcoming">Upcoming <span>3</span></button><button class="tab" role="tab" aria-selected="false" data-tab="past">Past history <span>12</span></button></div>
+      <section class="available-equipment" id="available-equipment" aria-label="Available equipment" hidden>
+        <div class="available-equipment-grid" id="available-equipment-grid"></div>
+      </section>
       <div class="rental-list" id="rental-list"></div>
     </section>
   </main>
+
+  <dialog class="application-dialog profile-dialog" id="profile-dialog" aria-labelledby="profile-title">
+    <form class="profile-form" id="profile-form">
+      <div class="profile-dialog-header">
+        <div><p class="eyebrow">MEMBER PROFILE</p><h2 id="profile-title">Personal information</h2></div>
+        <button class="application-close" type="button" id="close-profile" aria-label="Close profile">&times;</button>
+      </div>
+      <div class="profile-form-grid">
+        <label class="profile-field profile-span-two" for="profile-full-name">Full name<input id="profile-full-name" name="fullName" type="text" autocomplete="name" required></label>
+        <label class="profile-field profile-span-two" for="profile-email">Email address<input id="profile-email" name="email" type="email" autocomplete="email" required></label>
+        <label class="profile-field profile-span-two" for="profile-phone">Phone number<input id="profile-phone" name="phone" type="tel" autocomplete="tel" required></label>
+        <label class="profile-field profile-span-two" for="profile-address">Street address<input id="profile-address" name="address" type="text" autocomplete="address-line1" required></label>
+        <label class="profile-field profile-span-two" for="profile-address2">Address line 2<input id="profile-address2" name="address2" type="text" autocomplete="address-line2"></label>
+        <label class="profile-field" for="profile-city">City<input id="profile-city" name="city" type="text" autocomplete="address-level2" required></label>
+        <label class="profile-field" for="profile-region">State / Province<input id="profile-region" name="region" type="text" autocomplete="address-level1" required></label>
+        <label class="profile-field" for="profile-postal-code">Postal code<input id="profile-postal-code" name="postalCode" type="text" autocomplete="postal-code" required></label>
+        <label class="profile-field" for="profile-country">Country<input id="profile-country" name="country" type="text" autocomplete="country-name" required></label>
+      </div>
+      <p class="profile-note">Profile changes require email verification. Email delivery is not configured in this demo.</p>
+      <p class="form-feedback" id="profile-feedback" role="status" aria-live="polite"></p>
+      <div class="profile-actions"><button class="button button-outline" id="logout-button" type="button">Log out</button><button class="button button-primary" type="submit">Update profile <span aria-hidden="true">&#8594;</span></button></div>
+    </form>
+    <section class="profile-verification" id="profile-verification" hidden>
+      <p class="eyebrow">EMAIL VERIFICATION</p>
+      <h2>Confirm your profile update</h2>
+      <p class="muted small-copy">A verification request is prepared for <strong id="profile-verification-email"></strong>. This local demo cannot send email; confirm below to simulate verification and save your changes.</p>
+      <button class="button button-primary button-full" id="confirm-profile-update" type="button">Confirm email &amp; save profile</button>
+    </section>
+  </dialog>
+
+  <dialog class="application-dialog" id="application-dialog" aria-labelledby="application-title">
+    <form class="application-form" id="application-form">
+      <button class="application-close" type="button" id="close-application" aria-label="Close application">&times;</button>
+      <p class="eyebrow">EQUIPMENT REQUEST</p>
+      <h2 id="application-title">Apply for equipment</h2>
+      <label for="application-equipment">Equipment</label>
+      <select id="application-equipment" name="equipment" required>
+        <option value="">Choose equipment</option>
+        <option value="Precision Seeder">Precision Seeder</option>
+        <option value="Round Baler">Round Baler</option>
+        <option value="Irrigation System">Irrigation System</option>
+        <option value="Combine Harvester">Combine Harvester</option>
+        <option value="Field Tractor">Field Tractor</option>
+        <option value="Co-op Attachments">Co-op Attachments</option>
+      </select>
+      <label for="application-start">Start date</label>
+      <input id="application-start" name="startDate" type="date" required>
+      <label for="application-end">End date</label>
+      <input id="application-end" name="endDate" type="date" required>
+      <p class="form-feedback" id="application-feedback" role="status" aria-live="polite"></p>
+      <button class="button button-primary button-full" type="submit">Submit request <span aria-hidden="true">&#8594;</span></button>
+    </form>
+  </dialog>
 
   <script src="script.js"></script>
 </body>

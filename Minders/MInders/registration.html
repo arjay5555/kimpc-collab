@@ -21,7 +21,7 @@
       <p class="eyebrow">MEMBER PORTAL / GET STARTED</p>
       <h1>Start moving<br><em>forward.</em></h1>
       <p class="hero-description">Register your details and we will connect you with your cooperative.</p>
-      <div class="auth-trust"><span class="status-dot"></span><span>Your information is protected with secure two-step verification.</span></div>
+      <div class="auth-trust"><span class="status-dot"></span><span>Verify your email to activate your member account.</span></div>
     </section>
 
     <!-- New member registration form -->
@@ -31,13 +31,27 @@
       <form id="registration-form" class="stack-form">
         <label for="full-name">Full name</label>
         <input id="full-name" name="fullName" type="text" autocomplete="name" placeholder="e.g. Jordan Davis" required>
-        <label for="phone-number">Phone number</label>
-        <input id="phone-number" name="phone" type="tel" autocomplete="tel" pattern="[0-9+() .\-]{7,}" placeholder="e.g. +1 555 010 2026" required>
+        <label for="member-email">Email address</label>
+        <input id="member-email" name="email" type="email" autocomplete="email" placeholder="e.g. jordan@example.com" required>
+        <label for="confirm-email">Confirm email address</label>
+        <input id="confirm-email" name="confirmEmail" type="email" autocomplete="email" placeholder="Repeat your email address" required>
+        <label for="member-password">Create password</label>
+        <input id="member-password" name="password" type="password" autocomplete="new-password" minlength="6" placeholder="At least 6 characters" required>
+        <label for="confirm-password">Confirm password</label>
+        <input id="confirm-password" name="confirmPassword" type="password" autocomplete="new-password" minlength="6" placeholder="Repeat your password" required>
         <label for="cooperative-id">Cooperative ID number</label>
-        <input id="cooperative-id" name="cooperativeId" type="text" pattern="[A-Za-z0-9\-]{4,}" placeholder="e.g. GRN-2048" required>
+        <input id="cooperative-id" name="cooperativeId" type="text" readonly aria-describedby="cooperative-id-note">
+        <small class="field-note" id="cooperative-id-note">Generated automatically when your registration is submitted.</small>
         <button class="button button-primary button-full" type="submit">Continue registration <span aria-hidden="true">&#8594;</span></button>
         <p class="form-feedback" id="registration-feedback" role="status"></p>
       </form>
+      <div class="verification-panel" id="verification-panel" hidden>
+        <p class="section-label">EMAIL VERIFICATION</p>
+        <h3>Confirm your account</h3>
+        <p class="muted small-copy">We prepared a verification message for <strong id="verification-email"></strong>. Confirm your email to activate the account and continue to login.</p>
+        <button class="button button-dark button-full" id="confirm-email-button" type="button">Confirm email and activate account</button>
+        <p class="form-feedback" id="verification-feedback" role="status"></p>
+      </div>
     </section>
   </main>
 
