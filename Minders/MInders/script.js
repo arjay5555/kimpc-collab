@@ -16,8 +16,8 @@ const issueLogs = [
 // Member dashboard rental data grouped by status tab.
 const rentalData = {
   active: [
-    { equipment: "John Deere 5075E", kind: "Tractor", dates: "Sep 20 - Sep 23", location: "North field", status: "Active", statusClass: "status-active", icon: "JD" },
-    { equipment: "Kuhn Disc Mower", kind: "Mower", dates: "Sep 21 - Sep 22", location: "South shed", status: "Active", statusClass: "status-active", icon: "KM" }
+    { equipment: "John Deere 5075E", kind: "Tractor", operator: "Marcus Lee", dates: "Sep 20 - Sep 23", location: "North field", status: "Active", statusClass: "status-active", icon: "JD" },
+    { equipment: "Kuhn Disc Mower", kind: "Mower", operator: "Riley Cole", dates: "Sep 21 - Sep 22", location: "South field", status: "Active", statusClass: "status-active", icon: "KM" }
   ],
   upcoming: [
     { equipment: "New Holland Baler", kind: "Baler", dates: "Sep 27 - Sep 29", location: "East field", status: "Upcoming", statusClass: "status-upcoming", icon: "NH" },
@@ -238,9 +238,9 @@ function initMemberPage() {
   const renderRentals = (tabName) => {
     list.innerHTML = rentalData[tabName].map((rental) => `
       <article class="rental-card">
-        <div class="rental-equipment"><span class="equipment-icon">${rental.icon}</span><div><strong>${rental.equipment}</strong><small>${rental.kind}</small></div></div>
+        <div class="rental-equipment"><span class="equipment-icon">${rental.icon}</span><div><strong>${rental.equipment}</strong><small>${rental.kind}</small>${rental.operator ? `<small>Operator: ${rental.operator}</small>` : ""}</div></div>
         <div class="date-detail"><small>Rental dates</small><strong>${rental.dates}</strong></div>
-        <div class="date-detail"><small>Pickup location</small><strong>${rental.location}</strong></div>
+        <div class="date-detail"><small>Service location</small><strong>${rental.location}</strong></div>
         <span class="status-badge ${rental.statusClass}">${rental.status}</span>
       </article>`).join("");
   };
@@ -354,7 +354,7 @@ function initLoginPage() {
     document.querySelector("#login-form-eyebrow").textContent = `${roleName.toUpperCase()} ACCESS`;
     document.querySelector("#login-title").textContent = `Sign in to ${roleName} Dashboard`;
     document.querySelector("#login-registration-divider").hidden = true;
-    document.querySelector("#create-member-account").hidden = true;
+      document.querySelector("#create-member-account").hidden = true;
   }
 
   const loginForm = document.querySelector("#member-login-form");

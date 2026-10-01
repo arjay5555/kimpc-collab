@@ -76,6 +76,7 @@ h2 { font-size: clamp(1.3rem, 2vw, 1.8rem); margin-bottom: 0; }
 .page-intro-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
 .application-dialog { border: 0; border-radius: 10px; box-shadow: 0 20px 80px rgba(0,0,0,.2); max-width: 440px; padding: 30px; width: calc(100% - 32px); }
 .application-dialog::backdrop { background: rgba(13,31,29,.5); }
+.booking-note { font-size: .78rem; margin: -8px 0 20px; }
 .application-form { display: grid; gap: 9px; }
 .application-form .eyebrow { margin: 0 0 2px; }
 .application-form h2 { margin: 0 32px 12px 0; }

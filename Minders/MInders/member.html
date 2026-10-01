@@ -15,7 +15,7 @@
   </header>
 
   <main class="app-shell member-shell">
-    <section class="page-intro"><div><p class="eyebrow">MEMBER PORTAL / GOOD MORNING</p><h1>Let's get the next job moving.</h1><p class="muted">Your equipment schedule and cooperative activity, all in one place.</p></div><div class="page-intro-actions"><button class="button button-primary" id="open-application" type="button">Apply for equipment <span aria-hidden="true">&#8594;</span></button></div></section>
+    <section class="page-intro"><div><p class="eyebrow">MEMBER PORTAL / GOOD MORNING</p><h1>Let's get the next job moving.</h1><p class="muted">Your equipment schedule and cooperative activity, all in one place.</p></div><div class="page-intro-actions"><button class="button button-primary" id="open-application" type="button">Book equipment <span aria-hidden="true">&#8594;</span></button></div></section>
 
     <section class="dashboard-section" id="dashboard">
       <div class="section-heading dashboard-heading"><div><p class="eyebrow">YOUR ACTIVITY / LIVE VIEW</p><h2>Rental dashboard</h2></div><div class="dashboard-actions"><a class="button button-outline" href="applications.html">Your applications</a><button class="button button-outline" id="toggle-available-equipment" type="button" aria-expanded="false" aria-controls="available-equipment">Available equipment</button><span class="sync-label"><span class="status-dot"></span> Synced just now</span></div></div>
@@ -59,8 +59,9 @@
   <dialog class="application-dialog" id="application-dialog" aria-labelledby="application-title">
     <form class="application-form" id="application-form">
       <button class="application-close" type="button" id="close-application" aria-label="Close application">&times;</button>
-      <p class="eyebrow">EQUIPMENT REQUEST</p>
-      <h2 id="application-title">Apply for equipment</h2>
+      <p class="eyebrow">EQUIPMENT BOOKING</p>
+      <h2 id="application-title">Book equipment</h2>
+      <p class="muted booking-note">A company operator will deliver the equipment and operate it at your field.</p>
       <label for="application-equipment">Equipment</label>
       <select id="application-equipment" name="equipment" required>
         <option value="">Choose equipment</option>
@@ -76,7 +77,7 @@
       <label for="application-end">End date</label>
       <input id="application-end" name="endDate" type="date" required>
       <p class="form-feedback" id="application-feedback" role="status" aria-live="polite"></p>
-      <button class="button button-primary button-full" type="submit">Submit request <span aria-hidden="true">&#8594;</span></button>
+      <button class="button button-primary button-full" type="submit">Book equipment <span aria-hidden="true">&#8594;</span></button>
     </form>
   </dialog>
 
