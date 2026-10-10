@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="Minders cooperative manager portal"><title>Manager Portal | Minders</title><link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="manager">
+  <header class="site-header app-header"><a class="brand" href="index.html"><span class="brand-mark">M</span><span>Minders</span></a><nav class="top-nav" aria-label="Primary navigation"><a class="active" href="manager.html">Manager portal</a></nav><a class="header-user" href="#"><span class="avatar avatar-orange" id="manager-user-avatar">AM</span><span id="manager-user-name">Alex Morgan</span></a></header>
+  <main class="app-shell">
+    <section class="page-intro"><div><p class="eyebrow" id="manager-page-eyebrow">MANAGER PORTAL / GREEN VALLEY CO-OP</p><h1 id="manager-page-title">Good morning, Alex.</h1><p class="muted" id="manager-page-description">Here is what needs your attention across the cooperative.</p></div><div class="date-chip"><span class="status-dot"></span> Tuesday, September 22</div></section>
+    <div class="coverage-banner" id="admin-coverage-banner" role="status" hidden><span class="status-dot"></span><p><strong>Admin coverage active</strong><span>You are reviewing and deciding applications on behalf of the manager.</span></p><a class="text-link" href="admin.html">Return to admin dashboard &#8594;</a></div>
+    <section class="summary-strip"><div><span class="summary-label">Open requests</span><strong id="pending-count">4</strong><span class="summary-change">Need review</span></div><div><span class="summary-label">Active rentals</span><strong>18</strong><span class="summary-change positive">+3 this week</span></div><div><span class="summary-label">Field issues</span><strong>3</strong><span class="summary-change warning">2 high priority</span></div></section>
+    <section class="surface section-block" id="approvals"><div class="section-heading"><div><p class="section-label">CM-005 / CM-006</p><h2>Booking approvals</h2></div><span class="table-note">4 requests in queue</span></div><div class="table-wrap"><table><thead><tr><th>Member</th><th>Equipment</th><th>Requested dates</th><th>Submitted</th><th>Status</th><th class="align-right">Action</th></tr></thead><tbody id="approval-table"></tbody></table></div></section>
+    <section class="surface section-block"><div class="section-heading"><div><p class="section-label">CM-004 / FIELD PULSE</p><h2>Issues needing attention</h2></div><a class="text-link" href="#issues">View all issues &#8594;</a></div><div class="issue-grid" id="manager-issues"></div></section>
+  </main>
+  <script src="script.js"></script>
+</body>
+</html>

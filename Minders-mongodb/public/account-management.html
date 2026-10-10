@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Manage Minders member and staff accounts">
+  <title>Account Management | Minders</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="account-management">
+  <header class="site-header app-header">
+    <a class="brand" href="index.html"><span class="brand-mark">M</span><span>Minders</span></a>
+    <nav class="top-nav" aria-label="Primary navigation"><a href="admin.html">Admin portal</a><a href="manager.html">Manager</a></nav>
+    <a class="header-user" href="admin.html"><span class="avatar avatar-purple">SA</span><span>System admin</span></a>
+  </header>
+  <main class="app-shell admin-shell">
+    <section class="page-intro">
+      <div><p class="eyebrow">ADMIN PORTAL / STAFF AND MEMBERS</p><h1>Account management</h1><p class="muted">Create staff access and review registered application accounts.</p></div>
+      <a class="button button-outline" href="admin.html"><span aria-hidden="true">&#8592;</span> Back to admin</a>
+    </section>
+    <div class="account-management-layout">
+      <section class="surface account-management-surface">
+        <div class="section-heading"><div><p class="section-label">STAFF ACCESS</p><h2>Create staff account</h2></div></div>
+        <p class="section-intro">Create a manager or admin sign-in.</p>
+        <form class="stack-form staff-account-form" id="staff-account-form">
+          <label for="staff-full-name">Full name</label>
+          <input id="staff-full-name" name="fullName" type="text" autocomplete="name" required>
+          <label for="staff-email">Email address</label>
+          <input id="staff-email" name="email" type="email" autocomplete="email" required>
+          <label for="staff-password">Temporary password</label>
+          <input id="staff-password" name="password" type="password" autocomplete="new-password" minlength="6" required>
+          <label for="staff-role">Account role</label>
+          <select id="staff-role" name="role" required>
+            <option value="manager">Manager</option>
+            <option value="admin">Admin</option>
+          </select>
+          <button class="button button-primary button-full" type="submit">Create account <span aria-hidden="true">&#8594;</span></button>
+          <p class="form-feedback" id="account-feedback" role="status" aria-live="polite"></p>
+        </form>
+        <p class="delete-note">Staff accounts are marked verified when created by an admin.</p>
+      </section>
+      <section class="surface account-management-surface">
+        <div class="section-heading"><div><p class="section-label">ACCOUNT DIRECTORY</p><h2>Registered accounts</h2></div></div>
+        <p class="section-intro">Members who registered and staff accounts created by an admin.</p>
+        <div class="table-wrap">
+          <table class="account-directory">
+            <thead><tr><th>Name / ID</th><th>Email</th><th>Role</th><th>Status</th><th>Created</th><th>Action</th></tr></thead>
+            <tbody id="account-list"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+  <script src="script.js"></script>
+</body>
+</html>
