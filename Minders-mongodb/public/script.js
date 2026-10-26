@@ -1408,14 +1408,11 @@ async function initManagerPage() {
   const machineryPreviewImg = document.querySelector("#machinery-modal-preview-img");
   const machineryPreviewPh = document.querySelector("#machinery-modal-preview-ph");
 
-  const machineryPresets = {
-    tractor: "https://images.unsplash.com/photo-1592982537447-7440770cbfc9?auto=format&fit=crop&w=700&q=80",
-    harvester: "https://images.unsplash.com/photo-1595246140625-573b715d11dc?auto=format&fit=crop&w=700&q=80",
-    baler: "https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&w=700&q=80",
-    rake: "https://images.unsplash.com/photo-1589923188900-85dae523342b?auto=format&fit=crop&w=700&q=80",
-    sprayer: "https://images.unsplash.com/photo-1530267981375-f0de937f5f13?auto=format&fit=crop&w=700&q=80",
-    truck: "https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?auto=format&fit=crop&w=700&q=80"
-  };
+  const machineryImgFileInput = document.querySelector("#machinery-image-file");
+  const machineryImgFilename = document.querySelector("#machinery-image-filename");
+  const categorySelect = document.querySelector("#machinery-category");
+  const categoryOtherWrap = document.querySelector("#machinery-category-other-wrap");
+  const categoryOtherInput = document.querySelector("#machinery-category-other");
 
   function updateModalImgPreview(url) {
     if (url && url.trim().length > 5) {
@@ -1437,14 +1434,29 @@ async function initManagerPage() {
     updateModalImgPreview(e.target.value);
   });
 
-  document.querySelectorAll(".preset-img-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const presetKey = btn.dataset.preset;
-      if (machineryPresets[presetKey] && machineryImgUrlInput) {
-        machineryImgUrlInput.value = machineryPresets[presetKey];
-        updateModalImgPreview(machineryPresets[presetKey]);
-      }
-    });
+  // Local File Upload with Immediate Base64 Data URL Preview
+  machineryImgFileInput?.addEventListener("change", (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (machineryImgFilename) machineryImgFilename.textContent = `Selected: ${file.name}`;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const base64 = ev.target.result;
+      if (machineryImgUrlInput) machineryImgUrlInput.value = base64;
+      updateModalImgPreview(base64);
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // Category "Other" Dynamic Input Field Toggle
+  categorySelect?.addEventListener("change", () => {
+    if (categorySelect.value === "Other") {
+      if (categoryOtherWrap) categoryOtherWrap.style.display = "block";
+      categoryOtherInput?.focus();
+    } else {
+      if (categoryOtherWrap) categoryOtherWrap.style.display = "none";
+      if (categoryOtherInput) categoryOtherInput.value = "";
+    }
   });
 
   const updateMachineryStats = () => {
@@ -1689,9 +1701,20 @@ async function initManagerPage() {
         if (el) el.value = val !== undefined && val !== null ? val : "";
       };
 
+      const standardCats = ["Tractor", "Harvester", "Baler", "Planter / Seeder", "Sprayer", "Mower / Rake", "Transport / Truck"];
+      const catVal = unit.category || "Tractor";
+      if (standardCats.includes(catVal)) {
+        setVal("#machinery-category", catVal);
+        if (categoryOtherWrap) categoryOtherWrap.style.display = "none";
+        if (categoryOtherInput) categoryOtherInput.value = "";
+      } else {
+        setVal("#machinery-category", "Other");
+        if (categoryOtherWrap) categoryOtherWrap.style.display = "block";
+        if (categoryOtherInput) categoryOtherInput.value = catVal === "Other" ? "" : catVal;
+      }
+
       setVal("#machinery-unit-id", unit.unitId);
       setVal("#machinery-name", unit.name);
-      setVal("#machinery-category", unit.category || "Tractor");
       setVal("#machinery-status", unit.status || "Available");
       setVal("#machinery-driver", unit.assignedDriver || "Unassigned");
       setVal("#machinery-driver-phone", unit.driverPhone || "");
@@ -1703,6 +1726,8 @@ async function initManagerPage() {
       setVal("#machinery-hours", unit.operatingHours || 0);
       setVal("#machinery-notes", unit.conditionNotes || "");
 
+      if (machineryImgFileInput) machineryImgFileInput.value = "";
+      if (machineryImgFilename) machineryImgFilename.textContent = "";
       updateModalImgPreview(unit.imageUrl || "");
     } else {
       // Add mode
@@ -1717,10 +1742,14 @@ async function initManagerPage() {
       setVal("#machinery-unit-id", `UNIT-${Math.floor(1000 + Math.random() * 9000)}`);
       setVal("#machinery-status", "Available");
       setVal("#machinery-category", "Tractor");
+      if (categoryOtherWrap) categoryOtherWrap.style.display = "none";
+      if (categoryOtherInput) categoryOtherInput.value = "";
       setVal("#machinery-rate-day", 2800);
       setVal("#machinery-rate-hour", 450);
       setVal("#machinery-year", new Date().getFullYear());
       setVal("#machinery-driver", "Unassigned");
+      if (machineryImgFileInput) machineryImgFileInput.value = "";
+      if (machineryImgFilename) machineryImgFilename.textContent = "";
       updateModalImgPreview("");
     }
 
@@ -1764,10 +1793,14 @@ async function initManagerPage() {
     const mode = machineryFormModeInput?.value || "edit";
     const docId = machineryDocIdInput?.value;
 
+    const catSelectVal = document.querySelector("#machinery-category")?.value;
+    const catOtherVal = document.querySelector("#machinery-category-other")?.value?.trim();
+    const finalCategory = (catSelectVal === "Other" && catOtherVal) ? catOtherVal : (catSelectVal || "Other");
+
     const payload = {
       unitId: document.querySelector("#machinery-unit-id")?.value?.trim(),
       name: document.querySelector("#machinery-name")?.value?.trim(),
-      category: document.querySelector("#machinery-category")?.value,
+      category: finalCategory,
       status: document.querySelector("#machinery-status")?.value,
       assignedDriver: document.querySelector("#machinery-driver")?.value?.trim() || "Unassigned",
       driverPhone: document.querySelector("#machinery-driver-phone")?.value?.trim() || "",
