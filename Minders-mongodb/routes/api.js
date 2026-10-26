@@ -14,6 +14,10 @@ const { logAudit, logSystemEvent } = require("../services/auditLogger");
 const { sendDeleteOtpEmail } = require("../services/mailer");
 const authManager = require("../middleware/authManager");
 const { getMachineryUtilization } = require("../controllers/managerAnalyticsController");
+const {
+  syncBookingToGoogleCalendar,
+  syncMaintenanceToGoogleCalendar
+} = require("../services/googleCalendarService");
 
 const router = express.Router();
 
@@ -1665,6 +1669,13 @@ router.patch("/applications/:id", async (req, res) => {
   existing.status = newStatus;
   await existing.save();
 
+  // Push approved bookings to Google Calendar (try/catch safe)
+  if (newStatus === "Approved") {
+    syncBookingToGoogleCalendar(existing, req.user).catch((err) => {
+      console.warn("[GoogleCalendar] Background booking approval sync note:", err.message);
+    });
+  }
+
   // Use specific action constants for each status transition
   const actionMap = {
     Approved: "BOOKING_APPROVED",
@@ -1837,6 +1848,11 @@ router.post("/manager/machinery-maintenance", async (req, res) => {
     reason,
     assignedMechanic: clean(req.body.assignedMechanic) || "In-house Co-op Technician",
     loggedByManager: managerEmail
+  });
+
+  // Push maintenance schedule to Google Calendar (try/catch safe)
+  syncMaintenanceToGoogleCalendar(record, req.user).catch((err) => {
+    console.warn("[GoogleCalendar] Background maintenance sync note:", err.message);
   });
 
   await logAudit({

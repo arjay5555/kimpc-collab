@@ -1141,6 +1141,7 @@ async function initManagerPage() {
   const activeRentalsCountEl = document.querySelector("#active-rentals-count");
   const cashTotalEl = document.querySelector("#cash-intake-total");
   let loadMachineryUnits = null;
+  let loadManagerCalendar = null;
 
   // Field issues are loaded from the manager API below.
   const issuesEl = document.querySelector("#manager-issues");
@@ -1159,7 +1160,7 @@ async function initManagerPage() {
     "bookings": { label: "Bookings", selector: "#approvals" },
     "maintenance": { label: "Farm Machinery & Units", selector: "#maintenance" },
     "units": { label: "Farm Machinery & Units", selector: "#maintenance" },
-    "calendar": { label: "Calendar", selector: "#approvals" },
+    "calendar": { label: "Machinery Calendar & Google Sync", selector: "#calendar" },
     "clients": { label: "Clients", selector: "#analytics" },
     "drivers": { label: "Drivers", selector: "#approvals" },
     "financials": { label: "Financials", selector: "#pos-terminal" },
@@ -1193,6 +1194,11 @@ async function initManagerPage() {
       loadMachineryUnits();
     }
 
+    // Refresh calendar & sync status when navigating to calendar
+    if (targetKey === "calendar" && typeof loadManagerCalendar === "function") {
+      loadManagerCalendar();
+    }
+
     // Prevent scrolling down: stay pinned cleanly to top
     window.scrollTo({ top: 0, behavior: "instant" });
   }
@@ -1211,6 +1217,351 @@ async function initManagerPage() {
       }
     });
   });
+
+  // ================= 5. TWO-WAY GOOGLE CALENDAR & SCHEDULE SYNC =================
+  let calendarBookings = [];
+  let calendarMaintenance = [];
+  let calCurrentDate = new Date();
+  let calSelectedDayStr = null;
+
+  const googleBadgeEl = document.querySelector("#google-calendar-badge");
+  const btnConnectGoogle = document.querySelector("#btn-connect-google-calendar");
+  const btnSyncGoogle = document.querySelector("#btn-sync-google-calendar");
+  const btnDisconnectGoogle = document.querySelector("#btn-disconnect-google-calendar");
+  const calDaysContainer = document.querySelector("#manager-calendar-days");
+  const calMonthTitle = document.querySelector("#cal-month-title");
+  const calDetailList = document.querySelector("#calendar-detail-list");
+  const calDetailHeading = document.querySelector("#calendar-detail-heading");
+  const calEventCountBadge = document.querySelector("#calendar-event-count-badge");
+
+  const formatIsoDate = (d) => {
+    if (!d) return "";
+    const date = new Date(d);
+    if (isNaN(date.getTime())) return "";
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
+  const updateGoogleSyncStatus = async () => {
+    try {
+      const res = await api("/calendar/status");
+      const dotEl = document.querySelector("#google-badge-dot");
+      const textEl = document.querySelector("#google-badge-text");
+      if (res.ok && res.data && (res.data.connected || res.data.isConnected)) {
+        if (googleBadgeEl) googleBadgeEl.className = "google-sync-badge is-connected";
+        if (dotEl) dotEl.style.background = "#10b981";
+        if (textEl) textEl.textContent = `● Synced with Google Calendar (${res.data.email || "Primary"})`;
+        if (btnConnectGoogle) btnConnectGoogle.style.display = "none";
+        if (btnSyncGoogle) btnSyncGoogle.style.display = "inline-flex";
+        if (btnDisconnectGoogle) btnDisconnectGoogle.style.display = "inline";
+      } else {
+        if (googleBadgeEl) googleBadgeEl.className = "google-sync-badge is-disconnected";
+        if (dotEl) dotEl.style.background = "#dc2626";
+        if (textEl) textEl.textContent = "● Not connected to Google Calendar";
+        if (btnConnectGoogle) btnConnectGoogle.style.display = "inline-flex";
+        if (btnSyncGoogle) btnSyncGoogle.style.display = "none";
+        if (btnDisconnectGoogle) btnDisconnectGoogle.style.display = "none";
+      }
+    } catch (err) {
+      console.warn("Failed to check Google Calendar status:", err);
+    }
+  };
+
+  const handleCalendarUrlParams = () => {
+    const params = new URLSearchParams(window.location.search);
+    const googleStatus = params.get("google");
+    if (!googleStatus) return;
+
+    if (googleStatus === "connected") {
+      setFeedback(pageFeedback, "✓ Google Calendar connected successfully! Bookings and maintenance are now in two-way sync.");
+    } else if (googleStatus === "denied") {
+      setFeedback(pageFeedback, "Google Calendar authorization was cancelled.");
+    } else if (googleStatus === "error") {
+      const detail = params.get("message") || "Authentication failed.";
+      alert(`Google Calendar connection error: ${detail}`);
+    }
+
+    try {
+      const cleanUrl = window.location.pathname + window.location.hash;
+      window.history.replaceState({}, document.title, cleanUrl);
+    } catch (_) {}
+  };
+
+  if (btnConnectGoogle) {
+    btnConnectGoogle.addEventListener("click", () => {
+      window.location.href = "/api/calendar/connect";
+    });
+  }
+
+  if (btnSyncGoogle) {
+    btnSyncGoogle.addEventListener("click", async () => {
+      const origText = btnSyncGoogle.innerHTML;
+      btnSyncGoogle.innerHTML = "<span>Syncing...</span>";
+      btnSyncGoogle.disabled = true;
+
+      try {
+        const res = await api("/calendar/sync-now", { method: "POST" });
+        if (res.ok) {
+          setFeedback(pageFeedback, `✓ Synced with Google Calendar (${res.data.syncedBookings || 0} bookings, ${res.data.syncedMaintenance || 0} maintenance).`);
+          if (typeof loadManagerCalendar === "function") loadManagerCalendar();
+        } else {
+          alert(res.data.error || "Sync failed.");
+        }
+      } catch (err) {
+        alert("Failed to sync with Google Calendar: " + err.message);
+      } finally {
+        btnSyncGoogle.innerHTML = origText;
+        btnSyncGoogle.disabled = false;
+      }
+    });
+  }
+
+  if (btnDisconnectGoogle) {
+    btnDisconnectGoogle.addEventListener("click", async () => {
+      if (!confirm("Are you sure you want to disconnect Google Calendar synchronization?")) return;
+      try {
+        const res = await api("/calendar/disconnect", { method: "POST" });
+        if (res.ok) {
+          setFeedback(pageFeedback, "Google Calendar has been disconnected.");
+          updateGoogleSyncStatus();
+        } else {
+          alert(res.data.error || "Disconnect failed.");
+        }
+      } catch (err) {
+        alert("Disconnect error: " + err.message);
+      }
+    });
+  }
+
+  document.querySelector("#cal-prev-btn")?.addEventListener("click", () => {
+    calCurrentDate.setMonth(calCurrentDate.getMonth() - 1);
+    renderCalendarGrid();
+  });
+
+  document.querySelector("#cal-next-btn")?.addEventListener("click", () => {
+    calCurrentDate.setMonth(calCurrentDate.getMonth() + 1);
+    renderCalendarGrid();
+  });
+
+  document.querySelector("#cal-today-btn")?.addEventListener("click", () => {
+    calCurrentDate = new Date();
+    calSelectedDayStr = null;
+    renderCalendarGrid();
+    renderCalendarDetailList();
+  });
+
+  const renderCalendarGrid = () => {
+    if (!calDaysContainer) return;
+
+    const year = calCurrentDate.getFullYear();
+    const month = calCurrentDate.getMonth();
+
+    if (calMonthTitle) {
+      calMonthTitle.textContent = calCurrentDate.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+    }
+
+    const firstDayIndex = new Date(year, month, 1).getDay();
+    const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
+    const prevMonthDays = new Date(year, month, 0).getDate();
+    const todayStr = formatIsoDate(new Date());
+
+    let html = "";
+
+    for (let i = firstDayIndex - 1; i >= 0; i--) {
+      const dayNum = prevMonthDays - i;
+      const d = new Date(year, month - 1, dayNum);
+      const isoStr = formatIsoDate(d);
+      html += renderDayCell(dayNum, isoStr, true, todayStr);
+    }
+
+    for (let dayNum = 1; dayNum <= totalDaysInMonth; dayNum++) {
+      const d = new Date(year, month, dayNum);
+      const isoStr = formatIsoDate(d);
+      html += renderDayCell(dayNum, isoStr, false, todayStr);
+    }
+
+    const currentCells = firstDayIndex + totalDaysInMonth;
+    const remainingCells = currentCells % 7 === 0 ? 0 : 7 - (currentCells % 7);
+    for (let dayNum = 1; dayNum <= remainingCells; dayNum++) {
+      const d = new Date(year, month + 1, dayNum);
+      const isoStr = formatIsoDate(d);
+      html += renderDayCell(dayNum, isoStr, true, todayStr);
+    }
+
+    calDaysContainer.innerHTML = html;
+
+    calDaysContainer.querySelectorAll(".cal-day-cell").forEach((cell) => {
+      cell.addEventListener("click", () => {
+        calDaysContainer.querySelectorAll(".cal-day-cell").forEach((c) => c.style.outline = "none");
+        cell.style.outline = "2px solid #0d766e";
+        calSelectedDayStr = cell.dataset.date;
+        renderCalendarDetailList(calSelectedDayStr);
+      });
+    });
+  };
+
+  const renderDayCell = (dayNum, isoStr, isOtherMonth, todayStr) => {
+    const isToday = isoStr === todayStr;
+    const classes = ["cal-day-cell"];
+    if (isOtherMonth) classes.push("is-other-month");
+    if (isToday) classes.push("is-today");
+
+    const dayBookings = calendarBookings.filter((b) => {
+      const start = formatIsoDate(b.startDate);
+      const end = formatIsoDate(b.endDate) || start;
+      const st = (b.status || "").toLowerCase();
+      if (st === "rejected" || st === "cancelled") return false;
+      return start <= isoStr && isoStr <= end;
+    });
+
+    const dayMaintenance = calendarMaintenance.filter((m) => {
+      const start = formatIsoDate(m.startDate);
+      const end = formatIsoDate(m.endDate) || start;
+      return start <= isoStr && isoStr <= end;
+    });
+
+    const allEventsCount = dayBookings.length + dayMaintenance.length;
+    let chipsHtml = "";
+    const maxChips = 2;
+    let displayed = 0;
+
+    dayBookings.forEach((b) => {
+      if (displayed < maxChips) {
+        const equipName = b.equipment || "Equipment";
+        const farmer = b.memberName ? ` (${b.memberName})` : "";
+        chipsHtml += `<div class="cal-chip cal-chip-rental" title="${escapeHtml(equipName + farmer)}">🚜 ${escapeHtml(equipName)}</div>`;
+        displayed++;
+      }
+    });
+
+    dayMaintenance.forEach((m) => {
+      if (displayed < maxChips) {
+        const name = m.equipmentName || m.equipmentUnitId || "Maintenance";
+        chipsHtml += `<div class="cal-chip cal-chip-maintenance" title="${escapeHtml(name + ' - ' + (m.maintenanceType || 'Service'))}">🔧 ${escapeHtml(name)}</div>`;
+        displayed++;
+      }
+    });
+
+    if (allEventsCount > maxChips) {
+      chipsHtml += `<span style="font-size:0.65rem; color:#64748b; font-weight:700; padding:1px 4px;">+${allEventsCount - maxChips} more</span>`;
+    }
+
+    return `
+      <div class="${classes.join(" ")}" data-date="${isoStr}">
+        <span class="cal-day-num">${dayNum}</span>
+        <div style="display:flex; flex-direction:column; gap:2px; margin-top:2px;">
+          ${chipsHtml}
+        </div>
+      </div>
+    `;
+  };
+
+  const renderCalendarDetailList = (filterDate = null) => {
+    if (!calDetailList) return;
+
+    let filteredBookings = calendarBookings.filter((b) => {
+      const st = (b.status || "").toLowerCase();
+      return st !== "rejected" && st !== "cancelled";
+    });
+    let filteredMaint = calendarMaintenance;
+
+    if (filterDate) {
+      if (calDetailHeading) calDetailHeading.textContent = `Schedule for ${new Date(filterDate + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric", year: "numeric" })}`;
+      filteredBookings = filteredBookings.filter((b) => {
+        const s = formatIsoDate(b.startDate);
+        const e = formatIsoDate(b.endDate) || s;
+        return s <= filterDate && filterDate <= e;
+      });
+      filteredMaint = filteredMaint.filter((m) => {
+        const s = formatIsoDate(m.startDate);
+        const e = formatIsoDate(m.endDate) || s;
+        return s <= filterDate && filterDate <= e;
+      });
+    } else {
+      if (calDetailHeading) calDetailHeading.textContent = "Active Schedules & Dispatches (All Upcoming)";
+    }
+
+    const totalCount = filteredBookings.length + filteredMaint.length;
+    if (calEventCountBadge) calEventCountBadge.textContent = `${totalCount} event${totalCount === 1 ? "" : "s"}`;
+
+    if (totalCount === 0) {
+      calDetailList.innerHTML = `<p style="margin:0; font-size:0.78rem; color:#64748b; padding:12px; text-align:center;">No rental bookings or maintenance events scheduled for this period.</p>`;
+      return;
+    }
+
+    let itemsHtml = "";
+
+    filteredBookings.forEach((b) => {
+      const dates = formatApplicationDates(b.startDate, b.endDate);
+      const isGoogleSynced = Boolean(b.googleCalendarEventId);
+      itemsHtml += `
+        <div class="cal-detail-item" style="border-left-color: #10b981;">
+          <div style="flex:1;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:0.78rem; font-weight:800; color:#0f172a;">🚜 ${escapeHtml(b.equipment || "Farm Machinery")}</span>
+              <span class="status-badge ${b.status === "Approved" ? "status-approved" : "status-active"}" style="font-size:0.68rem; padding:2px 7px;">${escapeHtml(b.status || "Approved")}</span>
+              ${isGoogleSynced ? '<span style="font-size:0.68rem; color:#0d766e; font-weight:700;">✓ Synced to Google</span>' : ''}
+            </div>
+            <div style="font-size:0.75rem; color:#475569; margin-top:3px;">
+              Member: <strong>${escapeHtml(b.memberName || "Member")}</strong> (${escapeHtml(b.memberEmail || "")}) &bull; Dates: <strong>${dates}</strong>
+            </div>
+          </div>
+          <div style="font-size:0.72rem; color:#64748b; text-align:right;">
+            Booking ID: <strong class="font-mono text-slate-800">${escapeHtml(b.displayId || String(b._id || b.id).slice(-6).toUpperCase())}</strong>
+          </div>
+        </div>
+      `;
+    });
+
+    filteredMaint.forEach((m) => {
+      const isGoogleSynced = Boolean(m.googleCalendarEventId);
+      itemsHtml += `
+        <div class="cal-detail-item" style="border-left-color: #ef4444;">
+          <div style="flex:1;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:0.78rem; font-weight:800; color:#b91c1c;">🔧 ${escapeHtml(m.equipmentName || "Machinery Unit")}</span>
+              <span class="status-badge status-rejected" style="font-size:0.68rem; padding:2px 7px;">${escapeHtml(m.maintenanceType || "Maintenance")}</span>
+              ${isGoogleSynced ? '<span style="font-size:0.68rem; color:#0d766e; font-weight:700;">✓ Synced to Google</span>' : ''}
+            </div>
+            <div style="font-size:0.75rem; color:#475569; margin-top:3px;">
+              Unit: <strong>${escapeHtml(m.equipmentUnitId)}</strong> &bull; Period: <strong>${m.startDate} &rarr; ${m.endDate}</strong> &bull; Reason: ${escapeHtml(m.reason || "Scheduled inspection")}
+            </div>
+          </div>
+          <div style="font-size:0.72rem; color:#64748b; text-align:right;">
+            Status: <strong style="color:#ef4444;">Out of Service</strong>
+          </div>
+        </div>
+      `;
+    });
+
+    calDetailList.innerHTML = itemsHtml;
+  };
+
+  loadManagerCalendar = async () => {
+    updateGoogleSyncStatus();
+
+    try {
+      const [appsRes, maintRes] = await Promise.all([
+        api("/applications"),
+        api("/manager/machinery-maintenance")
+      ]);
+
+      calendarBookings = (appsRes.ok && Array.isArray(appsRes.data)) ? appsRes.data : [];
+      calendarMaintenance = (maintRes.ok && Array.isArray(maintRes.data)) ? maintRes.data : [];
+    } catch (err) {
+      console.warn("Failed to load events for manager calendar:", err);
+    }
+
+    renderCalendarGrid();
+    renderCalendarDetailList(calSelectedDayStr);
+  };
+
+  // Immediate synchronous initial render of month grid & params check
+  renderCalendarGrid();
+  handleCalendarUrlParams();
+  updateGoogleSyncStatus();
 
   window.addEventListener("hashchange", () => {
     const hash = window.location.hash.replace(/^#/, "");

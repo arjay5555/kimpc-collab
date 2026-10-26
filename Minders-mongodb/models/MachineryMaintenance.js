@@ -50,7 +50,9 @@ const machineryMaintenanceSchema = new mongoose.Schema(
     loggedByManager: {
       type: String,
       default: "manager@minders.test"
-    }
+    },
+    // Google Calendar 2-Way Synchronization
+    googleCalendarEventId: { type: String, default: "", index: true }
   },
   { timestamps: true }
 );

@@ -42,7 +42,9 @@ const applicationSchema = new mongoose.Schema(
       refundAmount: { type: Number, default: 0 },
       paymentMethod: { type: String, default: "Cash" },
       isSettled: { type: Boolean, default: false }
-    }
+    },
+    // Google Calendar 2-Way Synchronization
+    googleCalendarEventId: { type: String, default: "", index: true }
   },
   {
     timestamps: true,

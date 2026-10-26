@@ -3,6 +3,7 @@ const Application = require("../models/Application");
 const MachineryMaintenance = require("../models/MachineryMaintenance");
 const MachineryUnit = require("../models/MachineryUnit");
 const { logAudit } = require("../services/auditLogger");
+const { syncBookingToGoogleCalendar } = require("../services/googleCalendarService");
 
 const ACTIVE_BOOKING_STATUSES = ["Pending", "Approved", "Checked-Out"];
 const RESERVED_BOOKING_STATUSES = ["Approved", "Checked-Out"];
@@ -207,6 +208,11 @@ async function approveBooking(req, res) {
   if (!approved) {
     return res.status(409).json({ error: "This booking request was updated by another manager. Refresh and try again." });
   }
+
+  // Two-way sync: Push approved booking event to Manager Google Calendar
+  syncBookingToGoogleCalendar(approved, req.user).catch((err) => {
+    console.warn("[GoogleCalendar] Booking approval sync error:", err.message);
+  });
 
   await logAudit({
     action: "BOOKING_APPROVED",

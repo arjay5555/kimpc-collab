@@ -37,7 +37,22 @@ const accountSchema = new mongoose.Schema(
     // One-Time Password (OTP) & Forgot Password recovery
     mustChangePassword: { type: Boolean, default: false },
     forgotPasswordRequested: { type: Boolean, default: false },
-    oneTimePasswordSetAt: { type: Date, default: null }
+    oneTimePasswordSetAt: { type: Date, default: null },
+    // Google Calendar OAuth & Synchronization credentials
+    googleOAuth: {
+      accessToken: { type: String, default: "" },
+      refreshToken: { type: String, default: "" },
+      calendarId: { type: String, default: "primary" },
+      channelId: { type: String, default: "", index: true },
+      resourceId: { type: String, default: "" },
+      channelExpiration: { type: Date, default: null },
+      connectedAt: { type: Date, default: null }
+    },
+    accessToken: { type: String, default: "" },
+    refreshToken: { type: String, default: "" },
+    calendarId: { type: String, default: "primary" },
+    channelId: { type: String, default: "", index: true },
+    resourceId: { type: String, default: "" }
   },
   {
     timestamps: true,
@@ -47,10 +62,19 @@ const accountSchema = new mongoose.Schema(
         ret.hasAdminPin = Boolean(ret.adminPinHash);
         ret.mustChangePassword = Boolean(ret.mustChangePassword);
         ret.forgotPasswordRequested = Boolean(ret.forgotPasswordRequested);
+        ret.hasGoogleCalendar = Boolean(
+          (ret.googleOAuth && ret.googleOAuth.refreshToken) || ret.refreshToken
+        );
         delete ret._id;
         delete ret.__v;
         delete ret.passwordHash; // never send password hashes to the browser
         delete ret.adminPinHash; // never send PIN hash to the browser
+        if (ret.googleOAuth) {
+          delete ret.googleOAuth.accessToken;
+          delete ret.googleOAuth.refreshToken;
+        }
+        delete ret.accessToken;
+        delete ret.refreshToken;
         return ret;
       }
     }

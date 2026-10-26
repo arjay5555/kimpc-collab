@@ -9,6 +9,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(express.json());
+app.use("/api/calendar", require("./routes/calendar"));
 app.use("/api/manager", authManager);
 app.use("/api/manager", require("./routes/manager"));
 app.use("/api", require("./routes/api"));

@@ -3295,3 +3295,133 @@ body[data-page="manager"] .manager-category-track span {
     font-size: 0.52rem;
   }
 }
+
+/* ==========================================================
+   MANAGER CALENDAR & GOOGLE SYNC STYLES
+   ========================================================== */
+.google-sync-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  transition: all 0.2s ease;
+}
+
+.google-sync-badge.is-connected {
+  background: #ecfdf5 !important;
+  border-color: #a7f3d0 !important;
+  color: #047857 !important;
+}
+
+.google-sync-badge.is-connected #google-badge-dot {
+  background: #10b981 !important;
+  box-shadow: 0 0 0 3px #d1fae5;
+}
+
+.google-sync-badge.is-disconnected {
+  background: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #64748b !important;
+}
+
+.google-sync-badge.is-disconnected #google-badge-dot {
+  background: #94a3b8 !important;
+}
+
+.cal-day-cell {
+  border-right: 1px solid #f1f5f9;
+  border-bottom: 1px solid #f1f5f9;
+  min-height: 85px;
+  padding: 6px 7px;
+  box-sizing: border-box;
+  background: #fff;
+  transition: background 0.12s ease;
+  position: relative;
+}
+
+.cal-day-cell:nth-child(7n) {
+  border-right: none;
+}
+
+.cal-day-cell.is-today {
+  background: #f0fdf4 !important;
+}
+
+.cal-day-cell.is-today .cal-date-num {
+  color: #047857;
+  font-weight: 800;
+}
+
+.cal-day-cell.is-other-month {
+  background: #fafafa;
+  opacity: 0.45;
+}
+
+.cal-day-cell.is-selected {
+  outline: 2px solid #0d766e;
+  outline-offset: -2px;
+}
+
+.cal-date-num {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.cal-chip {
+  font-size: 0.67rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-bottom: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  display: block;
+  text-decoration: none;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.cal-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+.cal-chip-rental {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.cal-chip-maintenance {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.cal-detail-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+
+.cal-detail-item .detail-meta {
+  font-size: 0.74rem;
+  color: #64748b;
+}
+
+.cal-detail-item .detail-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #0f172a;
+}
