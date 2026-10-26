@@ -60,7 +60,7 @@
             </a>
           </li>
           <li>
-            <a class="admin-nav-link" data-view="financials" href="#pos-terminal">
+            <a class="admin-nav-link" data-view="financials" href="#analytics">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><line x1="12" y1="6" x2="12" y2="8"/><line x1="12" y1="16" x2="12" y2="18"/></svg>
               <span>Financials</span>
               <svg class="m-nav-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
@@ -760,14 +760,168 @@
           </div>
         </section>
 
-        <!-- ================= SECTION 1: RENTAL OPERATIONS & INSPECTIONS ================= -->
+        <!-- ================= SECTION 1: RENTAL OPERATIONS, INSPECTIONS & POS ================= -->
         <section class="surface section-block manager-view-panel" id="approvals" style="display: none; margin-bottom: 28px; padding: 24px; border-radius: 12px; border: 1px solid #e2e8e4; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
           <div class="section-heading" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 18px;">
             <div>
               <h2 style="font-size: 1.25rem; font-weight: 800; margin: 0; color: #1a2926;">Incoming Farmer Bookings &amp; Handover Queue</h2>
-              <p style="font-size: 0.8rem; color: #64746f; margin: 4px 0 0;">Decide farmer applications and conduct physical condition inspections on check-out/check-in.</p>
+              <p style="font-size: 0.8rem; color: #64746f; margin: 4px 0 0;">Decide farmer applications, conduct physical inspections, or issue walk-in desk rentals.</p>
             </div>
-            <span class="table-note" style="font-size: 0.78rem; font-weight: 700; color: #64746f; background: #f1f5f9; padding: 4px 10px; border-radius: 6px;">0 requests in queue</span>
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <span class="table-note" style="font-size: 0.78rem; font-weight: 700; color: #64746f; background: #f1f5f9; padding: 6px 12px; border-radius: 6px;">0 requests in queue</span>
+              <button type="button" id="btn-toggle-pos" class="button button-primary" style="display: inline-flex; align-items: center; gap: 7px; background: #d97706; color: #fff; padding: 7px 15px; font-size: 0.8rem; font-weight: 700; border-radius: 6px; border: none; cursor: pointer; box-shadow: 0 1px 3px rgba(217,119,6,0.25);">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                <span id="btn-toggle-pos-text">+ Point of Sale (POS)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- ================= INTEGRATED POINT OF SALE (POS) & DEPOSIT SETTLEMENT ================= -->
+          <div id="pos-terminal-container" style="display: none; margin-bottom: 24px; padding: 22px; border-radius: 10px; background: #fffcf8; border: 1px solid #fed7aa; box-shadow: 0 2px 6px rgba(217,119,6,0.06);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid #fed7aa;">
+              <div>
+                <h3 style="font-size: 1.15rem; font-weight: 800; margin: 0; color: #9a3412;">Point of Sale (POS) &amp; Deposit Settlement</h3>
+                <p style="font-size: 0.78rem; color: #78350f; margin: 2px 0 0;">Bypass the online booking flow for walk-in farmers and calculate post-rental deposit deductions.</p>
+              </div>
+              <button type="button" id="btn-close-pos-panel" style="background: transparent; border: 1px solid #f97316; color: #9a3412; font-weight: 700; font-size: 0.78rem; padding: 5px 12px; border-radius: 6px; cursor: pointer;">
+                ✕ Close POS
+              </button>
+            </div>
+
+            <!-- POS Mode Selector Tabs -->
+            <div style="display: flex; gap: 8px; margin-bottom: 18px; border-bottom: 1px solid #fed7aa; padding-bottom: 10px;">
+              <button type="button" id="pos-tab-walkin" style="padding: 7px 15px; border-radius: 6px; font-weight: 700; font-size: 0.8rem; cursor: pointer; border: 1px solid #d97706; background: #fffbeb; color: #92400e;">
+                👤 Walk-in Farmer Booking
+              </button>
+              <button type="button" id="pos-tab-settlement" style="padding: 7px 15px; border-radius: 6px; font-weight: 700; font-size: 0.8rem; cursor: pointer; border: 1px solid #cbd5e1; background: transparent; color: var(--ink-soft);">
+                💰 Return Deposit Settlement &amp; Deductions
+              </button>
+            </div>
+
+            <!-- POS Panel 1: Walk-In Form -->
+            <div id="pos-walkin-panel">
+              <form id="pos-walkin-form" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
+                <div>
+                  <label for="pos-farmer-name" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Farmer Full Name *</label>
+                  <input id="pos-farmer-name" type="text" placeholder="e.g. Samuel K. Boro" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+                </div>
+                <div>
+                  <label for="pos-farmer-phone" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Contact Phone *</label>
+                  <input id="pos-farmer-phone" type="tel" placeholder="+63 912 345 6789" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+                </div>
+                <div>
+                  <label for="pos-coop-id" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Cooperative ID / Walk-In</label>
+                  <input id="pos-coop-id" type="text" placeholder="e.g. CM-042 or WALK-IN" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+                </div>
+
+                <div>
+                  <label for="pos-equipment-select" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Equipment Unit *</label>
+                  <select id="pos-equipment-select" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
+                    <option value="John Deere 5075E" data-rate="120">John Deere 5075E Tractor ($120/day)</option>
+                    <option value="Kuhn Disc Mower" data-rate="85">Kuhn Disc Mower ($85/day)</option>
+                    <option value="New Holland Baler" data-rate="150">New Holland Baler ($150/day)</option>
+                    <option value="Case IH Tractor" data-rate="135">Case IH Tractor ($135/day)</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="pos-start-date" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Rental Start Date *</label>
+                  <input id="pos-start-date" type="date" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+                </div>
+                <div>
+                  <label for="pos-end-date" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Rental End Date *</label>
+                  <input id="pos-end-date" type="date" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+                </div>
+
+                <div>
+                  <label for="pos-daily-rate" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Daily Rate ($)</label>
+                  <input id="pos-daily-rate" type="number" value="120" min="10" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+                </div>
+                <div>
+                  <label for="pos-deposit" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Security Deposit ($)</label>
+                  <input id="pos-deposit" type="number" value="250" min="0" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+                </div>
+                <div>
+                  <label for="pos-payment-method" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Payment Method</label>
+                  <select id="pos-payment-method" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
+                    <option value="Cash">Cash (Desk Payment)</option>
+                    <option value="Bank Transfer">Bank Transfer</option>
+                    <option value="Co-op Credit">Co-op Credit Line</option>
+                  </select>
+                </div>
+
+                <!-- Live Total Breakdown Card -->
+                <div style="grid-column: 1 / -1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: gap; gap: 14px;">
+                  <div style="font-size: 0.82rem; color: #475569;">
+                    <div>Calculated Rental: <strong id="pos-breakdown-subtotal">$360.00</strong> (<span id="pos-breakdown-days">3</span> days)</div>
+                    <div>Refundable Security Deposit: <strong id="pos-breakdown-deposit">$250.00</strong></div>
+                  </div>
+                  <div style="text-align: right;">
+                    <span style="font-size: 0.72rem; text-transform: uppercase; font-weight: 700; color: #64748b;">Total Upfront Cash to Collect</span>
+                    <div style="font-size: 1.5rem; font-weight: 900; color: #d97706;" id="pos-breakdown-total">$610.00</div>
+                  </div>
+                </div>
+
+                <div style="grid-column: 1 / -1;">
+                  <button type="submit" class="button button-primary" style="width: 100%; padding: 12px; font-size: 0.9rem; font-weight: 800; border-radius: 8px; background: #d97706; border: none; cursor: pointer;">
+                    + Issue Walk-in Booking &amp; Record Cash Receipt
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <!-- POS Panel 2: Settlement Form -->
+            <div id="pos-settlement-panel" style="display: none;">
+              <form id="pos-settlement-form" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
+                <div>
+                  <label for="settle-rental-id" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Rental Contract / App ID *</label>
+                  <input id="settle-rental-id" type="text" placeholder="e.g. APP-042 or BK-1039" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+                </div>
+                <div>
+                  <label for="settle-initial-deposit" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Initial Security Deposit Held ($) *</label>
+                  <input id="settle-initial-deposit" type="number" value="250" min="0" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+                </div>
+
+                <!-- Penalties / Adjustments -->
+                <div style="grid-column: 1 / -1; background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 16px;">
+                  <strong style="display: block; font-size: 0.84rem; color: #9f1239; margin-bottom: 12px;">Late Fees &amp; Repair Damage Deductions</strong>
+                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                    <div>
+                      <label for="settle-late-days" style="display: block; font-size: 0.74rem; font-weight: 700; margin-bottom: 4px;">Late Return (Days Overdue)</label>
+                      <input id="settle-late-days" type="number" value="0" min="0" style="width: 100%; padding: 7px 10px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
+                      <small style="color: #64748b; font-size: 0.7rem;">@ $40.00/day penalty fee</small>
+                    </div>
+                    <div>
+                      <label for="settle-repair-cost" style="display: block; font-size: 0.74rem; font-weight: 700; margin-bottom: 4px;">Damage Repair / Parts Deductions ($)</label>
+                      <input id="settle-repair-cost" type="number" value="0" min="0" style="width: 100%; padding: 7px 10px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
+                    </div>
+                    <div>
+                      <label for="settle-fuel-charge" style="display: block; font-size: 0.74rem; font-weight: 700; margin-bottom: 4px;">Fuel Shortage Charge ($)</label>
+                      <input id="settle-fuel-charge" type="number" value="0" min="0" style="width: 100%; padding: 7px 10px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
+                    </div>
+                  </div>
+
+                  <div style="margin-top: 10px;">
+                    <label for="settle-deduction-notes" style="display: block; font-size: 0.74rem; font-weight: 700; margin-bottom: 4px;">Reason for Damages or Penalty Applied</label>
+                    <input id="settle-deduction-notes" type="text" placeholder="e.g. Scratched chassis, missing hitch pin, 1/4 fuel tank shortage" style="width: 100%; padding: 7px 10px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
+                  </div>
+                </div>
+
+                <!-- Net Settlement Summary Card -->
+                <div id="settle-summary-card" style="grid-column: 1 / -1; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <span style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #065f46;" id="settle-outcome-label">Deposit Refund to Farmer</span>
+                    <div style="font-size: 0.82rem; color: #047857;" id="settle-outcome-details">Initial Deposit: $250.00 &minus; Deductions: $0.00</div>
+                  </div>
+                  <div style="font-size: 1.6rem; font-weight: 900; color: #047857;" id="settle-net-amount">+$250.00</div>
+                </div>
+
+                <div style="grid-column: 1 / -1;">
+                  <button type="submit" class="button button-primary" style="width: 100%; padding: 12px; font-size: 0.9rem; font-weight: 800; border-radius: 8px; background: #0f172a; border: none; cursor: pointer;">
+                    Finalize Settlement &amp; Release Farmer Funds
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
 
           <div class="table-wrap">
@@ -784,149 +938,6 @@
               </thead>
               <tbody id="approval-table"></tbody>
             </table>
-          </div>
-        </section>
-
-        <!-- ================= SECTION 2: POINT OF SALE (POS) & DEPOSIT SETTLEMENT ================= -->
-        <section class="surface section-block manager-view-panel" id="pos-terminal" style="display: none; margin-bottom: 28px; padding: 24px; border-radius: 12px; border: 1px solid #e2e8e4; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
-          <div class="section-heading" style="margin-bottom: 16px;">
-            <h2 style="font-size: 1.25rem; font-weight: 800; margin: 0; color: #1a2926;">Point of Sale (POS) &amp; Deposit Settlement</h2>
-            <p style="font-size: 0.8rem; color: #64746f; margin: 4px 0 0;">Bypass the online booking flow for walk-in farmers and calculate post-rental deposit deductions.</p>
-          </div>
-
-          <!-- POS Mode Selector Tabs -->
-          <div style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--line); padding-bottom: 10px;">
-            <button type="button" id="pos-tab-walkin" style="padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 0.82rem; cursor: pointer; border: 1px solid #d97706; background: #fffbeb; color: #92400e;">
-              👤 Walk-in Farmer Booking
-            </button>
-            <button type="button" id="pos-tab-settlement" style="padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 0.82rem; cursor: pointer; border: 1px solid var(--line); background: transparent; color: var(--ink-soft);">
-              💰 Return Deposit Settlement &amp; Deductions
-            </button>
-          </div>
-
-          <!-- POS Panel 1: Walk-In Form -->
-          <div id="pos-walkin-panel">
-            <form id="pos-walkin-form" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
-              <div>
-                <label for="pos-farmer-name" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Farmer Full Name *</label>
-                <input id="pos-farmer-name" type="text" placeholder="e.g. Samuel K. Boro" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
-              </div>
-              <div>
-                <label for="pos-farmer-phone" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Contact Phone *</label>
-                <input id="pos-farmer-phone" type="tel" placeholder="+63 912 345 6789" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
-              </div>
-              <div>
-                <label for="pos-coop-id" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Cooperative ID / Walk-In</label>
-                <input id="pos-coop-id" type="text" placeholder="e.g. CM-042 or WALK-IN" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
-              </div>
-
-              <div>
-                <label for="pos-equipment-select" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Equipment Unit *</label>
-                <select id="pos-equipment-select" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
-                  <option value="John Deere 5075E" data-rate="120">John Deere 5075E Tractor ($120/day)</option>
-                  <option value="Kuhn Disc Mower" data-rate="85">Kuhn Disc Mower ($85/day)</option>
-                  <option value="New Holland Baler" data-rate="150">New Holland Baler ($150/day)</option>
-                  <option value="Case IH Tractor" data-rate="135">Case IH Tractor ($135/day)</option>
-                </select>
-              </div>
-              <div>
-                <label for="pos-start-date" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Rental Start Date *</label>
-                <input id="pos-start-date" type="date" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
-              </div>
-              <div>
-                <label for="pos-end-date" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Rental End Date *</label>
-                <input id="pos-end-date" type="date" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
-              </div>
-
-              <div>
-                <label for="pos-daily-rate" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Daily Rate ($)</label>
-                <input id="pos-daily-rate" type="number" value="120" min="10" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
-              </div>
-              <div>
-                <label for="pos-deposit" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Security Deposit ($)</label>
-                <input id="pos-deposit" type="number" value="250" min="0" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
-              </div>
-              <div>
-                <label for="pos-payment-method" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Payment Method</label>
-                <select id="pos-payment-method" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
-                  <option value="Cash">Cash (Desk Payment)</option>
-                  <option value="Bank Transfer">Bank Transfer</option>
-                  <option value="Co-op Credit">Co-op Credit Line</option>
-                </select>
-              </div>
-
-              <!-- Live Total Breakdown Card -->
-              <div style="grid-column: 1 / -1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: gap; gap: 14px;">
-                <div style="font-size: 0.82rem; color: #475569;">
-                  <div>Calculated Rental: <strong id="pos-breakdown-subtotal">$360.00</strong> (<span id="pos-breakdown-days">3</span> days)</div>
-                  <div>Refundable Security Deposit: <strong id="pos-breakdown-deposit">$250.00</strong></div>
-                </div>
-                <div style="text-align: right;">
-                  <span style="font-size: 0.72rem; text-transform: uppercase; font-weight: 700; color: #64748b;">Total Upfront Cash to Collect</span>
-                  <div style="font-size: 1.5rem; font-weight: 900; color: #d97706;" id="pos-breakdown-total">$610.00</div>
-                </div>
-              </div>
-
-              <div style="grid-column: 1 / -1;">
-                <button type="submit" class="button button-primary" style="width: 100%; padding: 12px; font-size: 0.9rem; font-weight: 800; border-radius: 8px; background: #d97706; border: none; cursor: pointer;">
-                  + Issue Walk-in Booking &amp; Record Cash Receipt
-                </button>
-              </div>
-            </form>
-          </div>
-
-          <!-- POS Panel 2: Settlement Form -->
-          <div id="pos-settlement-panel" style="display: none;">
-            <form id="pos-settlement-form" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
-              <div>
-                <label for="settle-rental-id" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Rental Contract / App ID *</label>
-                <input id="settle-rental-id" type="text" placeholder="e.g. APP-042 or BK-1039" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
-              </div>
-              <div>
-                <label for="settle-initial-deposit" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Initial Security Deposit Held ($) *</label>
-                <input id="settle-initial-deposit" type="number" value="250" min="0" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
-              </div>
-
-              <!-- Penalties / Adjustments -->
-              <div style="grid-column: 1 / -1; background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 16px;">
-                <strong style="display: block; font-size: 0.84rem; color: #9f1239; margin-bottom: 12px;">Late Fees &amp; Repair Damage Deductions</strong>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
-                  <div>
-                    <label for="settle-late-days" style="display: block; font-size: 0.74rem; font-weight: 700; margin-bottom: 4px;">Late Return (Days Overdue)</label>
-                    <input id="settle-late-days" type="number" value="0" min="0" style="width: 100%; padding: 7px 10px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
-                    <small style="color: #64748b; font-size: 0.7rem;">@ $40.00/day penalty fee</small>
-                  </div>
-                  <div>
-                    <label for="settle-repair-cost" style="display: block; font-size: 0.74rem; font-weight: 700; margin-bottom: 4px;">Damage Repair / Parts Deductions ($)</label>
-                    <input id="settle-repair-cost" type="number" value="0" min="0" style="width: 100%; padding: 7px 10px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
-                  </div>
-                  <div>
-                    <label for="settle-fuel-charge" style="display: block; font-size: 0.74rem; font-weight: 700; margin-bottom: 4px;">Fuel Shortage Charge ($)</label>
-                    <input id="settle-fuel-charge" type="number" value="0" min="0" style="width: 100%; padding: 7px 10px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
-                  </div>
-                </div>
-
-                <div style="margin-top: 10px;">
-                  <label for="settle-deduction-notes" style="display: block; font-size: 0.74rem; font-weight: 700; margin-bottom: 4px;">Reason for Damages or Penalty Applied</label>
-                  <input id="settle-deduction-notes" type="text" placeholder="e.g. Scratched chassis, missing hitch pin, 1/4 fuel tank shortage" style="width: 100%; padding: 7px 10px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
-                </div>
-              </div>
-
-              <!-- Net Settlement Summary Card -->
-              <div id="settle-summary-card" style="grid-column: 1 / -1; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                  <span style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #065f46;" id="settle-outcome-label">Deposit Refund to Farmer</span>
-                  <div style="font-size: 0.82rem; color: #047857;" id="settle-outcome-details">Initial Deposit: $250.00 &minus; Deductions: $0.00</div>
-                </div>
-                <div style="font-size: 1.6rem; font-weight: 900; color: #047857;" id="settle-net-amount">+$250.00</div>
-              </div>
-
-              <div style="grid-column: 1 / -1;">
-                <button type="submit" class="button button-primary" style="width: 100%; padding: 12px; font-size: 0.9rem; font-weight: 800; border-radius: 8px; background: #0f172a; border: none; cursor: pointer;">
-                  Finalize Settlement &amp; Release Farmer Funds
-                </button>
-              </div>
-            </form>
           </div>
         </section>
 

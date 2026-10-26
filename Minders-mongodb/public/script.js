@@ -1164,8 +1164,8 @@ async function initManagerPage() {
     "calendar": { label: "Machinery Calendar & Google Sync", selector: "#calendar" },
     "clients": { label: "Clients", selector: "#analytics" },
     "drivers": { label: "Drivers", selector: "#approvals" },
-    "financials": { label: "Financials", selector: "#pos-terminal" },
-    "pos-terminal": { label: "Point of Sale (POS)", selector: "#pos-terminal" },
+    "financials": { label: "Financials", selector: "#analytics" },
+    "pos-terminal": { label: "Point of Sale (POS)", selector: "#approvals" },
     "reports": { label: "Operations & Financial Reports", selector: "#reports" },
     "tracking": { label: "Fleet Tracking", selector: "#maintenance" },
     "analytics": { label: "Utilization & Ledger", selector: "#analytics" },
@@ -1190,6 +1190,14 @@ async function initManagerPage() {
     document.querySelectorAll(".manager-view-panel").forEach((panel) => {
       panel.style.display = panel.matches(targetSelector) ? "block" : "none";
     });
+
+    // If pos-terminal view is opened, expand the POS container inside approvals
+    if (targetKey === "pos-terminal") {
+      const posContainer = document.querySelector("#pos-terminal-container");
+      if (posContainer) posContainer.style.display = "block";
+      const btnPosText = document.querySelector("#btn-toggle-pos-text");
+      if (btnPosText) btnPosText.textContent = "✕ Close POS";
+    }
 
     // Refresh machinery units when navigating to units
     if ((targetKey === "units" || targetKey === "maintenance") && typeof loadMachineryUnits === "function") {
@@ -1895,6 +1903,27 @@ async function initManagerPage() {
   window.setInterval(renderBookings, 15000);
 
   // ================= 2. POINT OF SALE (POS) TABS & CALCULATORS =================
+  const btnTogglePos = document.querySelector("#btn-toggle-pos");
+  const btnTogglePosText = document.querySelector("#btn-toggle-pos-text");
+  const btnClosePosPanel = document.querySelector("#btn-close-pos-panel");
+  const posTerminalContainer = document.querySelector("#pos-terminal-container");
+
+  const togglePosPanel = (forceState) => {
+    if (!posTerminalContainer) return;
+    const isCurrentlyHidden = posTerminalContainer.style.display === "none" || !posTerminalContainer.style.display;
+    const shouldOpen = forceState !== undefined ? forceState : isCurrentlyHidden;
+    posTerminalContainer.style.display = shouldOpen ? "block" : "none";
+    if (btnTogglePosText) {
+      btnTogglePosText.textContent = shouldOpen ? "✕ Close POS" : "+ Point of Sale (POS)";
+    }
+    if (btnTogglePos) {
+      btnTogglePos.style.background = shouldOpen ? "#475569" : "#d97706";
+    }
+  };
+
+  btnTogglePos?.addEventListener("click", () => togglePosPanel());
+  btnClosePosPanel?.addEventListener("click", () => togglePosPanel(false));
+
   const posTabWalkin = document.querySelector("#pos-tab-walkin");
   const posTabSettlement = document.querySelector("#pos-tab-settlement");
   const posWalkinPanel = document.querySelector("#pos-walkin-panel");
