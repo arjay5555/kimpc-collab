@@ -877,7 +877,7 @@ async function initManagerDashboardWidgets() {
   const issuesPanel = document.querySelector("#manager-issues");
   const pendingList = document.querySelector("#dashboard-pending-list");
   const categoriesList = document.querySelector("#manager-category-distribution");
-  const currency = new Intl.NumberFormat(undefined, { style: "currency", currency: "PHP", maximumFractionDigits: 0 });
+  const currency = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 });
   const number = new Intl.NumberFormat();
 
   const setChartMessage = (element, message, isError = false) => {
@@ -1638,13 +1638,13 @@ async function initManagerPage() {
     try {
       const { ok, data } = await api(`/manager/reports/revenue/${period}?${param}`);
       if (ok && data) {
-        if (repStatRevenue) repStatRevenue.textContent = `$${Number(data.rentalRevenue || 0).toFixed(2)}`;
+        if (repStatRevenue) repStatRevenue.textContent = `₱${Number(data.rentalRevenue || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         if (repStatPeriodLabel) repStatPeriodLabel.textContent = data.range?.label || "Selected period";
         if (repStatTxCount) repStatTxCount.textContent = data.transactionCount || 0;
         
         const count = data.transactionCount || 0;
         const avg = count > 0 ? (Number(data.rentalRevenue || 0) / count) : 0;
-        if (repStatAvgValue) repStatAvgValue.textContent = `$${avg.toFixed(2)}`;
+        if (repStatAvgValue) repStatAvgValue.textContent = `₱${avg.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
         if (repCategoryList && data.totalsByType) {
           const types = Object.entries(data.totalsByType);
@@ -1657,7 +1657,7 @@ async function initManagerPage() {
                 <div>
                   <div style="display:flex; justify-content:space-between; font-size:0.78rem; font-weight:700; margin-bottom:3px;">
                     <span>${escapeHtml(type)}</span>
-                    <span style="color:#047857; font-family:monospace; font-weight:800;">+$${Number(total).toFixed(2)} (${pct}%)</span>
+                    <span style="color:#047857; font-family:monospace; font-weight:800;">+₱${Number(total).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${pct}%)</span>
                   </div>
                   <div style="width:100%; height:7px; background:#e2e8f0; border-radius:999px; overflow:hidden;">
                     <div style="width:${pct}%; height:100%; background:#0d766e; border-radius:999px;"></div>
@@ -1688,7 +1688,7 @@ async function initManagerPage() {
               <td>${escapeHtml(tx.equipment)}</td>
               <td><span class="status-badge ${tx.type === "Rental Fee" ? "status-approved" : tx.type === "Deposit" ? "status-active" : "status-rejected"}">${escapeHtml(tx.type)}</span></td>
               <td><strong>${escapeHtml(tx.paymentMethod)}</strong></td>
-              <td class="align-right font-mono" style="font-weight:800; color:#047857;">+$${Number(tx.amount).toFixed(2)}</td>
+              <td class="align-right font-mono" style="font-weight:800; color:#047857;">+₱${Number(tx.amount).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
             </tr>
           `).join("");
         }
@@ -1978,9 +1978,9 @@ async function initManagerPage() {
     const total = subtotal + dep;
 
     if (posDaysEl) posDaysEl.textContent = diffDays;
-    if (posSubtotalEl) posSubtotalEl.textContent = `$${subtotal.toFixed(2)}`;
-    if (posDepositEl) posDepositEl.textContent = `$${dep.toFixed(2)}`;
-    if (posTotalEl) posTotalEl.textContent = `$${total.toFixed(2)}`;
+    if (posSubtotalEl) posSubtotalEl.textContent = `₱${subtotal.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    if (posDepositEl) posDepositEl.textContent = `₱${dep.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    if (posTotalEl) posTotalEl.textContent = `₱${total.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   posEquipSelect?.addEventListener("change", () => {
@@ -2017,7 +2017,7 @@ async function initManagerPage() {
     });
 
     if (res.ok) {
-      alert(`Walk-in booking created for ${farmerName}. Collected: $${res.data.totalCollected}. Receipt: ${res.data.txId}`);
+      alert(`Walk-in booking created for ${farmerName}. Collected: ₱${res.data.totalCollected}. Receipt: ${res.data.txId}`);
       document.querySelector("#pos-walkin-form")?.reset();
       updatePosWalkinTotal();
       renderBookings();
@@ -2052,11 +2052,11 @@ async function initManagerPage() {
       settleOutcomeLabel.style.color = isRefund ? "#065f46" : "#9f1239";
     }
     if (settleOutcomeDetails) {
-      settleOutcomeDetails.textContent = `Initial Deposit: $${dep.toFixed(2)} − Total Deductions: $${deductions.toFixed(2)}`;
+      settleOutcomeDetails.textContent = `Initial Deposit: ₱${dep.toFixed(2)} − Total Deductions: ₱${deductions.toFixed(2)}`;
       settleOutcomeDetails.style.color = isRefund ? "#047857" : "#be123c";
     }
     if (settleNetAmount) {
-      settleNetAmount.textContent = isRefund ? `+$${net.toFixed(2)}` : `-$${Math.abs(net).toFixed(2)}`;
+      settleNetAmount.textContent = isRefund ? `+₱${net.toFixed(2)}` : `-₱${Math.abs(net).toFixed(2)}`;
       settleNetAmount.style.color = isRefund ? "#047857" : "#be123c";
     }
     if (settleSummaryCard) {
@@ -2741,8 +2741,8 @@ async function initManagerPage() {
 
     if (okTx && txData) {
       const txs = txData.transactions || [];
-      if (cashTotalEl) cashTotalEl.textContent = `$${(txData.totalCash || 0).toFixed(2)}`;
-      if (ledgerTotalCash) ledgerTotalCash.textContent = `$${(txData.totalCash || 0).toFixed(2)}`;
+      if (cashTotalEl) cashTotalEl.textContent = `₱${(txData.totalCash || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      if (ledgerTotalCash) ledgerTotalCash.textContent = `₱${(txData.totalCash || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
       if (ledgerTable) {
         ledgerTable.innerHTML = txs.map((tx) => `
@@ -2752,7 +2752,7 @@ async function initManagerPage() {
             <td>${escapeHtml(tx.equipment)}</td>
             <td><span class="status-badge ${tx.type === "Rental Fee" ? "status-approved" : tx.type === "Deposit" ? "status-active" : "status-rejected"}">${escapeHtml(tx.type)}</span></td>
             <td><strong>${escapeHtml(tx.paymentMethod)}</strong></td>
-            <td class="align-right font-mono" style="font-weight:800; color:#0f172a;">+$${Number(tx.amount).toFixed(2)}</td>
+            <td class="align-right font-mono" style="font-weight:800; color:#0f172a;">+₱${Number(tx.amount).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
           </tr>
         `).join("");
       }

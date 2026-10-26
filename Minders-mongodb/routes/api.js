@@ -2317,7 +2317,7 @@ router.post("/manager/pos-booking", async (req, res) => {
     type: "Rental Fee",
     amount: totalPaid,
     paymentMethod,
-    notes: `Walk-in Rental ($${rentalFee}) + Security Deposit ($${deposit})`
+    notes: `Walk-in Rental (₱${rentalFee}) + Security Deposit (₱${deposit})`
   });
 
   await logAudit({
@@ -2373,7 +2373,7 @@ router.post("/manager/pos-settlement", async (req, res) => {
       type: "Late Fee",
       amount: totalLateFee,
       paymentMethod: "Cash",
-      notes: `${lateDays} days overdue @ $${lateFeePerDay}/day`
+      notes: `${lateDays} days overdue @ ₱${lateFeePerDay}/day`
     });
   }
 
@@ -2431,8 +2431,8 @@ router.post("/manager/pos-settlement", async (req, res) => {
       isRefund
     },
     message: isRefund
-      ? `Settlement finalized. Refund $${netRefundOrDue.toFixed(2)} to farmer.`
-      : `Settlement finalized. Collect $${Math.abs(netRefundOrDue).toFixed(2)} balance from farmer.`
+      ? `Settlement finalized. Refund ₱${netRefundOrDue.toFixed(2)} to farmer.`
+      : `Settlement finalized. Collect ₱${Math.abs(netRefundOrDue).toFixed(2)} balance from farmer.`
   });
 });
 

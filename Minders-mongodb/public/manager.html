@@ -118,7 +118,7 @@
           <div style="display: none;" aria-hidden="true">
             <span id="pending-count">0</span>
             <span id="active-rentals-count">18</span>
-            <span id="cash-intake-total">$945</span>
+            <span id="cash-intake-total">₱945</span>
             <span id="maintenance-units-count">1</span>
             <div id="manager-overview-issues"></div>
             <p id="manager-page-eyebrow"></p>
@@ -234,19 +234,19 @@
 
                     <!-- Horizontal Grid lines -->
                     <line x1="50" y1="20" x2="610" y2="20" stroke="#f1f5f9" stroke-width="1.5"/>
-                    <text x="40" y="24" class="m-chart-axis-text">$24K</text>
+                    <text x="40" y="24" class="m-chart-axis-text">₱24K</text>
 
                     <line x1="50" y1="62" x2="610" y2="62" stroke="#f1f5f9" stroke-width="1.5"/>
-                    <text x="40" y="66" class="m-chart-axis-text">$18K</text>
+                    <text x="40" y="66" class="m-chart-axis-text">₱18K</text>
 
                     <line x1="50" y1="104" x2="610" y2="104" stroke="#f1f5f9" stroke-width="1.5"/>
-                    <text x="40" y="108" class="m-chart-axis-text">$12K</text>
+                    <text x="40" y="108" class="m-chart-axis-text">₱12K</text>
 
                     <line x1="50" y1="146" x2="610" y2="146" stroke="#f1f5f9" stroke-width="1.5"/>
-                    <text x="40" y="150" class="m-chart-axis-text">$6K</text>
+                    <text x="40" y="150" class="m-chart-axis-text">₱6K</text>
 
                     <line x1="50" y1="188" x2="610" y2="188" stroke="#f1f5f9" stroke-width="1.5"/>
-                    <text x="40" y="192" class="m-chart-axis-text">$0</text>
+                    <text x="40" y="192" class="m-chart-axis-text">₱0</text>
 
                     <!-- Area under curve -->
                     <path d="M 65 130 C 95 140, 115 105, 142 98 C 172 90, 195 132, 228 128 C 255 125, 270 58, 305 58 C 340 58, 355 125, 385 125 C 418 125, 435 98, 465 102 C 500 108, 515 65, 548 70 C 572 74, 590 92, 610 105 L 610 188 L 65 188 Z" fill="url(#splineGradient)"/>
@@ -271,7 +271,7 @@
                   <!-- Floating Tooltip directly above the April Peak -->
                   <div class="m-chart-tooltip dashboard-demo-chart" style="left: 49.2%; top: 4%;">
                     <div class="m-tooltip-header">April 2028</div>
-                    <div class="m-tooltip-value">$18,450</div>
+                    <div class="m-tooltip-value">₱18,450</div>
                     <div class="m-tooltip-arrow"></div>
                   </div>
                 </div>
@@ -817,10 +817,10 @@
                 <div>
                   <label for="pos-equipment-select" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Equipment Unit *</label>
                   <select id="pos-equipment-select" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
-                    <option value="John Deere 5075E" data-rate="120">John Deere 5075E Tractor ($120/day)</option>
-                    <option value="Kuhn Disc Mower" data-rate="85">Kuhn Disc Mower ($85/day)</option>
-                    <option value="New Holland Baler" data-rate="150">New Holland Baler ($150/day)</option>
-                    <option value="Case IH Tractor" data-rate="135">Case IH Tractor ($135/day)</option>
+                    <option value="John Deere 5075E" data-rate="120">John Deere 5075E Tractor (₱120/day)</option>
+                    <option value="Kuhn Disc Mower" data-rate="85">Kuhn Disc Mower (₱85/day)</option>
+                    <option value="New Holland Baler" data-rate="150">New Holland Baler (₱150/day)</option>
+                    <option value="Case IH Tractor" data-rate="135">Case IH Tractor (₱135/day)</option>
                   </select>
                 </div>
                 <div>
@@ -833,11 +833,11 @@
                 </div>
 
                 <div>
-                  <label for="pos-daily-rate" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Daily Rate ($)</label>
+                  <label for="pos-daily-rate" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Daily Rate (₱)</label>
                   <input id="pos-daily-rate" type="number" value="120" min="10" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
                 </div>
                 <div>
-                  <label for="pos-deposit" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Security Deposit ($)</label>
+                  <label for="pos-deposit" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Security Deposit (₱)</label>
                   <input id="pos-deposit" type="number" value="250" min="0" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
                 </div>
                 <div>
@@ -852,12 +852,12 @@
                 <!-- Live Total Breakdown Card -->
                 <div style="grid-column: 1 / -1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: gap; gap: 14px;">
                   <div style="font-size: 0.82rem; color: #475569;">
-                    <div>Calculated Rental: <strong id="pos-breakdown-subtotal">$360.00</strong> (<span id="pos-breakdown-days">3</span> days)</div>
-                    <div>Refundable Security Deposit: <strong id="pos-breakdown-deposit">$250.00</strong></div>
+                    <div>Calculated Rental: <strong id="pos-breakdown-subtotal">₱360.00</strong> (<span id="pos-breakdown-days">3</span> days)</div>
+                    <div>Refundable Security Deposit: <strong id="pos-breakdown-deposit">₱250.00</strong></div>
                   </div>
                   <div style="text-align: right;">
                     <span style="font-size: 0.72rem; text-transform: uppercase; font-weight: 700; color: #64748b;">Total Upfront Cash to Collect</span>
-                    <div style="font-size: 1.5rem; font-weight: 900; color: #d97706;" id="pos-breakdown-total">$610.00</div>
+                    <div style="font-size: 1.5rem; font-weight: 900; color: #d97706;" id="pos-breakdown-total">₱610.00</div>
                   </div>
                 </div>
 
@@ -877,25 +877,25 @@
                   <input id="settle-rental-id" type="text" placeholder="e.g. APP-042 or BK-1039" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
                 </div>
                 <div>
-                  <label for="settle-initial-deposit" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Initial Security Deposit Held ($) *</label>
+                  <label for="settle-initial-deposit" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Initial Security Deposit Held (₱) *</label>
                   <input id="settle-initial-deposit" type="number" value="250" min="0" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
                 </div>
 
                 <!-- Penalties / Adjustments -->
                 <div style="grid-column: 1 / -1; background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 16px;">
                   <strong style="display: block; font-size: 0.84rem; color: #9f1239; margin-bottom: 12px;">Late Fees &amp; Repair Damage Deductions</strong>
-                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                  <div style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); display: grid; gap: 12px;">
                     <div>
                       <label for="settle-late-days" style="display: block; font-size: 0.74rem; font-weight: 700; margin-bottom: 4px;">Late Return (Days Overdue)</label>
                       <input id="settle-late-days" type="number" value="0" min="0" style="width: 100%; padding: 7px 10px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
-                      <small style="color: #64748b; font-size: 0.7rem;">@ $40.00/day penalty fee</small>
+                      <small style="color: #64748b; font-size: 0.7rem;">@ ₱40.00/day penalty fee</small>
                     </div>
                     <div>
-                      <label for="settle-repair-cost" style="display: block; font-size: 0.74rem; font-weight: 700; margin-bottom: 4px;">Damage Repair / Parts Deductions ($)</label>
+                      <label for="settle-repair-cost" style="display: block; font-size: 0.74rem; font-weight: 700; margin-bottom: 4px;">Damage Repair / Parts Deductions (₱)</label>
                       <input id="settle-repair-cost" type="number" value="0" min="0" style="width: 100%; padding: 7px 10px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
                     </div>
                     <div>
-                      <label for="settle-fuel-charge" style="display: block; font-size: 0.74rem; font-weight: 700; margin-bottom: 4px;">Fuel Shortage Charge ($)</label>
+                      <label for="settle-fuel-charge" style="display: block; font-size: 0.74rem; font-weight: 700; margin-bottom: 4px;">Fuel Shortage Charge (₱)</label>
                       <input id="settle-fuel-charge" type="number" value="0" min="0" style="width: 100%; padding: 7px 10px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
                     </div>
                   </div>
@@ -910,9 +910,9 @@
                 <div id="settle-summary-card" style="grid-column: 1 / -1; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center;">
                   <div>
                     <span style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #065f46;" id="settle-outcome-label">Deposit Refund to Farmer</span>
-                    <div style="font-size: 0.82rem; color: #047857;" id="settle-outcome-details">Initial Deposit: $250.00 &minus; Deductions: $0.00</div>
+                    <div style="font-size: 0.82rem; color: #047857;" id="settle-outcome-details">Initial Deposit: ₱250.00 &minus; Deductions: ₱0.00</div>
                   </div>
-                  <div style="font-size: 1.6rem; font-weight: 900; color: #047857;" id="settle-net-amount">+$250.00</div>
+                  <div style="font-size: 1.6rem; font-weight: 900; color: #047857;" id="settle-net-amount">+₱250.00</div>
                 </div>
 
                 <div style="grid-column: 1 / -1;">
@@ -1144,7 +1144,7 @@
                       Total Reconciled Cash Intake:
                     </td>
                     <td style="padding: 10px 14px; text-align: right; color: #047857; font-size: 1.05rem;" id="ledger-total-cash">
-                      $0.00
+                      ₱0.00
                     </td>
                   </tr>
                 </tfoot>
@@ -1191,7 +1191,7 @@
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 22px;">
             <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px;">
               <span style="font-size: 0.72rem; font-weight: 600; color: #64748b; text-transform: uppercase; display: block; margin-bottom: 4px;">Rental Revenue Total</span>
-              <div style="font-size: 1.45rem; font-weight: 800; color: #047857;" id="rep-stat-revenue">$0.00</div>
+              <div style="font-size: 1.45rem; font-weight: 800; color: #047857;" id="rep-stat-revenue">₱0.00</div>
               <div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;" id="rep-stat-period-label">Period Summary</div>
             </div>
 
@@ -1203,7 +1203,7 @@
 
             <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px;">
               <span style="font-size: 0.72rem; font-weight: 600; color: #64748b; text-transform: uppercase; display: block; margin-bottom: 4px;">Average Rental Value</span>
-              <div style="font-size: 1.45rem; font-weight: 800; color: #0f172a;" id="rep-stat-avg-value">$0.00</div>
+              <div style="font-size: 1.45rem; font-weight: 800; color: #0f172a;" id="rep-stat-avg-value">₱0.00</div>
               <div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">Per completed booking</div>
             </div>
 
