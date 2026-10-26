@@ -40,6 +40,9 @@ const machineryMaintenanceSchema = new mongoose.Schema(
       required: true,
       trim: true
     },
+    maintenanceCost: { type: Number, min: 0, default: 0 },
+    runtimeHours: { type: Number, min: 0, default: null },
+    logType: { type: String, enum: ["Schedule", "Repair", "Maintenance"], default: "Schedule" },
     assignedMechanic: {
       type: String,
       default: "In-house Co-op Technician"

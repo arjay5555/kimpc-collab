@@ -870,6 +870,248 @@ function initRegistrationPage() {
 // Convert an issue status into the shared badge markup.
 function getIssueBadge(issue) { return `<span class="status-badge ${issue.statusClass}">${issue.status}</span>`; }
 
+async function initManagerDashboardWidgets() {
+  const revenueChart = document.querySelector("#manager-revenue-chart");
+  const bookingsChart = document.querySelector("#manager-bookings-chart");
+  const alertsList = document.querySelector("#manager-field-alerts");
+  const issuesPanel = document.querySelector("#manager-issues");
+  const pendingList = document.querySelector("#dashboard-pending-list");
+  const categoriesList = document.querySelector("#manager-category-distribution");
+  const currency = new Intl.NumberFormat(undefined, { style: "currency", currency: "PHP", maximumFractionDigits: 0 });
+  const number = new Intl.NumberFormat();
+
+  const setChartMessage = (element, message, isError = false) => {
+    if (element) {
+      element.innerHTML = `<p class="manager-empty-state${isError ? " is-error" : ""}">${escapeHtml(message)}</p>`;
+    }
+  };
+
+  const [metricsResult, issuesResult, pendingResult, utilizationResult] = await Promise.all([
+    api("/manager/dashboard/metrics"),
+    api("/manager/field-issues"),
+    api("/manager/bookings?status=Pending&page=1&limit=4"),
+    api("/manager/utilization")
+  ]);
+
+  if (metricsResult.ok && metricsResult.data) {
+    const metrics = metricsResult.data;
+    const revenueValue = document.querySelector("#manager-kpi-revenue");
+    const pendingValue = document.querySelector("#manager-kpi-bookings");
+    const activeValue = document.querySelector("#manager-kpi-rented");
+    const availableValue = document.querySelector("#manager-kpi-available");
+    if (revenueValue) revenueValue.textContent = currency.format(metrics.revenue?.monthly || 0);
+    if (pendingValue) pendingValue.textContent = number.format(metrics.pendingApprovalCount || 0);
+    if (activeValue) activeValue.textContent = number.format(metrics.fleetStatus?.activeRentals || 0);
+    if (availableValue) availableValue.textContent = number.format(metrics.fleetStatus?.available || 0);
+    if (document.querySelector("#pending-count")) {
+      document.querySelector("#pending-count").textContent = String(metrics.pendingApprovalCount || 0);
+    }
+
+    const status = metrics.fleetStatus || {};
+    const active = Number(status.activeRentals) || 0;
+    const available = Number(status.available) || 0;
+    const service = (Number(status.maintenance) || 0) + (Number(status.repair) || 0);
+    const total = active + available + service;
+    const circumference = 2 * Math.PI * 54;
+    let offset = 0;
+    [
+      ["fleet-donut-active", active],
+      ["fleet-donut-available", available],
+      ["fleet-donut-service", service]
+    ].forEach(([id, value]) => {
+      const segment = document.querySelector(`#${id}`);
+      if (!segment) return;
+      const length = total ? circumference * value / total : 0;
+      segment.setAttribute("stroke-dasharray", `${length} ${circumference - length}`);
+      segment.setAttribute("stroke-dashoffset", String(-offset));
+      offset += length;
+    });
+    document.querySelector("#fleet-active-count")?.replaceChildren(document.createTextNode(number.format(active)));
+    document.querySelector("#fleet-available-count")?.replaceChildren(document.createTextNode(number.format(available)));
+    document.querySelector("#fleet-service-count")?.replaceChildren(document.createTextNode(number.format(service)));
+  } else {
+    const error = metricsResult.data?.error || "Dashboard metrics could not be loaded.";
+    ["#manager-kpi-revenue", "#manager-kpi-bookings", "#manager-kpi-rented", "#manager-kpi-available"]
+      .forEach((selector) => {
+        const element = document.querySelector(selector);
+        if (element) {
+          element.textContent = "Unavailable";
+          element.title = error;
+        }
+      });
+  }
+
+  if (pendingResult.ok && Array.isArray(pendingResult.data?.data)) {
+    const requests = pendingResult.data.data;
+    const pendingCount = document.querySelector("#dashboard-pending-count");
+    if (pendingCount) pendingCount.textContent = number.format(pendingResult.data.total || requests.length);
+    const bookingsValue = document.querySelector("#manager-kpi-bookings");
+    if (bookingsValue && !metricsResult.ok) bookingsValue.textContent = number.format(pendingResult.data.total || requests.length);
+    if (!requests.length) {
+      setChartMessage(pendingList, "There are no booking requests awaiting review.");
+    } else if (pendingList) {
+      pendingList.innerHTML = requests.map((booking) => `
+        <article class="manager-approval-item">
+          <div class="manager-item-copy">
+            <strong>${escapeHtml(booking.memberName || "Member")}</strong>
+            <span>${escapeHtml(booking.equipment || "Equipment")} · ${escapeHtml(booking.startDate)} – ${escapeHtml(booking.endDate)}</span>
+          </div>
+          <a href="#approvals" data-view="approvals" class="manager-review-link" aria-label="Review booking for ${escapeHtml(booking.memberName || "member")}">Review</a>
+        </article>
+      `).join("");
+    }
+  } else {
+    setChartMessage(pendingList, pendingResult.data?.error || "Pending requests could not be loaded.", true);
+  }
+
+  if (issuesResult.ok && Array.isArray(issuesResult.data?.issues)) {
+    const issues = issuesResult.data.issues;
+    if (!issues.length) {
+      const message = "No active breakdowns, late returns, or schedule conflicts.";
+      setChartMessage(alertsList, message);
+      setChartMessage(issuesPanel, message);
+    } else if (alertsList) {
+      const markup = issues.slice(0, 5).map((issue) => {
+        const title = {
+          equipment_breakdown: "Equipment breakdown",
+          maintenance: "Maintenance flag",
+          late_return: "Late return",
+          scheduling_conflict: "Scheduling conflict"
+        }[issue.type] || "Field alert";
+        const context = [
+          issue.unitId || issue.equipment,
+          issue.dueDate ? `Due ${issue.dueDate}` : "",
+          issue.startDate && issue.endDate ? `${issue.startDate} – ${issue.endDate}` : "",
+          issue.dateRange ? `${issue.dateRange.startDate} – ${issue.dateRange.endDate}` : "",
+          issue.details
+        ].filter(Boolean).join(" · ");
+        return `
+          <article class="manager-alert-item">
+            <span class="manager-alert-marker ${issue.severity === "high" ? "is-high" : ""}" aria-hidden="true"></span>
+            <div class="manager-item-copy">
+              <strong>${escapeHtml(title)}</strong>
+              <span>${escapeHtml(context || issue.status || "")}</span>
+            </div>
+          </article>
+        `;
+      }).join("");
+      alertsList.innerHTML = markup;
+      if (issuesPanel) issuesPanel.innerHTML = markup;
+    } else if (issuesPanel) {
+      issuesPanel.innerHTML = '<p class="manager-empty-state">No active field alerts.</p>';
+    }
+  } else {
+    const message = issuesResult.data?.error || "Field alerts could not be loaded.";
+    setChartMessage(alertsList, message, true);
+    setChartMessage(issuesPanel, message, true);
+  }
+
+  if (utilizationResult.ok && Array.isArray(utilizationResult.data)) {
+    const categoryCounts = new Map();
+    const categoryNames = [
+      ["Tractors", /tractor/i],
+      ["Harvesters", /harvester/i],
+      ["Seeders", /seeder|planter/i],
+      ["Tillers", /tiller/i],
+      ["Irrigation Pumps", /irrigation|pump/i]
+    ];
+    for (const category of utilizationResult.data) {
+      const sourceName = category.name || category.category || "Other";
+      const mappedName = categoryNames.find(([, pattern]) => pattern.test(sourceName))?.[0] || sourceName;
+      const existing = categoryCounts.get(mappedName) || { count: 0, runtimeHours: 0 };
+      existing.count += Number(category.totalUnits) || 0;
+      existing.runtimeHours += Number(category.runtimeHours) || 0;
+      categoryCounts.set(mappedName, existing);
+    }
+    const totalUnits = [...categoryCounts.values()].reduce((sum, category) => sum + category.count, 0);
+    const standardCategories = ["Tractors", "Harvesters", "Seeders", "Tillers", "Irrigation Pumps"];
+    const extraCategories = [...categoryCounts.keys()].filter((name) => !standardCategories.includes(name));
+    const orderedCategories = [...standardCategories, ...extraCategories];
+    if (categoriesList) {
+      categoriesList.innerHTML = orderedCategories.map((name) => {
+        const category = categoryCounts.get(name) || { count: 0, runtimeHours: 0 };
+        const percent = totalUnits ? Math.round(category.count * 100 / totalUnits) : 0;
+        const initials = name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2);
+        return `
+          <div class="manager-category-item">
+            <span class="manager-category-icon" aria-hidden="true">${escapeHtml(initials)}</span>
+            <div class="manager-category-content">
+              <div class="manager-category-heading">
+                <strong>${escapeHtml(name)}</strong>
+                <span>${number.format(category.count)} <small>units</small></span>
+              </div>
+              <div class="manager-category-track" role="img" aria-label="${percent}% of fleet">
+                <span style="width:${percent}%"></span>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+  } else {
+    setChartMessage(categoriesList, utilizationResult.data?.error || "Equipment categories could not be loaded.", true);
+  }
+
+  const now = new Date();
+  const months = Array.from({ length: 8 }, (_, index) => {
+    const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (7 - index), 1));
+    const nextMonth = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1));
+    const month = date.toISOString().slice(0, 7);
+    const startDate = date.toISOString().slice(0, 10);
+    const endDate = new Date(nextMonth.getTime() - 86400000).toISOString().slice(0, 10);
+    return { month, startDate, endDate, label: date.toLocaleDateString(undefined, { month: "short", timeZone: "UTC" }) };
+  });
+
+  const [revenueResponses, bookingResponses] = await Promise.all([
+    Promise.all(months.map(({ month }) => api(`/manager/reports/revenue/monthly?month=${month}`))),
+    Promise.all(months.map(({ startDate, endDate }) =>
+      api(`/manager/bookings?status=All&page=1&limit=1&startDate=${startDate}&endDate=${endDate}`)
+    ))
+  ]);
+
+  if (revenueResponses.every((result) => result.ok) && revenueChart) {
+    const series = months.map((month, index) => ({
+      ...month,
+      value: Number(revenueResponses[index].data?.rentalRevenue) || 0
+    }));
+    const max = Math.max(...series.map((item) => item.value), 1);
+    revenueChart.innerHTML = `
+      <div class="manager-chart-bars" role="img" aria-label="Rental revenue for the last eight months">
+        ${series.map((item) => `
+          <div class="manager-chart-column" title="${escapeHtml(item.label)}: ${escapeHtml(currency.format(item.value))}">
+            <span class="manager-chart-value">${escapeHtml(currency.format(item.value))}</span>
+            <span class="manager-chart-bar" style="height:${Math.max(4, item.value / max * 100)}%"></span>
+            <span class="manager-chart-label">${escapeHtml(item.label)}</span>
+          </div>
+        `).join("")}
+      </div>
+    `;
+  } else {
+    setChartMessage(revenueChart, "Revenue history could not be loaded.", true);
+  }
+
+  if (bookingResponses.every((result) => result.ok) && bookingsChart) {
+    const series = months.map((month, index) => ({
+      ...month,
+      value: Number(bookingResponses[index].data?.total) || 0
+    }));
+    const max = Math.max(...series.map((item) => item.value), 1);
+    bookingsChart.innerHTML = `
+      <div class="manager-chart-bars manager-booking-bars" role="img" aria-label="Booking requests by scheduled month">
+        ${series.map((item) => `
+          <div class="manager-chart-column" title="${escapeHtml(item.label)}: ${number.format(item.value)} bookings">
+            <span class="manager-chart-value">${number.format(item.value)}</span>
+            <span class="manager-chart-bar" style="height:${Math.max(4, item.value / max * 100)}%"></span>
+            <span class="manager-chart-label">${escapeHtml(item.label)}</span>
+          </div>
+        `).join("")}
+      </div>
+    `;
+  } else {
+    setChartMessage(bookingsChart, "Booking history could not be loaded.", true);
+  }
+}
+
 // Manager dashboard: render booking approvals (from MongoDB) and issue cards.
 async function initManagerPage() {
   const isAdminCoverage = new URLSearchParams(window.location.search).get("coverage") === "admin";
@@ -879,6 +1121,18 @@ async function initManagerPage() {
     window.location.replace("login.html");
     return;
   }
+  initManagerDashboardWidgets().catch((error) => {
+    console.error("Manager dashboard widgets failed to render:", error);
+    const message = "Dashboard data could not be displayed. Refresh the page or check the server logs.";
+    ["#manager-field-alerts", "#manager-issues", "#dashboard-pending-list", "#manager-category-distribution", "#manager-revenue-chart", "#manager-bookings-chart"]
+      .forEach((selector) => {
+        const element = document.querySelector(selector);
+        if (element) {
+          element.textContent = message;
+          element.classList.add("is-error");
+        }
+      });
+  });
 
   const pageFeedback = document.querySelector("#manager-page-feedback");
   const table = document.querySelector("#approval-table");
@@ -888,24 +1142,9 @@ async function initManagerPage() {
   const cashTotalEl = document.querySelector("#cash-intake-total");
   let loadMachineryUnits = null;
 
-  // Populate Field Issues
+  // Field issues are loaded from the manager API below.
   const issuesEl = document.querySelector("#manager-issues");
-  if (issuesEl) {
-    issuesEl.innerHTML = issueLogs.map((issue) => `<article class="issue-card"><div class="issue-card-header"><div><h3>${issue.type}</h3><p>${issue.detail} / ${issue.location}</p></div>${getIssueBadge(issue)}</div><span class="issue-meta">${issue.owner}</span></article>`).join("");
-  }
-
-  const overviewIssuesEl = document.querySelector("#manager-overview-issues");
-  if (overviewIssuesEl && Array.isArray(issueLogs)) {
-    overviewIssuesEl.innerHTML = issueLogs.slice(0, 3).map((issue) => `
-      <div class="admin-preview-row">
-        <div>
-          <strong>${escapeHtml(issue.type)}</strong>
-          <small>${escapeHtml(issue.detail)} &bull; ${escapeHtml(issue.location)}</small>
-        </div>
-        ${getIssueBadge(issue)}
-      </div>
-    `).join("");
-  }
+  if (issuesEl) issuesEl.innerHTML = '<p class="manager-empty-state">Loading field alerts...</p>';
 
   // Today's date header
   const todayDateEl = document.querySelector("#manager-today-date");
@@ -980,31 +1219,6 @@ async function initManagerPage() {
 
   const initialHash = window.location.hash.replace(/^#/, "") || "overview";
   switchManagerView(initialHash);
-
-  // Quick Check button click handler: jumps smoothly to rental operations
-  const quickCheckBtn = document.querySelector("#m-btn-quick-check");
-  if (quickCheckBtn) {
-    quickCheckBtn.addEventListener("click", () => {
-      try {
-        history.replaceState(null, "", "#approvals");
-      } catch (_) {}
-      switchManagerView("approvals");
-    });
-  }
-
-  // Interactive Car Type selector: toggle active outline and agriculture green highlight bar
-  document.querySelectorAll(".m-cartype-item").forEach((item) => {
-    item.addEventListener("click", () => {
-      document.querySelectorAll(".m-cartype-item").forEach((it) => {
-        it.classList.remove("active-suv");
-        const bar = it.querySelector(".m-cartype-bar");
-        if (bar) bar.classList.remove("bar-green");
-      });
-      item.classList.add("active-suv");
-      const activeBar = item.querySelector(".m-cartype-bar");
-      if (activeBar) activeBar.classList.add("bar-green");
-    });
-  });
 
   // Manager identity sync
   if (isAdminCoverage) {
@@ -3960,5 +4174,3 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 });
-
-

@@ -6,6 +6,7 @@ const applicationSchema = new mongoose.Schema(
     memberEmail: { type: String, required: true, lowercase: true, trim: true, index: true },
     memberName: { type: String, required: true, trim: true },
     equipment: { type: String, required: true, trim: true },
+    machineryUnitId: { type: String, default: "", trim: true, index: true },
     startDate: { type: String, required: true }, // "YYYY-MM-DD", straight from <input type="date">
     endDate: { type: String, required: true },
     status: { 
@@ -14,6 +15,7 @@ const applicationSchema = new mongoose.Schema(
       default: "Pending",
       index: true 
     },
+    managerRemarks: { type: String, default: "", trim: true },
     isWalkIn: { type: Boolean, default: false },
     farmerPhone: { type: String, default: "" },
     checkoutInspection: {

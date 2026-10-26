@@ -12,6 +12,8 @@ const SystemSetting = require("../models/SystemSetting");
 const jwt = require("jsonwebtoken");
 const { logAudit, logSystemEvent } = require("../services/auditLogger");
 const { sendDeleteOtpEmail } = require("../services/mailer");
+const authManager = require("../middleware/authManager");
+const { getMachineryUtilization } = require("../controllers/managerAnalyticsController");
 
 const router = express.Router();
 
@@ -1741,9 +1743,9 @@ router.delete("/applications/:id", async (req, res) => {
  * PATCH /api/applications/:id/inspection
  * Log pre-rental checkout or post-rental check-in condition inspections.
  */
-router.patch("/applications/:id/inspection", async (req, res) => {
+router.patch("/applications/:id/inspection", authManager, async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 400, "Invalid application id.");
-  const { type, odometerHours, fuelLevel, notes, photoCount, managerEmail } = req.body;
+  const { type, odometerHours, fuelLevel, notes, photoCount } = req.body;
   const isCheckout = type === "checkout";
 
   const application = await Application.findById(req.params.id);
@@ -1769,8 +1771,9 @@ router.patch("/applications/:id/inspection", async (req, res) => {
 
   await logAudit({
     action: isCheckout ? "RENTAL_HANDOVER_CHECKOUT" : "RENTAL_RETURN_CHECKIN",
-    actorEmail: cleanEmail(managerEmail || "manager@minders.test"),
-    actorRole: "manager",
+    actorEmail: req.user.email,
+    actorRole: req.user.role,
+    actorId: req.user._id,
     targetEmail: application.memberEmail,
     targetName: application.memberName,
     details: {
@@ -1808,7 +1811,7 @@ router.post("/manager/machinery-maintenance", async (req, res) => {
   const endDate = clean(req.body.endDate);
   const reason = clean(req.body.reason);
   const maintenanceType = clean(req.body.maintenanceType) || "Routine Servicing";
-  const managerEmail = cleanEmail(req.body.managerEmail || "manager@minders.test");
+  const managerEmail = req.user.email;
 
   if (!equipmentUnitId || !equipmentName || !startDate || !endDate || !reason) {
     return fail(res, 400, "All fields (unit ID, machinery name, start date, end date, reason) are required.");
@@ -1839,7 +1842,8 @@ router.post("/manager/machinery-maintenance", async (req, res) => {
   await logAudit({
     action: "EQUIPMENT_OUT_OF_SERVICE",
     actorEmail: managerEmail,
-    actorRole: "manager",
+    actorRole: req.user.role,
+    actorId: req.user._id,
     details: {
       equipmentUnitId,
       equipmentName,
@@ -1870,8 +1874,9 @@ router.delete("/manager/machinery-maintenance/:id", async (req, res) => {
 
   await logAudit({
     action: "EQUIPMENT_RETURNED_TO_SERVICE",
-    actorEmail: cleanEmail(req.body.managerEmail || req.headers["x-admin-email"] || "manager@minders.test"),
-    actorRole: "manager",
+    actorEmail: req.user.email,
+    actorRole: req.user.role,
+    actorId: req.user._id,
     details: `Equipment unit ${record.equipmentUnitId} (${record.equipmentName}) completed ${record.maintenanceType} and is back in service.`,
     req
   });
@@ -2015,9 +2020,6 @@ async function seedDefaultMachineryUnits() {
   }
 }
 
-// Trigger initial seed
-seedDefaultMachineryUnits();
-
 /**
  * GET /api/machinery-units
  * Returns all farm machinery units with optional filters (?status=..., ?search=...)
@@ -2026,7 +2028,7 @@ router.get("/machinery-units", async (req, res) => {
   try {
     await seedDefaultMachineryUnits();
     const { status, search } = req.query;
-    const filter = {};
+    const filter = { isArchived: { $ne: true } };
 
     if (status && status !== "All") {
       filter.status = status;
@@ -2068,7 +2070,7 @@ router.get("/machinery-units/:id", async (req, res) => {
  * POST /api/machinery-units
  * Registers a new machinery unit in the fleet
  */
-router.post("/machinery-units", async (req, res) => {
+router.post("/machinery-units", authManager, async (req, res) => {
   try {
     const unitId = clean(req.body.unitId);
     const name = clean(req.body.name);
@@ -2083,7 +2085,7 @@ router.post("/machinery-units", async (req, res) => {
     const modelYear = clean(req.body.modelYear) || String(new Date().getFullYear());
     const serialNumber = clean(req.body.serialNumber) || "";
     const operatingHours = Number(req.body.operatingHours) || 0;
-    const managerEmail = cleanEmail(req.body.managerEmail || req.headers["x-admin-email"] || "manager@minders.test");
+    const managerEmail = req.user.email;
 
     if (!unitId || !name) {
       return fail(res, 400, "Machinery Unit ID and Name are required.");
@@ -2116,7 +2118,8 @@ router.post("/machinery-units", async (req, res) => {
     await logAudit({
       action: "MACHINERY_UNIT_CREATED",
       actorEmail: managerEmail,
-      actorRole: "manager",
+      actorRole: req.user.role,
+      actorId: req.user._id,
       details: `Added new machinery unit ${unitId} (${name}) with status ${status}.`,
       req
     });
@@ -2132,12 +2135,12 @@ router.post("/machinery-units", async (req, res) => {
  * PUT /api/machinery-units/:id
  * Updates an existing machinery unit
  */
-router.put("/machinery-units/:id", async (req, res) => {
+router.put("/machinery-units/:id", authManager, async (req, res) => {
   try {
     const unit = await MachineryUnit.findById(req.params.id);
     if (!unit) return res.status(404).json({ ok: false, error: "Machinery unit not found." });
 
-    const managerEmail = cleanEmail(req.body.managerEmail || req.headers["x-admin-email"] || "manager@minders.test");
+    const managerEmail = req.user.email;
     const oldStatus = unit.status;
 
     if (req.body.name) unit.name = clean(req.body.name);
@@ -2160,7 +2163,8 @@ router.put("/machinery-units/:id", async (req, res) => {
     await logAudit({
       action: "MACHINERY_UNIT_UPDATED",
       actorEmail: managerEmail,
-      actorRole: "manager",
+      actorRole: req.user.role,
+      actorId: req.user._id,
       details: `Updated machinery unit ${unit.unitId} (${unit.name}). Status: ${oldStatus} -> ${unit.status}.`,
       req
     });
@@ -2176,7 +2180,7 @@ router.put("/machinery-units/:id", async (req, res) => {
  * PATCH /api/machinery-units/:id/status
  * Quick status change (Available, Maintenance, Repair, Dispose)
  */
-router.patch("/machinery-units/:id/status", async (req, res) => {
+router.patch("/machinery-units/:id/status", authManager, async (req, res) => {
   try {
     const { status } = req.body;
     if (!["Available", "Maintenance", "Repair", "Dispose"].includes(status)) {
@@ -2190,11 +2194,12 @@ router.patch("/machinery-units/:id/status", async (req, res) => {
     unit.status = status;
     await unit.save();
 
-    const managerEmail = cleanEmail(req.body.managerEmail || req.headers["x-admin-email"] || "manager@minders.test");
+    const managerEmail = req.user.email;
     await logAudit({
       action: "MACHINERY_STATUS_CHANGED",
       actorEmail: managerEmail,
-      actorRole: "manager",
+      actorRole: req.user.role,
+      actorId: req.user._id,
       details: `Changed status of ${unit.unitId} (${unit.name}) from ${oldStatus} to ${status}.`,
       req
     });
@@ -2210,16 +2215,17 @@ router.patch("/machinery-units/:id/status", async (req, res) => {
  * DELETE /api/machinery-units/:id
  * Delete a machinery unit
  */
-router.delete("/machinery-units/:id", async (req, res) => {
+router.delete("/machinery-units/:id", authManager, async (req, res) => {
   try {
     const unit = await MachineryUnit.findByIdAndDelete(req.params.id);
     if (!unit) return res.status(404).json({ ok: false, error: "Machinery unit not found." });
 
-    const managerEmail = cleanEmail(req.body.managerEmail || req.headers["x-admin-email"] || "manager@minders.test");
+    const managerEmail = req.user.email;
     await logAudit({
       action: "MACHINERY_UNIT_DELETED",
       actorEmail: managerEmail,
-      actorRole: "manager",
+      actorRole: req.user.role,
+      actorId: req.user._id,
       details: `Deleted machinery unit ${unit.unitId} (${unit.name}).`,
       req
     });
@@ -2245,7 +2251,7 @@ router.post("/manager/pos-booking", async (req, res) => {
   const deposit = Number(req.body.deposit) || 250;
   const rentalDays = Math.max(Number(req.body.rentalDays) || 1, 1);
   const paymentMethod = clean(req.body.paymentMethod) || "Cash";
-  const managerEmail = cleanEmail(req.body.managerEmail || "manager@minders.test");
+  const managerEmail = req.user.email;
 
   if (!farmerName || !equipment || !startDate || !endDate) {
     return fail(res, 400, "Farmer name, machinery, and valid dates are required.");
@@ -2301,7 +2307,8 @@ router.post("/manager/pos-booking", async (req, res) => {
   await logAudit({
     action: "POS_WALKIN_BOOKING_CREATED",
     actorEmail: managerEmail,
-    actorRole: "manager",
+    actorRole: req.user.role,
+    actorId: req.user._id,
     details: {
       farmerName,
       equipment,
@@ -2333,7 +2340,7 @@ router.post("/manager/pos-settlement", async (req, res) => {
   const repairCost = Number(req.body.repairCost) || 0;
   const fuelCharge = Number(req.body.fuelCharge) || 0;
   const deductionNotes = clean(req.body.deductionNotes);
-  const managerEmail = cleanEmail(req.body.managerEmail || "manager@minders.test");
+  const managerEmail = req.user.email;
 
   const totalLateFee = lateDays * lateFeePerDay;
   const totalDeductions = totalLateFee + repairCost + fuelCharge;
@@ -2382,7 +2389,8 @@ router.post("/manager/pos-settlement", async (req, res) => {
   await logAudit({
     action: "DEPOSIT_SETTLEMENT_FINALIZED",
     actorEmail: managerEmail,
-    actorRole: "manager",
+    actorRole: req.user.role,
+    actorId: req.user._id,
     details: {
       rentalId,
       initialDeposit,
@@ -2417,20 +2425,7 @@ router.post("/manager/pos-settlement", async (req, res) => {
  * Returns daily transaction logs with total cash collected.
  */
 router.get("/manager/transactions", async (req, res) => {
-  let txs = await Transaction.find({}).sort({ createdAt: -1 }).limit(100);
-
-  // If database is empty, seed demo ledger records so dashboard has rich visuals immediately
-  if (!txs.length) {
-    const demoTxs = [
-      { txId: "TX-901", time: "08:45 AM", farmer: "Maya Patel", equipment: "John Deere 5075E", type: "Rental Fee", amount: 360, paymentMethod: "Cash" },
-      { txId: "TX-902", time: "09:12 AM", farmer: "Luis Hernandez", equipment: "Kuhn Disc Mower 310", type: "Deposit", amount: 200, paymentMethod: "Cash" },
-      { txId: "TX-903", time: "11:30 AM", farmer: "Samuel K. Boro", equipment: "Case IH Cultivator", type: "Rental Fee", amount: 285, paymentMethod: "Co-op Credit" },
-      { txId: "TX-904", time: "01:15 PM", farmer: "Eduardo Santos", equipment: "New Holland Baler", type: "Damage Charge", amount: 65, paymentMethod: "Cash" },
-      { txId: "TX-905", time: "03:40 PM", farmer: "Elena Rostova", equipment: "Field Seeder PS-2", type: "Late Fee", amount: 40, paymentMethod: "Cash" }
-    ];
-    await Transaction.insertMany(demoTxs);
-    txs = await Transaction.find({}).sort({ createdAt: -1 });
-  }
+  const txs = await Transaction.find({}).sort({ createdAt: -1 }).limit(100);
 
   const totalCash = txs
     .filter((t) => t.paymentMethod === "Cash")
@@ -2446,15 +2441,7 @@ router.get("/manager/transactions", async (req, res) => {
  * Returns equipment utilization rates across categories.
  */
 router.get("/manager/utilization", async (req, res) => {
-  const categories = [
-    { name: "Tractors", utilizationRate: 88, activeUnits: 7, totalUnits: 8 },
-    { name: "Harvesters", utilizationRate: 75, activeUnits: 3, totalUnits: 4 },
-    { name: "Balers", utilizationRate: 92, activeUnits: 5, totalUnits: 6 },
-    { name: "Mowers", utilizationRate: 60, activeUnits: 3, totalUnits: 5 },
-    { name: "Seeders", utilizationRate: 45, activeUnits: 2, totalUnits: 4 },
-    { name: "Sprayers", utilizationRate: 80, activeUnits: 4, totalUnits: 5 }
-  ];
-  res.json(categories);
+  return getMachineryUtilization(req, res);
 });
 
 // ---------- AUDIT LOGS ENDPOINTS ----------

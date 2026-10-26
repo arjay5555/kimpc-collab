@@ -3,11 +3,14 @@ const path = require("path");
 const express = require("express");
 const mongoose = require("mongoose");
 const { startAuditArchiveWorker } = require("./workers/archiveAuditLogs");
+const authManager = require("./middleware/authManager");
 
 const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(express.json());
+app.use("/api/manager", authManager);
+app.use("/api/manager", require("./routes/manager"));
 app.use("/api", require("./routes/api"));
 app.use(express.static(path.join(__dirname, "public")));
 

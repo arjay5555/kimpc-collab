@@ -45,6 +45,8 @@ const machineryUnitSchema = new mongoose.Schema(
       min: 0,
       default: 400
     },
+    depositRequired: { type: Number, min: 0, default: 0 },
+    lateFeePerDay: { type: Number, min: 0, default: 0 },
     status: {
       type: String,
       enum: ["Available", "Maintenance", "Repair", "Dispose"],
@@ -70,7 +72,9 @@ const machineryUnitSchema = new mongoose.Schema(
     operatingHours: {
       type: Number,
       default: 0
-    }
+    },
+    isArchived: { type: Boolean, default: false, index: true },
+    archivedAt: { type: Date, default: null }
   },
   { timestamps: true }
 );

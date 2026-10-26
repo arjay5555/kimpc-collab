@@ -2957,4 +2957,316 @@ body[data-page="manager"] .admin-workspace-content {
   color: #fff;
 }
 
+/* Manager dashboard overview refresh */
+body[data-page="manager"] .m-dashboard-grid {
+  grid-template-columns: minmax(0, 1.85fr) minmax(290px, 1fr);
+  gap: 22px;
+  align-items: start;
+}
 
+body[data-page="manager"] .m-col-main,
+body[data-page="manager"] .m-col-mid {
+  min-width: 0;
+}
+
+body[data-page="manager"] .dashboard-legacy-widgets,
+body[data-page="manager"] .m-reminders-card,
+body[data-page="manager"] .dashboard-demo-chart {
+  display: none;
+}
+
+body[data-page="manager"] .m-kpi-card {
+  min-height: 116px;
+  box-sizing: border-box;
+  padding: 20px;
+  overflow: hidden;
+}
+
+body[data-page="manager"] .m-kpi-badge-col {
+  gap: 5px;
+  min-width: 74px;
+}
+
+body[data-page="manager"] .m-trend-pill {
+  white-space: nowrap;
+  padding: 4px 8px;
+  color: #006a55;
+  background: #eaf6f1;
+}
+
+body[data-page="manager"] .m-kpi-val {
+  overflow-wrap: anywhere;
+  font-size: clamp(1.15rem, 1.8vw, 1.55rem);
+}
+
+body[data-page="manager"] .m-card {
+  min-width: 0;
+}
+
+body[data-page="manager"] .m-chart-container {
+  min-height: 230px;
+  overflow: hidden;
+}
+
+body[data-page="manager"] .manager-data-chart {
+  width: 100%;
+  height: 230px;
+}
+
+body[data-page="manager"] .manager-chart-bars {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  align-items: end;
+  gap: clamp(5px, 1.1vw, 14px);
+  height: 100%;
+  padding: 14px 4px 0;
+  box-sizing: border-box;
+}
+
+body[data-page="manager"] .manager-chart-column {
+  display: grid;
+  grid-template-rows: 24px minmax(60px, 1fr) 22px;
+  align-items: end;
+  justify-items: center;
+  gap: 7px;
+  height: 100%;
+  min-width: 0;
+}
+
+body[data-page="manager"] .manager-chart-value {
+  max-width: 100%;
+  color: #60736b;
+  font-size: clamp(0.55rem, 0.75vw, 0.72rem);
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body[data-page="manager"] .manager-chart-bar {
+  display: block;
+  width: min(38px, 72%);
+  min-height: 4px;
+  align-self: end;
+  border-radius: 7px 7px 2px 2px;
+  background: linear-gradient(180deg, #28a879, #006a55);
+}
+
+body[data-page="manager"] .manager-booking-bars .manager-chart-bar {
+  background: linear-gradient(180deg, #84c9ab, #328d6c);
+}
+
+body[data-page="manager"] .manager-chart-label {
+  color: #60736b;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+body[data-page="manager"] .manager-dashboard-card {
+  padding: 19px;
+}
+
+body[data-page="manager"] .manager-dashboard-card .m-card-header {
+  margin-bottom: 13px;
+}
+
+body[data-page="manager"] .manager-card-eyebrow {
+  margin: 0 0 3px;
+  color: #718179;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+body[data-page="manager"] .manager-card-link,
+body[data-page="manager"] .manager-review-link,
+body[data-page="manager"] .manager-primary-link {
+  color: #006a55;
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+body[data-page="manager"] .manager-card-link:hover,
+body[data-page="manager"] .manager-review-link:hover,
+body[data-page="manager"] .manager-primary-link:hover {
+  color: #004f40;
+  text-decoration: underline;
+}
+
+body[data-page="manager"] .manager-pending-total {
+  display: grid;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  place-items: center;
+  border-radius: 999px;
+  background: #eaf6f1;
+  color: #006a55;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+body[data-page="manager"] .manager-alert-list,
+body[data-page="manager"] .manager-approval-list,
+body[data-page="manager"] .manager-category-list {
+  display: grid;
+  gap: 10px;
+}
+
+body[data-page="manager"] .manager-alert-item,
+body[data-page="manager"] .manager-approval-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid #e5ece7;
+  border-radius: 10px;
+  background: #fbfdfb;
+}
+
+body[data-page="manager"] .manager-alert-marker {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  border-radius: 50%;
+  background: #d89b27;
+  box-shadow: 0 0 0 4px #fbf2df;
+}
+
+body[data-page="manager"] .manager-alert-marker.is-high {
+  background: #d34e43;
+  box-shadow: 0 0 0 4px #fbe9e6;
+}
+
+body[data-page="manager"] .manager-item-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+body[data-page="manager"] .manager-item-copy strong {
+  color: #20352d;
+  font-size: 0.8rem;
+}
+
+body[data-page="manager"] .manager-item-copy span {
+  color: #718179;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+body[data-page="manager"] .manager-review-link {
+  flex-shrink: 0;
+  padding: 6px 9px;
+  border: 1px solid #cde4d8;
+  border-radius: 7px;
+  background: #f1f8f4;
+}
+
+body[data-page="manager"] .manager-primary-link {
+  display: inline-flex;
+  margin-top: 13px;
+}
+
+body[data-page="manager"] .manager-empty-state {
+  margin: 0;
+  padding: 14px 12px;
+  border: 1px dashed #d8e3dc;
+  border-radius: 9px;
+  color: #718179;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+body[data-page="manager"] .manager-empty-state.is-error {
+  border-color: #efc3bd;
+  color: #a43f35;
+}
+
+body[data-page="manager"] .manager-category-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+body[data-page="manager"] .manager-category-icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  place-items: center;
+  border: 1px solid #d5eade;
+  border-radius: 10px;
+  background: #eff8f2;
+  color: #006a55;
+  font-size: 0.65rem;
+  font-weight: 900;
+}
+
+body[data-page="manager"] .manager-category-content {
+  flex: 1;
+  min-width: 0;
+}
+
+body[data-page="manager"] .manager-category-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: #263a32;
+  font-size: 0.74rem;
+}
+
+body[data-page="manager"] .manager-category-heading > span {
+  color: #50675d;
+  white-space: nowrap;
+}
+
+body[data-page="manager"] .manager-category-heading small {
+  color: #829087;
+  font-size: 0.65rem;
+}
+
+body[data-page="manager"] .manager-category-track {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #edf2ee;
+}
+
+body[data-page="manager"] .manager-category-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #278868;
+}
+
+@media (max-width: 1260px) {
+  body[data-page="manager"] .m-dashboard-grid {
+    grid-template-columns: minmax(0, 1.85fr) minmax(280px, 1fr);
+  }
+}
+
+@media (max-width: 860px) {
+  body[data-page="manager"] .m-dashboard-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body[data-page="manager"] .m-col-mid {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 540px) {
+  body[data-page="manager"] .manager-chart-bars {
+    gap: 3px;
+  }
+
+  body[data-page="manager"] .manager-chart-value {
+    font-size: 0.52rem;
+  }
+}
