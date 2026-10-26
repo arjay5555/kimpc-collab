@@ -67,6 +67,12 @@
             </a>
           </li>
           <li>
+            <a class="admin-nav-link" data-view="reports" href="#reports">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+              <span>Reports</span>
+            </a>
+          </li>
+          <li>
             <a class="admin-nav-link" data-view="messages" href="#issues">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
               <span>Messages</span>
@@ -1131,6 +1137,123 @@
                     </td>
                   </tr>
                 </tfoot>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= SECTION: OPERATIONS & FINANCIAL REPORTS ================= -->
+        <section class="surface section-block manager-view-panel" id="reports" style="display: none; margin-bottom: 28px; padding: 24px; border-radius: 12px; border: 1px solid #e2e8e4; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+          
+          <!-- Top Heading & Filter Controls -->
+          <div class="section-heading" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #f1f5f9;">
+            <div>
+              <h2 style="font-size: 1.3rem; font-weight: 800; margin: 0; color: #1a2926;">Operations &amp; Financial Reports</h2>
+              <p style="font-size: 0.8rem; color: #64746f; margin: 4px 0 0;">Generate period revenue statements, fleet utilization audit logs, and transaction breakdowns.</p>
+            </div>
+
+            <!-- Report Filters Toolbar -->
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <select id="report-period-type" style="padding: 7px 12px; font-size: 0.8rem; font-weight: 600; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #334155; cursor: pointer;">
+                <option value="monthly" selected>Monthly Report</option>
+                <option value="daily">Daily Report</option>
+                <option value="annual">Annual Report</option>
+              </select>
+
+              <input type="month" id="report-param-month" style="padding: 6px 10px; font-size: 0.8rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #334155;">
+              <input type="date" id="report-param-date" style="display: none; padding: 6px 10px; font-size: 0.8rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #334155;">
+              <input type="number" id="report-param-year" min="2020" max="2035" style="display: none; width: 85px; padding: 6px 10px; font-size: 0.8rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #334155;">
+
+              <button type="button" id="btn-run-report" class="button button-outline" style="padding: 7px 12px; font-size: 0.8rem; font-weight: 700; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                Generate
+              </button>
+
+              <button type="button" id="btn-export-report-csv" class="button button-primary" style="background: #0d766e; color: #fff; padding: 7px 14px; font-size: 0.8rem; font-weight: 700; border-radius: 6px; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export CSV
+              </button>
+            </div>
+          </div>
+
+          <!-- Report Metric Summary Cards -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 22px;">
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px;">
+              <span style="font-size: 0.72rem; font-weight: 600; color: #64748b; text-transform: uppercase; display: block; margin-bottom: 4px;">Rental Revenue Total</span>
+              <div style="font-size: 1.45rem; font-weight: 800; color: #047857;" id="rep-stat-revenue">$0.00</div>
+              <div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;" id="rep-stat-period-label">Period Summary</div>
+            </div>
+
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px;">
+              <span style="font-size: 0.72rem; font-weight: 600; color: #64748b; text-transform: uppercase; display: block; margin-bottom: 4px;">Completed Rentals</span>
+              <div style="font-size: 1.45rem; font-weight: 800; color: #0f172a;" id="rep-stat-tx-count">0</div>
+              <div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">Transactions reconciled</div>
+            </div>
+
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px;">
+              <span style="font-size: 0.72rem; font-weight: 600; color: #64748b; text-transform: uppercase; display: block; margin-bottom: 4px;">Average Rental Value</span>
+              <div style="font-size: 1.45rem; font-weight: 800; color: #0f172a;" id="rep-stat-avg-value">$0.00</div>
+              <div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">Per completed booking</div>
+            </div>
+
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px;">
+              <span style="font-size: 0.72rem; font-weight: 600; color: #64748b; text-transform: uppercase; display: block; margin-bottom: 4px;">Fleet Deployment</span>
+              <div style="font-size: 1.45rem; font-weight: 800; color: #0d766e;" id="rep-stat-fleet-util">73.3%</div>
+              <div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">Co-op asset rate</div>
+            </div>
+          </div>
+
+          <!-- Two Column Details: Revenue Category Breakdown & Fast Export Center -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; margin-bottom: 22px;">
+            <!-- Category Revenue Breakdown -->
+            <div style="border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; background: #fff;">
+              <strong style="font-size: 0.88rem; color: #0f172a; display: block; margin-bottom: 12px;">Revenue Stream Breakdown</strong>
+              <div id="rep-category-list" style="display: flex; flex-direction: column; gap: 10px;">
+                <p style="margin: 0; font-size: 0.8rem; color: #64748b;">Loading breakdown...</p>
+              </div>
+            </div>
+
+            <!-- Fast CSV Export Shortcuts -->
+            <div style="border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; background: #f8fafc;">
+              <strong style="font-size: 0.88rem; color: #0f172a; display: block; margin-bottom: 12px;">One-Click Audit Downloads</strong>
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <a id="rep-quick-monthly-csv" href="/api/manager/reports/revenue/monthly?format=csv" class="button button-outline" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; font-size: 0.78rem; text-decoration: none; border-radius: 6px; background: #fff;">
+                  <span>📊 Current Month Revenue Statement (CSV)</span>
+                  <span style="color: #0d766e; font-weight: 700;">Download &darr;</span>
+                </a>
+                <a id="rep-quick-daily-csv" href="/api/manager/reports/revenue/daily?format=csv" class="button button-outline" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; font-size: 0.78rem; text-decoration: none; border-radius: 6px; background: #fff;">
+                  <span>📋 Today's Desk Register Ledger (CSV)</span>
+                  <span style="color: #0d766e; font-weight: 700;">Download &darr;</span>
+                </a>
+                <a id="rep-quick-annual-csv" href="/api/manager/reports/revenue/annual?format=csv" class="button button-outline" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; font-size: 0.78rem; text-decoration: none; border-radius: 6px; background: #fff;">
+                  <span>📈 Annual Fiscal Revenue Summary (CSV)</span>
+                  <span style="color: #0d766e; font-weight: 700;">Download &darr;</span>
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <!-- Transaction Ledger for Selected Period -->
+          <div style="border-top: 1px solid #e2e8f0; padding-top: 18px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <strong style="font-size: 0.92rem; color: #1e293b;" id="rep-table-heading">Completed Period Transactions</strong>
+              <span id="rep-table-count" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 6px; background: #e2e8f0; color: #475569; font-weight: 700;">0 records</span>
+            </div>
+            <div class="table-wrap">
+              <table class="table-full" style="width: 100%;">
+                <thead>
+                  <tr>
+                    <th>Tx ID / Time</th>
+                    <th>Farmer</th>
+                    <th>Equipment Unit</th>
+                    <th>Category</th>
+                    <th>Payment Method</th>
+                    <th class="align-right">Net Amount</th>
+                  </tr>
+                </thead>
+                <tbody id="rep-transactions-table">
+                  <tr><td colspan="6" style="text-align: center; color: #64748b; padding: 16px; font-size: 0.8rem;">Loading report data...</td></tr>
+                </tbody>
               </table>
             </div>
           </div>

@@ -1142,6 +1142,7 @@ async function initManagerPage() {
   const cashTotalEl = document.querySelector("#cash-intake-total");
   let loadMachineryUnits = null;
   let loadManagerCalendar = null;
+  let loadManagerReports = null;
 
   // Field issues are loaded from the manager API below.
   const issuesEl = document.querySelector("#manager-issues");
@@ -1165,6 +1166,7 @@ async function initManagerPage() {
     "drivers": { label: "Drivers", selector: "#approvals" },
     "financials": { label: "Financials", selector: "#pos-terminal" },
     "pos-terminal": { label: "Point of Sale (POS)", selector: "#pos-terminal" },
+    "reports": { label: "Operations & Financial Reports", selector: "#reports" },
     "tracking": { label: "Fleet Tracking", selector: "#maintenance" },
     "analytics": { label: "Utilization & Ledger", selector: "#analytics" },
     "messages": { label: "Messages & Incidents", selector: "#issues" },
@@ -1197,6 +1199,11 @@ async function initManagerPage() {
     // Refresh calendar & sync status when navigating to calendar
     if (targetKey === "calendar" && typeof loadManagerCalendar === "function") {
       loadManagerCalendar();
+    }
+
+    // Refresh reports when navigating to reports
+    if (targetKey === "reports" && typeof loadManagerReports === "function") {
+      loadManagerReports();
     }
 
     // Prevent scrolling down: stay pinned cleanly to top
@@ -1562,6 +1569,126 @@ async function initManagerPage() {
   renderCalendarGrid();
   handleCalendarUrlParams();
   updateGoogleSyncStatus();
+
+  // ================= 6. OPERATIONS & FINANCIAL REPORTS =================
+  const repPeriodTypeSelect = document.querySelector("#report-period-type");
+  const repMonthInput = document.querySelector("#report-param-month");
+  const repDateInput = document.querySelector("#report-param-date");
+  const repYearInput = document.querySelector("#report-param-year");
+  const btnRunReport = document.querySelector("#btn-run-report");
+  const btnExportCsv = document.querySelector("#btn-export-report-csv");
+  const repStatRevenue = document.querySelector("#rep-stat-revenue");
+  const repStatPeriodLabel = document.querySelector("#rep-stat-period-label");
+  const repStatTxCount = document.querySelector("#rep-stat-tx-count");
+  const repStatAvgValue = document.querySelector("#rep-stat-avg-value");
+  const repCategoryList = document.querySelector("#rep-category-list");
+  const repTxTable = document.querySelector("#rep-transactions-table");
+  const repTableCount = document.querySelector("#rep-table-count");
+
+  const nowReport = new Date();
+  const currentMonthStr = `${nowReport.getFullYear()}-${String(nowReport.getMonth() + 1).padStart(2, "0")}`;
+  const currentDateStr = `${currentMonthStr}-${String(nowReport.getDate()).padStart(2, "0")}`;
+  if (repMonthInput) repMonthInput.value = currentMonthStr;
+  if (repDateInput) repDateInput.value = currentDateStr;
+  if (repYearInput) repYearInput.value = nowReport.getFullYear();
+
+  repPeriodTypeSelect?.addEventListener("change", (e) => {
+    const val = e.target.value;
+    if (repMonthInput) repMonthInput.style.display = val === "monthly" ? "inline-block" : "none";
+    if (repDateInput) repDateInput.style.display = val === "daily" ? "inline-block" : "none";
+    if (repYearInput) repYearInput.style.display = val === "annual" ? "inline-block" : "none";
+    loadManagerReports();
+  });
+
+  const getReportQueryParam = () => {
+    const period = repPeriodTypeSelect ? repPeriodTypeSelect.value : "monthly";
+    if (period === "daily") {
+      const d = repDateInput?.value || currentDateStr;
+      return { period: "daily", param: `date=${encodeURIComponent(d)}` };
+    }
+    if (period === "annual") {
+      const y = repYearInput?.value || nowReport.getFullYear();
+      return { period: "annual", param: `year=${encodeURIComponent(y)}` };
+    }
+    const m = repMonthInput?.value || currentMonthStr;
+    return { period: "monthly", param: `month=${encodeURIComponent(m)}` };
+  };
+
+  btnExportCsv?.addEventListener("click", () => {
+    const { period, param } = getReportQueryParam();
+    window.location.href = `/api/manager/reports/revenue/${period}?${param}&format=csv`;
+  });
+
+  btnRunReport?.addEventListener("click", () => {
+    loadManagerReports();
+  });
+
+  loadManagerReports = async () => {
+    const { period, param } = getReportQueryParam();
+    
+    // 1. Fetch revenue report
+    try {
+      const { ok, data } = await api(`/manager/reports/revenue/${period}?${param}`);
+      if (ok && data) {
+        if (repStatRevenue) repStatRevenue.textContent = `$${Number(data.rentalRevenue || 0).toFixed(2)}`;
+        if (repStatPeriodLabel) repStatPeriodLabel.textContent = data.range?.label || "Selected period";
+        if (repStatTxCount) repStatTxCount.textContent = data.transactionCount || 0;
+        
+        const count = data.transactionCount || 0;
+        const avg = count > 0 ? (Number(data.rentalRevenue || 0) / count) : 0;
+        if (repStatAvgValue) repStatAvgValue.textContent = `$${avg.toFixed(2)}`;
+
+        if (repCategoryList && data.totalsByType) {
+          const types = Object.entries(data.totalsByType);
+          if (types.length === 0) {
+            repCategoryList.innerHTML = `<p style="margin:0; font-size:0.8rem; color:#64748b;">No collections recorded for this period.</p>`;
+          } else {
+            repCategoryList.innerHTML = types.map(([type, total]) => {
+              const pct = data.rentalRevenue > 0 ? Math.min(100, Math.round((total / data.rentalRevenue) * 100)) : 0;
+              return `
+                <div>
+                  <div style="display:flex; justify-content:space-between; font-size:0.78rem; font-weight:700; margin-bottom:3px;">
+                    <span>${escapeHtml(type)}</span>
+                    <span style="color:#047857; font-family:monospace; font-weight:800;">+$${Number(total).toFixed(2)} (${pct}%)</span>
+                  </div>
+                  <div style="width:100%; height:7px; background:#e2e8f0; border-radius:999px; overflow:hidden;">
+                    <div style="width:${pct}%; height:100%; background:#0d766e; border-radius:999px;"></div>
+                  </div>
+                </div>
+              `;
+            }).join("");
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to load revenue report:", err);
+    }
+
+    // 2. Fetch completed transactions for the table
+    try {
+      const { ok: okTx, data: txData } = await api("/manager/transactions");
+      if (okTx && txData && repTxTable) {
+        const list = txData.transactions || [];
+        if (repTableCount) repTableCount.textContent = `${list.length} records`;
+        if (list.length === 0) {
+          repTxTable.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:16px; color:#64748b; font-size:0.8rem;">No transactions recorded for this period.</td></tr>`;
+        } else {
+          repTxTable.innerHTML = list.map((tx) => `
+            <tr>
+              <td><strong class="font-mono text-slate-900">${escapeHtml(tx.txId)}</strong><small style="display:block; font-size:0.72rem; color:#64748b;">${escapeHtml(tx.time)}</small></td>
+              <td><strong>${escapeHtml(tx.farmer)}</strong></td>
+              <td>${escapeHtml(tx.equipment)}</td>
+              <td><span class="status-badge ${tx.type === "Rental Fee" ? "status-approved" : tx.type === "Deposit" ? "status-active" : "status-rejected"}">${escapeHtml(tx.type)}</span></td>
+              <td><strong>${escapeHtml(tx.paymentMethod)}</strong></td>
+              <td class="align-right font-mono" style="font-weight:800; color:#047857;">+$${Number(tx.amount).toFixed(2)}</td>
+            </tr>
+          `).join("");
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to load transactions for report:", err);
+    }
+  };
 
   window.addEventListener("hashchange", () => {
     const hash = window.location.hash.replace(/^#/, "");
