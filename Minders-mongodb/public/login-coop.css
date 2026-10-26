@@ -1,0 +1,872 @@
+/* =========================================================================
+   KIMPC Cooperative Machinery Rental - Modern Authentic Login Experience
+   Compact No-Scroll Responsive Layout (Fits 100vh on all screen sizes)
+   ========================================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,600&display=swap');
+
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body.coop-login-page,
+body.coop-login-page input,
+body.coop-login-page button,
+body.coop-login-page select,
+body.coop-login-page textarea,
+body.coop-login-page a,
+body.coop-login-page span,
+body.coop-login-page p,
+body.coop-login-page h1,
+body.coop-login-page h2,
+body.coop-login-page h3 {
+  font-family: "Century Gothic", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+body.coop-login-page {
+  height: 100vh;
+  max-height: 100vh;
+  background: url("images/log in page background.png") no-repeat center center fixed;
+  background-size: cover;
+  font-family: "Century Gothic", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #1a2b1f;
+  position: relative;
+  overflow-x: hidden;
+  overflow-y: auto; /* Fallback for very small height screens */
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+/* Subtle cinematic lighting overlay */
+body.coop-login-page::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(14, 32, 20, 0.48) 0%,
+    rgba(25, 20, 10, 0.22) 45%,
+    rgba(35, 25, 10, 0.44) 100%
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ================= Top Navigation Header ================= */
+.coop-top-header {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 36px;
+  max-width: 1440px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.coop-brand-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+.coop-brand-wrap:hover {
+  opacity: 0.94;
+}
+
+.coop-brand-logo {
+  height: 38px;
+  width: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
+}
+
+.coop-brand-text {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.coop-brand-name {
+  font-family: "Century Gothic", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.coop-brand-slash {
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 300;
+  font-size: 1.15rem;
+}
+
+.coop-brand-dept {
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: #f1ede2;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  letter-spacing: 0.01em;
+}
+
+.coop-nav-links {
+  display: flex;
+  gap: 28px;
+  align-items: center;
+}
+
+.coop-nav-link {
+  color: rgba(255, 255, 255, 0.88);
+  text-decoration: none;
+  font-size: 0.84rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+.coop-nav-link:hover {
+  color: #86efac;
+  transform: translateY(-1px);
+}
+
+/* ================= Main Stage Grid (Zero-Scroll Flex View) ================= */
+.coop-login-stage {
+  position: relative;
+  z-index: 10;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 18px 40px 22px;
+  display: grid;
+  grid-template-columns: 480px 1fr;
+  grid-template-rows: 1fr;
+  gap: 44px;
+  align-items: stretch;
+  flex: 1;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ================= Left: Prominent Spacious Login & Sign-up Card ================= */
+.coop-login-card {
+  align-self: stretch;
+  background: #f5f4ed;
+  border-radius: 32px;
+  padding: 30px 40px 26px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.42), 0 6px 18px rgba(0, 0, 0, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  position: relative;
+  box-sizing: border-box;
+  margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  animation: cardFadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(47, 69, 52, 0.2) transparent;
+  transition: background 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
+}
+
+/* ================= Distinctive Sign-up Green Card Theme ================= */
+.coop-login-card.signup-mode {
+  background: linear-gradient(165deg, #123e20 0%, #0d2c16 55%, #082010 100%);
+  border: 1.5px solid rgba(74, 222, 128, 0.45);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.58), 0 0 35px rgba(34, 197, 94, 0.22);
+  scrollbar-color: rgba(74, 222, 128, 0.35) transparent;
+}
+
+.coop-login-card.signup-mode::-webkit-scrollbar-thumb {
+  background: rgba(74, 222, 128, 0.35);
+}
+
+.coop-login-card.signup-mode .coop-login-headline {
+  color: #ffffff;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+.coop-login-card.signup-mode .coop-auth-subtext {
+  color: #c0dec8;
+}
+
+.coop-login-card.signup-mode .coop-pill-input {
+  background: #ffffff;
+  border: 1.5px solid #295735;
+  color: #0f2617;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.coop-login-card.signup-mode .coop-pill-input::placeholder {
+  color: #688570;
+}
+
+.coop-login-card.signup-mode .coop-pill-input:focus {
+  background: #ffffff;
+  border-color: #22c55e;
+  box-shadow: 0 0 0 3.5px rgba(34, 197, 94, 0.3);
+}
+
+.coop-login-card.signup-mode .coop-pwd-eye-btn {
+  color: #55755e;
+}
+
+.coop-login-card.signup-mode .coop-pwd-eye-btn:hover {
+  color: #143e21;
+}
+
+.coop-login-card.signup-mode .coop-remember-label,
+.coop-login-card.signup-mode .coop-remember-label span {
+  color: #ffffff;
+}
+
+.coop-login-card.signup-mode .coop-remember-label input[type="checkbox"] {
+  accent-color: #22c55e;
+}
+
+.coop-login-card.signup-mode .btn-coop-harvest {
+  background: linear-gradient(135deg, #22c55e 0%, #15803d 100%);
+  color: #ffffff;
+  border: 1px solid rgba(134, 239, 172, 0.4);
+  box-shadow: 0 8px 24px rgba(34, 197, 94, 0.38);
+}
+
+.coop-login-card.signup-mode .btn-coop-harvest:hover {
+  background: linear-gradient(135deg, #28d066 0%, #166534 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 28px rgba(34, 197, 94, 0.48);
+}
+
+.coop-login-card.signup-mode .coop-auth-divider {
+  color: #b2d7bc;
+}
+
+.coop-login-card.signup-mode .coop-auth-divider::before,
+.coop-login-card.signup-mode .coop-auth-divider::after {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.coop-login-card.signup-mode .coop-card-footer {
+  color: #c0dec8;
+}
+
+.coop-login-card.signup-mode .coop-card-footer .coop-join-link {
+  color: #86efac;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.coop-login-card.signup-mode .coop-card-footer .coop-join-link:hover {
+  color: #bbf7d0;
+}
+
+.coop-login-card.signup-mode .form-feedback {
+  color: #fef08a;
+}
+
+.coop-login-card.signup-mode .form-feedback.is-error {
+  color: #fca5a5;
+}
+
+.coop-login-card::-webkit-scrollbar {
+  width: 5px;
+}
+.coop-login-card::-webkit-scrollbar-track {
+  background: transparent;
+}
+.coop-login-card::-webkit-scrollbar-thumb {
+  background: rgba(47, 69, 52, 0.25);
+  border-radius: 10px;
+}
+
+@keyframes cardFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ================= View Panels (Log In / Sign Up / Verify) ================= */
+.coop-auth-view {
+  display: none;
+  flex-direction: column;
+  flex: 1;
+  justify-content: space-between;
+}
+
+.coop-auth-view.active {
+  display: flex;
+  animation: viewFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes viewFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.coop-login-headline {
+  font-family: "Century Gothic", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 2.25rem;
+  font-weight: 700;
+  color: #1a2c1f;
+  line-height: 1.12;
+  margin: 0 0 6px;
+  letter-spacing: -0.02em;
+}
+
+.coop-auth-subtext {
+  font-size: 0.88rem;
+  color: #556b5a;
+  margin: 0 0 18px;
+  line-height: 1.35;
+}
+
+.coop-signup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.coop-signup-header .coop-login-headline {
+  margin-bottom: 0;
+  font-size: 2.15rem;
+}
+
+.coop-badge-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #eaf5ec;
+  border: 1px solid #c2e2cc;
+  color: #136534;
+  padding: 4px 10px;
+  border-radius: 14px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.coop-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #16a34a;
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.25);
+}
+
+/* Verification State Styling */
+.coop-verify-card {
+  background: #ffffff;
+  border: 1.5px solid #d4e8da;
+  border-radius: 20px;
+  padding: 22px 18px;
+  text-align: center;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.04);
+  margin: 10px 0 16px;
+}
+
+.coop-verify-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #e8f5ec;
+  color: #166b39;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 12px;
+}
+
+.coop-verify-title {
+  font-family: "Century Gothic", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: #1a2c1f;
+  margin: 0 0 8px;
+}
+
+.coop-verify-desc {
+  font-size: 0.85rem;
+  color: #4b6151;
+  line-height: 1.45;
+  margin: 0 0 14px;
+}
+
+.coop-verify-email-badge {
+  display: inline-block;
+  background: #f4f3ec;
+  color: #1a2c1f;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid #dcd9cf;
+  word-break: break-all;
+}
+
+.coop-login-subline {
+  font-family: "Century Gothic", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 1.05rem;
+  color: #2e4435;
+  line-height: 1.35;
+  margin: 0 0 22px;
+  font-weight: 500;
+}
+
+/* Multi-column Input Rows */
+.coop-input-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 520px) {
+  .coop-input-row {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}
+
+/* Spacious Pill Inputs */
+.coop-pill-input-wrap {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.coop-pill-input {
+  width: 100%;
+  padding: 12px 20px;
+  border-radius: 26px;
+  border: 1.5px solid #2f4534;
+  background: #faf9f4;
+  color: #1a2a1e;
+  font-size: 0.94rem;
+  font-family: inherit;
+  outline: none;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+.coop-pill-input:focus {
+  background: #ffffff;
+  border-color: #0d766e;
+  box-shadow: 0 0 0 3.5px rgba(13, 118, 110, 0.16);
+}
+
+.coop-pill-input::placeholder {
+  color: #7b8c80;
+  font-weight: 400;
+}
+
+.coop-password-input {
+  padding-right: 46px;
+}
+
+.coop-pwd-eye-btn {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #637667;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: color 0.2s;
+}
+
+.coop-pwd-eye-btn:hover {
+  color: #1a2c1f;
+}
+
+/* Meta: Remember me & Forgot Password */
+.coop-login-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 2px 4px 10px;
+  font-size: 0.78rem;
+}
+
+.coop-remember-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #556b5a;
+  cursor: pointer;
+  user-select: none;
+}
+
+.coop-remember-label input[type="checkbox"] {
+  accent-color: #1b7a43;
+  cursor: pointer;
+  margin: 0;
+}
+
+.coop-forgot-link {
+  color: #3b5040;
+  text-decoration: none;
+  font-weight: 600;
+  transition: color 0.2s;
+}
+
+.coop-forgot-link:hover {
+  color: #1b7a43;
+  text-decoration: underline;
+}
+
+/* Scaled Compact reCAPTCHA */
+.coop-recaptcha-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 2px 0 8px;
+  transform: scale(0.84);
+  transform-origin: center;
+  height: 66px;
+}
+
+/* Agriculture Green Button */
+.btn-coop-harvest {
+  width: 100%;
+  padding: 13px 24px;
+  border-radius: 28px;
+  border: none;
+  background: linear-gradient(135deg, #1b7a43 0%, #11572e 100%);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 1.02rem;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  cursor: pointer;
+  box-shadow: 0 7px 20px rgba(27, 122, 67, 0.38);
+  transition: all 0.2s ease;
+  letter-spacing: 0.01em;
+}
+
+.btn-coop-harvest:hover {
+  background: linear-gradient(135deg, #229352 0%, #166b39 100%);
+  box-shadow: 0 9px 24px rgba(27, 122, 67, 0.48);
+  transform: translateY(-1px);
+}
+
+.btn-coop-harvest:active {
+  transform: translateY(0);
+  box-shadow: 0 4px 10px rgba(27, 122, 67, 0.25);
+}
+
+.key-glyph {
+  font-size: 1rem;
+}
+
+/* Divider */
+.coop-auth-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 14px 0 12px;
+  color: #8c9c8f;
+  font-size: 0.78rem;
+}
+
+.coop-auth-divider::before,
+.coop-auth-divider::after {
+  content: "";
+  flex: 1;
+  border-bottom: 1px solid #dcd9cf;
+}
+
+.coop-auth-divider span {
+  padding: 0 14px;
+}
+
+/* Circular Social / Auth Buttons */
+.coop-social-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.coop-circle-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid #d5d2c5;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
+  transition: all 0.2s ease;
+}
+
+.coop-circle-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12);
+}
+
+.coop-circle-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.coop-circle-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+.coop-circle-btn.btn-google {
+  background: #ffffff;
+}
+
+.coop-circle-btn.btn-facebook {
+  background: #ffffff;
+}
+
+.coop-circle-btn.btn-facebook:hover {
+  border-color: #1877F2;
+  box-shadow: 0 6px 18px rgba(24, 119, 242, 0.28);
+}
+
+.coop-circle-btn.btn-coop-badge {
+  background: #1b4332;
+  border-color: #1b4332;
+  color: #ffffff;
+}
+
+.coop-circle-btn.btn-id-card {
+  background: #2d4f3b;
+  border-color: #2d4f3b;
+  color: #ffffff;
+}
+
+/* Hidden container for official GIS (triggered via circular button or One Tap) */
+.coop-google-gsi-wrap {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  height: 0;
+  overflow: hidden;
+}
+
+/* Card Footer */
+.coop-card-footer {
+  text-align: center;
+  font-size: 0.86rem;
+  color: #4b6151;
+  margin: 0;
+}
+
+.coop-join-link {
+  color: #1b7a43;
+  font-weight: 700;
+  text-decoration: none;
+  margin-left: 4px;
+}
+
+.coop-join-link:hover {
+  text-decoration: underline;
+  color: #11572e;
+}
+
+/* ================= Right: Compact Floating Active Fleet Card ================= */
+.coop-floating-widget-wrap {
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-end;
+  align-self: end;
+  width: 100%;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.coop-floating-card {
+  margin-bottom: 0;
+  background: rgba(36, 25, 14, 0.68);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 24px;
+  padding: 20px 26px 22px;
+  color: #ffffff;
+  max-width: 520px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+  animation: cardFadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.coop-float-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.coop-float-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+  letter-spacing: 0.01em;
+}
+
+.coop-float-nav {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.coop-nav-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.coop-nav-dot.active {
+  background: #ffffff;
+}
+
+.coop-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.coop-stat-cell {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 10px 8px;
+  text-align: center;
+}
+
+.coop-stat-num {
+  display: block;
+  font-size: 1.45rem;
+  font-weight: 800;
+  line-height: 1;
+  margin-bottom: 4px;
+  color: #ffffff;
+}
+
+.coop-stat-lbl {
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.78);
+  line-height: 1.25;
+  font-weight: 500;
+}
+
+.coop-floating-quote {
+  font-family: "Century Gothic", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 1.35rem;
+  font-weight: 500;
+  line-height: 1.22;
+  color: #f7f3e8;
+  margin: 0;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+
+/* Form Feedback */
+.form-feedback {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  min-height: 1.1rem;
+  text-align: center;
+}
+
+.form-feedback.is-error {
+  color: #b91c1c;
+}
+
+.form-feedback.is-success {
+  color: #15803d;
+}
+
+/* ================= Responsive Breakpoints ================= */
+@media (max-width: 1024px) {
+  body.coop-login-page {
+    height: auto;
+    max-height: none;
+    overflow-y: auto;
+  }
+  .coop-login-stage {
+    grid-template-columns: 1fr;
+    gap: 28px;
+    padding: 10px 24px 30px;
+  }
+  .coop-login-card {
+    max-width: 440px;
+    margin: 0 auto;
+    width: 100%;
+  }
+  .coop-floating-widget-wrap {
+    justify-content: center;
+  }
+  .coop-floating-card {
+    max-width: 440px;
+    width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .coop-top-header {
+    padding: 14px 18px;
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .coop-nav-links {
+    gap: 16px;
+    flex-wrap: wrap;
+    font-size: 0.78rem;
+  }
+  .coop-login-stage {
+    padding: 10px 14px 24px;
+  }
+  .coop-login-card {
+    padding: 22px 20px 18px;
+    border-radius: 22px;
+  }
+  .coop-login-headline {
+    font-size: 1.65rem;
+  }
+  .coop-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .coop-floating-quote {
+    font-size: 1.2rem;
+  }
+}

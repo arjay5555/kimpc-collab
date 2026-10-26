@@ -7,50 +7,719 @@
   <title>Account Management | Minders</title>
   <link rel="stylesheet" href="styles.css">
 </head>
-<body data-page="account-management">
-  <header class="site-header app-header">
-    <a class="brand" href="index.html"><span class="brand-mark">M</span><span>Minders</span></a>
-    <nav class="top-nav" aria-label="Primary navigation"><a href="admin.html">Admin portal</a><a href="manager.html">Manager</a></nav>
-    <a class="header-user" href="admin.html"><span class="avatar avatar-purple">SA</span><span>System admin</span></a>
-  </header>
-  <main class="app-shell admin-shell">
-    <section class="page-intro">
-      <div><p class="eyebrow">ADMIN PORTAL / STAFF AND MEMBERS</p><h1>Account management</h1><p class="muted">Create staff access and review registered application accounts.</p></div>
-      <a class="button button-outline" href="admin.html"><span aria-hidden="true">&#8592;</span> Back to admin</a>
-    </section>
-    <div class="account-management-layout">
-      <section class="surface account-management-surface">
-        <div class="section-heading"><div><p class="section-label">STAFF ACCESS</p><h2>Create staff account</h2></div></div>
-        <p class="section-intro">Create a manager or admin sign-in.</p>
-        <form class="stack-form staff-account-form" id="staff-account-form">
-          <label for="staff-full-name">Full name</label>
-          <input id="staff-full-name" name="fullName" type="text" autocomplete="name" required>
-          <label for="staff-email">Email address</label>
-          <input id="staff-email" name="email" type="email" autocomplete="email" required>
-          <label for="staff-password">Temporary password</label>
-          <input id="staff-password" name="password" type="password" autocomplete="new-password" minlength="6" required>
-          <label for="staff-role">Account role</label>
-          <select id="staff-role" name="role" required>
-            <option value="manager">Manager</option>
-            <option value="admin">Admin</option>
-          </select>
-          <button class="button button-primary button-full" type="submit">Create account <span aria-hidden="true">&#8594;</span></button>
-          <p class="form-feedback" id="account-feedback" role="status" aria-live="polite"></p>
-        </form>
-        <p class="delete-note">Staff accounts are marked verified when created by an admin.</p>
-      </section>
-      <section class="surface account-management-surface">
-        <div class="section-heading"><div><p class="section-label">ACCOUNT DIRECTORY</p><h2>Registered accounts</h2></div></div>
-        <p class="section-intro">Members who registered and staff accounts created by an admin.</p>
-        <div class="table-wrap">
-          <table class="account-directory">
-            <thead><tr><th>Name / ID</th><th>Email</th><th>Role</th><th>Status</th><th>Created</th><th>Action</th></tr></thead>
-            <tbody id="account-list"></tbody>
-          </table>
+<body class="admin-body" data-page="account-management">
+  <div class="admin-layout">
+    <!-- ================= Left Sidebar ================= -->
+    <aside class="admin-sidebar" aria-label="Admin Sidebar">
+      <div class="admin-sidebar-header">
+        <a class="admin-brand" href="admin.html">
+          <img src="images/kimpc logo.png" alt="KIMPC Logo" class="admin-brand-logo">
+          <div class="admin-brand-text">
+            <strong>ADMIN</strong>
+            <small>Kalilangan Irrigators Multi-Purpose Cooperative</small>
+          </div>
+        </a>
+      </div>
+
+      <nav class="admin-sidebar-nav" aria-label="Admin Navigation">
+        <div>
+          <div class="admin-nav-group-title">Main Menu</div>
+          <ul class="admin-nav-list">
+            <li>
+              <a class="admin-nav-link" href="admin.html">
+                <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+                <span>Overview</span>
+              </a>
+            </li>
+            <li>
+              <a class="admin-nav-link active" href="account-management.html">
+                <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                <span>Account</span>
+              </a>
+            </li>
+            <li>
+              <a class="admin-nav-link" href="booking-approvals.html">
+                <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                <span>Booking Approvals</span>
+              </a>
+            </li>
+            <li>
+              <a class="admin-nav-link" href="audit-logs.html">
+                <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                <span>Audit Logs</span>
+              </a>
+            </li>
+            <li>
+              <a class="admin-nav-link" id="open-sys-settings" href="#settings">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                <span>Settings</span>
+              </a>
+            </li>
+          </ul>
         </div>
-      </section>
+      </nav>
+
+      <div class="admin-sidebar-footer">
+        <div class="admin-user-card">
+          <div class="admin-avatar" id="sidebar-admin-avatar">SA</div>
+          <div class="admin-user-info" id="sidebar-admin-info">
+            <strong id="sidebar-admin-name">Admin</strong>
+            <small id="sidebar-admin-email">...</small>
+          </div>
+        </div>
+        <button class="admin-logout-btn" data-logout type="button">
+          <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          <span>Log out</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- ================= Main Workspace ================= -->
+    <div class="admin-main-wrapper">
+      <header class="admin-topbar">
+        <div class="admin-topbar-left">
+          <div class="admin-breadcrumb">
+            <a href="admin.html" style="color: inherit; text-decoration: none;">Admin Console</a>
+            <span>/</span>
+            <strong>Account</strong>
+          </div>
+        </div>
+      </header>
+
+      <main class="admin-workspace-content">
+        <div class="account-management-layout">
+          <!-- Registered Account Directory Table -->
+          <section class="surface account-management-surface">
+            <div class="section-heading" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 12px;">
+              <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+                <h1 style="margin: 0; font-size: 1.3rem; font-weight: 800; color: var(--ink); letter-spacing: -0.02em;">Accounts</h1>
+                
+                <!-- Account Directory Tabs (Active Directory vs Archive Folder) -->
+                <div class="account-tabs-bar" style="display: flex; gap: 6px; margin: 0; border: none; padding: 0;">
+                  <button type="button" class="tab-button is-active" id="tab-btn-active" style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 6px; font-weight: 700; font-size: 0.78rem; cursor: pointer; border: 1px solid var(--line); background: #ffffff; color: var(--ink);">
+                    <span>👥 Active</span>
+                    <span id="badge-count-active" style="background: #e2e8f0; color: #334155; font-size: 0.7rem; padding: 1px 6px; border-radius: 10px; font-weight: 700;">0</span>
+                  </button>
+                  <button type="button" class="tab-button" id="tab-btn-archive" style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 6px; font-weight: 700; font-size: 0.78rem; cursor: pointer; border: 1px solid transparent; background: transparent; color: var(--ink-soft);">
+                    <span>📁 Archive</span>
+                    <span id="badge-count-archived" style="background: #fef3c7; color: #92400e; font-size: 0.7rem; padding: 1px 6px; border-radius: 10px; font-weight: 700;">0</span>
+                  </button>
+                </div>
+              </div>
+
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <div id="archive-folder-badge" style="display: none; font-size: 0.74rem; color: #92400e; background: #fffbeb; padding: 4px 9px; border-radius: 6px; border: 1px solid #fde68a; font-weight: 700;">
+                  📁 ARCHIVE VIEW
+                </div>
+                <!-- Create staff account button with icon -->
+                <button type="button" class="button button-primary" id="btn-open-create-staff" style="display: inline-flex; align-items: center; gap: 6px; font-weight: 700; padding: 7px 14px; font-size: 0.8rem; border-radius: 6px; box-shadow: 0 2px 8px rgba(13, 118, 110, 0.18); cursor: pointer;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="8.5" cy="7" r="4"></circle>
+                    <line x1="20" y1="8" x2="20" y2="14"></line>
+                    <line x1="23" y1="11" x2="17" y2="11"></line>
+                  </svg>
+                  <span>Create staff account</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Page-level Notification Feedback -->
+            <p class="form-feedback" id="page-account-feedback" role="status" aria-live="polite" style="margin: 0 0 10px; font-size: 0.82rem; font-weight: 600;"></p>
+
+            <!-- Search Bar with Inline Sort & Filter Icon Button -->
+            <div class="account-search-container" style="position: relative; margin-bottom: 12px;">
+              <div class="search-input-wrapper" style="position: relative; display: flex; align-items: center;">
+                <span style="position: absolute; left: 14px; color: var(--ink-soft); font-size: 0.95rem; pointer-events: none; display: flex; align-items: center;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                  </svg>
+                </span>
+                <input 
+                  type="text" 
+                  id="account-search-input" 
+                  placeholder="Search accounts by name, email, role, or ID..." 
+                  style="width: 100%; padding: 8px 85px 8px 38px; border: 1px solid var(--line); border-radius: 7px; font-size: 0.82rem; background: #ffffff; color: var(--ink); outline: none; transition: border-color 0.2s, box-shadow 0.2s;"
+                >
+                <!-- Sort & Filter Icon Inside Search Bar -->
+                <button 
+                  type="button" 
+                  id="btn-toggle-filter-popover" 
+                  title="Sort &amp; Filter Directory" 
+                  style="position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 5px; padding: 4px 8px; cursor: pointer; display: flex; align-items: center; gap: 5px; color: var(--ink); font-size: 0.72rem; font-weight: 700; transition: all 0.2s;"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="4" y1="21" x2="4" y2="14"></line>
+                    <line x1="4" y1="10" x2="4" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="12"></line>
+                    <line x1="12" y1="8" x2="12" y2="3"></line>
+                    <line x1="20" y1="21" x2="20" y2="16"></line>
+                    <line x1="20" y1="12" x2="20" y2="3"></line>
+                    <line x1="1" y1="14" x2="7" y2="14"></line>
+                    <line x1="9" y1="8" x2="15" y2="8"></line>
+                    <line x1="17" y1="16" x2="23" y2="16"></line>
+                  </svg>
+                  <span>Filter</span>
+                  <span id="active-filter-indicator" style="display: none; width: 6px; height: 6px; border-radius: 50%; background: #0d9488;"></span>
+                </button>
+              </div>
+
+              <!-- Floating Sort & Filter Popover Panel -->
+              <div 
+                id="filter-sort-panel" 
+                style="display: none; position: absolute; right: 0; top: calc(100% + 6px); z-index: 50; width: 330px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.12); padding: 16px;"
+              >
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line);">
+                  <strong style="font-size: 0.86rem; color: var(--ink);">Sort &amp; Filter Options</strong>
+                  <button type="button" id="btn-reset-filters" style="background: none; border: none; font-size: 0.74rem; color: #0d9488; font-weight: 600; cursor: pointer; text-decoration: underline;">Reset All</button>
+                </div>
+
+                <!-- Priority Notice -->
+                <div style="margin-bottom: 12px; padding: 7px 10px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; font-size: 0.72rem; color: #166534; display: flex; align-items: center; gap: 6px;">
+                  <span>📌</span>
+                  <span><strong>Admin &amp; Manager</strong> accounts are always prioritized at the top.</span>
+                </div>
+
+                <!-- Sort Options -->
+                <div style="margin-bottom: 12px;">
+                  <label for="filter-sort-select" style="display: block; font-size: 0.76rem; font-weight: 700; color: var(--ink); margin-bottom: 4px;">Sort Secondary Order</label>
+                  <select id="filter-sort-select" style="width: 100%; padding: 6px 10px; font-size: 0.8rem; border: 1px solid var(--line); border-radius: 6px; background: #fff;">
+                    <option value="name_asc">Full Name (A &rarr; Z)</option>
+                    <option value="name_desc">Full Name (Z &rarr; A)</option>
+                    <option value="date_desc">Date Created (Newest First)</option>
+                    <option value="date_asc">Date Created (Oldest First)</option>
+                    <option value="email_asc">Email Address (A &rarr; Z)</option>
+                  </select>
+                </div>
+
+                <!-- Role Filter -->
+                <div style="margin-bottom: 12px;">
+                  <label for="filter-role-select" style="display: block; font-size: 0.76rem; font-weight: 700; color: var(--ink); margin-bottom: 4px;">Filter by Role</label>
+                  <select id="filter-role-select" style="width: 100%; padding: 6px 10px; font-size: 0.8rem; border: 1px solid var(--line); border-radius: 6px; background: #fff;">
+                    <option value="ALL">All Roles (Admin, Manager, Member)</option>
+                    <option value="admin">Administrators Only</option>
+                    <option value="manager">Managers Only</option>
+                    <option value="member">Members Only</option>
+                  </select>
+                </div>
+
+                <!-- Status Filter -->
+                <div style="margin-bottom: 14px;">
+                  <label for="filter-status-select" style="display: block; font-size: 0.76rem; font-weight: 700; color: var(--ink); margin-bottom: 4px;">Filter by Account Status</label>
+                  <select id="filter-status-select" style="width: 100%; padding: 6px 10px; font-size: 0.8rem; border: 1px solid var(--line); border-radius: 6px; background: #fff;">
+                    <option value="ALL">All Statuses</option>
+                    <option value="verified">Verified Only</option>
+                    <option value="unverified">Unverified Only</option>
+                    <option value="suspended">Suspended Only</option>
+                  </select>
+                </div>
+
+                <div style="display: flex; gap: 8px;">
+                  <button type="button" id="btn-close-filter-popover" class="button button-primary" style="flex: 1; padding: 7px 12px; font-size: 0.78rem;">
+                    Done
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="table-wrap">
+              <table class="account-directory">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Member ID</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Created</th>
+                    <th class="align-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="account-list"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </main>
     </div>
-  </main>
+  </div>
+
+  <!-- Create Staff Account Dialog Modal -->
+  <dialog class="application-dialog" id="create-staff-dialog" style="max-width: 480px;">
+    <div class="profile-dialog-header">
+      <div>
+        <p class="eyebrow">STAFF ACCESS PROVISIONING</p>
+        <h2 style="font-size: 1.35rem;">Create staff account</h2>
+      </div>
+      <button class="application-close" id="close-create-staff-dialog" type="button">&times;</button>
+    </div>
+    <p style="font-size: 0.8rem; color: var(--ink-soft); margin: 8px 0 16px;">
+      Provision a Manager or Admin sign-in with instant verification.
+    </p>
+    <form class="stack-form staff-account-form" id="staff-account-form">
+      <label for="staff-full-name">Full name</label>
+      <input id="staff-full-name" name="fullName" type="text" autocomplete="name" placeholder="e.g. Elena Rostova" required>
+      
+      <label for="staff-email">Email address</label>
+      <input id="staff-email" name="email" type="email" autocomplete="email" placeholder="e.g. elena@minders.test" required>
+      
+      <label for="staff-password">Temporary password</label>
+      <input id="staff-password" name="password" type="password" autocomplete="new-password" minlength="6" placeholder="Min. 6 characters" required>
+      
+      <label for="staff-role">Account role</label>
+      <select id="staff-role" name="role" required>
+        <option value="manager">Manager</option>
+        <option value="admin">Admin</option>
+      </select>
+
+      <!-- One-time PIN group for new Admin -->
+      <div id="staff-admin-pin-group" style="display: none; margin: 10px 0; padding: 12px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;">
+        <label for="staff-admin-pin" style="color: #166534; font-weight: 700; font-size: 0.8rem;">Assign One-Time 6-Digit Admin PIN</label>
+        <input id="staff-admin-pin" name="adminPin" type="password" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" placeholder="e.g. 123456 (or leave blank to auto-generate)" style="font-size: 0.86rem; letter-spacing: 2px;">
+        <p style="margin: 4px 0 0; font-size: 0.73rem; color: #166534; line-height: 1.4;">
+          The new admin will be required to enter this one-time PIN upon first login, then set and confirm their own permanent 6-digit PIN.
+        </p>
+      </div>
+      
+      <div style="display: flex; gap: 10px; margin-top: 12px;">
+        <button class="button button-outline" style="flex: 1;" id="cancel-create-staff-dialog" type="button">Cancel</button>
+        <button class="button button-primary" style="flex: 1.4;" type="submit">Create account &rarr;</button>
+      </div>
+      <p class="form-feedback" id="account-feedback" role="status" aria-live="polite"></p>
+    </form>
+    <p class="delete-note" style="margin-top: 14px; font-size: 0.72rem; color: var(--ink-soft);">
+      Staff accounts created here are marked verified immediately.
+    </p>
+  </dialog>
+
+  <!-- Edit Account Dialog Modal (Non-AI, Enterprise Admin) -->
+  <dialog class="application-dialog edit-account-modal" id="edit-account-dialog">
+    <div class="edit-modal-header">
+      <div class="edit-modal-title-wrap">
+        <div class="edit-modal-eyebrow">
+          <span class="edit-status-indicator"></span>
+          <span>Account Administration</span>
+        </div>
+        <h2 class="edit-modal-title">Edit Account Profile</h2>
+        <p class="edit-modal-subtitle" id="edit-account-subtitle">Manage credentials, permissions, and security settings</p>
+      </div>
+      <button class="edit-modal-close-btn" id="close-edit-dialog" type="button" aria-label="Close dialog">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+
+    <form id="edit-account-form" class="edit-modal-form">
+      <input type="hidden" id="edit-original-email">
+      
+      <!-- Scrollable Modal Body -->
+      <div class="edit-modal-body">
+        <!-- Section 1: Member Credentials & Information -->
+        <div class="edit-form-section">
+          <div class="edit-section-header">
+            <span class="edit-section-tag">Profile &amp; Credentials</span>
+          </div>
+          <div class="edit-form-grid">
+            <div class="edit-form-field">
+              <label for="edit-full-name">Full Name</label>
+              <input id="edit-full-name" name="fullName" type="text" autocomplete="name" required placeholder="Member full name">
+            </div>
+            <div class="edit-form-field">
+              <label for="edit-role">Account Role</label>
+              <select id="edit-role" name="role" required>
+                <option value="member">Member</option>
+                <option value="manager">Manager</option>
+                <option value="admin">Administrator</option>
+              </select>
+            </div>
+            <div class="edit-form-field">
+              <label for="edit-email">Email Address</label>
+              <input id="edit-email" name="email" type="email" autocomplete="email" required placeholder="name@domain.com">
+            </div>
+            <div class="edit-form-field" style="grid-column: 1 / -1;">
+              <!-- State 1: When member has NOT requested forgot password from login page -->
+              <div id="edit-otp-no-request" style="display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+                <div style="display: flex; flex-direction: column; gap: 3px;">
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="font-size: 0.82rem; font-weight: 700; color: #334155;">Password Management</span>
+                    <span style="background: #f1f5f9; color: #64748b; font-size: 0.68rem; font-weight: 600; padding: 2px 7px; border-radius: 4px; border: 1px solid #e2e8f0;">No Reset Requested</span>
+                  </div>
+                  <p style="margin: 2px 0 0; font-size: 0.73rem; color: #64748b; line-height: 1.4;">
+                    Administrators cannot change passwords. If this member forgot their password, they must click <strong>"Forgot Password?"</strong> on the login page first. Once submitted, you can issue their One-Time Password here.
+                  </p>
+                </div>
+              </div>
+
+              <!-- State 2: When member HAS clicked forgot password on login page -->
+              <div id="edit-otp-has-request" style="display: none; padding: 14px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                  <span style="font-size: 0.82rem; font-weight: 700; color: #92400e;">⚠️ Forgot Password Requested</span>
+                  <span style="background: #fef3c7; color: #92400e; font-size: 0.68rem; font-weight: 700; padding: 2px 7px; border-radius: 4px; border: 1px solid #fde68a;">Action Required</span>
+                </div>
+                <p style="margin: 0 0 10px; font-size: 0.74rem; color: #78350f; line-height: 1.4;">
+                  This account requested password recovery on the login page. You can now issue a temporary One-Time Password (OTP) for them.
+                </p>
+                <label for="edit-one-time-password" style="display: block; font-size: 0.76rem; font-weight: 600; color: #334155; margin-bottom: 5px;">
+                  One-Time Password (OTP)
+                </label>
+                <div style="display: flex; gap: 8px;">
+                  <input id="edit-one-time-password" type="text" autocomplete="off" spellcheck="false" placeholder="Enter or generate temporary password" style="flex: 1; padding: 7px 11px; font-size: 0.85rem; font-family: monospace; letter-spacing: 1px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
+                  <button type="button" id="btn-generate-otp" class="btn-control btn-control-neutral" style="padding: 7px 12px; font-size: 0.76rem;">
+                    Generate OTP
+                  </button>
+                </div>
+                <span class="edit-field-hint" style="display: block; margin-top: 5px; color: #92400e; font-size: 0.71rem;">
+                  The member will use this temporary password for single sign-in, and will immediately be prompted to create their permanent password.
+                </span>
+              </div>
+            </div>
+            <div class="edit-form-field" id="edit-admin-pin-field" style="display: none;">
+              <label for="edit-admin-pin">Admin Security PIN</label>
+              <input id="edit-admin-pin" name="adminPin" type="password" maxlength="6" pattern="\d{6}" inputmode="numeric" placeholder="New 6-digit PIN (leave blank to keep current)">
+              <span class="edit-field-hint">6-digit PIN for sensitive administrative actions</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2: Account Security Controls (Visible for Administrators) -->
+        <div class="edit-form-section" id="edit-security-section" style="display: none;">
+          <div class="edit-section-header">
+            <span class="edit-section-tag">Security &amp; Access Controls</span>
+          </div>
+          <div class="edit-status-card-list">
+            <!-- Admin Security PIN Row (visible when editing an admin) -->
+            <div class="edit-status-row" id="edit-admin-pin-row">
+              <div class="edit-status-info">
+                <div class="edit-status-label">Admin Security PIN</div>
+                <div class="edit-status-subtext" id="edit-admin-pin-desc">Configured &bull; Required for sensitive administrative actions</div>
+              </div>
+              <button type="button" class="btn-control btn-control-neutral" id="btn-edit-change-pin">
+                Change PIN
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 3: Data Retention & Removal -->
+        <div class="edit-form-section">
+          <div class="edit-section-header">
+            <span class="edit-section-tag">Record Management</span>
+          </div>
+          <div class="edit-actions-panel">
+            <!-- Archive -->
+            <div class="edit-action-row">
+              <div class="edit-action-info">
+                <div class="edit-action-title">Archive Record</div>
+                <div class="edit-action-desc" id="edit-archive-desc">Move to archive folder. Preserves records safely.</div>
+              </div>
+              <button class="btn-control btn-control-archive" id="btn-archive-from-edit" type="button">
+                Move to Archive
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Feedback Banner -->
+        <p class="form-feedback" id="edit-feedback" role="status" aria-live="polite"></p>
+      </div>
+
+      <!-- Always-Visible Pinned Modal Footer -->
+      <div class="edit-modal-footer">
+        <button class="btn-modal-cancel" id="cancel-edit-dialog" type="button">Cancel</button>
+        <button class="btn-modal-save" id="btn-save-edit-account" type="submit">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          Save Changes
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Multi-Step Administrative Deletion Dialog Modal -->
+  <dialog class="application-dialog" id="delete-flow-dialog" style="max-width: 480px;">
+    <!-- Step 1: Initial Intent Confirmation -->
+    <div class="delete-step" id="delete-step-1">
+      <div class="profile-dialog-header">
+        <div>
+          <p class="eyebrow" style="color: #dc2626;">STEP 1 OF 3: INTENT CONFIRMATION</p>
+          <h2 style="font-size: 1.35rem;">Delete this account?</h2>
+        </div>
+        <button class="application-close" type="button" data-close-delete-flow>&times;</button>
+      </div>
+      <div style="margin: 16px 0; background: #fff5f5; border: 1px solid #fed7d7; border-radius: 8px; padding: 14px;">
+        <p style="margin: 0 0 6px; font-weight: 700; color: #9b2c2c; font-size: 0.88rem;">
+          Target: <span id="del-step1-name"></span>
+        </p>
+        <p style="margin: 0; font-size: 0.78rem; color: #742a2a;">
+          Email: <span id="del-step1-email" style="font-weight: 600;"></span> &bull; Role: <span id="del-step1-role" style="text-transform: capitalize; font-weight: 600;"></span>
+        </p>
+      </div>
+      <p style="font-size: 0.82rem; color: var(--ink-soft); margin-bottom: 20px;">
+        Are you sure you want to delete this account? To proceed, you will need to enter your administrator password to authorize this action.
+      </p>
+      <div style="display: flex; gap: 10px;">
+        <button class="button button-outline" style="flex: 1;" type="button" data-close-delete-flow>Cancel</button>
+        <button class="button" id="btn-del-proceed-step2" type="button" style="flex: 1; background: #dc2626; color: white;">
+          Yes, Continue &rarr;
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 2: 6-Digit Admin Security PIN Verification -->
+    <div class="delete-step" id="delete-step-2" style="display: none;">
+      <div class="profile-dialog-header">
+        <div>
+          <p class="eyebrow" style="color: #dc2626;">STEP 2 OF 3: SECURITY PIN AUTHORIZATION</p>
+          <h2 style="font-size: 1.35rem;">Enter Admin PIN</h2>
+        </div>
+        <button class="application-close" type="button" data-close-delete-flow>&times;</button>
+      </div>
+      <p style="font-size: 0.82rem; color: var(--ink-soft); margin: 12px 0 16px;">
+        Please enter your 6-digit administrator security PIN (<strong id="del-step2-admin-email">admin</strong>) to authorize deletion.
+      </p>
+      <form class="stack-form" id="del-password-form">
+        <label for="del-admin-password">6-Digit Admin Security PIN</label>
+        <input id="del-admin-password" type="password" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" placeholder="Enter 6-digit PIN" required autocomplete="one-time-code" style="letter-spacing: 4px; font-size: 1.1rem; text-align: center;">
+        <small style="font-size: 0.74rem; color: var(--ink-soft);">Dedicated 6-digit action PIN for permanent deletion</small>
+        <div style="display: flex; gap: 10px; margin-top: 10px;">
+          <button class="button button-outline" style="flex: 1;" type="button" id="btn-del-back-step1">&larr; Back</button>
+          <button class="button button-primary" style="flex: 1.4;" type="submit" id="btn-del-verify-pwd">
+            Verify PIN &rarr;
+          </button>
+        </div>
+        <p class="form-feedback" id="del-step2-feedback" role="status" aria-live="polite"></p>
+      </form>
+    </div>
+
+    <!-- Step 3: Final Confirmation with Target Name and Role -->
+    <div class="delete-step" id="delete-step-3" style="display: none;">
+      <div class="profile-dialog-header">
+        <div>
+          <p class="eyebrow" style="color: #dc2626;">STEP 3 OF 3: FINAL CONFIRMATION</p>
+          <h2 style="font-size: 1.35rem;">Permanently Delete Account?</h2>
+        </div>
+        <button class="application-close" type="button" data-close-delete-flow>&times;</button>
+      </div>
+
+      <div style="margin: 16px 0; background: #fff5f5; border: 2px solid #feb2b2; border-radius: 8px; padding: 16px;">
+        <p style="font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: #9b2c2c; font-weight: 800; margin-bottom: 8px;">
+          ACCOUNT TO BE COMPLETELY DELETED:
+        </p>
+        <div style="display: grid; gap: 6px; font-size: 0.85rem;">
+          <div style="display: flex; justify-content: space-between;">
+            <span class="muted">Full Name:</span>
+            <strong id="del-final-name" style="color: #1a2926;">--</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span class="muted">Account Role:</span>
+            <strong id="del-final-role" style="text-transform: uppercase; color: #c53030; background: #fee2e2; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem;">--</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span class="muted">Email Address:</span>
+            <span id="del-final-email" style="font-family: monospace; font-size: 0.82rem;">--</span>
+          </div>
+        </div>
+      </div>
+
+      <p style="font-size: 0.8rem; color: #742a2a; margin-bottom: 18px; line-height: 1.45;">
+        &bull; All personal details, credentials, and machinery booking records will be <strong>permanently deleted from MongoDB</strong>.<br>
+        &bull; This operation is recorded in the system <strong>Audit Logs</strong> and cannot be undone.
+      </p>
+
+      <div style="display: flex; gap: 10px;">
+        <button class="button button-outline" style="flex: 1;" type="button" data-close-delete-flow>Cancel &amp; Abort</button>
+        <button class="button" id="btn-del-final-execute" type="button" style="flex: 1.3; background: #dc2626; color: white; font-weight: 800; box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);">
+          &#128465; Confirm Delete
+        </button>
+      </div>
+      <p class="form-feedback" id="del-step3-feedback" role="status" aria-live="polite"></p>
+    </div>
+  </dialog>
+
+  <!-- Admin 6-Digit Security PIN Setup & Change Modal -->
+  <dialog class="application-dialog" id="admin-pin-dialog" style="max-width: 440px;">
+    <div class="profile-dialog-header">
+      <div>
+        <p class="eyebrow" id="admin-pin-modal-eyebrow" style="color: #0d9488;">ADMIN SECURITY</p>
+        <h2 id="admin-pin-modal-title" style="font-size: 1.35rem;">Security PIN Setup</h2>
+      </div>
+      <button class="application-close" id="close-admin-pin-dialog" type="button">&times;</button>
+    </div>
+    <p id="admin-pin-modal-desc" style="font-size: 0.82rem; color: var(--ink-soft); margin: 10px 0 16px; line-height: 1.45;">
+      Your 6-digit Security PIN is required whenever performing sensitive actions (such as deleting accounts).
+    </p>
+
+    <!-- Form for Initial PIN Setup -->
+    <form class="stack-form" id="admin-set-initial-pin-form" style="display: none;">
+      <label for="initial-new-pin">Create 6-Digit Admin PIN</label>
+      <input id="initial-new-pin" type="password" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" placeholder="6 digits (e.g. 123456)" required style="letter-spacing: 4px; font-size: 1.1rem; text-align: center;">
+
+      <label for="initial-confirm-pin">Confirm 6-Digit Admin PIN</label>
+      <input id="initial-confirm-pin" type="password" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" placeholder="Repeat 6 digits" required style="letter-spacing: 4px; font-size: 1.1rem; text-align: center;">
+
+      <div style="display: flex; gap: 10px; margin-top: 14px;">
+        <button class="button button-primary button-full" type="submit" style="font-weight: 700;">
+          Save Security PIN &rarr;
+        </button>
+      </div>
+      <p class="form-feedback" id="initial-pin-feedback" role="status" aria-live="polite"></p>
+    </form>
+
+    <!-- Form for Changing One-Time Temporary PIN or Existing PIN -->
+    <form class="stack-form" id="admin-change-pin-form" style="display: none;">
+      <div id="pin-change-notice" style="display: none; padding: 10px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; font-size: 0.76rem; color: #92400e; margin-bottom: 12px;">
+        ⚠️ <strong>One-time PIN change required:</strong> Please enter the temporary PIN provided by the administrator who created your account, then choose and confirm your own permanent PIN.
+      </div>
+
+      <label for="current-admin-pin" id="label-current-pin">Current or One-Time PIN</label>
+      <input id="current-admin-pin" type="password" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" placeholder="Enter temporary 6-digit PIN" required style="letter-spacing: 4px; font-size: 1.1rem; text-align: center;">
+
+      <label for="change-new-pin">New 6-Digit Admin PIN</label>
+      <input id="change-new-pin" type="password" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" placeholder="Choose new 6 digits" required style="letter-spacing: 4px; font-size: 1.1rem; text-align: center;">
+
+      <label for="change-confirm-pin">Confirm New 6-Digit Admin PIN</label>
+      <input id="change-confirm-pin" type="password" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" placeholder="Repeat new 6 digits" required style="letter-spacing: 4px; font-size: 1.1rem; text-align: center;">
+
+      <div style="display: flex; gap: 10px; margin-top: 14px;">
+        <button class="button button-primary button-full" type="submit" style="font-weight: 700;">
+          Update &amp; Confirm PIN &rarr;
+        </button>
+      </div>
+      <p class="form-feedback" id="change-pin-feedback" role="status" aria-live="polite"></p>
+    </form>
+  </dialog>
+
+  <!-- System Settings & Auth Dialog -->
+  <dialog class="application-dialog" id="sys-config-dialog" style="max-width: 540px; width: 92%;">
+    <div class="profile-dialog-header">
+      <div>
+        <p class="eyebrow">ADMINISTRATION SETTINGS</p>
+        <h2>System &amp; Authentication</h2>
+      </div>
+      <button class="application-close" id="close-sys-config" type="button">&times;</button>
+    </div>
+
+    <div style="margin: 18px 0 20px;">
+      <!-- Google Authentication Setting Card -->
+      <div class="settings-dialog-card">
+        <div class="settings-row">
+          <div class="settings-meta">
+            <h3>
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.34 24 12 24z"/>
+                <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
+                <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+              </svg>
+              <span>Log in with Google</span>
+              <span id="google-login-status-badge" class="badge" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: #e8f5e9; color: #1b5e20;">Active</span>
+            </h3>
+            <p>Allow members and staff to sign in or register with their Google account on the login page.</p>
+          </div>
+          <label class="switch-control" title="Toggle Log in with Google">
+            <input type="checkbox" id="toggle-google-login-checkbox" checked>
+            <span class="switch-slider"></span>
+          </label>
+        </div>
+
+        <div style="margin-top: 14px; padding-top: 12px; border-top: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center;">
+          <small class="muted" id="google-login-state-label">Status: Google Login is currently <strong>Enabled</strong></small>
+          <button type="button" class="button button-sm" id="btn-toggle-google-login-action" style="font-size: 0.76rem; padding: 5px 12px; border-radius: 6px; cursor: pointer;">Disable</button>
+        </div>
+      </div>
+
+      <!-- Facebook Authentication Setting Card -->
+      <div class="settings-dialog-card">
+        <div class="settings-row">
+          <div class="settings-meta">
+            <h3>
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <path fill="#1877F2" d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+              </svg>
+              <span>Log in with Facebook</span>
+              <span id="facebook-login-status-badge" class="badge" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: #e8f5e9; color: #1b5e20;">Active</span>
+            </h3>
+            <p>Allow members and staff to sign in or register with their Facebook account (App ID: 4031349940338782).</p>
+          </div>
+          <label class="switch-control" title="Toggle Log in with Facebook">
+            <input type="checkbox" id="toggle-facebook-login-checkbox" checked>
+            <span class="switch-slider"></span>
+          </label>
+        </div>
+
+        <div style="margin-top: 14px; padding-top: 12px; border-top: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center;">
+          <small class="muted" id="facebook-login-state-label">Status: Facebook Login is currently <strong>Enabled</strong></small>
+          <button type="button" class="button button-sm" id="btn-toggle-facebook-login-action" style="font-size: 0.76rem; padding: 5px 12px; border-radius: 6px; cursor: pointer;">Disable</button>
+        </div>
+      </div>
+
+      <!-- Admin 6-Digit Security PIN Setting Card -->
+      <div class="settings-dialog-card" id="settings-admin-pin-card">
+        <div class="settings-row" style="margin-bottom: 6px;">
+          <div class="settings-meta">
+            <h3>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: #059669;">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+              <span>Admin Security PIN</span>
+              <span id="admin-pin-settings-badge" class="badge" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: #e8f5e9; color: #1b5e20;">Configured</span>
+            </h3>
+            <p>6-digit security code required to authorize sensitive actions like permanently deleting accounts.</p>
+          </div>
+        </div>
+
+        <form id="settings-change-pin-form" style="display: grid; gap: 10px; margin-top: 10px; padding-top: 12px; border-top: 1px solid #f0f0f0;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="settings-current-pin" style="font-size: 0.82rem; font-weight: 600; display: block; margin-bottom: 4px;">Current 6-Digit PIN</label>
+            <input type="password" id="settings-current-pin" class="input input-sm" placeholder="Enter Current 6-Digit PIN" maxlength="6" inputmode="numeric" pattern="\d{6}" required autocomplete="current-password" style="width: 100%; box-sizing: border-box; padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-family: inherit;">
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="settings-new-pin" style="font-size: 0.82rem; font-weight: 600; display: block; margin-bottom: 4px;">New 6-Digit PIN</label>
+              <input type="password" id="settings-new-pin" class="input input-sm" placeholder="New 6 digits" maxlength="6" inputmode="numeric" pattern="\d{6}" required autocomplete="new-password" style="width: 100%; box-sizing: border-box; padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-family: inherit;">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="settings-confirm-pin" style="font-size: 0.82rem; font-weight: 600; display: block; margin-bottom: 4px;">Confirm New PIN</label>
+              <input type="password" id="settings-confirm-pin" class="input input-sm" placeholder="Confirm new 6 digits" maxlength="6" inputmode="numeric" pattern="\d{6}" required autocomplete="new-password" style="width: 100%; box-sizing: border-box; padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-family: inherit;">
+            </div>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 4px;">
+            <p id="settings-pin-feedback" class="form-feedback" style="margin: 0; font-size: 0.8rem; display: none;"></p>
+            <button type="submit" class="button button-sm button-primary" id="btn-settings-update-pin" style="margin-left: auto; padding: 7px 16px; font-size: 0.82rem; font-weight: 600; border-radius: 6px; background: #059669; color: #ffffff; border: none; cursor: pointer;">Change PIN</button>
+          </div>
+        </form>
+      </div>
+
+      <p id="settings-save-feedback" class="form-feedback" style="margin: 8px 0 14px; font-size: 0.8rem; text-align: center; display: none;"></p>
+
+      <!-- System Environment Info Details -->
+      <div style="display: grid; gap: 8px; font-size: 0.82rem;">
+        <div style="display: flex; justify-content: space-between; padding: 8px 12px; background: #f8faf8; border-radius: 6px;">
+          <span class="muted">Database</span>
+          <strong>MongoDB Community (Active)</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding: 8px 12px; background: #f8faf8; border-radius: 6px;">
+          <span class="muted">Server Runtime</span>
+          <strong>Node.js (Express 5.3)</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding: 8px 12px; background: #f8faf8; border-radius: 6px;">
+          <span class="muted">Security Captcha</span>
+          <strong>Google reCAPTCHA v2 Enabled</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding: 8px 12px; background: #f8faf8; border-radius: 6px;">
+          <span class="muted">Port</span>
+          <strong>3000 (localhost)</strong>
+        </div>
+      </div>
+    </div>
+
+    <button class="button button-dark button-full" id="close-sys-config-btn" type="button">Close</button>
+  </dialog>
+
   <script src="script.js"></script>
 </body>
 </html>

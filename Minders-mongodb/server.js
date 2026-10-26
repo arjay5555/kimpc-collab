@@ -2,6 +2,7 @@ require("dotenv").config();
 const path = require("path");
 const express = require("express");
 const mongoose = require("mongoose");
+const { startAuditArchiveWorker } = require("./workers/archiveAuditLogs");
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -26,6 +27,12 @@ mongoose
   .connect(process.env.MONGODB_URI)
   .then(() => {
     console.log("Connected to MongoDB");
+
+    // Start the monthly audit-log archive cron worker.
+    // Pass { runImmediately: true } to test it on startup without waiting for
+    // the 1st of the month.
+    startAuditArchiveWorker({ runImmediately: false });
+
     app.listen(port, () => console.log(`Minders is running at http://localhost:${port}/login.html`));
   })
   .catch((error) => {

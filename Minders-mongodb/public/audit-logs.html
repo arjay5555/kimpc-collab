@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="System Audit Logs for Minders Administrator Portal — complete chronological trail of all security events.">
+  <title>Audit Logs | Minders Admin</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    /* ── Audit Log specific styles ─────────────────────────────────── */
+
+    /* Action text - matches actor style, no color */
+    .audit-action-badge {
+      display: inline;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--ink, #1f2937);
+      background: transparent !important;
+      border: none !important;
+      padding: 0;
+    }
+    .badge-danger, .badge-failed, .badge-warning, .badge-info,
+    .badge-success, .badge-blue, .badge-purple, .badge-muted, .badge-default {
+      background: transparent !important;
+      color: var(--ink, #1f2937) !important;
+    }
+
+    /* Details cell with JSON definition list */
+    .audit-details-cell {
+      max-width: 300px;
+      font-size: 0.75rem;
+      color: #374151;
+      line-height: 1.5;
+    }
+    .audit-details-dl {
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 1px;
+    }
+    .audit-details-dl div {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+    .audit-details-dl dt {
+      font-weight: 600;
+      color: #6b7280;
+      white-space: nowrap;
+      text-transform: capitalize;
+    }
+    .audit-details-dl dd {
+      margin: 0;
+      color: #111827;
+      word-break: break-word;
+    }
+
+    /* 5-column metric grid */
+    .audit-metric-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    /* Result counter pill */
+    .audit-result-pill {
+      font-size: 0.78rem;
+      color: var(--ink-soft);
+      background: var(--surface-alt, #f8faf8);
+      border: 1px solid var(--line);
+      border-radius: 99px;
+      padding: 4px 12px;
+    }
+
+    /* Export button group */
+    .audit-export-group {
+      display: flex;
+      gap: 6px;
+    }
+    .btn-export {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 8px 13px;
+      font-size: 0.78rem;
+      font-weight: 500;
+      border-radius: 6px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .btn-export:hover { background: #f0faf0; border-color: #6EBF8B; }
+
+    /* td auto-sizing */
+    .account-directory td,
+    .account-directory th { vertical-align: top; }
+  </style>
+</head>
+<body class="admin-body" data-page="audit-logs">
+  <div class="admin-layout">
+    <!-- ================= Left Sidebar ================= -->
+    <aside class="admin-sidebar" aria-label="Admin Sidebar">
+      <div class="admin-sidebar-header">
+        <a class="admin-brand" href="admin.html">
+          <img src="images/kimpc logo.png" alt="KIMPC Logo" class="admin-brand-logo">
+          <div class="admin-brand-text">
+            <strong>ADMIN</strong>
+            <small>Kalilangan Irrigators Multi-Purpose Cooperative</small>
+          </div>
+        </a>
+      </div>
+
+      <nav class="admin-sidebar-nav" aria-label="Admin Navigation">
+        <div>
+          <div class="admin-nav-group-title">Main Menu</div>
+          <ul class="admin-nav-list">
+            <li>
+              <a class="admin-nav-link" href="admin.html">
+                <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+                <span>Overview</span>
+              </a>
+            </li>
+            <li>
+              <a class="admin-nav-link" href="account-management.html">
+                <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                <span>Account</span>
+              </a>
+            </li>
+            <li>
+              <a class="admin-nav-link" href="booking-approvals.html">
+                <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                <span>Booking Approvals</span>
+              </a>
+            </li>
+            <li>
+              <a class="admin-nav-link active" href="audit-logs.html">
+                <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                <span>Audit Logs</span>
+                <span class="admin-nav-badge" id="sidebar-audit-badge">0</span>
+              </a>
+            <li>
+              <a class="admin-nav-link" id="open-sys-settings" href="#settings">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                <span>Settings</span>
+              </a>
+            </li>
+          </ul>
+        </div>
+      </nav>
+
+      <div class="admin-sidebar-footer">
+        <div class="admin-user-card">
+          <div class="admin-avatar" id="sidebar-admin-avatar">SA</div>
+          <div class="admin-user-info" id="sidebar-admin-info">
+            <strong id="sidebar-admin-name">Admin</strong>
+            <small id="sidebar-admin-email">...</small>
+          </div>
+        </div>
+        <button class="admin-logout-btn" data-logout type="button">
+          <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          <span>Log out</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- ================= Main Workspace ================= -->
+    <div class="admin-main-wrapper">
+      <header class="admin-topbar">
+        <div class="admin-topbar-left">
+          <div class="admin-breadcrumb">
+            <a href="admin.html" style="color: inherit; text-decoration: none;">Admin Console</a>
+            <span>/</span>
+            <strong>Audit Logs</strong>
+          </div>
+        </div>
+      </header>
+
+      <main class="admin-workspace-content">
+        <!-- ── Activity Feed Table ── -->
+        <section class="surface" style="padding: 18px 20px; border-radius: 10px; width: 100%;">
+          <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 20px;">
+            <div>
+              <h2 style="font-size: 1.3rem; margin: 0; font-weight: 800; color: var(--ink); letter-spacing: -0.02em;">Activity Feed</h2>
+            </div>
+
+            <!-- Filters & Actions -->
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
+              <!-- Search -->
+              <input id="audit-search" type="search" placeholder="Search email, actor, details…"
+                style="padding: 9px 12px; border: 1px solid var(--line); border-radius: 6px; font-size: 0.8rem; width: 230px; background: #fbfdfb;">
+
+              <!-- Event type filter -->
+              <select id="audit-filter-action"
+                style="padding: 9px 12px; border: 1px solid var(--line); border-radius: 6px; font-size: 0.8rem; background: #fbfdfb; color: var(--ink);">
+                <option value="ALL">All Event Types</option>
+                <optgroup label="Account Events">
+                  <option value="ACCOUNT_CREATED">Account Created</option>
+                  <option value="ACCOUNT_UPDATED">Account Updated</option>
+                  <option value="ACCOUNT_DELETED">Account Deleted</option>
+                  <option value="ACCOUNT_SUSPENDED">Account Suspended</option>
+                  <option value="ACCOUNT_ACTIVATED">Account Activated</option>
+                  <option value="ACCOUNT_ARCHIVED">Account Archived</option>
+                  <option value="ACCOUNT_RESTORED">Account Restored</option>
+                </optgroup>
+                <optgroup label="Booking / Rental Events">
+                  <option value="BOOKING_CREATED">Booking Created</option>
+                  <option value="BOOKING_APPROVED">Booking Approved</option>
+                  <option value="BOOKING_REJECTED">Booking Rejected</option>
+                  <option value="BOOKING_STATUS_UPDATED">Booking Status Updated</option>
+                </optgroup>
+                <optgroup label="Authentication Events">
+                  <option value="USER_LOGIN">User Login</option>
+                  <option value="LOGIN_FAILED">Login Failed</option>
+                  <option value="USER_REGISTERED">User Registered</option>
+                  <option value="EMAIL_VERIFIED">Email Verified</option>
+                  <option value="PROFILE_UPDATED">Profile Updated</option>
+                </optgroup>
+                <optgroup label="Deletion Verification">
+                  <option value="DELETE_OTP_SENT">Deletion OTP Sent</option>
+                  <option value="DELETE_OTP_VERIFIED">Deletion OTP Verified</option>
+                  <option value="DELETE_OTP_FAILED">Deletion OTP Failed</option>
+                  <option value="ADMIN_PASSWORD_VERIFIED">Admin Password Verified</option>
+                  <option value="ADMIN_AUTH_FAILED">Admin Auth Failed</option>
+                </optgroup>
+                <optgroup label="System Events">
+                  <option value="AUDIT_LOGS_PURGED">Audit Logs Purged</option>
+                  <option value="AUDIT_LOGS_ARCHIVED">Audit Logs Archived</option>
+                </optgroup>
+              </select>
+
+              <!-- Result counter -->
+              <span class="audit-result-pill" id="audit-result-count">— records</span>
+
+              <!-- Export & Refresh buttons -->
+              <div class="audit-export-group">
+                <button class="btn-export" id="refresh-audit-logs" type="button" title="Refresh records from MongoDB">
+                  &#x21bb; Refresh
+                </button>
+                <button class="btn-export" id="btn-export-json" type="button" title="Download visible records as JSON">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  JSON
+                </button>
+                <button class="btn-export" id="btn-export-csv" type="button" title="Download visible records as CSV">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  CSV
+                </button>
+              </div>
+
+              <!-- Purge -->
+              <button class="button button-outline" id="btn-purge-logs" type="button"
+                style="color:#c53030; border-color:#feb2b2; padding:9px 14px; font-size:0.78rem;">
+                &#128465; Purge Logs
+              </button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="account-directory">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Action</th>
+                  <th>Actor (Admin / User)</th>
+                  <th>Target Account</th>
+                  <th>Details</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="audit-log-rows">
+                <tr>
+                  <td colspan="6" style="text-align: center; padding: 30px; color: var(--ink-soft);">
+                    Loading audit logs from MongoDB…
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- System Settings & Auth Dialog -->
+  <dialog class="application-dialog" id="sys-config-dialog" style="max-width: 540px; width: 92%;">
+    <div class="profile-dialog-header">
+      <div>
+        <p class="eyebrow">ADMINISTRATION SETTINGS</p>
+        <h2>System &amp; Authentication</h2>
+      </div>
+      <button class="application-close" id="close-sys-config" type="button">&times;</button>
+    </div>
+
+    <div style="margin: 18px 0 20px;">
+      <!-- Google Authentication Setting Card -->
+      <div class="settings-dialog-card">
+        <div class="settings-row">
+          <div class="settings-meta">
+            <h3>
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.34 24 12 24z"/>
+                <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
+                <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+              </svg>
+              <span>Log in with Google</span>
+              <span id="google-login-status-badge" class="badge" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: #e8f5e9; color: #1b5e20;">Active</span>
+            </h3>
+            <p>Allow members and staff to sign in or register with their Google account on the login page.</p>
+          </div>
+          <label class="switch-control" title="Toggle Log in with Google">
+            <input type="checkbox" id="toggle-google-login-checkbox" checked>
+            <span class="switch-slider"></span>
+          </label>
+        </div>
+
+        <div style="margin-top: 14px; padding-top: 12px; border-top: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center;">
+          <small class="muted" id="google-login-state-label">Status: Google Login is currently <strong>Enabled</strong></small>
+          <button type="button" class="button button-sm" id="btn-toggle-google-login-action" style="font-size: 0.76rem; padding: 5px 12px; border-radius: 6px; cursor: pointer;">Disable</button>
+        </div>
+      </div>
+
+      <!-- Facebook Authentication Setting Card -->
+      <div class="settings-dialog-card">
+        <div class="settings-row">
+          <div class="settings-meta">
+            <h3>
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <path fill="#1877F2" d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+              </svg>
+              <span>Log in with Facebook</span>
+              <span id="facebook-login-status-badge" class="badge" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: #e8f5e9; color: #1b5e20;">Active</span>
+            </h3>
+            <p>Allow members and staff to sign in or register with their Facebook account (App ID: 4031349940338782).</p>
+          </div>
+          <label class="switch-control" title="Toggle Log in with Facebook">
+            <input type="checkbox" id="toggle-facebook-login-checkbox" checked>
+            <span class="switch-slider"></span>
+          </label>
+        </div>
+
+        <div style="margin-top: 14px; padding-top: 12px; border-top: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center;">
+          <small class="muted" id="facebook-login-state-label">Status: Facebook Login is currently <strong>Enabled</strong></small>
+          <button type="button" class="button button-sm" id="btn-toggle-facebook-login-action" style="font-size: 0.76rem; padding: 5px 12px; border-radius: 6px; cursor: pointer;">Disable</button>
+        </div>
+      </div>
+
+      <!-- Admin 6-Digit Security PIN Setting Card -->
+      <div class="settings-dialog-card" id="settings-admin-pin-card">
+        <div class="settings-row" style="margin-bottom: 6px;">
+          <div class="settings-meta">
+            <h3>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: #059669;">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+              <span>Admin Security PIN</span>
+              <span id="admin-pin-settings-badge" class="badge" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: #e8f5e9; color: #1b5e20;">Configured</span>
+            </h3>
+            <p>6-digit security code required to authorize sensitive actions like permanently deleting accounts.</p>
+          </div>
+        </div>
+
+        <form id="settings-change-pin-form" style="display: grid; gap: 10px; margin-top: 10px; padding-top: 12px; border-top: 1px solid #f0f0f0;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="settings-current-pin" style="font-size: 0.82rem; font-weight: 600; display: block; margin-bottom: 4px;">Current 6-Digit PIN</label>
+            <input type="password" id="settings-current-pin" class="input input-sm" placeholder="Enter Current 6-Digit PIN" maxlength="6" inputmode="numeric" pattern="\d{6}" required autocomplete="current-password" style="width: 100%; box-sizing: border-box; padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-family: inherit;">
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="settings-new-pin" style="font-size: 0.82rem; font-weight: 600; display: block; margin-bottom: 4px;">New 6-Digit PIN</label>
+              <input type="password" id="settings-new-pin" class="input input-sm" placeholder="New 6 digits" maxlength="6" inputmode="numeric" pattern="\d{6}" required autocomplete="new-password" style="width: 100%; box-sizing: border-box; padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-family: inherit;">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="settings-confirm-pin" style="font-size: 0.82rem; font-weight: 600; display: block; margin-bottom: 4px;">Confirm New PIN</label>
+              <input type="password" id="settings-confirm-pin" class="input input-sm" placeholder="Confirm new 6 digits" maxlength="6" inputmode="numeric" pattern="\d{6}" required autocomplete="new-password" style="width: 100%; box-sizing: border-box; padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-family: inherit;">
+            </div>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 4px;">
+            <p id="settings-pin-feedback" class="form-feedback" style="margin: 0; font-size: 0.8rem; display: none;"></p>
+            <button type="submit" class="button button-sm button-primary" id="btn-settings-update-pin" style="margin-left: auto; padding: 7px 16px; font-size: 0.82rem; font-weight: 600; border-radius: 6px; background: #059669; color: #ffffff; border: none; cursor: pointer;">Change PIN</button>
+          </div>
+        </form>
+      </div>
+
+      <p id="settings-save-feedback" class="form-feedback" style="margin: 8px 0 14px; font-size: 0.8rem; text-align: center; display: none;"></p>
+
+      <!-- System Environment Info Details -->
+      <div style="display: grid; gap: 8px; font-size: 0.82rem;">
+        <div style="display: flex; justify-content: space-between; padding: 8px 12px; background: #f8faf8; border-radius: 6px;">
+          <span class="muted">Database</span>
+          <strong>MongoDB Community (Active)</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding: 8px 12px; background: #f8faf8; border-radius: 6px;">
+          <span class="muted">Server Runtime</span>
+          <strong>Node.js (Express 5.3)</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding: 8px 12px; background: #f8faf8; border-radius: 6px;">
+          <span class="muted">Security Captcha</span>
+          <strong>Google reCAPTCHA v2 Enabled</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding: 8px 12px; background: #f8faf8; border-radius: 6px;">
+          <span class="muted">Port</span>
+          <strong>3000 (localhost)</strong>
+        </div>
+      </div>
+    </div>
+
+    <button class="button button-dark button-full" id="close-sys-config-btn" type="button">Close</button>
+  </dialog>
+
+  <!-- Admin 6-Digit Security PIN Setup & Change Modal -->
+  <dialog class="application-dialog" id="admin-pin-dialog" style="max-width: 440px;">
+    <div class="profile-dialog-header">
+      <div>
+        <p class="eyebrow" id="admin-pin-modal-eyebrow" style="color: #0d9488;">ADMIN SECURITY</p>
+        <h2 id="admin-pin-modal-title" style="font-size: 1.35rem;">Security PIN Setup</h2>
+      </div>
+      <button class="application-close" id="close-admin-pin-dialog" type="button">&times;</button>
+    </div>
+    <p id="admin-pin-modal-desc" style="font-size: 0.82rem; color: var(--ink-soft); margin: 10px 0 16px; line-height: 1.45;">
+      Your 6-digit Security PIN is required whenever performing sensitive actions (such as deleting accounts).
+    </p>
+
+    <!-- Form for Initial PIN Setup -->
+    <form class="stack-form" id="admin-set-initial-pin-form" style="display: none;">
+      <label for="initial-new-pin">Create 6-Digit Admin PIN</label>
+      <input id="initial-new-pin" type="password" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" placeholder="6 digits (e.g. 123456)" required style="letter-spacing: 4px; font-size: 1.1rem; text-align: center;">
+
+      <label for="initial-confirm-pin">Confirm 6-Digit Admin PIN</label>
+      <input id="initial-confirm-pin" type="password" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" placeholder="Repeat 6 digits" required style="letter-spacing: 4px; font-size: 1.1rem; text-align: center;">
+
+      <div style="display: flex; gap: 10px; margin-top: 14px;">
+        <button class="button button-primary button-full" type="submit" style="font-weight: 700;">
+          Save Security PIN &rarr;
+        </button>
+      </div>
+      <p class="form-feedback" id="initial-pin-feedback" role="status" aria-live="polite"></p>
+    </form>
+
+    <!-- Form for Changing One-Time Temporary PIN or Existing PIN -->
+    <form class="stack-form" id="admin-change-pin-form" style="display: none;">
+      <div id="pin-change-notice" style="display: none; padding: 10px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; font-size: 0.76rem; color: #92400e; margin-bottom: 12px;">
+        ⚠️ <strong>One-time PIN change required:</strong> Please enter the temporary PIN provided by the administrator who created your account, then choose and confirm your own permanent PIN.
+      </div>
+
+      <label for="current-admin-pin" id="label-current-pin">Current or One-Time PIN</label>
+      <input id="current-admin-pin" type="password" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" placeholder="Enter temporary 6-digit PIN" required style="letter-spacing: 4px; font-size: 1.1rem; text-align: center;">
+
+      <label for="change-new-pin">New 6-Digit Admin PIN</label>
+      <input id="change-new-pin" type="password" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" placeholder="Choose new 6 digits" required style="letter-spacing: 4px; font-size: 1.1rem; text-align: center;">
+
+      <label for="change-confirm-pin">Confirm New 6-Digit Admin PIN</label>
+      <input id="change-confirm-pin" type="password" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" placeholder="Repeat new 6 digits" required style="letter-spacing: 4px; font-size: 1.1rem; text-align: center;">
+
+      <div style="display: flex; gap: 10px; margin-top: 14px;">
+        <button class="button button-primary button-full" type="submit" style="font-weight: 700;">
+          Update &amp; Confirm PIN &rarr;
+        </button>
+      </div>
+      <p class="form-feedback" id="change-pin-feedback" role="status" aria-live="polite"></p>
+    </form>
+  </dialog>
+
+  <script src="script.js"></script>
+</body>
+</html>

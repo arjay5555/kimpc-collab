@@ -4,6 +4,9 @@ const mongoose = require("mongoose");
 // Profile details live on the account itself, so no separate "profiles" collection is needed.
 const accountSchema = new mongoose.Schema(
   {
+    firstName: { type: String, default: "", trim: true },
+    middleName: { type: String, default: "", trim: true },
+    lastName: { type: String, default: "", trim: true },
     fullName: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     passwordHash: { type: String, required: true },
@@ -19,16 +22,35 @@ const accountSchema = new mongoose.Schema(
     postalCode: { type: String, default: "" },
     country: { type: String, default: "" },
     // Profile edits wait here until the member confirms them by email.
-    pendingUpdate: { type: mongoose.Schema.Types.Mixed, default: null }
+    pendingUpdate: { type: mongoose.Schema.Types.Mixed, default: null },
+    // Archive status
+    isArchived: { type: Boolean, default: false },
+    archivedAt: { type: Date, default: null },
+    // Suspension status
+    isSuspended: { type: Boolean, default: false },
+    suspendedAt: { type: Date, default: null },
+    suspensionReason: { type: String, default: "" },
+    // 6-digit administrative action PIN
+    adminPinHash: { type: String, default: null },
+    mustChangePin: { type: Boolean, default: false },
+    pinSetAt: { type: Date, default: null },
+    // One-Time Password (OTP) & Forgot Password recovery
+    mustChangePassword: { type: Boolean, default: false },
+    forgotPasswordRequested: { type: Boolean, default: false },
+    oneTimePasswordSetAt: { type: Date, default: null }
   },
   {
     timestamps: true,
     toJSON: {
       transform(doc, ret) {
         ret.id = String(ret._id);
+        ret.hasAdminPin = Boolean(ret.adminPinHash);
+        ret.mustChangePassword = Boolean(ret.mustChangePassword);
+        ret.forgotPasswordRequested = Boolean(ret.forgotPasswordRequested);
         delete ret._id;
         delete ret.__v;
         delete ret.passwordHash; // never send password hashes to the browser
+        delete ret.adminPinHash; // never send PIN hash to the browser
         return ret;
       }
     }

@@ -1,17 +1,1323 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="Minders cooperative manager portal"><title>Manager Portal | Minders</title><link rel="stylesheet" href="styles.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Minders cooperative manager operations portal">
+  <title>Manager Portal | Minders</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
-<body data-page="manager">
-  <header class="site-header app-header"><a class="brand" href="index.html"><span class="brand-mark">M</span><span>Minders</span></a><nav class="top-nav" aria-label="Primary navigation"><a class="active" href="manager.html">Manager portal</a></nav><a class="header-user" href="#"><span class="avatar avatar-orange" id="manager-user-avatar">AM</span><span id="manager-user-name">Alex Morgan</span></a></header>
-  <main class="app-shell">
-    <section class="page-intro"><div><p class="eyebrow" id="manager-page-eyebrow">MANAGER PORTAL / GREEN VALLEY CO-OP</p><h1 id="manager-page-title">Good morning, Alex.</h1><p class="muted" id="manager-page-description">Here is what needs your attention across the cooperative.</p></div><div class="date-chip"><span class="status-dot"></span> Tuesday, September 22</div></section>
-    <div class="coverage-banner" id="admin-coverage-banner" role="status" hidden><span class="status-dot"></span><p><strong>Admin coverage active</strong><span>You are reviewing and deciding applications on behalf of the manager.</span></p><a class="text-link" href="admin.html">Return to admin dashboard &#8594;</a></div>
-    <section class="summary-strip"><div><span class="summary-label">Open requests</span><strong id="pending-count">4</strong><span class="summary-change">Need review</span></div><div><span class="summary-label">Active rentals</span><strong>18</strong><span class="summary-change positive">+3 this week</span></div><div><span class="summary-label">Field issues</span><strong>3</strong><span class="summary-change warning">2 high priority</span></div></section>
-    <section class="surface section-block" id="approvals"><div class="section-heading"><div><p class="section-label">CM-005 / CM-006</p><h2>Booking approvals</h2></div><span class="table-note">4 requests in queue</span></div><div class="table-wrap"><table><thead><tr><th>Member</th><th>Equipment</th><th>Requested dates</th><th>Submitted</th><th>Status</th><th class="align-right">Action</th></tr></thead><tbody id="approval-table"></tbody></table></div></section>
-    <section class="surface section-block"><div class="section-heading"><div><p class="section-label">CM-004 / FIELD PULSE</p><h2>Issues needing attention</h2></div><a class="text-link" href="#issues">View all issues &#8594;</a></div><div class="issue-grid" id="manager-issues"></div></section>
-  </main>
+<body class="admin-body" data-page="manager">
+  <div class="admin-layout">
+    <!-- ================= Left Sidebar ================= -->
+    <aside class="admin-sidebar" aria-label="Manager Sidebar">
+      <div class="admin-sidebar-header">
+        <a class="admin-brand" href="manager.html">
+          <img src="images/kimpc logo.png" alt="KIMPC Logo" class="admin-brand-logo">
+          <div class="admin-brand-text">
+            <strong>MANAGER</strong>
+            <small>Kalilangan Irrigators Multi-Purpose Cooperative</small>
+          </div>
+        </a>
+      </div>
+
+      <nav class="admin-sidebar-nav" aria-label="Manager Navigation">
+        <ul class="admin-nav-list">
+          <li>
+            <a class="admin-nav-link active" data-view="overview" href="#overview">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>
+              <span>Dashboard</span>
+            </a>
+          </li>
+          <li>
+            <a class="admin-nav-link" data-view="approvals" href="#approvals">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              <span>Bookings</span>
+            </a>
+          </li>
+          <li>
+            <a class="admin-nav-link" data-view="units" href="#units">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M5 17a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2M5 17l-2 3m16-3 2 3M7 11h.01M17 11h.01"/></svg>
+              <span>Units</span>
+            </a>
+          </li>
+          <li>
+            <a class="admin-nav-link" data-view="calendar" href="#approvals">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              <span>Calendar</span>
+            </a>
+          </li>
+          <li>
+            <a class="admin-nav-link" data-view="clients" href="#analytics">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <span>Clients</span>
+            </a>
+          </li>
+          <li>
+            <a class="admin-nav-link" data-view="drivers" href="#approvals">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><line x1="15" y1="8" x2="17" y2="8"/><line x1="15" y1="12" x2="17" y2="12"/><line x1="7" y1="16" x2="17" y2="16"/></svg>
+              <span>Drivers</span>
+            </a>
+          </li>
+          <li>
+            <a class="admin-nav-link" data-view="financials" href="#pos-terminal">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><line x1="12" y1="6" x2="12" y2="8"/><line x1="12" y1="16" x2="12" y2="18"/></svg>
+              <span>Financials</span>
+              <svg class="m-nav-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </a>
+          </li>
+          <li>
+            <a class="admin-nav-link" data-view="tracking" href="#maintenance">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+              <span>Tracking</span>
+            </a>
+          </li>
+          <li>
+            <a class="admin-nav-link" data-view="messages" href="#issues">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              <span>Messages</span>
+              <span class="admin-nav-badge" id="sidebar-manager-pending-badge">5</span>
+            </a>
+          </li>
+        </ul>
+      </nav>
+
+      <div class="admin-sidebar-footer">
+        <div class="admin-user-card">
+          <div class="admin-avatar avatar-forest" id="manager-user-avatar">AM</div>
+          <div class="admin-user-info">
+            <strong id="manager-user-name">Alex M.</strong>
+            <small id="manager-user-email">manager@minders.test</small>
+          </div>
+        </div>
+        <button class="admin-logout-btn" data-logout type="button">
+          <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          <span>Log out</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- ================= Main Workspace ================= -->
+    <div class="admin-main-wrapper">
+      <!-- Topbar -->
+      <header class="admin-topbar">
+        <div class="admin-topbar-left">
+          <div class="admin-breadcrumb">
+            <a href="manager.html" style="color: inherit; text-decoration: none;">Manager Console</a>
+            <span>/</span>
+            <strong id="manager-topbar-breadcrumb">Overview</strong>
+          </div>
+        </div>
+      </header>
+
+      <!-- Workspace Content -->
+      <main class="admin-workspace-content">
+        <!-- Overview Panel -->
+        <div id="manager-view-overview" class="manager-view-panel">
+          <!-- Hidden compatibility anchors for existing script handlers -->
+          <div style="display: none;" aria-hidden="true">
+            <span id="pending-count">0</span>
+            <span id="active-rentals-count">18</span>
+            <span id="cash-intake-total">$945</span>
+            <span id="maintenance-units-count">1</span>
+            <div id="manager-overview-issues"></div>
+            <p id="manager-page-eyebrow"></p>
+            <h1 id="manager-page-title"></h1>
+            <p id="manager-page-description"></p>
+            <span id="manager-today-date"></span>
+            <div id="admin-coverage-banner" hidden></div>
+            <p id="manager-page-feedback"></p>
+          </div>
+
+          <!-- Modern 3-Column Dashboard Grid Container -->
+          <div class="m-dashboard-grid">
+            
+            <!-- ===== COLUMN 1: Main (KPIs, Spline Line Chart, Bar Chart) ===== -->
+            <div class="m-col-main">
+              <!-- 4 KPI Stat Cards in 2x2 Grid -->
+              <div class="m-kpi-grid">
+                <!-- KPI 1: Total Revenue -->
+                <div class="m-kpi-card">
+                  <div class="m-kpi-circle-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M15 9.5a2.5 2.5 0 0 0-5 0c0 2 5 2 5 4a2.5 2.5 0 0 1-5 0"/></svg>
+                  </div>
+                  <div class="m-kpi-info">
+                    <span class="m-kpi-label">Total Revenue</span>
+                    <div class="m-kpi-val" id="manager-kpi-revenue">$8,450</div>
+                  </div>
+                  <div class="m-kpi-badge-col">
+                    <span class="m-trend-pill trend-up">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="18 15 12 9 6 15"/></svg>
+                      +2.86%
+                    </span>
+                    <span class="m-trend-sub">from last week</span>
+                  </div>
+                </div>
+
+                <!-- KPI 2: New Bookings -->
+                <div class="m-kpi-card">
+                  <div class="m-kpi-circle-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><polyline points="9 16 11 18 15 14"/></svg>
+                  </div>
+                  <div class="m-kpi-info">
+                    <span class="m-kpi-label">New Bookings</span>
+                    <div class="m-kpi-val" id="manager-kpi-bookings">386</div>
+                  </div>
+                  <div class="m-kpi-badge-col">
+                    <span class="m-trend-pill trend-up">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="18 15 12 9 6 15"/></svg>
+                      +1.73%
+                    </span>
+                    <span class="m-trend-sub">from last week</span>
+                  </div>
+                </div>
+
+                <!-- KPI 3: Rented Cars / Units -->
+                <div class="m-kpi-card">
+                  <div class="m-kpi-circle-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="2.5"/><line x1="12" y1="2" x2="12" y2="9.5"/><line x1="4.93" y1="19.07" x2="10.2" y2="13.8"/><line x1="19.07" y1="19.07" x2="13.8" y2="13.8"/></svg>
+                  </div>
+                  <div class="m-kpi-info">
+                    <span class="m-kpi-label">Rented Cars</span>
+                    <div class="m-kpi-val" id="manager-kpi-rented">214 Unit</div>
+                  </div>
+                  <div class="m-kpi-badge-col">
+                    <span class="m-trend-pill trend-down">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
+                      -2.86%
+                    </span>
+                    <span class="m-trend-sub">from last week</span>
+                  </div>
+                </div>
+
+                <!-- KPI 4: Available Cars / Units -->
+                <div class="m-kpi-card">
+                  <div class="m-kpi-circle-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="11" width="18" height="9" rx="2"/><path d="M5 11l2-6h10l2 6"/><circle cx="7.5" cy="16.5" r="1.5"/><circle cx="16.5" cy="16.5" r="1.5"/></svg>
+                  </div>
+                  <div class="m-kpi-info">
+                    <span class="m-kpi-label">Available Cars</span>
+                    <div class="m-kpi-val" id="manager-kpi-available">89 Unit</div>
+                  </div>
+                  <div class="m-kpi-badge-col">
+                    <span class="m-trend-pill trend-up">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="18 15 12 9 6 15"/></svg>
+                      +3.45%
+                    </span>
+                    <span class="m-trend-sub">from last week</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card: Earnings Summary with Spline Line Chart -->
+              <div class="m-card m-earnings-card">
+                <div class="m-card-header">
+                  <h2 class="m-card-title">Earnings Summary</h2>
+                  <div class="m-pill-select-wrap">
+                    <button class="m-pill-select" type="button">
+                      <span>Last 8 Month</span>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="m-chart-container">
+                  <!-- SVG Spline Line Chart (Agriculture Emerald #10b981) -->
+                  <svg class="m-line-chart" viewBox="0 0 620 230" preserveAspectRatio="none">
+                    <defs>
+                      <linearGradient id="splineGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#10b981" stop-opacity="0.22"/>
+                        <stop offset="100%" stop-color="#10b981" stop-opacity="0.0"/>
+                      </linearGradient>
+                    </defs>
+
+                    <!-- Horizontal Grid lines -->
+                    <line x1="50" y1="20" x2="610" y2="20" stroke="#f1f5f9" stroke-width="1.5"/>
+                    <text x="40" y="24" class="m-chart-axis-text">$24K</text>
+
+                    <line x1="50" y1="62" x2="610" y2="62" stroke="#f1f5f9" stroke-width="1.5"/>
+                    <text x="40" y="66" class="m-chart-axis-text">$18K</text>
+
+                    <line x1="50" y1="104" x2="610" y2="104" stroke="#f1f5f9" stroke-width="1.5"/>
+                    <text x="40" y="108" class="m-chart-axis-text">$12K</text>
+
+                    <line x1="50" y1="146" x2="610" y2="146" stroke="#f1f5f9" stroke-width="1.5"/>
+                    <text x="40" y="150" class="m-chart-axis-text">$6K</text>
+
+                    <line x1="50" y1="188" x2="610" y2="188" stroke="#f1f5f9" stroke-width="1.5"/>
+                    <text x="40" y="192" class="m-chart-axis-text">$0</text>
+
+                    <!-- Area under curve -->
+                    <path d="M 65 130 C 95 140, 115 105, 142 98 C 172 90, 195 132, 228 128 C 255 125, 270 58, 305 58 C 340 58, 355 125, 385 125 C 418 125, 435 98, 465 102 C 500 108, 515 65, 548 70 C 572 74, 590 92, 610 105 L 610 188 L 65 188 Z" fill="url(#splineGradient)"/>
+
+                    <!-- Smooth Spline Stroke in Agriculture Emerald Green (#10b981) -->
+                    <path d="M 65 130 C 95 140, 115 105, 142 98 C 172 90, 195 132, 228 128 C 255 125, 270 58, 305 58 C 340 58, 355 125, 385 125 C 418 125, 435 98, 465 102 C 500 108, 515 65, 548 70 C 572 74, 590 92, 610 105" fill="none" stroke="#10b981" stroke-width="3.5" stroke-linecap="round"/>
+
+                    <!-- Highlight Peak Dot at April -->
+                    <circle cx="305" cy="58" r="5.5" fill="#064e3b" stroke="#ffffff" stroke-width="2.5"/>
+
+                    <!-- X-Axis Labels -->
+                    <text x="65" y="214" class="m-chart-x-text">Jan</text>
+                    <text x="142" y="214" class="m-chart-x-text">Feb</text>
+                    <text x="228" y="214" class="m-chart-x-text">Mar</text>
+                    <text x="305" y="214" class="m-chart-x-text">Apr</text>
+                    <text x="385" y="214" class="m-chart-x-text">May</text>
+                    <text x="465" y="214" class="m-chart-x-text">Jun</text>
+                    <text x="548" y="214" class="m-chart-x-text">Jul</text>
+                    <text x="605" y="214" class="m-chart-x-text">Aug</text>
+                  </svg>
+
+                  <!-- Floating Tooltip directly above the April Peak -->
+                  <div class="m-chart-tooltip" style="left: 49.2%; top: 4%;">
+                    <div class="m-tooltip-header">April 2028</div>
+                    <div class="m-tooltip-value">$18,450</div>
+                    <div class="m-tooltip-arrow"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card: Bookings Overview with Bar Chart -->
+              <div class="m-card m-bookings-card">
+                <div class="m-card-header">
+                  <h2 class="m-card-title">Bookings Overview</h2>
+                  <div class="m-pill-select-wrap">
+                    <button class="m-pill-select" type="button">
+                      <span>This Year</span>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="m-chart-container">
+                  <svg class="m-bar-chart" viewBox="0 0 620 230" preserveAspectRatio="none">
+                    <!-- Grid lines -->
+                    <line x1="50" y1="20" x2="610" y2="20" stroke="#f1f5f9" stroke-width="1.5"/>
+                    <text x="40" y="24" class="m-chart-axis-text">1.2K</text>
+
+                    <line x1="50" y1="62" x2="610" y2="62" stroke="#f1f5f9" stroke-width="1.5"/>
+                    <text x="40" y="66" class="m-chart-axis-text">900</text>
+
+                    <line x1="50" y1="104" x2="610" y2="104" stroke="#f1f5f9" stroke-width="1.5"/>
+                    <text x="40" y="108" class="m-chart-axis-text">600</text>
+
+                    <line x1="50" y1="146" x2="610" y2="146" stroke="#f1f5f9" stroke-width="1.5"/>
+                    <text x="40" y="150" class="m-chart-axis-text">300</text>
+
+                    <line x1="50" y1="188" x2="610" y2="188" stroke="#f1f5f9" stroke-width="1.5"/>
+                    <text x="40" y="192" class="m-chart-axis-text">0</text>
+
+                    <!-- Bars: Jan to Dec -->
+                    <!-- Jan (640) -->
+                    <rect x="68" y="118" width="18" height="70" rx="6" fill="#1e3a34"/>
+                    <!-- Feb (870) -->
+                    <rect x="113" y="80" width="18" height="108" rx="6" fill="#1e3a34"/>
+                    <!-- Mar (960) -->
+                    <rect x="158" y="65" width="18" height="123" rx="6" fill="#1e3a34"/>
+                    <!-- Apr (820) -->
+                    <rect x="203" y="90" width="18" height="98" rx="6" fill="#1e3a34"/>
+                    <!-- May (720) -->
+                    <rect x="248" y="108" width="18" height="80" rx="6" fill="#1e3a34"/>
+                    <!-- Jun (985) - Highlighted in Agriculture Green (#10b981) -->
+                    <rect x="293" y="58" width="18" height="130" rx="6" fill="#10b981"/>
+                    <!-- Jul (860) -->
+                    <rect x="338" y="82" width="18" height="106" rx="6" fill="#1e3a34"/>
+                    <!-- Aug (890) -->
+                    <rect x="383" y="78" width="18" height="110" rx="6" fill="#1e3a34"/>
+                    <!-- Sep (1050) -->
+                    <rect x="428" y="48" width="18" height="140" rx="6" fill="#1e3a34"/>
+                    <!-- Oct (850) -->
+                    <rect x="473" y="85" width="18" height="103" rx="6" fill="#1e3a34"/>
+                    <!-- Nov (940) -->
+                    <rect x="518" y="72" width="18" height="116" rx="6" fill="#1e3a34"/>
+                    <!-- Dec (990) -->
+                    <rect x="563" y="60" width="18" height="128" rx="6" fill="#1e3a34"/>
+
+                    <!-- X-Axis Labels -->
+                    <text x="77" y="214" class="m-chart-x-text">Jan</text>
+                    <text x="122" y="214" class="m-chart-x-text">Feb</text>
+                    <text x="167" y="214" class="m-chart-x-text">Mar</text>
+                    <text x="212" y="214" class="m-chart-x-text">Apr</text>
+                    <text x="257" y="214" class="m-chart-x-text">May</text>
+                    <text x="302" y="214" class="m-chart-x-text">Jun</text>
+                    <text x="347" y="214" class="m-chart-x-text">Jul</text>
+                    <text x="392" y="214" class="m-chart-x-text">Aug</text>
+                    <text x="437" y="214" class="m-chart-x-text">Sep</text>
+                    <text x="482" y="214" class="m-chart-x-text">Oct</text>
+                    <text x="527" y="214" class="m-chart-x-text">Nov</text>
+                    <text x="572" y="214" class="m-chart-x-text">Dec</text>
+                  </svg>
+
+                  <!-- Floating Tooltip above June Bar -->
+                  <div class="m-chart-tooltip" style="left: 48.7%; top: 4%;">
+                    <div class="m-tooltip-header">June 2028</div>
+                    <div class="m-tooltip-value">985</div>
+                    <div class="m-tooltip-arrow"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ===== COLUMN 2: Middle (Rent Status Donut & Reminders) ===== -->
+            <div class="m-col-mid">
+              <!-- Rent Status Card -->
+              <div class="m-card m-rent-status-card">
+                <div class="m-card-header">
+                  <h2 class="m-card-title">Rent Status</h2>
+                  <div class="m-pill-select-wrap">
+                    <button class="m-pill-select" type="button">
+                      <span>This Week</span>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="m-donut-container">
+                  <!-- Donut chart with smooth arcs -->
+                  <svg class="m-donut-chart" viewBox="0 0 160 160">
+                    <!-- Background / Track ring -->
+                    <circle cx="80" cy="80" r="54" fill="transparent" stroke="#f1f5f9" stroke-width="24"/>
+                    <!-- Slice 1: Cancelled 18% (Soft Sage Slate #cbd5e1) -->
+                    <circle cx="80" cy="80" r="54" fill="transparent" stroke="#cbd5e1" stroke-width="24" stroke-dasharray="61.1 278.2" stroke-dashoffset="0"/>
+                    <!-- Slice 2: Pending 24% (Agriculture Emerald #10b981) -->
+                    <circle cx="80" cy="80" r="54" fill="transparent" stroke="#10b981" stroke-width="24" stroke-dasharray="81.4 257.9" stroke-dashoffset="-61.1"/>
+                    <!-- Slice 3: Hired 58% (Deep Forest Agriculture #134e4a) -->
+                    <circle cx="80" cy="80" r="54" fill="transparent" stroke="#134e4a" stroke-width="24" stroke-dasharray="196.8 142.5" stroke-dashoffset="-142.5"/>
+                  </svg>
+                </div>
+
+                <!-- Rent Status Legend -->
+                <div class="m-rent-legend">
+                  <div class="m-legend-row">
+                    <div class="m-legend-left">
+                      <span class="m-legend-dot dot-forest"></span>
+                      <span class="m-legend-label">Hired</span>
+                    </div>
+                    <div class="m-legend-val">58% <span class="trend-arrow-up">↑</span></div>
+                  </div>
+                  <div class="m-legend-row">
+                    <div class="m-legend-left">
+                      <span class="m-legend-dot dot-emerald"></span>
+                      <span class="m-legend-label">Pending</span>
+                    </div>
+                    <div class="m-legend-val">24% <span class="trend-arrow-down">↓</span></div>
+                  </div>
+                  <div class="m-legend-row">
+                    <div class="m-legend-left">
+                      <span class="m-legend-dot dot-gray"></span>
+                      <span class="m-legend-label">Cancelled</span>
+                    </div>
+                    <div class="m-legend-val">18% <span class="trend-arrow-up">↑</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Reminders Card -->
+              <div class="m-card m-reminders-card">
+                <div class="m-card-header">
+                  <h2 class="m-card-title">Reminders</h2>
+                  <button class="m-icon-btn-add" type="button" aria-label="Add reminder">+</button>
+                </div>
+
+                <div class="m-reminders-list">
+                  <div class="m-reminder-item">
+                    <div class="m-reminder-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    </div>
+                    <div class="m-reminder-body">
+                      <p class="m-reminder-text">Inspect and service the fleet vehicles.</p>
+                      <span class="m-reminder-date">2028-08-10</span>
+                    </div>
+                  </div>
+
+                  <div class="m-reminder-item">
+                    <div class="m-reminder-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    </div>
+                    <div class="m-reminder-body">
+                      <p class="m-reminder-text">Update the car rental pricing plans for the upcoming season.</p>
+                      <span class="m-reminder-date">2028-08-12</span>
+                    </div>
+                  </div>
+
+                  <div class="m-reminder-item">
+                    <div class="m-reminder-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    </div>
+                    <div class="m-reminder-body">
+                      <p class="m-reminder-text">Review customer feedback and implement improvements.</p>
+                      <span class="m-reminder-date">2028-08-15</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ===== COLUMN 3: Right (Quick Check & Car Types) ===== -->
+            <div class="m-col-right">
+              <!-- Quick Check Availability Card -->
+              <div class="m-card m-check-card">
+                <div class="m-form-inputs-group">
+                  <!-- Input 1: Car Type -->
+                  <div class="m-input-pill" tabindex="0">
+                    <div class="m-input-pill-left">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="#0d766e" stroke-width="2"><rect x="3" y="11" width="18" height="9" rx="2"/><path d="M5 11l2-6h10l2 6"/><circle cx="7.5" cy="16.5" r="1.5"/><circle cx="16.5" cy="16.5" r="1.5"/></svg>
+                      <span>Car Type</span>
+                    </div>
+                    <svg class="m-pill-arrow" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                  </div>
+
+                  <!-- Input 2: Date Picker -->
+                  <div class="m-input-pill" tabindex="0">
+                    <div class="m-input-pill-left">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="#0d766e" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                      <span>17 August 2028</span>
+                    </div>
+                    <svg class="m-pill-arrow" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                  </div>
+
+                  <!-- Input 3: Time Picker -->
+                  <div class="m-input-pill" tabindex="0">
+                    <div class="m-input-pill-left">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="#0d766e" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                      <span>10:00 AM</span>
+                    </div>
+                  </div>
+                </div>
+
+                <button type="button" class="m-btn-check" id="m-btn-quick-check">Check</button>
+              </div>
+
+              <!-- Car Types List Card -->
+              <div class="m-card m-cartypes-card">
+                <div class="m-card-header">
+                  <h2 class="m-card-title">Car Types</h2>
+                  <button class="m-icon-btn-more" type="button" aria-label="More options">···</button>
+                </div>
+
+                <div class="m-cartypes-list">
+                  <!-- Sedan -->
+                  <div class="m-cartype-item" tabindex="0">
+                    <div class="m-cartype-thumb">
+                      <svg viewBox="0 0 100 45" class="m-car-svg">
+                        <path d="M 10 32 L 18 32 C 19 28, 23 28, 24 32 L 72 32 C 73 28, 77 28, 78 32 L 92 32 C 94 32, 95 30, 94 28 L 88 23 C 86 21, 80 20, 72 19 L 58 12 C 54 10, 40 10, 32 15 L 20 22 C 16 23, 11 25, 10 28 Z" fill="#94a3b8"/>
+                        <circle cx="21" cy="32" r="6" fill="#1e3a34"/>
+                        <circle cx="21" cy="32" r="2.5" fill="#f8fafc"/>
+                        <circle cx="75" cy="32" r="6" fill="#1e3a34"/>
+                        <circle cx="75" cy="32" r="2.5" fill="#f8fafc"/>
+                      </svg>
+                    </div>
+                    <div class="m-cartype-content">
+                      <div class="m-cartype-top">
+                        <span class="m-cartype-name">Sedan</span>
+                        <span class="m-cartype-pct">30%</span>
+                      </div>
+                      <div class="m-cartype-bar-wrap">
+                        <div class="m-cartype-bar" style="width: 30%;"></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- SUV (Active Card Outline + Green Bar) -->
+                  <div class="m-cartype-item active-suv" tabindex="0">
+                    <div class="m-cartype-thumb">
+                      <svg viewBox="0 0 100 45" class="m-car-svg">
+                        <path d="M 8 32 L 17 32 C 18 27, 24 27, 25 32 L 71 32 C 72 27, 78 27, 79 32 L 93 32 C 95 32, 96 30, 95 27 L 90 20 C 88 16, 84 15, 78 15 L 42 12 C 36 12, 30 14, 25 18 L 16 23 C 12 24, 9 27, 8 29 Z" fill="#94a3b8"/>
+                        <circle cx="21" cy="32" r="6.5" fill="#1e3a34"/>
+                        <circle cx="21" cy="32" r="2.5" fill="#f8fafc"/>
+                        <circle cx="75" cy="32" r="6.5" fill="#1e3a34"/>
+                        <circle cx="75" cy="32" r="2.5" fill="#f8fafc"/>
+                      </svg>
+                    </div>
+                    <div class="m-cartype-content">
+                      <div class="m-cartype-top">
+                        <span class="m-cartype-name">SUV</span>
+                        <span class="m-cartype-pct">25%</span>
+                      </div>
+                      <div class="m-cartype-bar-wrap">
+                        <div class="m-cartype-bar bar-green" style="width: 25%;"></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Hatchback -->
+                  <div class="m-cartype-item" tabindex="0">
+                    <div class="m-cartype-thumb">
+                      <svg viewBox="0 0 100 45" class="m-car-svg">
+                        <path d="M 12 32 L 19 32 C 20 28, 25 28, 26 32 L 70 32 C 71 28, 76 28, 77 32 L 90 32 C 92 32, 93 30, 92 28 L 86 20 C 84 16, 78 16, 70 16 L 46 16 C 40 16, 32 18, 26 22 L 18 26 C 14 27, 12 29, 12 32 Z" fill="#94a3b8"/>
+                        <circle cx="22.5" cy="32" r="6" fill="#1e293b"/>
+                        <circle cx="22.5" cy="32" r="2.5" fill="#f8fafc"/>
+                        <circle cx="73.5" cy="32" r="6" fill="#1e293b"/>
+                        <circle cx="73.5" cy="32" r="2.5" fill="#f8fafc"/>
+                      </svg>
+                    </div>
+                    <div class="m-cartype-content">
+                      <div class="m-cartype-top">
+                        <span class="m-cartype-name">Hatchback</span>
+                        <span class="m-cartype-pct">20%</span>
+                      </div>
+                      <div class="m-cartype-bar-wrap">
+                        <div class="m-cartype-bar" style="width: 20%;"></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Convertible -->
+                  <div class="m-cartype-item" tabindex="0">
+                    <div class="m-cartype-thumb">
+                      <svg viewBox="0 0 100 45" class="m-car-svg">
+                        <path d="M 10 32 L 18 32 C 19 28, 24 28, 25 32 L 72 32 C 73 28, 78 28, 79 32 L 92 32 C 94 32, 95 30, 94 28 L 86 24 C 82 22, 75 22, 68 22 L 40 22 C 34 22, 28 23, 22 25 L 14 28 C 11 29, 10 30, 10 32 Z" fill="#94a3b8"/>
+                        <circle cx="21" cy="32" r="6" fill="#1e293b"/>
+                        <circle cx="21" cy="32" r="2.5" fill="#f8fafc"/>
+                        <circle cx="75" cy="32" r="6" fill="#1e293b"/>
+                        <circle cx="75" cy="32" r="2.5" fill="#f8fafc"/>
+                      </svg>
+                    </div>
+                    <div class="m-cartype-content">
+                      <div class="m-cartype-top">
+                        <span class="m-cartype-name">Convertible</span>
+                        <span class="m-cartype-pct">10%</span>
+                      </div>
+                      <div class="m-cartype-bar-wrap">
+                        <div class="m-cartype-bar" style="width: 10%;"></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Truck -->
+                  <div class="m-cartype-item" tabindex="0">
+                    <div class="m-cartype-thumb">
+                      <svg viewBox="0 0 100 45" class="m-car-svg">
+                        <path d="M 8 32 L 16 32 C 17 27, 23 27, 24 32 L 72 32 C 73 27, 79 27, 80 32 L 94 32 C 95 32, 96 30, 95 28 L 94 21 L 68 21 L 62 14 C 58 13, 44 13, 38 15 L 24 22 C 18 24, 12 26, 8 28 Z" fill="#94a3b8"/>
+                        <circle cx="20" cy="32" r="6.5" fill="#1e293b"/>
+                        <circle cx="20" cy="32" r="2.5" fill="#f8fafc"/>
+                        <circle cx="76" cy="32" r="6.5" fill="#1e293b"/>
+                        <circle cx="76" cy="32" r="2.5" fill="#f8fafc"/>
+                      </svg>
+                    </div>
+                    <div class="m-cartype-content">
+                      <div class="m-cartype-top">
+                        <span class="m-cartype-name">Truck</span>
+                        <span class="m-cartype-pct">10%</span>
+                      </div>
+                      <div class="m-cartype-bar-wrap">
+                        <div class="m-cartype-bar" style="width: 10%;"></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Minivan -->
+                  <div class="m-cartype-item" tabindex="0">
+                    <div class="m-cartype-thumb">
+                      <svg viewBox="0 0 100 45" class="m-car-svg">
+                        <path d="M 10 32 L 18 32 C 19 28, 24 28, 25 32 L 72 32 C 73 28, 78 28, 79 32 L 92 32 C 94 32, 95 30, 94 28 L 90 18 C 88 15, 80 14, 70 14 L 40 14 C 32 14, 24 16, 18 21 L 12 26 C 10 28, 10 30, 10 32 Z" fill="#94a3b8"/>
+                        <circle cx="21" cy="32" r="6" fill="#1e293b"/>
+                        <circle cx="21" cy="32" r="2.5" fill="#f8fafc"/>
+                        <circle cx="75" cy="32" r="6" fill="#1e293b"/>
+                        <circle cx="75" cy="32" r="2.5" fill="#f8fafc"/>
+                      </svg>
+                    </div>
+                    <div class="m-cartype-content">
+                      <div class="m-cartype-top">
+                        <span class="m-cartype-name">Minivan</span>
+                        <span class="m-cartype-pct">5%</span>
+                      </div>
+                      <div class="m-cartype-bar-wrap">
+                        <div class="m-cartype-bar" style="width: 5%;"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ================= SECTION 1: RENTAL OPERATIONS & INSPECTIONS ================= -->
+        <section class="surface section-block manager-view-panel" id="approvals" style="display: none; margin-bottom: 28px; padding: 24px; border-radius: 12px; border: 1px solid #e2e8e4; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+          <div class="section-heading" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 18px;">
+            <div>
+              <p class="section-label" style="font-size: 0.7rem; font-weight: 800; color: #64746f; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 4px;">CM-005 / RENTAL DISPATCH</p>
+              <h2 style="font-size: 1.25rem; font-weight: 800; margin: 0; color: #1a2926;">Incoming Farmer Bookings &amp; Handover Queue</h2>
+              <p style="font-size: 0.8rem; color: #64746f; margin: 4px 0 0;">Decide farmer applications and conduct physical condition inspections on check-out/check-in.</p>
+            </div>
+            <span class="table-note" style="font-size: 0.78rem; font-weight: 700; color: #64746f; background: #f1f5f9; padding: 4px 10px; border-radius: 6px;">0 requests in queue</span>
+          </div>
+
+          <div class="table-wrap">
+            <table class="table-full" style="width: 100%;">
+              <thead>
+                <tr>
+                  <th>Booking / Farmer</th>
+                  <th>Equipment Unit</th>
+                  <th>Rental Dates</th>
+                  <th>Submitted</th>
+                  <th>Inspection Status</th>
+                  <th class="align-right">Action</th>
+                </tr>
+              </thead>
+              <tbody id="approval-table"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ================= SECTION 2: POINT OF SALE (POS) & DEPOSIT SETTLEMENT ================= -->
+        <section class="surface section-block manager-view-panel" id="pos-terminal" style="display: none; margin-bottom: 28px; padding: 24px; border-radius: 12px; border: 1px solid #e2e8e4; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+          <div class="section-heading" style="margin-bottom: 16px;">
+            <p class="section-label" style="font-size: 0.7rem; font-weight: 800; color: #64746f; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 4px;">CM-003 / DESK TERMINAL</p>
+            <h2 style="font-size: 1.25rem; font-weight: 800; margin: 0; color: #1a2926;">Point of Sale (POS) &amp; Deposit Settlement</h2>
+            <p style="font-size: 0.8rem; color: #64746f; margin: 4px 0 0;">Bypass the online booking flow for walk-in farmers and calculate post-rental deposit deductions.</p>
+          </div>
+
+          <!-- POS Mode Selector Tabs -->
+          <div style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--line); padding-bottom: 10px;">
+            <button type="button" id="pos-tab-walkin" style="padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 0.82rem; cursor: pointer; border: 1px solid #d97706; background: #fffbeb; color: #92400e;">
+              👤 Walk-in Farmer Booking
+            </button>
+            <button type="button" id="pos-tab-settlement" style="padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 0.82rem; cursor: pointer; border: 1px solid var(--line); background: transparent; color: var(--ink-soft);">
+              💰 Return Deposit Settlement &amp; Deductions
+            </button>
+          </div>
+
+          <!-- POS Panel 1: Walk-In Form -->
+          <div id="pos-walkin-panel">
+            <form id="pos-walkin-form" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
+              <div>
+                <label for="pos-farmer-name" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Farmer Full Name *</label>
+                <input id="pos-farmer-name" type="text" placeholder="e.g. Samuel K. Boro" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+              </div>
+              <div>
+                <label for="pos-farmer-phone" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Contact Phone *</label>
+                <input id="pos-farmer-phone" type="tel" placeholder="+63 912 345 6789" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+              </div>
+              <div>
+                <label for="pos-coop-id" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Cooperative ID / Walk-In</label>
+                <input id="pos-coop-id" type="text" placeholder="e.g. CM-042 or WALK-IN" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+              </div>
+
+              <div>
+                <label for="pos-equipment-select" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Equipment Unit *</label>
+                <select id="pos-equipment-select" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
+                  <option value="John Deere 5075E" data-rate="120">John Deere 5075E Tractor ($120/day)</option>
+                  <option value="Kuhn Disc Mower" data-rate="85">Kuhn Disc Mower ($85/day)</option>
+                  <option value="New Holland Baler" data-rate="150">New Holland Baler ($150/day)</option>
+                  <option value="Case IH Tractor" data-rate="135">Case IH Tractor ($135/day)</option>
+                </select>
+              </div>
+              <div>
+                <label for="pos-start-date" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Rental Start Date *</label>
+                <input id="pos-start-date" type="date" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+              </div>
+              <div>
+                <label for="pos-end-date" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Rental End Date *</label>
+                <input id="pos-end-date" type="date" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+              </div>
+
+              <div>
+                <label for="pos-daily-rate" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Daily Rate ($)</label>
+                <input id="pos-daily-rate" type="number" value="120" min="10" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+              </div>
+              <div>
+                <label for="pos-deposit" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Security Deposit ($)</label>
+                <input id="pos-deposit" type="number" value="250" min="0" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+              </div>
+              <div>
+                <label for="pos-payment-method" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Payment Method</label>
+                <select id="pos-payment-method" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
+                  <option value="Cash">Cash (Desk Payment)</option>
+                  <option value="Bank Transfer">Bank Transfer</option>
+                  <option value="Co-op Credit">Co-op Credit Line</option>
+                </select>
+              </div>
+
+              <!-- Live Total Breakdown Card -->
+              <div style="grid-column: 1 / -1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: gap; gap: 14px;">
+                <div style="font-size: 0.82rem; color: #475569;">
+                  <div>Calculated Rental: <strong id="pos-breakdown-subtotal">$360.00</strong> (<span id="pos-breakdown-days">3</span> days)</div>
+                  <div>Refundable Security Deposit: <strong id="pos-breakdown-deposit">$250.00</strong></div>
+                </div>
+                <div style="text-align: right;">
+                  <span style="font-size: 0.72rem; text-transform: uppercase; font-weight: 700; color: #64748b;">Total Upfront Cash to Collect</span>
+                  <div style="font-size: 1.5rem; font-weight: 900; color: #d97706;" id="pos-breakdown-total">$610.00</div>
+                </div>
+              </div>
+
+              <div style="grid-column: 1 / -1;">
+                <button type="submit" class="button button-primary" style="width: 100%; padding: 12px; font-size: 0.9rem; font-weight: 800; border-radius: 8px; background: #d97706; border: none; cursor: pointer;">
+                  + Issue Walk-in Booking &amp; Record Cash Receipt
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- POS Panel 2: Settlement Form -->
+          <div id="pos-settlement-panel" style="display: none;">
+            <form id="pos-settlement-form" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
+              <div>
+                <label for="settle-rental-id" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Rental Contract / App ID *</label>
+                <input id="settle-rental-id" type="text" placeholder="e.g. APP-042 or BK-1039" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+              </div>
+              <div>
+                <label for="settle-initial-deposit" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Initial Security Deposit Held ($) *</label>
+                <input id="settle-initial-deposit" type="number" value="250" min="0" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+              </div>
+
+              <!-- Penalties / Adjustments -->
+              <div style="grid-column: 1 / -1; background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 16px;">
+                <strong style="display: block; font-size: 0.84rem; color: #9f1239; margin-bottom: 12px;">⚠️ Late Fees &amp; Repair Damage Deductions</strong>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                  <div>
+                    <label for="settle-late-days" style="display: block; font-size: 0.74rem; font-weight: 700; margin-bottom: 4px;">Late Return (Days Overdue)</label>
+                    <input id="settle-late-days" type="number" value="0" min="0" style="width: 100%; padding: 7px 10px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
+                    <small style="color: #64748b; font-size: 0.7rem;">@ $40.00/day penalty fee</small>
+                  </div>
+                  <div>
+                    <label for="settle-repair-cost" style="display: block; font-size: 0.74rem; font-weight: 700; margin-bottom: 4px;">Damage Repair / Parts Deductions ($)</label>
+                    <input id="settle-repair-cost" type="number" value="0" min="0" style="width: 100%; padding: 7px 10px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
+                  </div>
+                  <div>
+                    <label for="settle-fuel-charge" style="display: block; font-size: 0.74rem; font-weight: 700; margin-bottom: 4px;">Fuel Shortage Charge ($)</label>
+                    <input id="settle-fuel-charge" type="number" value="0" min="0" style="width: 100%; padding: 7px 10px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
+                  </div>
+                </div>
+
+                <div style="margin-top: 10px;">
+                  <label for="settle-deduction-notes" style="display: block; font-size: 0.74rem; font-weight: 700; margin-bottom: 4px;">Reason for Damages or Penalty Applied</label>
+                  <input id="settle-deduction-notes" type="text" placeholder="e.g. Scratched chassis, missing hitch pin, 1/4 fuel tank shortage" style="width: 100%; padding: 7px 10px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
+                </div>
+              </div>
+
+              <!-- Net Settlement Summary Card -->
+              <div id="settle-summary-card" style="grid-column: 1 / -1; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <span style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #065f46;" id="settle-outcome-label">Deposit Refund to Farmer</span>
+                  <div style="font-size: 0.82rem; color: #047857;" id="settle-outcome-details">Initial Deposit: $250.00 &minus; Deductions: $0.00</div>
+                </div>
+                <div style="font-size: 1.6rem; font-weight: 900; color: #047857;" id="settle-net-amount">+$250.00</div>
+              </div>
+
+              <div style="grid-column: 1 / -1;">
+                <button type="submit" class="button button-primary" style="width: 100%; padding: 12px; font-size: 0.9rem; font-weight: 800; border-radius: 8px; background: #0f172a; border: none; cursor: pointer;">
+                  ✓ Finalize Settlement &amp; Release Farmer Funds
+                </button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <!-- ================= SECTION 3: FARM MACHINERY & UNITS MANAGEMENT ================= -->
+        <section class="surface section-block manager-view-panel" id="maintenance" style="display: none; margin-bottom: 28px; padding: 24px; border-radius: 12px; border: 1px solid #e2e8e4; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+          
+          <!-- Section Top Heading -->
+          <div class="section-heading" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px; margin-bottom: 22px;">
+            <div>
+              <p class="section-label" style="font-size: 0.7rem; font-weight: 800; color: #0d766e; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 4px;">CM-007 / FLEET OPERATIONS &amp; INVENTORY</p>
+              <h2 style="font-size: 1.35rem; font-weight: 800; margin: 0; color: #0f172a;">Farm Machinery &amp; Equipment Units</h2>
+              <p style="font-size: 0.82rem; color: #64748b; margin: 4px 0 0;">Manage cooperative machinery units, driver assignments, daily/hourly rates, and status lifecycle.</p>
+            </div>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+              <button type="button" id="btn-open-maintenance-modal" class="button" style="background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; font-weight: 700; padding: 9px 15px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 0.82rem;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                <span>Schedule Out-of-Service</span>
+              </button>
+              <button type="button" id="btn-add-machinery" class="button button-primary" style="background: #0d766e; color: #fff; border: none; font-weight: 700; padding: 9px 18px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 0.82rem; box-shadow: 0 2px 4px rgba(13,118,110,0.2);">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <span>+ Add Machinery Unit</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Machinery KPI Metric Stat Cards -->
+          <div class="machinery-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 24px;">
+            <!-- Total Units -->
+            <div class="machinery-stat-card" style="background: #f8faf9; border: 1px solid #e2e8e4; border-radius: 10px; padding: 14px 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-size: 0.72rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Total Fleet Units</span>
+                <span style="display: inline-flex; width: 28px; height: 28px; background: #e6f4ea; color: #0d766e; border-radius: 6px; align-items: center; justify-content: center; font-size: 0.9rem;">🚜</span>
+              </div>
+              <div style="font-size: 1.5rem; font-weight: 800; color: #0f172a;" id="machinery-stat-total">0</div>
+              <div style="font-size: 0.7rem; color: #64748b; margin-top: 2px;">Co-op machinery assets</div>
+            </div>
+
+            <!-- Available -->
+            <div class="machinery-stat-card" style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 14px 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-size: 0.72rem; font-weight: 700; color: #166534; text-transform: uppercase;">Available</span>
+                <span style="display: inline-flex; width: 28px; height: 28px; background: #dcfce7; color: #15803d; border-radius: 6px; align-items: center; justify-content: center; font-size: 0.85rem;">✓</span>
+              </div>
+              <div style="font-size: 1.5rem; font-weight: 800; color: #15803d;" id="machinery-stat-available">0</div>
+              <div style="font-size: 0.7rem; color: #166534; margin-top: 2px;">Ready for immediate dispatch</div>
+            </div>
+
+            <!-- In Maintenance -->
+            <div class="machinery-stat-card" style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 14px 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-size: 0.72rem; font-weight: 700; color: #92400e; text-transform: uppercase;">In Maintenance</span>
+                <span style="display: inline-flex; width: 28px; height: 28px; background: #fef3c7; color: #b45309; border-radius: 6px; align-items: center; justify-content: center; font-size: 0.85rem;">🔧</span>
+              </div>
+              <div style="font-size: 1.5rem; font-weight: 800; color: #b45309;" id="machinery-stat-maintenance">0</div>
+              <div style="font-size: 0.7rem; color: #92400e; margin-top: 2px;">Scheduled service / inspection</div>
+            </div>
+
+            <!-- In Repair -->
+            <div class="machinery-stat-card" style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 14px 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-size: 0.72rem; font-weight: 700; color: #991b1b; text-transform: uppercase;">In Repair</span>
+                <span style="display: inline-flex; width: 28px; height: 28px; background: #fee2e2; color: #dc2626; border-radius: 6px; align-items: center; justify-content: center; font-size: 0.85rem;">⚠️</span>
+              </div>
+              <div style="font-size: 1.5rem; font-weight: 800; color: #dc2626;" id="machinery-stat-repair">0</div>
+              <div style="font-size: 0.7rem; color: #991b1b; margin-top: 2px;">Workshop mechanical fix</div>
+            </div>
+
+            <!-- Dispose -->
+            <div class="machinery-stat-card" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-size: 0.72rem; font-weight: 700; color: #475569; text-transform: uppercase;">Disposed / Retired</span>
+                <span style="display: inline-flex; width: 28px; height: 28px; background: #f1f5f9; color: #475569; border-radius: 6px; align-items: center; justify-content: center; font-size: 0.85rem;">🗑️</span>
+              </div>
+              <div style="font-size: 1.5rem; font-weight: 800; color: #475569;" id="machinery-stat-dispose">0</div>
+              <div style="font-size: 0.7rem; color: #64748b; margin-top: 2px;">Decommissioned assets</div>
+            </div>
+          </div>
+
+          <!-- Machinery Filter & Search Toolbar -->
+          <div class="machinery-toolbar" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 20px; padding: 14px 16px; background: #f8faf9; border: 1px solid #e2e8e4; border-radius: 10px;">
+            <!-- Status Filter Tabs -->
+            <div class="machinery-filter-tabs" style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <button type="button" class="machinery-status-pill active" data-status-filter="All">All (<span id="pill-count-all">0</span>)</button>
+              <button type="button" class="machinery-status-pill" data-status-filter="Available">● Available (<span id="pill-count-avail">0</span>)</button>
+              <button type="button" class="machinery-status-pill" data-status-filter="Maintenance">🔧 Maintenance (<span id="pill-count-maint">0</span>)</button>
+              <button type="button" class="machinery-status-pill" data-status-filter="Repair">⚠️ Repair (<span id="pill-count-repair">0</span>)</button>
+              <button type="button" class="machinery-status-pill" data-status-filter="Dispose">🗑️ Dispose (<span id="pill-count-dispose">0</span>)</button>
+            </div>
+
+            <!-- Search, Category & View Mode Controls -->
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <!-- Category Filter -->
+              <select id="machinery-category-filter" style="padding: 7px 12px; font-size: 0.8rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #334155; font-weight: 600;">
+                <option value="All">All Categories</option>
+                <option value="Tractor">Tractor</option>
+                <option value="Harvester">Harvester</option>
+                <option value="Baler">Baler</option>
+                <option value="Planter / Seeder">Planter / Seeder</option>
+                <option value="Sprayer">Sprayer</option>
+                <option value="Mower / Rake">Mower / Rake</option>
+                <option value="Transport / Truck">Transport / Truck</option>
+                <option value="Other">Other</option>
+              </select>
+
+              <!-- Search Input -->
+              <div style="position: relative;">
+                <svg style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #94a3b8; pointer-events: none;" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="machinery-search-input" placeholder="Search machinery, driver, ID..." style="padding: 7px 12px 7px 30px; font-size: 0.8rem; border: 1px solid #cbd5e1; border-radius: 6px; width: 220px; background: #fff;">
+              </div>
+
+              <!-- View Mode Toggles (Grid vs Table) -->
+              <div style="display: inline-flex; border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden; background: #fff;">
+                <button type="button" id="btn-machinery-grid-view" class="machinery-view-btn active" title="Grid View" style="padding: 6px 10px; border: none; background: #0d766e; color: #fff; cursor: pointer;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                </button>
+                <button type="button" id="btn-machinery-table-view" class="machinery-view-btn" title="Table View" style="padding: 6px 10px; border: none; background: transparent; color: #64748b; cursor: pointer;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Machinery Grid View Container -->
+          <div id="machinery-grid-container" class="machinery-grid-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 18px; margin-bottom: 24px;">
+            <!-- Populated via JavaScript -->
+          </div>
+
+          <!-- Machinery Table View Container (Hidden by default, toggled with view button) -->
+          <div id="machinery-table-container" style="display: none; margin-bottom: 24px;">
+            <div class="table-wrap">
+              <table class="table-full" style="width: 100%;">
+                <thead>
+                  <tr>
+                    <th>Unit / Machinery</th>
+                    <th>Category</th>
+                    <th>Assigned Driver</th>
+                    <th>Rental Rates</th>
+                    <th>Status</th>
+                    <th>Condition / Notes</th>
+                    <th class="align-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="machinery-table-body">
+                  <!-- Populated via JavaScript -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Collapsible: Scheduled Out-of-Service & Maintenance Overlap Log -->
+          <details style="margin-top: 14px; border: 1px solid #e2e8e4; border-radius: 10px; background: #fafbfc; padding: 12px 18px;">
+            <summary style="font-size: 0.88rem; font-weight: 700; color: #334155; cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between;">
+              <span style="display: flex; align-items: center; gap: 8px;">
+                <span>🔒 Scheduled Maintenance &amp; Booking Lockouts</span>
+                <span id="maintenance-count-badge" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 999px; background: #e2e8f0; color: #475569; font-weight: 800;">0 active</span>
+              </span>
+              <span style="font-size: 0.75rem; color: #0d766e; text-decoration: underline;">View / Manage Schedules &darr;</span>
+            </summary>
+            
+            <div style="margin-top: 14px; padding-top: 14px; border-top: 1px dashed #cbd5e1;">
+              <p style="font-size: 0.78rem; color: #64748b; margin: 0 0 12px;">Equipment scheduled here automatically locks out farmer bookings on the member portal for conflicting dates.</p>
+              <div class="table-wrap">
+                <table class="table-full" style="width: 100%;">
+                  <thead>
+                    <tr>
+                      <th>Unit ID</th>
+                      <th>Machinery Name</th>
+                      <th>Maintenance Type</th>
+                      <th>Blocked Date Window</th>
+                      <th>Status</th>
+                      <th>Reason / Notes</th>
+                      <th class="align-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="maintenance-table"></tbody>
+                </table>
+              </div>
+            </div>
+          </details>
+
+        </section>
+
+        <!-- ================= SECTION 4: BRANCH UTILIZATION & CASH RECONCILIATION ================= -->
+        <section class="surface section-block manager-view-panel" id="analytics" style="display: none; margin-bottom: 28px; padding: 24px; border-radius: 12px; border: 1px solid #e2e8e4; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+          <div class="section-heading" style="margin-bottom: 18px;">
+            <p class="section-label" style="font-size: 0.7rem; font-weight: 800; color: #64746f; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 4px;">CM-009 / LEDGER &amp; UTILIZATION</p>
+            <h2 style="font-size: 1.25rem; font-weight: 800; margin: 0; color: #1a2926;">Branch Fleet Utilization &amp; Daily Cash Ledger</h2>
+            <p style="font-size: 0.8rem; color: #64746f; margin: 4px 0 0;">Weekly machinery utilization percentage chart and end-of-day register cash reconciliation.</p>
+          </div>
+
+          <!-- Utilization Rate Visual Bar Chart -->
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; margin-bottom: 24px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+              <strong style="font-size: 0.88rem; color: #0f172a;">Weekly Equipment Utilization Rates (%)</strong>
+              <span style="font-size: 0.72rem; background: #e2e8f0; color: #475569; padding: 3px 8px; border-radius: 6px; font-weight: 700;">Active Fleet: 73.3%</span>
+            </div>
+            
+            <div id="utilization-bars-container" style="display: flex; flex-direction: column; gap: 12px;"></div>
+          </div>
+
+          <!-- Cash Reconciliation Table -->
+          <div style="border-top: 1px solid #f1f5f9; padding-top: 18px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <strong style="font-size: 0.95rem; color: #1e293b;">Daily Cash Collections &amp; Ledger Log</strong>
+              <button type="button" id="btn-export-ledger-csv" class="action-button" style="background: #f1f5f9; color: #0f172a; font-weight: 700; border: 1px solid #cbd5e1; border-radius: 6px; padding: 5px 12px; cursor: pointer;">
+                ⬇ Export Ledger (CSV)
+              </button>
+            </div>
+
+            <div class="table-wrap">
+              <table class="table-full" style="width: 100%;">
+                <thead>
+                  <tr>
+                    <th>Tx ID / Time</th>
+                    <th>Farmer</th>
+                    <th>Equipment</th>
+                    <th>Category</th>
+                    <th>Method</th>
+                    <th class="align-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody id="transaction-ledger-table"></tbody>
+                <tfoot style="background: #f8fafc; font-weight: 800; border-top: 2px solid #cbd5e1;">
+                  <tr>
+                    <td colspan="5" style="padding: 10px 14px; text-align: right; font-size: 0.8rem; text-transform: uppercase; color: #475569;">
+                      Total Reconciled Cash Intake:
+                    </td>
+                    <td style="padding: 10px 14px; text-align: right; color: #047857; font-size: 1.05rem;" id="ledger-total-cash">
+                      $0.00
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= SECTION 5: FIELD ISSUES ================= -->
+        <section class="surface section-block manager-view-panel" id="issues" style="display: none; padding: 24px; border-radius: 12px; border: 1px solid #e2e8e4; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+          <div class="section-heading" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
+            <div>
+              <p class="section-label" style="font-size: 0.7rem; font-weight: 800; color: #64746f; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 4px;">CM-004 / FIELD PULSE</p>
+              <h2 style="font-size: 1.25rem; font-weight: 800; margin: 0; color: #1a2926;">Issues Needing Attention</h2>
+            </div>
+            <a class="text-link" href="#issues" style="font-size: 0.8rem; font-weight: 700; color: #0d766e; text-decoration: none;">View all issues &rarr;</a>
+          </div>
+          <div class="issue-grid" id="manager-issues"></div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- ================= MODAL 1: CHECK-OUT / CHECK-IN INSPECTION DIALOG ================= -->
+  <dialog class="application-dialog" id="inspection-dialog" style="max-width: 540px; border-radius: 14px; border: 1px solid #cbd5e1; padding: 0;">
+    <div style="background: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 16px 22px; display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <p class="eyebrow" style="margin: 0; font-size: 0.68rem; font-weight: 800; color: #d97706; text-transform: uppercase;">CONDITION AUDIT PROTOCOL</p>
+        <h3 id="inspection-modal-title" style="margin: 2px 0 0; font-size: 1.25rem; font-weight: 800; color: #0f172a;">Pre-Rental Handover Inspection</h3>
+      </div>
+      <button class="application-close" id="close-inspection-dialog" type="button" style="border: none; background: transparent; font-size: 1.4rem; cursor: pointer;">&times;</button>
+    </div>
+
+    <form id="inspection-form" style="padding: 22px; display: flex; flex-direction: column; gap: 14px;">
+      <input type="hidden" id="inspection-app-id">
+      <input type="hidden" id="inspection-type" value="checkout">
+
+      <div style="background: #fffbeb; border: 1px solid #fef3c7; border-radius: 8px; padding: 10px 14px; font-size: 0.8rem; color: #92400e;">
+        <strong>Equipment:</strong> <span id="inspection-equipment-name">Tractor</span> &bull; 
+        <strong>Farmer:</strong> <span id="inspection-farmer-name">Farmer</span>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div>
+          <label for="inspect-odometer" style="display: block; font-size: 0.74rem; font-weight: 700; margin-bottom: 4px;">Odometer / Engine Hours</label>
+          <input id="inspect-odometer" type="number" step="0.1" placeholder="e.g. 1420.5 hrs" required style="width: 100%; padding: 8px 10px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+        </div>
+        <div>
+          <label for="inspect-fuel" style="display: block; font-size: 0.74rem; font-weight: 700; margin-bottom: 4px;">Fuel Gauge Level</label>
+          <select id="inspect-fuel" style="width: 100%; padding: 8px 10px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
+            <option value="100%">100% (Full Tank)</option>
+            <option value="75%">75% (3/4 Tank)</option>
+            <option value="50%">50% (Half Tank)</option>
+            <option value="25%">25% (Quarter Tank)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Condition Photos File Upload -->
+      <div>
+        <label style="display: block; font-size: 0.74rem; font-weight: 700; margin-bottom: 4px;">Inspection Photos (Tires, Hydraulic Lines, Chassis)</label>
+        <div style="border: 2px dashed #cbd5e1; border-radius: 8px; padding: 14px; text-align: center; background: #f8fafc;">
+          <input type="file" id="inspect-photos-file" multiple style="display: none;">
+          <label for="inspect-photos-file" style="cursor: pointer; display: inline-block; padding: 6px 14px; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.78rem; font-weight: 700; color: #334155;">
+            📷 Choose Photos to Attach
+          </label>
+          <p id="inspect-photo-count-preview" style="margin: 6px 0 0; font-size: 0.72rem; color: #64748b;">No photos selected yet.</p>
+        </div>
+      </div>
+
+      <div>
+        <label for="inspect-notes" style="display: block; font-size: 0.74rem; font-weight: 700; margin-bottom: 4px;">Condition Notes &amp; Damage Verification</label>
+        <textarea id="inspect-notes" rows="3" placeholder="Confirm functional lights, clean filters, scratches, dented blade guard, etc." required style="width: 100%; padding: 8px 10px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px;"></textarea>
+      </div>
+
+      <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 6px;">
+        <button type="button" id="cancel-inspection-dialog" class="button button-outline" style="padding: 8px 16px;">Cancel</button>
+        <button type="submit" id="submit-inspection-btn" class="button button-primary" style="padding: 8px 20px; font-weight: 800; background: #d97706; border: none;">
+          Confirm Handover
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ================= MODAL 2: MACHINERY MAINTENANCE SCHEDULE DIALOG ================= -->
+  <dialog class="application-dialog" id="maintenance-dialog" style="max-width: 500px; border-radius: 14px; border: 1px solid #cbd5e1; padding: 0;">
+    <div style="background: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 16px 22px; display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <p class="eyebrow" style="margin: 0; font-size: 0.68rem; font-weight: 800; color: #dc2626; text-transform: uppercase;">MAINTENANCE PROTOCOL</p>
+        <h3 style="margin: 2px 0 0; font-size: 1.25rem; font-weight: 800; color: #0f172a;">Set Unit Out of Service</h3>
+      </div>
+      <button class="application-close" id="close-maintenance-dialog" type="button" style="border: none; background: transparent; font-size: 1.4rem; cursor: pointer;">&times;</button>
+    </div>
+
+    <form id="maintenance-form" style="padding: 22px; display: flex; flex-direction: column; gap: 14px;">
+      <div>
+        <label for="maint-unit-id" style="display: block; font-size: 0.74rem; font-weight: 700; margin-bottom: 4px;">Machinery Unit ID *</label>
+        <input id="maint-unit-id" type="text" placeholder="e.g. JD-5075-01" required style="width: 100%; padding: 8px 10px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+      </div>
+      <div>
+        <label for="maint-equipment-name" style="display: block; font-size: 0.74rem; font-weight: 700; margin-bottom: 4px;">Machinery Equipment Name *</label>
+        <select id="maint-equipment-name" style="width: 100%; padding: 8px 10px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
+          <option value="John Deere 5075E">John Deere 5075E Tractor</option>
+          <option value="Kuhn Disc Mower">Kuhn Disc Mower</option>
+          <option value="New Holland Baler">New Holland Baler</option>
+          <option value="Case IH Tractor">Case IH Tractor</option>
+        </select>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div>
+          <label for="maint-start-date" style="display: block; font-size: 0.74rem; font-weight: 700; margin-bottom: 4px;">Out of Service Start *</label>
+          <input id="maint-start-date" type="date" required style="width: 100%; padding: 8px 10px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+        </div>
+        <div>
+          <label for="maint-end-date" style="display: block; font-size: 0.74rem; font-weight: 700; margin-bottom: 4px;">Out of Service End *</label>
+          <input id="maint-end-date" type="date" required style="width: 100%; padding: 8px 10px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+        </div>
+      </div>
+
+      <div>
+        <label for="maint-type" style="display: block; font-size: 0.74rem; font-weight: 700; margin-bottom: 4px;">Maintenance Type</label>
+        <select id="maint-type" style="width: 100%; padding: 8px 10px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
+          <option value="Routine Servicing">Routine Servicing (Oil, Greasing, Filters)</option>
+          <option value="Hydraulic Repair">Hydraulic Repair (Cylinder, Hoses)</option>
+          <option value="Emergency Breakdown">Emergency Breakdown</option>
+          <option value="Tire Replacement">Tire / Track Replacement</option>
+          <option value="General Overhaul">General Overhaul</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="maint-reason" style="display: block; font-size: 0.74rem; font-weight: 700; margin-bottom: 4px;">Reason / Diagnostics Description *</label>
+        <textarea id="maint-reason" rows="2" placeholder="Describe mechanical fault or routine inspection protocol..." required style="width: 100%; padding: 8px 10px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px;"></textarea>
+      </div>
+
+      <div style="background: #fef2f2; border: 1px solid #fecdd3; border-radius: 6px; padding: 10px; font-size: 0.72rem; color: #991b1b;">
+        🔒 <strong>Automatic Overlap Protection:</strong> Farmers attempting to book this unit during this window will be prevented automatically by the backend.
+      </div>
+
+      <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 6px;">
+        <button type="button" id="cancel-maintenance-dialog" class="button button-outline" style="padding: 8px 16px;">Cancel</button>
+        <button type="submit" class="button button-primary" style="padding: 8px 20px; font-weight: 800; background: #dc2626; border: none;">
+          Lock Unit Out of Service
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ================= MACHINERY UNIT ADD / EDIT MODAL ================= -->
+  <dialog id="machinery-modal" class="application-modal" style="max-width: 680px; width: 94%; border: none; border-radius: 14px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); padding: 0; background: #fff; overflow: hidden;">
+    <div style="background: #0d1a18; color: #fff; padding: 18px 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0d766e;">
+      <div>
+        <p style="font-size: 0.68rem; font-weight: 800; color: #10b981; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 2px;">FLEET INVENTORY MANAGEMENT</p>
+        <h3 id="machinery-modal-title" style="margin: 0; font-size: 1.25rem; font-weight: 800; color: #fff;">Edit Machinery Unit</h3>
+      </div>
+      <button class="application-close" id="close-machinery-modal" type="button" style="border: none; background: transparent; font-size: 1.5rem; color: #94a3b8; cursor: pointer; line-height: 1;">&times;</button>
+    </div>
+
+    <form id="machinery-form" style="padding: 22px 24px; display: flex; flex-direction: column; gap: 14px; max-height: 80vh; overflow-y: auto;">
+      <input type="hidden" id="machinery-doc-id" value="">
+      <input type="hidden" id="machinery-form-mode" value="edit">
+
+      <!-- Identification Row -->
+      <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 14px;">
+        <div>
+          <label for="machinery-unit-id" style="display: block; font-size: 0.75rem; font-weight: 700; color: #334155; margin-bottom: 4px;">Unit ID *</label>
+          <input id="machinery-unit-id" type="text" placeholder="e.g. JD-5075-01" required style="width: 100%; padding: 8px 10px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 700; font-family: monospace;">
+        </div>
+        <div>
+          <label for="machinery-name" style="display: block; font-size: 0.75rem; font-weight: 700; color: #334155; margin-bottom: 4px;">Machinery Name &amp; Model *</label>
+          <input id="machinery-name" type="text" placeholder="e.g. John Deere 5075E Utility Tractor" required style="width: 100%; padding: 8px 10px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+        </div>
+      </div>
+
+      <!-- Category & Status -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+        <div>
+          <label for="machinery-category" style="display: block; font-size: 0.75rem; font-weight: 700; color: #334155; margin-bottom: 4px;">Category *</label>
+          <select id="machinery-category" style="width: 100%; padding: 8px 10px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
+            <option value="Tractor">Tractor</option>
+            <option value="Harvester">Harvester</option>
+            <option value="Baler">Baler</option>
+            <option value="Planter / Seeder">Planter / Seeder</option>
+            <option value="Sprayer">Sprayer</option>
+            <option value="Mower / Rake">Mower / Rake</option>
+            <option value="Transport / Truck">Transport / Truck</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div>
+          <label for="machinery-status" style="display: block; font-size: 0.75rem; font-weight: 700; color: #334155; margin-bottom: 4px;">Current Status *</label>
+          <select id="machinery-status" style="width: 100%; padding: 8px 10px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; font-weight: 700;">
+            <option value="Available" style="color: #15803d;">● Available (Ready for booking)</option>
+            <option value="Maintenance" style="color: #b45309;">🔧 Maintenance (Routine service)</option>
+            <option value="Repair" style="color: #dc2626;">⚠️ Repair (Workshop / mechanical)</option>
+            <option value="Dispose" style="color: #475569;">🗑️ Dispose (Retired / auction)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Driver Assignment Row -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+        <div>
+          <label for="machinery-driver" style="display: block; font-size: 0.75rem; font-weight: 700; color: #334155; margin-bottom: 4px;">Assigned Driver / Operator</label>
+          <input id="machinery-driver" type="text" placeholder="e.g. Ramon Gutierrez (or Unassigned)" style="width: 100%; padding: 8px 10px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+        </div>
+        <div>
+          <label for="machinery-driver-phone" style="display: block; font-size: 0.75rem; font-weight: 700; color: #334155; margin-bottom: 4px;">Driver Contact Phone</label>
+          <input id="machinery-driver-phone" type="text" placeholder="e.g. +63 917 842 1092" style="width: 100%; padding: 8px 10px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+        </div>
+      </div>
+
+      <!-- Rental Pricing Row (Rate per Day / Hour) -->
+      <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px 14px;">
+        <span style="display: block; font-size: 0.75rem; font-weight: 800; color: #166534; margin-bottom: 8px; text-transform: uppercase;">Co-op Rental Pricing Schedule</span>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+          <div>
+            <label for="machinery-rate-day" style="display: block; font-size: 0.74rem; font-weight: 700; color: #166534; margin-bottom: 4px;">Rate per Day (₱) *</label>
+            <input id="machinery-rate-day" type="number" min="0" step="10" placeholder="2800" required style="width: 100%; padding: 8px 10px; font-size: 0.95rem; font-weight: 800; border: 1px solid #86efac; border-radius: 6px; background: #fff; color: #0f172a;">
+          </div>
+          <div>
+            <label for="machinery-rate-hour" style="display: block; font-size: 0.74rem; font-weight: 700; color: #166534; margin-bottom: 4px;">Rate per Hour (₱) *</label>
+            <input id="machinery-rate-hour" type="number" min="0" step="10" placeholder="450" required style="width: 100%; padding: 8px 10px; font-size: 0.95rem; font-weight: 800; border: 1px solid #86efac; border-radius: 6px; background: #fff; color: #0f172a;">
+          </div>
+        </div>
+      </div>
+
+      <!-- Picture URL & Presets Preview -->
+      <div>
+        <label for="machinery-image-url" style="display: block; font-size: 0.75rem; font-weight: 700; color: #334155; margin-bottom: 4px;">Machinery Photo (Image URL or Presets)</label>
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <input id="machinery-image-url" type="url" placeholder="https://... or select preset below" style="flex: 1; padding: 8px 10px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+          <div id="machinery-modal-preview-box" style="width: 50px; height: 38px; border-radius: 6px; background: #f1f5f9; border: 1px solid #cbd5e1; overflow: hidden; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+            <img id="machinery-modal-preview-img" src="" alt="" style="width: 100%; height: 100%; object-fit: cover; display: none;">
+            <span id="machinery-modal-preview-ph" style="font-size: 1rem;">🚜</span>
+          </div>
+        </div>
+        <!-- Quick Preset Image Buttons -->
+        <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px;">
+          <span style="font-size: 0.7rem; color: #64748b; align-self: center;">Presets:</span>
+          <button type="button" class="preset-img-btn" data-preset="tractor" style="font-size: 0.7rem; padding: 2px 8px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; cursor: pointer;">🚜 Tractor</button>
+          <button type="button" class="preset-img-btn" data-preset="harvester" style="font-size: 0.7rem; padding: 2px 8px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; cursor: pointer;">🌾 Harvester</button>
+          <button type="button" class="preset-img-btn" data-preset="baler" style="font-size: 0.7rem; padding: 2px 8px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; cursor: pointer;">📦 Baler</button>
+          <button type="button" class="preset-img-btn" data-preset="rake" style="font-size: 0.7rem; padding: 2px 8px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; cursor: pointer;">⚙️ Rake/Mower</button>
+          <button type="button" class="preset-img-btn" data-preset="sprayer" style="font-size: 0.7rem; padding: 2px 8px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; cursor: pointer;">💧 Sprayer</button>
+          <button type="button" class="preset-img-btn" data-preset="truck" style="font-size: 0.7rem; padding: 2px 8px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; cursor: pointer;">🚚 Flatbed</button>
+        </div>
+      </div>
+
+      <!-- Specs Row (Year, Serial, Hours) -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+        <div>
+          <label for="machinery-year" style="display: block; font-size: 0.74rem; font-weight: 700; color: #334155; margin-bottom: 4px;">Model Year</label>
+          <input id="machinery-year" type="text" placeholder="2023" style="width: 100%; padding: 8px 10px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+        </div>
+        <div>
+          <label for="machinery-serial" style="display: block; font-size: 0.74rem; font-weight: 700; color: #334155; margin-bottom: 4px;">Serial Number</label>
+          <input id="machinery-serial" type="text" placeholder="e.g. SN-88219" style="width: 100%; padding: 8px 10px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+        </div>
+        <div>
+          <label for="machinery-hours" style="display: block; font-size: 0.74rem; font-weight: 700; color: #334155; margin-bottom: 4px;">Operating Hours</label>
+          <input id="machinery-hours" type="number" min="0" placeholder="640" style="width: 100%; padding: 8px 10px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+        </div>
+      </div>
+
+      <!-- Condition / Maintenance Notes -->
+      <div>
+        <label for="machinery-notes" style="display: block; font-size: 0.74rem; font-weight: 700; color: #334155; margin-bottom: 4px;">Condition Notes &amp; Specifications</label>
+        <textarea id="machinery-notes" rows="2" placeholder="Engine health, tire/track condition, implement compatibility, servicing logs..." style="width: 100%; padding: 8px 10px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px;"></textarea>
+      </div>
+
+      <!-- Action Footer -->
+      <div style="display: flex; gap: 10px; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 14px; border-top: 1px solid #e2e8e4;">
+        <button type="button" id="btn-delete-machinery" style="background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; font-weight: 700; padding: 9px 16px; border-radius: 6px; cursor: pointer; display: none;">
+          🗑️ Remove Unit
+        </button>
+        <div style="display: flex; gap: 10px; margin-left: auto;">
+          <button type="button" id="cancel-machinery-modal" class="button button-outline" style="padding: 9px 18px; border-radius: 6px;">Cancel</button>
+          <button type="submit" class="button button-primary" style="padding: 9px 22px; font-weight: 800; background: #0d766e; border: none; border-radius: 6px; color: #fff; box-shadow: 0 2px 4px rgba(13,118,110,0.25);">
+            Save Machinery Unit
+          </button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
   <script src="script.js"></script>
 </body>
 </html>

@@ -1,48 +1,868 @@
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Sign in to the Minders member portal">
-  <title>Member Login | Minders</title>
+  <meta name="description" content="KIMPC Cooperative Machinery Rental - Member Access Portal">
+  <title>KIMPC | Machinery Rental</title>
+  <link rel="icon" type="image/png" href="images/kimpc logo.png">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="login-coop.css">
+  <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
 </head>
-<body class="auth-page" data-page="login">
-  <!-- Site header and return-home navigation -->
-  <header class="site-header app-header auth-header">
-    <a class="brand" href="index.html"><span class="brand-mark">M</span><span>Minders</span></a>
-    <a class="text-link" href="index.html">Back to home <span aria-hidden="true">&#8592;</span></a>
+
+<body class="coop-login-page" data-page="login">
+  <!-- Top Navigation Header -->
+  <header class="coop-top-header">
+    <div class="coop-header-left">
+      <a class="coop-brand-wrap" href="index.html">
+        <img src="images/kimpc logo.png" alt="KIMPC Logo" class="coop-brand-logo">
+        <div class="coop-brand-text">
+          <span class="coop-brand-name">KIMPC</span>
+          <span class="coop-brand-slash">/</span>
+          <span class="coop-brand-dept">Machinery Rental</span>
+        </div>
+      </a>
+    </div>
+
+    <nav class="coop-nav-links" aria-label="Main Navigation">
+      <a class="coop-nav-link" href="index.html#machinery">Available Fleet</a>
+      <a class="coop-nav-link" href="index.html#how-it-works">How It Works</a>
+      <a class="coop-nav-link" href="index.html#cooperative">Cooperative Benefits</a>
+      <a class="coop-nav-link" href="index.html#contact">Contact</a>
+    </nav>
   </header>
 
-  <!-- Login and registration content -->
-  <main class="auth-layout">
-    <!-- Introductory copy for the member portal -->
-    <section class="auth-intro">
-      <p class="eyebrow" id="login-page-eyebrow">MEMBER PORTAL / SECURE ACCESS</p>
-      <h1>Welcome back<br><em>to the field.</em></h1>
-      <p class="hero-description" id="login-page-description">Sign in to keep an eye on your machinery, your schedule, and the work ahead.</p>
-      <div class="auth-trust"><span class="status-dot"></span><span>Sign in securely with your verified email address.</span></div>
+  <!-- Main Hero Stage Layout -->
+  <main class="coop-login-stage">
+    <!-- Left Column: Unified Auth Card (Switches between Login & Sign Up) -->
+    <section class="coop-login-card" id="login">
+      <!-- View 1: Log In Container -->
+      <div id="login-view" class="coop-auth-view active">
+        <div>
+          <h1 class="coop-login-headline">Welcome to KIMPC</h1>
+          <p class="coop-auth-subtext">Access your cooperative machinery rental portal.</p>
+
+          <form id="member-login-form" class="coop-login-form" autocomplete="off">
+            <!-- Member ID or Email Input -->
+            <div class="coop-pill-input-wrap">
+              <input 
+                id="member-email" 
+                name="email" 
+                type="text" 
+                class="coop-pill-input" 
+                placeholder="Cooperative No ID (e.g. M260001) or Email" 
+                autocomplete="off"
+                value=""
+                required
+                aria-label="Cooperative No ID or Email Address"
+              >
+            </div>
+
+            <!-- Password Input with Show/Hide Eye Toggle -->
+            <div class="coop-pill-input-wrap">
+              <input 
+                id="member-password" 
+                name="password" 
+                type="password" 
+                class="coop-pill-input coop-password-input" 
+                placeholder="Password" 
+                autocomplete="new-password"
+                value=""
+                minlength="6" 
+                required
+                aria-label="Password"
+              >
+              <button 
+                type="button" 
+                id="toggle-password-btn" 
+                class="coop-pwd-eye-btn" 
+                title="Toggle password visibility"
+                aria-label="Toggle password visibility"
+              >
+                <svg id="eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M1 12s4-8 11-8 8 8 8 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              </button>
+            </div>
+
+            <!-- Remember Me & Forgot Password Row -->
+            <div class="coop-login-meta">
+              <label class="coop-remember-label">
+                <input type="checkbox" id="remember-me">
+                <span>Remember me</span>
+              </label>
+              <a href="javascript:void(0)" id="link-forgot-pwd" class="coop-forgot-link">Forgot Password?</a>
+            </div>
+
+            <!-- Google reCAPTCHA v2 (if enabled) -->
+            <div class="coop-recaptcha-wrap">
+              <div class="g-recaptcha" id="login-recaptcha" data-sitekey="6LfrJe0tAAAAAIIeW87yfUlJuzJOokkWT4KM6UG5"></div>
+            </div>
+
+            <!-- Submit Button -->
+            <button class="btn-coop-harvest" type="submit" id="btn-login-submit">
+              <span>Log In</span>
+            </button>
+
+            <p class="form-feedback" id="login-feedback" role="status" aria-live="polite"></p>
+          </form>
+
+          <!-- Divider -->
+          <div class="coop-auth-divider" id="login-google-divider">
+            <span>or continue with</span>
+          </div>
+
+          <!-- Social / Quick Sign-In Circular Icons (Google and Facebook only) -->
+          <div class="coop-social-row">
+            <!-- Google Quick Button -->
+            <button type="button" class="coop-circle-btn btn-google" id="btn-quick-google" title="Sign in with Google">
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.34 24 12 24z"/>
+                <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
+                <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+              </svg>
+            </button>
+
+            <!-- Facebook Quick Button -->
+            <button type="button" class="coop-circle-btn btn-facebook" id="btn-quick-facebook" title="Sign in with Facebook">
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                <path fill="#1877F2" d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- Official Google Sign-In Container (Google Identity Services) -->
+          <div id="google-signin-wrapper" class="coop-google-gsi-wrap">
+            <div id="google-signin-btn"></div>
+          </div>
+        </div>
+
+        <!-- Registration link footer -->
+        <p class="coop-card-footer">
+          First time here? <a class="coop-join-link" id="link-goto-signup" href="#signup">Set up your Member Account</a>
+        </p>
+      </div>
+
+      <!-- View 2: Sign Up Container (Matches Login Style Exactly) -->
+      <div id="signup-view" class="coop-auth-view" style="display: none;">
+        <div>
+          <h1 class="coop-login-headline">Register an Account</h1>
+          <p class="coop-auth-subtext">Register your account to access cooperative machinery.</p>
+
+          <form id="coop-registration-form" class="coop-login-form" autocomplete="off">
+            <!-- Full Name Input -->
+            <div class="coop-pill-input-wrap">
+              <input 
+                id="reg-full-name" 
+                name="fullName" 
+                type="text" 
+                class="coop-pill-input" 
+                placeholder="Full Name" 
+                required
+                autocomplete="name"
+                aria-label="Full Name"
+              >
+            </div>
+
+            <!-- Cooperative No ID -->
+            <div class="coop-pill-input-wrap">
+              <input 
+                id="reg-coop-id" 
+                name="cooperativeId" 
+                type="text" 
+                class="coop-pill-input" 
+                placeholder="Cooperative No ID (e.g. M260001)" 
+                pattern="^[Mm]\d{6}$"
+                title="Format: M followed by 2-digit year and 4-digit sequence, e.g. M260001"
+                required
+                autocomplete="off"
+                aria-label="Cooperative No ID"
+              >
+            </div>
+
+            <!-- Email Address Input -->
+            <div class="coop-pill-input-wrap">
+              <input 
+                id="reg-email" 
+                name="email" 
+                type="email" 
+                class="coop-pill-input" 
+                placeholder="Email Address" 
+                required
+                autocomplete="email"
+                aria-label="Email Address"
+              >
+            </div>
+
+            <!-- Password & Confirm Password Row -->
+            <div class="coop-input-row">
+              <div class="coop-pill-input-wrap">
+                <input 
+                  id="reg-password" 
+                  name="password" 
+                  type="password" 
+                  class="coop-pill-input coop-password-input" 
+                  placeholder="Create Password" 
+                  minlength="6"
+                  required
+                  autocomplete="new-password"
+                  aria-label="Password"
+                >
+                <button 
+                  type="button" 
+                  id="reg-toggle-pwd" 
+                  class="coop-pwd-eye-btn" 
+                  title="Toggle password visibility"
+                  aria-label="Toggle password visibility"
+                >
+                  <svg class="eye-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-8 11-8 8 8 8 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                </button>
+              </div>
+
+              <div class="coop-pill-input-wrap">
+                <input 
+                  id="reg-confirm-password" 
+                  name="confirmPassword" 
+                  type="password" 
+                  class="coop-pill-input coop-password-input" 
+                  placeholder="Confirm Password" 
+                  minlength="6"
+                  required
+                  autocomplete="new-password"
+                  aria-label="Confirm Password"
+                >
+                <button 
+                  type="button" 
+                  id="reg-toggle-confirm-pwd" 
+                  class="coop-pwd-eye-btn" 
+                  title="Toggle password visibility"
+                  aria-label="Toggle password visibility"
+                >
+                  <svg class="eye-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-8 11-8 8 8 8 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Terms agreement -->
+            <div class="coop-login-meta" style="margin-bottom: 12px;">
+              <label class="coop-remember-label">
+                <input type="checkbox" id="reg-terms-check" required checked>
+                <span>I agree to the terms for creating a digital account</span>
+              </label>
+            </div>
+
+            <!-- Submit Registration Button -->
+            <button class="btn-coop-harvest" type="submit" id="btn-register-submit">
+              <span>Create Member Account</span>
+            </button>
+
+            <p class="form-feedback" id="signup-feedback" role="status" aria-live="polite"></p>
+          </form>
+
+          <!-- Divider -->
+          <div class="coop-auth-divider" id="signup-social-divider">
+            <span>or sign up with</span>
+          </div>
+
+          <!-- Social Quick Sign-Up (Triggers same Google / FB authentications) -->
+          <div class="coop-social-row" id="signup-social-row">
+            <button type="button" class="coop-circle-btn btn-google" id="btn-signup-google" title="Sign up with Google">
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.34 24 12 24z"/>
+                <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
+                <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+              </svg>
+            </button>
+            <button type="button" class="coop-circle-btn btn-facebook" id="btn-signup-facebook" title="Sign up with Facebook">
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                <path fill="#1877F2" d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Switch back to Login footer -->
+        <p class="coop-card-footer">
+          Already a registered member? <a class="coop-join-link" id="link-goto-login" href="#login">Log In</a>
+        </p>
+      </div>
+
+      <!-- View 3: Email Verification State Container -->
+      <div id="verify-view" class="coop-auth-view" style="display: none;">
+        <div>
+          <div class="coop-verify-card">
+            <div class="coop-verify-icon">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                <polyline points="22,6 12,13 2,6"></polyline>
+              </svg>
+            </div>
+            <h2 class="coop-verify-title">Verify Your Email</h2>
+            <p class="coop-verify-desc">
+              Your member account was created. Please confirm your email address to activate your account:
+            </p>
+            <div class="coop-verify-email-badge" id="verify-display-email">member@example.com</div>
+          </div>
+
+          <button class="btn-coop-harvest" type="button" id="btn-verify-submit">
+            <span>Confirm Email & Activate Account</span>
+          </button>
+          <p class="form-feedback" id="verify-feedback" role="status" aria-live="polite"></p>
+        </div>
+
+        <p class="coop-card-footer">
+          <a class="coop-join-link" id="link-verify-to-login" href="#login">&larr; Return to Sign In</a>
+        </p>
+      </div>
     </section>
 
-    <!-- Existing member login form -->
-    <section class="surface auth-surface login-surface" id="login">
-      <div class="section-heading"><div><p class="section-label" id="login-form-eyebrow">MEMBER ACCESS</p><h2 id="login-title">Sign in to Minders</h2></div><span class="live-label"><span class="status-dot"></span> Secure</span></div>
-      <!-- Login credentials and verification trigger -->
-      <form id="member-login-form" class="stack-form">
-        <label for="member-email">Email address</label>
-        <input id="member-email" name="email" type="email" autocomplete="email" placeholder="e.g. jordan@example.com" required>
-        <label for="member-password">Password</label>
-        <input id="member-password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" minlength="6" required>
-        <div class="form-row-between"><label class="checkbox-label"><input type="checkbox"> Remember me</label><span class="muted">Email verification required</span></div>
-        <button class="button button-dark button-full" type="submit">Continue to dashboard <span aria-hidden="true">&#8594;</span></button>
-        <p class="form-feedback" id="login-feedback" role="status"></p>
-      </form>
-      <div class="divider" id="login-registration-divider"><span>New to Minders?</span></div>
-      <a class="button button-outline button-full" id="create-member-account" href="registration.html">Create member account</a>
-    </section>
+    <!-- Right Column: Floating Active Fleet Stats Card (Glassmorphism) -->
+    <div class="coop-floating-widget-wrap">
+      <aside class="coop-floating-card">
+        <div class="coop-float-header">
+          <span class="coop-float-title">Active Fleet This Week</span>
+          <div class="coop-float-nav">
+            <span class="coop-nav-dot active"></span>
+            <span class="coop-nav-dot"></span>
+            <span class="coop-nav-dot"></span>
+            <span style="margin-left: 2px; font-weight: 700; cursor: pointer;">&rsaquo;</span>
+          </div>
+        </div>
+
+        <!-- 4 Key Equipment Fleet Metrics -->
+        <div class="coop-stats-grid">
+          <div class="coop-stat-cell">
+            <strong class="coop-stat-num">14</strong>
+            <span class="coop-stat-lbl">Tractors<br>Available</span>
+          </div>
+          <div class="coop-stat-cell">
+            <strong class="coop-stat-num">6</strong>
+            <span class="coop-stat-lbl">Harvesters</span>
+          </div>
+          <div class="coop-stat-cell">
+            <strong class="coop-stat-num">20+</strong>
+            <span class="coop-stat-lbl">Implements</span>
+          </div>
+          <div class="coop-stat-cell">
+            <strong class="coop-stat-num">24/7</strong>
+            <span class="coop-stat-lbl">Happy<br>Farmers</span>
+          </div>
+        </div>
+
+        <p class="coop-floating-quote">
+          Fast, reliable, and<br>
+          shared by our<br>
+          community.
+        </p>
+      </aside>
+    </div>
   </main>
 
-  <!-- Shared page interaction logic -->
-  <script src="script.js"></script>
+  <!-- Forgot Password Request Dialog -->
+  <dialog id="forgot-pwd-dialog" class="application-dialog" style="max-width: 440px; padding: 24px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+      <div>
+        <p style="font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--teal); margin: 0 0 4px;">Account Recovery</p>
+        <h3 style="margin: 0; font-size: 1.2rem; color: #0f172a;">Forgot Password?</h3>
+      </div>
+      <button type="button" id="close-forgot-pwd-dialog" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b; line-height: 1;">&times;</button>
+    </div>
+    <p style="font-size: 0.82rem; color: #475569; margin: 0 0 16px; line-height: 1.45;">
+      Enter your Member ID or registered cooperative email address. Your administrator will verify your account and issue a temporary One-Time Password (OTP).
+    </p>
+    <form id="forgot-pwd-form" style="display: flex; flex-direction: column; gap: 12px;">
+      <div>
+        <label for="forgot-pwd-identifier" style="display: block; font-size: 0.78rem; font-weight: 600; color: #334155; margin-bottom: 4px;">Member ID or Email</label>
+        <input type="text" id="forgot-pwd-identifier" required placeholder="e.g. 2401115992 or email@domain.com" style="width: 100%; padding: 8px 12px; font-size: 0.86rem; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box;">
+      </div>
+      <p id="forgot-pwd-feedback" class="form-feedback" style="margin: 0; font-size: 0.78rem;" role="status" aria-live="polite"></p>
+      <div style="display: flex; gap: 10px; margin-top: 6px;">
+        <button type="button" id="cancel-forgot-pwd-btn" class="button button-outline" style="flex: 1; padding: 8px 14px; font-size: 0.82rem;">Cancel</button>
+        <button type="submit" id="btn-submit-forgot-pwd" class="button button-primary" style="flex: 1.4; padding: 8px 14px; font-size: 0.82rem;">Submit Request</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- One-Time Password / Establish Permanent Password Dialog -->
+  <dialog id="temp-password-dialog" class="application-dialog" style="max-width: 440px; padding: 24px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);">
+    <div style="margin-bottom: 14px;">
+      <div style="display: inline-block; padding: 3px 8px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; background: #fef3c7; color: #92400e; border-radius: 4px; margin-bottom: 6px; font-weight: 700;">
+        Temporary Access Key Detected
+      </div>
+      <h3 style="margin: 0; font-size: 1.22rem; color: #0f172a;">Set Permanent Password</h3>
+      <p style="margin: 4px 0 0; font-size: 0.8rem; color: #475569; line-height: 1.45;">
+        You logged in using a temporary One-Time Password. For your security, you must choose a new permanent password to access your dashboard.
+      </p>
+    </div>
+    <form id="temp-password-form" style="display: flex; flex-direction: column; gap: 12px;">
+      <div>
+        <label for="temp-new-password" style="display: block; font-size: 0.78rem; font-weight: 600; color: #334155; margin-bottom: 4px;">New Password</label>
+        <input type="password" id="temp-new-password" minlength="6" required placeholder="At least 6 characters" style="width: 100%; padding: 8px 12px; font-size: 0.86rem; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box;">
+      </div>
+      <div>
+        <label for="temp-confirm-password" style="display: block; font-size: 0.78rem; font-weight: 600; color: #334155; margin-bottom: 4px;">Confirm New Password</label>
+        <input type="password" id="temp-confirm-password" minlength="6" required placeholder="Re-type new password" style="width: 100%; padding: 8px 12px; font-size: 0.86rem; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box;">
+      </div>
+      <p id="temp-password-feedback" class="form-feedback" style="margin: 0; font-size: 0.78rem;" role="status" aria-live="polite"></p>
+      <button type="submit" id="btn-save-temp-password" class="button button-primary" style="width: 100%; padding: 9px 16px; font-size: 0.84rem; margin-top: 4px;">
+        Set Password &amp; Continue &rarr;
+      </button>
+    </form>
+  </dialog>
+
+  <!-- Interactive Scripts & Logic -->
+  <script src="script.js?v=3"></script>
+  <script>
+    // Auto-adjust font size dynamically when text/password is long so it fits and remains readable
+    const _fitCanvas = document.createElement("canvas");
+    const _fitCtx = _fitCanvas.getContext("2d");
+
+    function autoFitInput(input, minSize = 9, defaultSize = 15) {
+      if (!input) return;
+      const val = input.value || "";
+      if (!val) {
+        input.style.fontSize = "";
+        return;
+      }
+
+      const style = window.getComputedStyle(input);
+      const padLeft = parseFloat(style.paddingLeft) || 16;
+      const padRight = parseFloat(style.paddingRight) || (input.classList.contains("coop-password-input") ? 46 : 20);
+      const clientWidth = input.clientWidth;
+      if (clientWidth <= 0) return;
+
+      const availWidth = clientWidth - padLeft - padRight - 8;
+      if (availWidth <= 20) return;
+
+      const fontFamily = style.fontFamily || "sans-serif";
+      // Masked bullets in password fields are typically slightly wider than average chars
+      const testString = (input.type === "password") ? "•".repeat(val.length) : val;
+
+      let size = defaultSize;
+      while (size > minSize) {
+        _fitCtx.font = `${size}px ${fontFamily}`;
+        const measured = _fitCtx.measureText(testString).width;
+        if (measured <= availWidth) break;
+        size -= 0.5;
+      }
+      input.style.fontSize = `${size}px`;
+    }
+
+    function initAutoFitInputs() {
+      const inputs = document.querySelectorAll(".coop-pill-input");
+      inputs.forEach((input) => {
+        input.addEventListener("input", () => autoFitInput(input));
+        input.addEventListener("change", () => autoFitInput(input));
+      });
+      window.addEventListener("resize", () => {
+        inputs.forEach((input) => autoFitInput(input));
+      });
+    }
+
+    // Setup Password Show/Hide Toggle with clean, crisp icons for both states
+    const SVG_EYE_NOT_SEE = '<path d="M1 12s4-8 11-8 8 8 8 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
+    const SVG_EYE_SEE = '<path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path><line x1="2" y1="2" x2="22" y2="22"></line>';
+
+    function setupEyeToggle(btnId, inputId) {
+      const btn = document.querySelector(btnId);
+      const input = document.querySelector(inputId);
+      btn?.addEventListener("click", () => {
+        if (!input) return;
+        const isPassword = input.type === "password";
+        input.type = isPassword ? "text" : "password";
+        const svg = btn.querySelector("svg");
+        if (svg) {
+          svg.innerHTML = isPassword ? SVG_EYE_SEE : SVG_EYE_NOT_SEE;
+        }
+        btn.setAttribute("title", isPassword ? "Hide password" : "Show password");
+        btn.setAttribute("aria-label", isPassword ? "Hide password" : "Show password");
+        autoFitInput(input);
+      });
+    }
+
+    setupEyeToggle("#toggle-password-btn", "#member-password");
+    setupEyeToggle("#reg-toggle-pwd", "#reg-password");
+    setupEyeToggle("#reg-toggle-confirm-pwd", "#reg-confirm-password");
+    initAutoFitInputs();
+
+    // Unified Container View Switcher (Log In <-> Create Account <-> Verification)
+    function switchAuthView(mode) {
+      const card = document.querySelector(".coop-login-card");
+      const loginView = document.querySelector("#login-view");
+      const signupView = document.querySelector("#signup-view");
+      const verifyView = document.querySelector("#verify-view");
+
+      if (mode === "signup") {
+        card?.classList.add("signup-mode");
+        loginView.style.display = "none";
+        loginView.classList.remove("active");
+        verifyView.style.display = "none";
+        verifyView.classList.remove("active");
+
+        signupView.style.display = "flex";
+        signupView.classList.add("active");
+
+        setTimeout(() => {
+          document.querySelectorAll("#signup-view .coop-pill-input").forEach((inp) => autoFitInput(inp));
+        }, 50);
+
+        const coopInput = document.querySelector("#reg-coop-id");
+        if (coopInput && !coopInput.value) {
+          api("/cooperative-id/next").then((res) => {
+            if (coopInput && !coopInput.value && res.data?.cooperativeId) {
+              coopInput.value = res.data.cooperativeId;
+              autoFitInput(coopInput);
+            }
+          }).catch(() => {});
+        }
+
+        if (window.location.hash !== "#signup") {
+          history.replaceState(null, "", "#signup");
+        }
+      } else if (mode === "verify") {
+        card?.classList.remove("signup-mode");
+        loginView.style.display = "none";
+        loginView.classList.remove("active");
+        signupView.style.display = "none";
+        signupView.classList.remove("active");
+
+        verifyView.style.display = "flex";
+        verifyView.classList.add("active");
+      } else {
+        // default: "login"
+        card?.classList.remove("signup-mode");
+        signupView.style.display = "none";
+        signupView.classList.remove("active");
+        verifyView.style.display = "none";
+        verifyView.classList.remove("active");
+
+        loginView.style.display = "flex";
+        loginView.classList.add("active");
+
+        setTimeout(() => {
+          document.querySelectorAll("#login-view .coop-pill-input").forEach((inp) => autoFitInput(inp));
+        }, 50);
+
+        if (window.location.hash === "#signup" || window.location.hash === "#register") {
+          history.replaceState(null, "", "#login");
+        }
+      }
+    }
+
+    // Footer link clicks
+    document.querySelector("#link-goto-signup")?.addEventListener("click", (e) => {
+      e.preventDefault();
+      switchAuthView("signup");
+    });
+    document.querySelector("#link-goto-login")?.addEventListener("click", (e) => {
+      e.preventDefault();
+      switchAuthView("login");
+    });
+    document.querySelector("#link-verify-to-login")?.addEventListener("click", (e) => {
+      e.preventDefault();
+      switchAuthView("login");
+    });
+
+    // Check URL hash on load & on hash change
+    function handleHashView() {
+      if (window.location.hash === "#signup" || window.location.hash === "#register") {
+        switchAuthView("signup");
+      } else {
+        switchAuthView("login");
+      }
+    }
+    window.addEventListener("hashchange", handleHashView);
+    handleHashView();
+
+    // Sign Up form submission
+    const regForm = document.querySelector("#coop-registration-form");
+    regForm?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const feedback = document.querySelector("#signup-feedback");
+      if (!regForm.checkValidity()) {
+        regForm.reportValidity();
+        return;
+      }
+
+      const fullName = document.querySelector("#reg-full-name")?.value.trim();
+      const cooperativeId = document.querySelector("#reg-coop-id")?.value.trim();
+      const email = document.querySelector("#reg-email")?.value.trim().toLowerCase();
+      const password = document.querySelector("#reg-password")?.value;
+      const confirmPassword = document.querySelector("#reg-confirm-password")?.value;
+
+      if (!fullName) {
+        if (feedback) setFeedback(feedback, "Please enter your full name.", true);
+        return;
+      }
+
+      if (!cooperativeId) {
+        if (feedback) setFeedback(feedback, "Please enter your Cooperative No ID.", true);
+        return;
+      }
+
+      if (!/^M\d{2}\d{4}$/i.test(cooperativeId)) {
+        if (feedback) setFeedback(feedback, "Cooperative No ID must follow the format M(Year)(Sequence), for example M260001.", true);
+        return;
+      }
+
+      if (!email) {
+        if (feedback) setFeedback(feedback, "Please enter your email address.", true);
+        return;
+      }
+
+      if (password.length < 6) {
+        if (feedback) setFeedback(feedback, "Password must be at least 6 characters.", true);
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        if (feedback) setFeedback(feedback, "Passwords do not match.", true);
+        return;
+      }
+
+      if (feedback) setFeedback(feedback, "Creating your member account...");
+
+      const { ok, data } = await api("/register", {
+        method: "POST",
+        body: { fullName, cooperativeId, email, password }
+      });
+
+      if (!ok) {
+        if (feedback) setFeedback(feedback, data.error || "Could not create account.", true);
+        return;
+      }
+
+      // Display email in verify view
+      const emailDisplay = document.querySelector("#verify-display-email");
+      if (emailDisplay) emailDisplay.textContent = data.email || email;
+
+      const verifyFeedback = document.querySelector("#verify-feedback");
+      if (verifyFeedback) setFeedback(verifyFeedback, "Registration saved! Confirm your email to activate.");
+
+      switchAuthView("verify");
+    });
+
+    // Email verification confirmation button
+    const confirmBtn = document.querySelector("#btn-verify-submit");
+    confirmBtn?.addEventListener("click", async () => {
+      const emailDisplay = document.querySelector("#verify-display-email");
+      const email = emailDisplay ? emailDisplay.textContent.trim() : "";
+      const feedback = document.querySelector("#verify-feedback");
+
+      if (!email) {
+        if (feedback) setFeedback(feedback, "No email found to verify.", true);
+        return;
+      }
+
+      if (feedback) setFeedback(feedback, "Verifying member account...");
+
+      const { ok, data } = await api("/verify", {
+        method: "POST",
+        body: { email }
+      });
+
+      if (!ok) {
+        if (feedback) setFeedback(feedback, data.error || "Could not verify account.", true);
+        return;
+      }
+
+      if (feedback) setFeedback(feedback, "Account verified! Redirecting to login...");
+
+      setTimeout(() => {
+        switchAuthView("login");
+        const loginEmail = document.querySelector("#member-email");
+        const displayId = data.cooperativeId || email;
+        if (loginEmail) {
+          loginEmail.value = displayId;
+          document.querySelector("#member-password")?.focus();
+        }
+        const loginFeedback = document.querySelector("#login-feedback");
+        if (loginFeedback) {
+          setFeedback(loginFeedback, `Account activated! You can now log in using your Cooperative No ID (${displayId}) or Email.`);
+        }
+      }, 900);
+    });
+
+    // Sync social auth visibility across both Sign In and Sign Up views
+    api("/config").then(({ ok, data }) => {
+      const isGoogleEnabled = ok ? (data.googleLoginEnabled !== false) : true;
+      const isFacebookEnabled = ok ? (data.facebookLoginEnabled !== false) : true;
+      window._googleLoginEnabled = isGoogleEnabled;
+      window._facebookLoginEnabled = isFacebookEnabled;
+
+      const btnQuickGoogle = document.querySelector("#btn-quick-google");
+      const btnQuickFacebook = document.querySelector("#btn-quick-facebook");
+      const btnSignupGoogle = document.querySelector("#btn-signup-google");
+      const btnSignupFacebook = document.querySelector("#btn-signup-facebook");
+      const loginDivider = document.querySelector("#login-google-divider");
+      const signupDivider = document.querySelector("#signup-social-divider");
+      const signupSocialRow = document.querySelector("#signup-social-row");
+
+      if (btnQuickGoogle) btnQuickGoogle.style.display = isGoogleEnabled ? "" : "none";
+      if (btnQuickFacebook) btnQuickFacebook.style.display = isFacebookEnabled ? "" : "none";
+      if (btnSignupGoogle) btnSignupGoogle.style.display = isGoogleEnabled ? "" : "none";
+      if (btnSignupFacebook) btnSignupFacebook.style.display = isFacebookEnabled ? "" : "none";
+      if (loginDivider) loginDivider.style.display = (isGoogleEnabled || isFacebookEnabled) ? "" : "none";
+      if (signupDivider) signupDivider.style.display = (isGoogleEnabled || isFacebookEnabled) ? "" : "none";
+      if (signupSocialRow) signupSocialRow.style.display = (isGoogleEnabled || isFacebookEnabled) ? "" : "none";
+    });
+
+    // Delegate Google & Facebook sign-up triggers to existing handlers
+    document.querySelector("#btn-signup-google")?.addEventListener("click", () => {
+      document.querySelector("#btn-quick-google")?.click();
+    });
+    document.querySelector("#btn-signup-facebook")?.addEventListener("click", () => {
+      document.querySelector("#btn-quick-facebook")?.click();
+    });
+
+    // Forgot Password dialog handlers
+    const forgotPwdDialog = document.querySelector("#forgot-pwd-dialog");
+    const forgotPwdForm = document.querySelector("#forgot-pwd-form");
+    const forgotPwdFeedback = document.querySelector("#forgot-pwd-feedback");
+    const forgotPwdIdentifier = document.querySelector("#forgot-pwd-identifier");
+
+    document.querySelector("#link-forgot-pwd")?.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (forgotPwdFeedback) setFeedback(forgotPwdFeedback, "");
+      if (forgotPwdIdentifier) {
+        const currentId = document.querySelector("#member-email")?.value.trim() || "";
+        forgotPwdIdentifier.value = currentId;
+      }
+      forgotPwdDialog?.showModal();
+    });
+
+    document.querySelector("#close-forgot-pwd-dialog")?.addEventListener("click", () => {
+      forgotPwdDialog?.close();
+    });
+    document.querySelector("#cancel-forgot-pwd-btn")?.addEventListener("click", () => {
+      forgotPwdDialog?.close();
+    });
+
+    forgotPwdForm?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const identifier = forgotPwdIdentifier ? forgotPwdIdentifier.value.trim() : "";
+      if (!identifier) {
+        if (forgotPwdFeedback) setFeedback(forgotPwdFeedback, "Please enter your Member ID or registered email.", true);
+        return;
+      }
+      const submitBtn = document.querySelector("#btn-submit-forgot-pwd");
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Submitting...";
+      }
+      const { ok, data } = await api("/auth/forgot-password-request", {
+        method: "POST",
+        body: { identifier }
+      });
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Submit Request";
+      }
+      if (!ok) {
+        if (forgotPwdFeedback) setFeedback(forgotPwdFeedback, data.error || "Could not submit recovery request.", true);
+        return;
+      }
+      if (forgotPwdFeedback) {
+        setFeedback(forgotPwdFeedback, data.message || "Request submitted! An administrator can now issue your temporary One-Time Password.");
+      }
+      setTimeout(() => {
+        forgotPwdDialog?.close();
+        const mainFeedback = document.querySelector("#login-feedback");
+        if (mainFeedback) {
+          setFeedback(mainFeedback, "Password recovery requested! Please contact your administrator to receive your temporary OTP.");
+        }
+      }, 2500);
+    });
+
+    // Quick Google Button triggers the Google Auth action
+    document.querySelector("#btn-quick-google")?.addEventListener("click", () => {
+      if (window._googleLoginEnabled === false) {
+        alert("Log in with Google is currently disabled by administrator.");
+        return;
+      }
+      const gBtn = document.querySelector("#google-signin-btn div[role=button], #google-signin-btn iframe");
+      if (gBtn) {
+        gBtn.click();
+      } else if (typeof google !== "undefined" && google.accounts?.id) {
+        google.accounts.id.prompt();
+      }
+    });
+
+    // Initialize Facebook JavaScript SDK with App ID 4031349940338782
+    window.fbAsyncInit = function() {
+      if (typeof FB !== "undefined") {
+        FB.init({
+          appId: "4031349940338782",
+          cookie: true,
+          xfbml: true,
+          version: "v20.0"
+        });
+      }
+    };
+
+    // Quick Facebook Button triggers Facebook OAuth flow
+    document.querySelector("#btn-quick-facebook")?.addEventListener("click", () => {
+      if (window._facebookLoginEnabled === false) {
+        alert("Log in with Facebook is currently disabled by administrator.");
+        return;
+      }
+
+      const feedback = document.querySelector("#login-feedback") || document.querySelector("#signup-feedback");
+      if (feedback) setFeedback(feedback, "Opening Facebook login...");
+
+      if (typeof FB === "undefined") {
+        if (feedback) setFeedback(feedback, "Facebook SDK loading. Please ensure ad-blocker is disabled or retry in a moment.", true);
+        return;
+      }
+
+      FB.login((response) => {
+        if (response.authResponse) {
+          const { accessToken, userID } = response.authResponse;
+          if (feedback) setFeedback(feedback, "Verifying Facebook credentials with Minders...");
+          
+          api("/auth/facebook", {
+            method: "POST",
+            body: { accessToken, userID }
+          }).then(({ ok, data }) => {
+            if (!ok) {
+              if (feedback) setFeedback(feedback, data.error || "Facebook sign-in failed.", true);
+              return;
+            }
+            if (typeof completeSignIn === "function") {
+              completeSignIn(data);
+            } else {
+              window.location.reload();
+            }
+          });
+        } else {
+          if (feedback) setFeedback(feedback, "Facebook login was cancelled or not authorized.", true);
+        }
+      }, { scope: "public_profile,email" });
+    });
+
+    // Prevent browser auto-fill on page load
+    window.addEventListener("DOMContentLoaded", () => {
+      setTimeout(() => {
+        const emailEl = document.querySelector("#member-email");
+        const pwdEl = document.querySelector("#member-password");
+        if (emailEl && emailEl.value === "kalilanganirrigatorsmpc@gmail.com") emailEl.value = "";
+        if (pwdEl && !emailEl?.value) pwdEl.value = "";
+      }, 100);
+    });
+  </script>
 </body>
+
 </html>

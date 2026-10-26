@@ -19,7 +19,7 @@
 
     <section class="dashboard-section" id="dashboard">
       <div class="section-heading dashboard-heading"><div><p class="eyebrow">YOUR ACTIVITY / LIVE VIEW</p><h2>Rental dashboard</h2></div><div class="dashboard-actions"><a class="button button-outline" href="applications.html">Your applications</a><button class="button button-outline" id="toggle-available-equipment" type="button" aria-expanded="false" aria-controls="available-equipment">Available equipment</button><span class="sync-label"><span class="status-dot"></span> Synced just now</span></div></div>
-      <div class="tabs" role="tablist" aria-label="Rental history tabs"><button class="tab active" role="tab" aria-selected="true" data-tab="active">Active <span>2</span></button><button class="tab" role="tab" aria-selected="false" data-tab="upcoming">Upcoming <span>3</span></button><button class="tab" role="tab" aria-selected="false" data-tab="past">Past history <span>12</span></button></div>
+      <div class="tabs" role="tablist" aria-label="Rental history tabs"><button class="tab" role="tab" aria-selected="false" data-tab="pending">Pending <span id="pending-tab-badge">0</span></button><button class="tab active" role="tab" aria-selected="true" data-tab="active">Active <span>2</span></button><button class="tab" role="tab" aria-selected="false" data-tab="upcoming">Upcoming <span>3</span></button><button class="tab" role="tab" aria-selected="false" data-tab="past">Past history <span>12</span></button></div>
       <section class="available-equipment" id="available-equipment" aria-label="Available equipment" hidden>
         <div class="available-equipment-grid" id="available-equipment-grid"></div>
       </section>
@@ -79,6 +79,52 @@
       <p class="form-feedback" id="application-feedback" role="status" aria-live="polite"></p>
       <button class="button button-primary button-full" type="submit">Book equipment <span aria-hidden="true">&#8594;</span></button>
     </form>
+  </dialog>
+
+  <!-- Edit Pending Booking Dialog -->
+  <dialog class="application-dialog" id="edit-booking-dialog" aria-labelledby="edit-booking-title">
+    <form class="application-form" id="edit-booking-form">
+      <button class="application-close" type="button" id="close-edit-booking" aria-label="Close edit dialog">&times;</button>
+      <p class="eyebrow">EQUIPMENT BOOKING</p>
+      <h2 id="edit-booking-title">Edit pending booking</h2>
+      <p class="muted booking-note">Update equipment or dates prior to manager approval.</p>
+      <input type="hidden" id="edit-booking-id" name="id">
+      <label for="edit-booking-equipment">Equipment</label>
+      <select id="edit-booking-equipment" name="equipment" required>
+        <option value="">Choose equipment</option>
+        <option value="Precision Seeder">Precision Seeder</option>
+        <option value="Round Baler">Round Baler</option>
+        <option value="Irrigation System">Irrigation System</option>
+        <option value="Combine Harvester">Combine Harvester</option>
+        <option value="Field Tractor">Field Tractor</option>
+        <option value="Co-op Attachments">Co-op Attachments</option>
+      </select>
+      <label for="edit-booking-start">Start date</label>
+      <input id="edit-booking-start" name="startDate" type="date" required>
+      <label for="edit-booking-end">End date</label>
+      <input id="edit-booking-end" name="endDate" type="date" required>
+      <p class="form-feedback" id="edit-booking-feedback" role="status" aria-live="polite"></p>
+      <div style="display:flex; gap:10px; margin-top:8px;">
+        <button class="button button-outline" type="button" id="abort-edit-booking" style="flex:1;">Dismiss</button>
+        <button class="button button-primary" type="submit" id="save-edit-booking" style="flex:2;">Save changes <span aria-hidden="true">&#8594;</span></button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Cancel Pending Booking Confirmation Dialog -->
+  <dialog class="application-dialog" id="cancel-booking-dialog" aria-labelledby="cancel-booking-title">
+    <div class="application-form" style="display:flex; flex-direction:column; gap:14px;">
+      <button class="application-close" type="button" id="close-cancel-booking" aria-label="Close cancel dialog">&times;</button>
+      <p class="eyebrow" style="color:#b45449;">CANCEL REQUEST</p>
+      <h2 id="cancel-booking-title">Cancel booking?</h2>
+      <p class="muted" id="cancel-booking-desc">Are you sure you want to cancel this pending equipment request prior to manager approval?</p>
+      <input type="hidden" id="cancel-booking-id">
+      <p class="form-feedback" id="cancel-booking-feedback" role="status" aria-live="polite"></p>
+      <div style="display:flex; gap:10px; margin-top:10px;">
+        <button class="button button-outline" type="button" id="abort-cancel-booking" style="flex:1;">Keep booking</button>
+        <button class="button" type="button" id="confirm-cancel-booking" style="flex:1; background:#b45449; color:#fff; border:none; border-radius:6px; font-weight:700; cursor:pointer; padding:12px 16px;">Yes, cancel request</button>
+      </div>
+    </div>
   </dialog>
 
   <script src="script.js"></script>
