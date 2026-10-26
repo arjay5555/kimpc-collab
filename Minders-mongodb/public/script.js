@@ -1447,33 +1447,6 @@ async function initManagerPage() {
     });
   });
 
-  const getCategoryFallbackEmoji = (cat) => {
-    switch (cat) {
-      case "Tractor": return "🚜";
-      case "Harvester": return "🌾";
-      case "Baler": return "📦";
-      case "Sprayer": return "💧";
-      case "Mower / Rake": return "⚙️";
-      case "Transport / Truck": return "🚚";
-      default: return "🔧";
-    }
-  };
-
-  const getStatusBadgeHtml = (status) => {
-    switch (status) {
-      case "Available":
-        return `<span class="machinery-badge-status badge-status-available">● Available</span>`;
-      case "Maintenance":
-        return `<span class="machinery-badge-status badge-status-maintenance">🔧 Maintenance</span>`;
-      case "Repair":
-        return `<span class="machinery-badge-status badge-status-repair">⚠️ In Repair</span>`;
-      case "Dispose":
-        return `<span class="machinery-badge-status badge-status-dispose">🗑️ Dispose</span>`;
-      default:
-        return `<span class="machinery-badge-status badge-status-available">${escapeHtml(status)}</span>`;
-    }
-  };
-
   const updateMachineryStats = () => {
     const total = machineryUnitsData.length;
     const avail = machineryUnitsData.filter((u) => u.status === "Available").length;
@@ -1503,76 +1476,68 @@ async function initManagerPage() {
 
     if (!units.length) {
       machineryGridEl.innerHTML = `
-        <div style="grid-column: 1 / -1; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 40px 20px; text-align: center; color: #64748b;">
-          <p style="font-size: 2rem; margin: 0 0 8px;">🚜</p>
-          <strong style="color: #1e293b; font-size: 1rem; display: block; margin-bottom: 4px;">No machinery units found</strong>
-          <p style="font-size: 0.82rem; margin: 0;">Try adjusting your status filter or search query, or click <strong>+ Add Machinery Unit</strong> above.</p>
+        <div style="grid-column: 1 / -1; background: #fff; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 36px 20px; text-align: center; color: #64748b;">
+          <strong style="color: #1e293b; font-size: 0.95rem; display: block; margin-bottom: 4px;">No machinery units found</strong>
+          <p style="font-size: 0.8rem; margin: 0;">Try adjusting your status filter or search query, or click Add Unit above.</p>
         </div>
       `;
       return;
     }
 
     machineryGridEl.innerHTML = units.map((unit) => {
-      const isUnassigned = !unit.assignedDriver || unit.assignedDriver.toLowerCase() === "unassigned";
-      const fallbackEmoji = getCategoryFallbackEmoji(unit.category);
       const imgHtml = unit.imageUrl
-        ? `<img src="${escapeHtml(unit.imageUrl)}" class="machinery-card-img" alt="${escapeHtml(unit.name)}" loading="lazy" onerror="this.onerror=null; this.parentElement.innerHTML='<div style=\\'width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:3rem;background:#1e293b;\\'>${fallbackEmoji}</div>';">`
-        : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:3.5rem;background:#0d1a18;">${fallbackEmoji}</div>`;
+        ? `<img src="${escapeHtml(unit.imageUrl)}" class="machinery-card-img" alt="${escapeHtml(unit.name)}" loading="lazy" onerror="this.onerror=null; this.parentElement.innerHTML='<span class=\\'machinery-card-placeholder\\'>No photo available</span>';">`
+        : `<span class="machinery-card-placeholder">No photo available</span>`;
 
       return `
         <div class="machinery-card" data-card-id="${unit._id}">
-          <div class="machinery-card-media">
-            ${imgHtml}
-            <span class="machinery-chip-id">${escapeHtml(unit.unitId)}</span>
-            ${getStatusBadgeHtml(unit.status)}
+          <!-- Top Bar: Unit Code and Actions outside body -->
+          <div class="machinery-card-top">
+            <span class="machinery-unit-code">${escapeHtml(unit.unitId)}</span>
+            <div class="machinery-card-actions">
+              <select class="machinery-quick-select" data-quick-id="${unit._id}" title="Change Status">
+                <option value="Available" ${unit.status === "Available" ? "selected" : ""}>Available</option>
+                <option value="Maintenance" ${unit.status === "Maintenance" ? "selected" : ""}>Maintenance</option>
+                <option value="Repair" ${unit.status === "Repair" ? "selected" : ""}>Repair</option>
+                <option value="Dispose" ${unit.status === "Dispose" ? "selected" : ""}>Dispose</option>
+              </select>
+              <button type="button" class="machinery-edit-btn" data-edit-id="${unit._id}">Edit</button>
+            </div>
           </div>
 
-          <div class="machinery-card-body">
-            <div class="machinery-meta-row">
-              <span class="machinery-category-pill">${escapeHtml(unit.category || "Machinery")}</span>
-              <span style="font-size: 0.72rem; color: #64748b; font-weight: 600;">${unit.modelYear ? escapeHtml(unit.modelYear) : ""} ${unit.operatingHours ? `• ${unit.operatingHours} hrs` : ""}</span>
-            </div>
+          <!-- Machinery Photo (No floating badges, clean) -->
+          <div class="machinery-card-media">
+            ${imgHtml}
+          </div>
 
+          <!-- Card Body: Clean typography, no colored containers, no icons, no actions -->
+          <div class="machinery-card-body">
+            <div class="machinery-card-category">${escapeHtml(unit.category || "Machinery")}${unit.modelYear ? ` · ${escapeHtml(unit.modelYear)}` : ""}</div>
             <h3 class="machinery-card-title">${escapeHtml(unit.name)}</h3>
 
-            <!-- Driver Assign Section -->
-            <div class="machinery-driver-badge ${isUnassigned ? "unassigned" : ""}">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0; color:#0d766e;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-              <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-                <span>Driver: </span>
-                <strong>${escapeHtml(unit.assignedDriver || "Unassigned")}</strong>
-                ${unit.driverPhone ? `<small style="display:block; font-size:0.68rem; color:#64748b;">${escapeHtml(unit.driverPhone)}</small>` : ""}
-              </div>
+            <div class="machinery-details-row">
+              <span class="machinery-detail-label">Driver</span>
+              <span class="machinery-detail-val">${escapeHtml(unit.assignedDriver || "Unassigned")}</span>
             </div>
 
-            <!-- Rates per Day or Hour -->
-            <div class="machinery-rates-box">
-              <div class="machinery-rate-col">
-                <span class="rate-label">Rate / Day</span>
-                <span class="rate-val">₱${Number(unit.ratePerDay || 0).toLocaleString()} <small>/day</small></span>
-              </div>
-              <div class="machinery-rate-col">
-                <span class="rate-label">Rate / Hour</span>
-                <span class="rate-val">₱${Number(unit.ratePerHour || 0).toLocaleString()} <small>/hr</small></span>
-              </div>
+            <div class="machinery-details-row">
+              <span class="machinery-detail-label">Rate / Day</span>
+              <span class="machinery-detail-val">₱${Number(unit.ratePerDay || 0).toLocaleString()} <small>/day</small></span>
             </div>
 
-            ${unit.conditionNotes ? `<p class="machinery-notes-snippet" title="${escapeHtml(unit.conditionNotes)}">${escapeHtml(unit.conditionNotes)}</p>` : ""}
-
-            <!-- Card Action Footer: Quick Status & Edit Button -->
-            <div class="machinery-card-footer">
-              <select class="machinery-quick-select status-${unit.status}" data-quick-id="${unit._id}" title="Quick Status Change">
-                <option value="Available" ${unit.status === "Available" ? "selected" : ""}>● Available</option>
-                <option value="Maintenance" ${unit.status === "Maintenance" ? "selected" : ""}>🔧 Maintenance</option>
-                <option value="Repair" ${unit.status === "Repair" ? "selected" : ""}>⚠️ Repair</option>
-                <option value="Dispose" ${unit.status === "Dispose" ? "selected" : ""}>🗑️ Dispose</option>
-              </select>
-
-              <button type="button" class="machinery-edit-btn" data-edit-id="${unit._id}">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                <span>Edit</span>
-              </button>
+            <div class="machinery-details-row">
+              <span class="machinery-detail-label">Rate / Hour</span>
+              <span class="machinery-detail-val">₱${Number(unit.ratePerHour || 0).toLocaleString()} <small>/hr</small></span>
             </div>
+
+            ${unit.operatingHours ? `
+              <div class="machinery-details-row">
+                <span class="machinery-detail-label">Hours Logged</span>
+                <span class="machinery-detail-val">${Number(unit.operatingHours).toLocaleString()} hrs</span>
+              </div>
+            ` : ""}
+
+            ${unit.conditionNotes ? `<p class="machinery-card-notes" title="${escapeHtml(unit.conditionNotes)}">${escapeHtml(unit.conditionNotes)}</p>` : ""}
           </div>
         </div>
       `;
@@ -1595,35 +1560,35 @@ async function initManagerPage() {
         <tr>
           <td>
             <div style="display:flex; align-items:center; gap:10px;">
-              <div style="width:40px; height:32px; border-radius:6px; overflow:hidden; background:#0d1a18; flex-shrink:0;">
-                ${unit.imageUrl ? `<img src="${escapeHtml(unit.imageUrl)}" style="width:100%; height:100%; object-fit:cover;" onerror="this.style.display='none';">` : `<span style="font-size:1rem; display:flex; align-items:center; justify-content:center; height:100%;">🚜</span>`}
+              <div style="width:40px; height:32px; border-radius:4px; overflow:hidden; background:#f1f5f9; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                ${unit.imageUrl ? `<img src="${escapeHtml(unit.imageUrl)}" style="width:100%; height:100%; object-fit:cover;" onerror="this.style.display='none';">` : `<span style="font-size:0.65rem; color:#94a3b8;">No photo</span>`}
               </div>
               <div>
                 <strong style="display:block; font-size:0.86rem; color:#0f172a;">${escapeHtml(unit.name)}</strong>
-                <span class="font-mono" style="font-size:0.7rem; color:#0d766e; font-weight:700;">${escapeHtml(unit.unitId)}</span>
+                <span class="font-mono" style="font-size:0.7rem; color:#475569; font-weight:600;">${escapeHtml(unit.unitId)}</span>
               </div>
             </div>
           </td>
-          <td><span class="machinery-category-pill">${escapeHtml(unit.category || "Tractor")}</span></td>
+          <td><span style="font-size:0.78rem; color:#475569;">${escapeHtml(unit.category || "Tractor")}</span></td>
           <td>
-            <div style="font-size:0.82rem; ${isUnassigned ? "color:#94a3b8; font-style:italic;" : "color:#1e293b; font-weight:600;"}">
+            <div style="font-size:0.82rem; ${isUnassigned ? "color:#94a3b8;" : "color:#1e293b; font-weight:500;"}">
               ${escapeHtml(unit.assignedDriver || "Unassigned")}
             </div>
           </td>
           <td>
-            <div style="font-size:0.8rem; font-weight:700; color:#15803d;">
-              ₱${Number(unit.ratePerDay || 0).toLocaleString()} <small style="color:#64748b;">/day</small>
+            <div style="font-size:0.8rem; font-weight:600; color:#0f172a;">
+              ₱${Number(unit.ratePerDay || 0).toLocaleString()} <small style="color:#64748b; font-weight:400;">/day</small>
             </div>
             <div style="font-size:0.74rem; color:#64748b;">
               ₱${Number(unit.ratePerHour || 0).toLocaleString()} <small>/hr</small>
             </div>
           </td>
           <td>
-            <select class="machinery-quick-select status-${unit.status}" data-quick-id="${unit._id}" style="max-width:140px;">
-              <option value="Available" ${unit.status === "Available" ? "selected" : ""}>● Available</option>
-              <option value="Maintenance" ${unit.status === "Maintenance" ? "selected" : ""}>🔧 Maintenance</option>
-              <option value="Repair" ${unit.status === "Repair" ? "selected" : ""}>⚠️ Repair</option>
-              <option value="Dispose" ${unit.status === "Dispose" ? "selected" : ""}>🗑️ Dispose</option>
+            <select class="machinery-quick-select" data-quick-id="${unit._id}" style="max-width:130px;">
+              <option value="Available" ${unit.status === "Available" ? "selected" : ""}>Available</option>
+              <option value="Maintenance" ${unit.status === "Maintenance" ? "selected" : ""}>Maintenance</option>
+              <option value="Repair" ${unit.status === "Repair" ? "selected" : ""}>Repair</option>
+              <option value="Dispose" ${unit.status === "Dispose" ? "selected" : ""}>Dispose</option>
             </select>
           </td>
           <td style="max-width:200px; font-size:0.75rem; color:#64748b;">
@@ -1631,7 +1596,7 @@ async function initManagerPage() {
           </td>
           <td class="align-right">
             <button type="button" class="machinery-edit-btn" data-edit-id="${unit._id}">
-              ✏️ Edit
+              Edit
             </button>
           </td>
         </tr>

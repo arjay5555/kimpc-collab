@@ -764,7 +764,7 @@
 
               <!-- Penalties / Adjustments -->
               <div style="grid-column: 1 / -1; background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 16px;">
-                <strong style="display: block; font-size: 0.84rem; color: #9f1239; margin-bottom: 12px;">⚠️ Late Fees &amp; Repair Damage Deductions</strong>
+                <strong style="display: block; font-size: 0.84rem; color: #9f1239; margin-bottom: 12px;">Late Fees &amp; Repair Damage Deductions</strong>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
                   <div>
                     <label for="settle-late-days" style="display: block; font-size: 0.74rem; font-weight: 700; margin-bottom: 4px;">Late Return (Days Overdue)</label>
@@ -798,7 +798,7 @@
 
               <div style="grid-column: 1 / -1;">
                 <button type="submit" class="button button-primary" style="width: 100%; padding: 12px; font-size: 0.9rem; font-weight: 800; border-radius: 8px; background: #0f172a; border: none; cursor: pointer;">
-                  ✓ Finalize Settlement &amp; Release Farmer Funds
+                  Finalize Settlement &amp; Release Farmer Funds
                 </button>
               </div>
             </form>
@@ -811,90 +811,73 @@
           <!-- Section Top Heading -->
           <div class="section-heading" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px; margin-bottom: 22px;">
             <div>
-              <p class="section-label" style="font-size: 0.7rem; font-weight: 800; color: #0d766e; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 4px;">CM-007 / FLEET OPERATIONS &amp; INVENTORY</p>
-              <h2 style="font-size: 1.35rem; font-weight: 800; margin: 0; color: #0f172a;">Farm Machinery &amp; Equipment Units</h2>
+              <p class="section-label" style="font-size: 0.7rem; font-weight: 700; color: #0d766e; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 4px;">CM-007 / FLEET OPERATIONS &amp; INVENTORY</p>
+              <h2 style="font-size: 1.35rem; font-weight: 700; margin: 0; color: #0f172a;">Farm Machinery &amp; Equipment Units</h2>
               <p style="font-size: 0.82rem; color: #64748b; margin: 4px 0 0;">Manage cooperative machinery units, driver assignments, daily/hourly rates, and status lifecycle.</p>
             </div>
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-              <button type="button" id="btn-open-maintenance-modal" class="button" style="background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; font-weight: 700; padding: 9px 15px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 0.82rem;">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                <span>Schedule Out-of-Service</span>
+              <button type="button" id="btn-open-maintenance-modal" class="button button-outline" style="font-size: 0.82rem; padding: 8px 14px; font-weight: 500;">
+                Schedule Out-of-Service
               </button>
-              <button type="button" id="btn-add-machinery" class="button button-primary" style="background: #0d766e; color: #fff; border: none; font-weight: 700; padding: 9px 18px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 0.82rem; box-shadow: 0 2px 4px rgba(13,118,110,0.2);">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                <span>+ Add Machinery Unit</span>
+              <button type="button" id="btn-add-machinery" class="button button-primary" style="background: #0d766e; color: #fff; border: none; font-weight: 600; padding: 8px 16px; border-radius: 6px; font-size: 0.82rem;">
+                + Add Machinery Unit
               </button>
             </div>
           </div>
 
-          <!-- Machinery KPI Metric Stat Cards -->
+          <!-- Machinery KPI Metric Stat Cards (Clean, Neutral, No Emojis, No Rainbow Fills) -->
           <div class="machinery-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 24px;">
             <!-- Total Units -->
-            <div class="machinery-stat-card" style="background: #f8faf9; border: 1px solid #e2e8e4; border-radius: 10px; padding: 14px 16px;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <span style="font-size: 0.72rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Total Fleet Units</span>
-                <span style="display: inline-flex; width: 28px; height: 28px; background: #e6f4ea; color: #0d766e; border-radius: 6px; align-items: center; justify-content: center; font-size: 0.9rem;">🚜</span>
-              </div>
-              <div style="font-size: 1.5rem; font-weight: 800; color: #0f172a;" id="machinery-stat-total">0</div>
-              <div style="font-size: 0.7rem; color: #64748b; margin-top: 2px;">Co-op machinery assets</div>
+            <div class="machinery-stat-card" style="background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px;">
+              <span style="font-size: 0.72rem; font-weight: 600; color: #64748b; text-transform: uppercase; display: block; margin-bottom: 6px;">Total Fleet</span>
+              <div style="font-size: 1.5rem; font-weight: 700; color: #0f172a;" id="machinery-stat-total">0</div>
+              <div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">Registered assets</div>
             </div>
 
             <!-- Available -->
-            <div class="machinery-stat-card" style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 14px 16px;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <span style="font-size: 0.72rem; font-weight: 700; color: #166534; text-transform: uppercase;">Available</span>
-                <span style="display: inline-flex; width: 28px; height: 28px; background: #dcfce7; color: #15803d; border-radius: 6px; align-items: center; justify-content: center; font-size: 0.85rem;">✓</span>
-              </div>
-              <div style="font-size: 1.5rem; font-weight: 800; color: #15803d;" id="machinery-stat-available">0</div>
-              <div style="font-size: 0.7rem; color: #166534; margin-top: 2px;">Ready for immediate dispatch</div>
+            <div class="machinery-stat-card" style="background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px;">
+              <span style="font-size: 0.72rem; font-weight: 600; color: #64748b; text-transform: uppercase; display: block; margin-bottom: 6px;">Available</span>
+              <div style="font-size: 1.5rem; font-weight: 700; color: #0f172a;" id="machinery-stat-available">0</div>
+              <div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">Ready for dispatch</div>
             </div>
 
             <!-- In Maintenance -->
-            <div class="machinery-stat-card" style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 14px 16px;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <span style="font-size: 0.72rem; font-weight: 700; color: #92400e; text-transform: uppercase;">In Maintenance</span>
-                <span style="display: inline-flex; width: 28px; height: 28px; background: #fef3c7; color: #b45309; border-radius: 6px; align-items: center; justify-content: center; font-size: 0.85rem;">🔧</span>
-              </div>
-              <div style="font-size: 1.5rem; font-weight: 800; color: #b45309;" id="machinery-stat-maintenance">0</div>
-              <div style="font-size: 0.7rem; color: #92400e; margin-top: 2px;">Scheduled service / inspection</div>
+            <div class="machinery-stat-card" style="background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px;">
+              <span style="font-size: 0.72rem; font-weight: 600; color: #64748b; text-transform: uppercase; display: block; margin-bottom: 6px;">Maintenance</span>
+              <div style="font-size: 1.5rem; font-weight: 700; color: #0f172a;" id="machinery-stat-maintenance">0</div>
+              <div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">Scheduled service</div>
             </div>
 
             <!-- In Repair -->
-            <div class="machinery-stat-card" style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 14px 16px;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <span style="font-size: 0.72rem; font-weight: 700; color: #991b1b; text-transform: uppercase;">In Repair</span>
-                <span style="display: inline-flex; width: 28px; height: 28px; background: #fee2e2; color: #dc2626; border-radius: 6px; align-items: center; justify-content: center; font-size: 0.85rem;">⚠️</span>
-              </div>
-              <div style="font-size: 1.5rem; font-weight: 800; color: #dc2626;" id="machinery-stat-repair">0</div>
-              <div style="font-size: 0.7rem; color: #991b1b; margin-top: 2px;">Workshop mechanical fix</div>
+            <div class="machinery-stat-card" style="background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px;">
+              <span style="font-size: 0.72rem; font-weight: 600; color: #64748b; text-transform: uppercase; display: block; margin-bottom: 6px;">In Repair</span>
+              <div style="font-size: 1.5rem; font-weight: 700; color: #0f172a;" id="machinery-stat-repair">0</div>
+              <div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">Mechanical repair</div>
             </div>
 
             <!-- Dispose -->
-            <div class="machinery-stat-card" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <span style="font-size: 0.72rem; font-weight: 700; color: #475569; text-transform: uppercase;">Disposed / Retired</span>
-                <span style="display: inline-flex; width: 28px; height: 28px; background: #f1f5f9; color: #475569; border-radius: 6px; align-items: center; justify-content: center; font-size: 0.85rem;">🗑️</span>
-              </div>
-              <div style="font-size: 1.5rem; font-weight: 800; color: #475569;" id="machinery-stat-dispose">0</div>
-              <div style="font-size: 0.7rem; color: #64748b; margin-top: 2px;">Decommissioned assets</div>
+            <div class="machinery-stat-card" style="background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px;">
+              <span style="font-size: 0.72rem; font-weight: 600; color: #64748b; text-transform: uppercase; display: block; margin-bottom: 6px;">Disposed</span>
+              <div style="font-size: 1.5rem; font-weight: 700; color: #0f172a;" id="machinery-stat-dispose">0</div>
+              <div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">Retired assets</div>
             </div>
           </div>
 
-          <!-- Machinery Filter & Search Toolbar -->
-          <div class="machinery-toolbar" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 20px; padding: 14px 16px; background: #f8faf9; border: 1px solid #e2e8e4; border-radius: 10px;">
+          <!-- Machinery Filter & Search Toolbar (Clean, No Emojis, No Clutter) -->
+          <div class="machinery-toolbar" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 20px; padding: 12px 16px; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;">
             <!-- Status Filter Tabs -->
             <div class="machinery-filter-tabs" style="display: flex; gap: 6px; flex-wrap: wrap;">
               <button type="button" class="machinery-status-pill active" data-status-filter="All">All (<span id="pill-count-all">0</span>)</button>
-              <button type="button" class="machinery-status-pill" data-status-filter="Available">● Available (<span id="pill-count-avail">0</span>)</button>
-              <button type="button" class="machinery-status-pill" data-status-filter="Maintenance">🔧 Maintenance (<span id="pill-count-maint">0</span>)</button>
-              <button type="button" class="machinery-status-pill" data-status-filter="Repair">⚠️ Repair (<span id="pill-count-repair">0</span>)</button>
-              <button type="button" class="machinery-status-pill" data-status-filter="Dispose">🗑️ Dispose (<span id="pill-count-dispose">0</span>)</button>
+              <button type="button" class="machinery-status-pill" data-status-filter="Available">Available (<span id="pill-count-avail">0</span>)</button>
+              <button type="button" class="machinery-status-pill" data-status-filter="Maintenance">Maintenance (<span id="pill-count-maint">0</span>)</button>
+              <button type="button" class="machinery-status-pill" data-status-filter="Repair">Repair (<span id="pill-count-repair">0</span>)</button>
+              <button type="button" class="machinery-status-pill" data-status-filter="Dispose">Dispose (<span id="pill-count-dispose">0</span>)</button>
             </div>
 
             <!-- Search, Category & View Mode Controls -->
             <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
               <!-- Category Filter -->
-              <select id="machinery-category-filter" style="padding: 7px 12px; font-size: 0.8rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #334155; font-weight: 600;">
+              <select id="machinery-category-filter" style="padding: 7px 12px; font-size: 0.8rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #334155;">
                 <option value="All">All Categories</option>
                 <option value="Tractor">Tractor</option>
                 <option value="Harvester">Harvester</option>
@@ -907,18 +890,15 @@
               </select>
 
               <!-- Search Input -->
-              <div style="position: relative;">
-                <svg style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #94a3b8; pointer-events: none;" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <input type="text" id="machinery-search-input" placeholder="Search machinery, driver, ID..." style="padding: 7px 12px 7px 30px; font-size: 0.8rem; border: 1px solid #cbd5e1; border-radius: 6px; width: 220px; background: #fff;">
-              </div>
+              <input type="text" id="machinery-search-input" placeholder="Search name, driver, ID..." style="padding: 7px 12px; font-size: 0.8rem; border: 1px solid #cbd5e1; border-radius: 6px; width: 200px; background: #fff;">
 
               <!-- View Mode Toggles (Grid vs Table) -->
               <div style="display: inline-flex; border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden; background: #fff;">
-                <button type="button" id="btn-machinery-grid-view" class="machinery-view-btn active" title="Grid View" style="padding: 6px 10px; border: none; background: #0d766e; color: #fff; cursor: pointer;">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                <button type="button" id="btn-machinery-grid-view" class="machinery-view-btn active" style="padding: 6px 12px; font-size: 0.76rem; border: none; background: #0d766e; color: #fff; cursor: pointer; font-weight: 500;">
+                  Grid
                 </button>
-                <button type="button" id="btn-machinery-table-view" class="machinery-view-btn" title="Table View" style="padding: 6px 10px; border: none; background: transparent; color: #64748b; cursor: pointer;">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                <button type="button" id="btn-machinery-table-view" class="machinery-view-btn" style="padding: 6px 12px; font-size: 0.76rem; border: none; background: transparent; color: #64748b; cursor: pointer; font-weight: 500;">
+                  Table
                 </button>
               </div>
             </div>
@@ -955,7 +935,7 @@
           <details style="margin-top: 14px; border: 1px solid #e2e8e4; border-radius: 10px; background: #fafbfc; padding: 12px 18px;">
             <summary style="font-size: 0.88rem; font-weight: 700; color: #334155; cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between;">
               <span style="display: flex; align-items: center; gap: 8px;">
-                <span>🔒 Scheduled Maintenance &amp; Booking Lockouts</span>
+                <span>Scheduled Maintenance &amp; Booking Lockouts</span>
                 <span id="maintenance-count-badge" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 999px; background: #e2e8f0; color: #475569; font-weight: 800;">0 active</span>
               </span>
               <span style="font-size: 0.75rem; color: #0d766e; text-decoration: underline;">View / Manage Schedules &darr;</span>
@@ -1007,7 +987,7 @@
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
               <strong style="font-size: 0.95rem; color: #1e293b;">Daily Cash Collections &amp; Ledger Log</strong>
               <button type="button" id="btn-export-ledger-csv" class="action-button" style="background: #f1f5f9; color: #0f172a; font-weight: 700; border: 1px solid #cbd5e1; border-radius: 6px; padding: 5px 12px; cursor: pointer;">
-                ⬇ Export Ledger (CSV)
+                Export Ledger (CSV)
               </button>
             </div>
 
@@ -1095,7 +1075,7 @@
         <div style="border: 2px dashed #cbd5e1; border-radius: 8px; padding: 14px; text-align: center; background: #f8fafc;">
           <input type="file" id="inspect-photos-file" multiple style="display: none;">
           <label for="inspect-photos-file" style="cursor: pointer; display: inline-block; padding: 6px 14px; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.78rem; font-weight: 700; color: #334155;">
-            📷 Choose Photos to Attach
+            Choose Photos to Attach
           </label>
           <p id="inspect-photo-count-preview" style="margin: 6px 0 0; font-size: 0.72rem; color: #64748b;">No photos selected yet.</p>
         </div>
@@ -1168,7 +1148,7 @@
       </div>
 
       <div style="background: #fef2f2; border: 1px solid #fecdd3; border-radius: 6px; padding: 10px; font-size: 0.72rem; color: #991b1b;">
-        🔒 <strong>Automatic Overlap Protection:</strong> Farmers attempting to book this unit during this window will be prevented automatically by the backend.
+        <strong>Automatic Overlap Protection:</strong> Farmers attempting to book this unit during this window will be prevented automatically by the backend.
       </div>
 
       <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 6px;">
@@ -1222,12 +1202,12 @@
           </select>
         </div>
         <div>
-          <label for="machinery-status" style="display: block; font-size: 0.75rem; font-weight: 700; color: #334155; margin-bottom: 4px;">Current Status *</label>
-          <select id="machinery-status" style="width: 100%; padding: 8px 10px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; font-weight: 700;">
-            <option value="Available" style="color: #15803d;">● Available (Ready for booking)</option>
-            <option value="Maintenance" style="color: #b45309;">🔧 Maintenance (Routine service)</option>
-            <option value="Repair" style="color: #dc2626;">⚠️ Repair (Workshop / mechanical)</option>
-            <option value="Dispose" style="color: #475569;">🗑️ Dispose (Retired / auction)</option>
+          <label for="machinery-status" style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 4px;">Current Status *</label>
+          <select id="machinery-status" style="width: 100%; padding: 8px 10px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
+            <option value="Available">Available (Ready for booking)</option>
+            <option value="Maintenance">Maintenance (Routine service)</option>
+            <option value="Repair">Repair (Workshop / mechanical)</option>
+            <option value="Dispose">Dispose (Retired / auction)</option>
           </select>
         </div>
       </div>
@@ -1235,82 +1215,82 @@
       <!-- Driver Assignment Row -->
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
         <div>
-          <label for="machinery-driver" style="display: block; font-size: 0.75rem; font-weight: 700; color: #334155; margin-bottom: 4px;">Assigned Driver / Operator</label>
+          <label for="machinery-driver" style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 4px;">Assigned Driver / Operator</label>
           <input id="machinery-driver" type="text" placeholder="e.g. Ramon Gutierrez (or Unassigned)" style="width: 100%; padding: 8px 10px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
         </div>
         <div>
-          <label for="machinery-driver-phone" style="display: block; font-size: 0.75rem; font-weight: 700; color: #334155; margin-bottom: 4px;">Driver Contact Phone</label>
+          <label for="machinery-driver-phone" style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 4px;">Driver Contact Phone</label>
           <input id="machinery-driver-phone" type="text" placeholder="e.g. +63 917 842 1092" style="width: 100%; padding: 8px 10px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
         </div>
       </div>
 
-      <!-- Rental Pricing Row (Rate per Day / Hour) -->
-      <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px 14px;">
-        <span style="display: block; font-size: 0.75rem; font-weight: 800; color: #166534; margin-bottom: 8px; text-transform: uppercase;">Co-op Rental Pricing Schedule</span>
+      <!-- Rental Pricing Row (Clean, Neutral, No Green Container) -->
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px 14px;">
+        <span style="display: block; font-size: 0.75rem; font-weight: 600; color: #475569; margin-bottom: 8px; text-transform: uppercase;">Rental Pricing Schedule</span>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
           <div>
-            <label for="machinery-rate-day" style="display: block; font-size: 0.74rem; font-weight: 700; color: #166534; margin-bottom: 4px;">Rate per Day (₱) *</label>
-            <input id="machinery-rate-day" type="number" min="0" step="10" placeholder="2800" required style="width: 100%; padding: 8px 10px; font-size: 0.95rem; font-weight: 800; border: 1px solid #86efac; border-radius: 6px; background: #fff; color: #0f172a;">
+            <label for="machinery-rate-day" style="display: block; font-size: 0.74rem; font-weight: 600; color: #334155; margin-bottom: 4px;">Rate per Day (₱) *</label>
+            <input id="machinery-rate-day" type="number" min="0" step="10" placeholder="2800" required style="width: 100%; padding: 8px 10px; font-size: 0.9rem; font-weight: 600; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #0f172a;">
           </div>
           <div>
-            <label for="machinery-rate-hour" style="display: block; font-size: 0.74rem; font-weight: 700; color: #166534; margin-bottom: 4px;">Rate per Hour (₱) *</label>
-            <input id="machinery-rate-hour" type="number" min="0" step="10" placeholder="450" required style="width: 100%; padding: 8px 10px; font-size: 0.95rem; font-weight: 800; border: 1px solid #86efac; border-radius: 6px; background: #fff; color: #0f172a;">
+            <label for="machinery-rate-hour" style="display: block; font-size: 0.74rem; font-weight: 600; color: #334155; margin-bottom: 4px;">Rate per Hour (₱) *</label>
+            <input id="machinery-rate-hour" type="number" min="0" step="10" placeholder="450" required style="width: 100%; padding: 8px 10px; font-size: 0.9rem; font-weight: 600; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #0f172a;">
           </div>
         </div>
       </div>
 
       <!-- Picture URL & Presets Preview -->
       <div>
-        <label for="machinery-image-url" style="display: block; font-size: 0.75rem; font-weight: 700; color: #334155; margin-bottom: 4px;">Machinery Photo (Image URL or Presets)</label>
+        <label for="machinery-image-url" style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 4px;">Machinery Photo (Image URL or Presets)</label>
         <div style="display: flex; gap: 10px; align-items: center;">
-          <input id="machinery-image-url" type="url" placeholder="https://... or select preset below" style="flex: 1; padding: 8px 10px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+          <input id="machinery-image-url" type="url" placeholder="https://... or choose preset" style="flex: 1; padding: 8px 10px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px;">
           <div id="machinery-modal-preview-box" style="width: 50px; height: 38px; border-radius: 6px; background: #f1f5f9; border: 1px solid #cbd5e1; overflow: hidden; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
             <img id="machinery-modal-preview-img" src="" alt="" style="width: 100%; height: 100%; object-fit: cover; display: none;">
-            <span id="machinery-modal-preview-ph" style="font-size: 1rem;">🚜</span>
+            <span id="machinery-modal-preview-ph" style="font-size: 0.65rem; color: #94a3b8;">No photo</span>
           </div>
         </div>
-        <!-- Quick Preset Image Buttons -->
+        <!-- Quick Preset Image Buttons (Clean text, no emojis) -->
         <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px;">
           <span style="font-size: 0.7rem; color: #64748b; align-self: center;">Presets:</span>
-          <button type="button" class="preset-img-btn" data-preset="tractor" style="font-size: 0.7rem; padding: 2px 8px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; cursor: pointer;">🚜 Tractor</button>
-          <button type="button" class="preset-img-btn" data-preset="harvester" style="font-size: 0.7rem; padding: 2px 8px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; cursor: pointer;">🌾 Harvester</button>
-          <button type="button" class="preset-img-btn" data-preset="baler" style="font-size: 0.7rem; padding: 2px 8px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; cursor: pointer;">📦 Baler</button>
-          <button type="button" class="preset-img-btn" data-preset="rake" style="font-size: 0.7rem; padding: 2px 8px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; cursor: pointer;">⚙️ Rake/Mower</button>
-          <button type="button" class="preset-img-btn" data-preset="sprayer" style="font-size: 0.7rem; padding: 2px 8px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; cursor: pointer;">💧 Sprayer</button>
-          <button type="button" class="preset-img-btn" data-preset="truck" style="font-size: 0.7rem; padding: 2px 8px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; cursor: pointer;">🚚 Flatbed</button>
+          <button type="button" class="preset-img-btn" data-preset="tractor" style="font-size: 0.7rem; padding: 3px 8px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; cursor: pointer;">Tractor</button>
+          <button type="button" class="preset-img-btn" data-preset="harvester" style="font-size: 0.7rem; padding: 3px 8px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; cursor: pointer;">Harvester</button>
+          <button type="button" class="preset-img-btn" data-preset="baler" style="font-size: 0.7rem; padding: 3px 8px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; cursor: pointer;">Baler</button>
+          <button type="button" class="preset-img-btn" data-preset="rake" style="font-size: 0.7rem; padding: 3px 8px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; cursor: pointer;">Rake</button>
+          <button type="button" class="preset-img-btn" data-preset="sprayer" style="font-size: 0.7rem; padding: 3px 8px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; cursor: pointer;">Sprayer</button>
+          <button type="button" class="preset-img-btn" data-preset="truck" style="font-size: 0.7rem; padding: 3px 8px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; cursor: pointer;">Flatbed Truck</button>
         </div>
       </div>
 
       <!-- Specs Row (Year, Serial, Hours) -->
       <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
         <div>
-          <label for="machinery-year" style="display: block; font-size: 0.74rem; font-weight: 700; color: #334155; margin-bottom: 4px;">Model Year</label>
+          <label for="machinery-year" style="display: block; font-size: 0.74rem; font-weight: 600; color: #334155; margin-bottom: 4px;">Model Year</label>
           <input id="machinery-year" type="text" placeholder="2023" style="width: 100%; padding: 8px 10px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
         </div>
         <div>
-          <label for="machinery-serial" style="display: block; font-size: 0.74rem; font-weight: 700; color: #334155; margin-bottom: 4px;">Serial Number</label>
+          <label for="machinery-serial" style="display: block; font-size: 0.74rem; font-weight: 600; color: #334155; margin-bottom: 4px;">Serial Number</label>
           <input id="machinery-serial" type="text" placeholder="e.g. SN-88219" style="width: 100%; padding: 8px 10px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
         </div>
         <div>
-          <label for="machinery-hours" style="display: block; font-size: 0.74rem; font-weight: 700; color: #334155; margin-bottom: 4px;">Operating Hours</label>
+          <label for="machinery-hours" style="display: block; font-size: 0.74rem; font-weight: 600; color: #334155; margin-bottom: 4px;">Operating Hours</label>
           <input id="machinery-hours" type="number" min="0" placeholder="640" style="width: 100%; padding: 8px 10px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
         </div>
       </div>
 
       <!-- Condition / Maintenance Notes -->
       <div>
-        <label for="machinery-notes" style="display: block; font-size: 0.74rem; font-weight: 700; color: #334155; margin-bottom: 4px;">Condition Notes &amp; Specifications</label>
+        <label for="machinery-notes" style="display: block; font-size: 0.74rem; font-weight: 600; color: #334155; margin-bottom: 4px;">Condition Notes &amp; Specifications</label>
         <textarea id="machinery-notes" rows="2" placeholder="Engine health, tire/track condition, implement compatibility, servicing logs..." style="width: 100%; padding: 8px 10px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px;"></textarea>
       </div>
 
       <!-- Action Footer -->
       <div style="display: flex; gap: 10px; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 14px; border-top: 1px solid #e2e8e4;">
-        <button type="button" id="btn-delete-machinery" style="background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; font-weight: 700; padding: 9px 16px; border-radius: 6px; cursor: pointer; display: none;">
-          🗑️ Remove Unit
+        <button type="button" id="btn-delete-machinery" style="background: #f1f5f9; color: #dc2626; border: 1px solid #e2e8f0; font-weight: 500; padding: 8px 14px; border-radius: 6px; cursor: pointer; display: none;">
+          Remove Unit
         </button>
         <div style="display: flex; gap: 10px; margin-left: auto;">
-          <button type="button" id="cancel-machinery-modal" class="button button-outline" style="padding: 9px 18px; border-radius: 6px;">Cancel</button>
-          <button type="submit" class="button button-primary" style="padding: 9px 22px; font-weight: 800; background: #0d766e; border: none; border-radius: 6px; color: #fff; box-shadow: 0 2px 4px rgba(13,118,110,0.25);">
+          <button type="button" id="cancel-machinery-modal" class="button button-outline" style="padding: 8px 16px; border-radius: 6px; font-weight: 500;">Cancel</button>
+          <button type="submit" class="button button-primary" style="padding: 8px 20px; font-weight: 600; background: #0d766e; border: none; border-radius: 6px; color: #fff;">
             Save Machinery Unit
           </button>
         </div>
