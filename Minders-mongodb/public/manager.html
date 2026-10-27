@@ -815,10 +815,18 @@
                 </div>
 
                 <div>
-                  <label for="pos-equipment-select" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Available Equipment Unit (from Units Fleet) *</label>
-                  <select id="pos-equipment-select" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
-                    <option value="">Loading available units...</option>
+                  <label for="pos-category-select" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">1. Machinery Category *</label>
+                  <select id="pos-category-select" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; font-weight: 600;">
+                    <option value="">-- Choose Category First (e.g. Tractors) --</option>
                   </select>
+                </div>
+
+                <div>
+                  <label for="pos-equipment-select" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">2. Machinery Unit (Quantity: 1 per Unit) *</label>
+                  <select id="pos-equipment-select" required disabled style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #f8fafc;">
+                    <option value="">← Please choose a category first</option>
+                  </select>
+                  <small id="pos-unit-status-hint" style="display: block; margin-top: 4px; font-size: 0.7rem; color: #64748b;">All units are single assets (quantity: 1). If booked, select another date.</small>
                 </div>
 
                 <div>
@@ -863,6 +871,11 @@
                   </select>
                 </div>
 
+                <!-- Conflict Alert Banner (shown when unit is already booked on dates) -->
+                <div id="pos-conflict-alert" style="display: none; grid-column: 1 / -1; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px 16px; color: #991b1b; font-size: 0.82rem; font-weight: 600;">
+                  ⚠️ <span id="pos-conflict-alert-text">This machinery unit is already booked on the selected dates. Please select other dates.</span>
+                </div>
+
                 <!-- Live Total Breakdown Card (Zero Security Deposit) -->
                 <div style="grid-column: 1 / -1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
                   <div style="font-size: 0.82rem; color: #475569;">
@@ -876,7 +889,7 @@
                 </div>
 
                 <div style="grid-column: 1 / -1;">
-                  <button type="submit" class="button button-primary" style="width: 100%; padding: 12px; font-size: 0.9rem; font-weight: 800; border-radius: 8px; background: #d97706; border: none; cursor: pointer;">
+                  <button type="submit" id="btn-submit-pos-walkin" class="button button-primary" style="width: 100%; padding: 12px; font-size: 0.9rem; font-weight: 800; border-radius: 8px; background: #d97706; border: none; cursor: pointer;">
                     + Issue Walk-in Booking &amp; Record Cash Receipt
                   </button>
                 </div>

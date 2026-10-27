@@ -1958,6 +1958,7 @@ async function initManagerPage() {
   });
 
   // ================= 2. POINT OF SALE (POS) DYNAMIC FLEET & CALCULATIONS =================
+  const posCategorySelect = document.querySelector("#pos-category-select");
   const posEquipSelect = document.querySelector("#pos-equipment-select");
   const posRentalType = document.querySelector("#pos-rental-type");
   const posGroupDayStart = document.querySelector("#pos-group-day-start");
@@ -1970,6 +1971,9 @@ async function initManagerPage() {
   const posHoursCountInput = document.querySelector("#pos-hours-count");
   const posRateLabel = document.querySelector("#pos-rate-label");
   const posRateInput = document.querySelector("#pos-rate-input");
+  const posConflictAlert = document.querySelector("#pos-conflict-alert");
+  const posConflictAlertText = document.querySelector("#pos-conflict-alert-text");
+  const btnSubmitPosWalkin = document.querySelector("#btn-submit-pos-walkin");
   const posSubtotalEl = document.querySelector("#pos-breakdown-subtotal");
   const posDurationEl = document.querySelector("#pos-breakdown-duration");
   const posTotalEl = document.querySelector("#pos-breakdown-total");
@@ -1991,54 +1995,205 @@ async function initManagerPage() {
     posHourDateInput.value = todayIso;
   }
 
-  // Populate equipment from Units fleet (status === 'Available')
-  let populatePosAvailableEquipment = async () => {
-    if (!posEquipSelect) return;
-    let units = machineryUnitsData;
-    if (!units || !units.length) {
-      try {
-        const { ok, data } = await api("/machinery-units");
-        if (ok && data) {
-          units = Array.isArray(data) ? data : (Array.isArray(data.data) ? data.data : []);
-          machineryUnitsData = units;
-        }
-      } catch (_) {}
+  // Get current active date range for availability check
+  const getPosSelectedDates = () => {
+    const isHourly = posRentalType?.value === "hour";
+    const startDate = isHourly ? (posHourDateInput?.value || todayIso) : (posStartDateInput?.value || todayIso);
+    const endDate = isHourly ? (posHourDateInput?.value || todayIso) : (posEndDateInput?.value || todayIso);
+    return { isHourly, startDate, endDate };
+  };
+
+  // Helper to ensure machinery units data is loaded
+  const ensureMachineryUnitsData = async () => {
+    if (machineryUnitsData && machineryUnitsData.length > 0) return machineryUnitsData;
+    try {
+      const { ok, data } = await api("/machinery-units");
+      if (ok && data) {
+        machineryUnitsData = Array.isArray(data) ? data : (Array.isArray(data.data) ? data.data : []);
+      }
+    } catch (_) {}
+    return machineryUnitsData || [];
+  };
+
+  // 1. Populate Categories First (Tractors, Harvesters, etc.)
+  let populatePosCategories = async () => {
+    if (!posCategorySelect) return;
+    const units = await ensureMachineryUnitsData();
+    const availableUnits = units.filter((u) => u.status === "Available" && !u.isArchived);
+
+    // Extract unique categories from units
+    const categorySet = new Set();
+    availableUnits.forEach((u) => {
+      const cat = (u.category || "Machinery").trim();
+      if (cat) categorySet.add(cat);
+    });
+
+    const categories = Array.from(categorySet).sort();
+    const currentCategory = posCategorySelect.value;
+
+    if (!categories.length) {
+      posCategorySelect.innerHTML = `<option value="">⚠️ No available machinery categories</option>`;
+      if (posEquipSelect) {
+        posEquipSelect.innerHTML = `<option value="">No units available</option>`;
+        posEquipSelect.disabled = true;
+      }
+      return;
     }
 
-    const availableUnits = (units || []).filter((u) => u.status === "Available" && !u.isArchived);
+    posCategorySelect.innerHTML = `
+      <option value="">-- Choose Category First (e.g. Tractor) --</option>
+      ${categories.map((cat) => `<option value="${escapeHtml(cat)}" ${cat === currentCategory ? "selected" : ""}>${escapeHtml(cat)}</option>`).join("")}
+    `;
 
-    if (!availableUnits.length) {
-      posEquipSelect.innerHTML = `<option value="">⚠️ No available machinery in units fleet</option>`;
+    if (currentCategory && categories.includes(currentCategory)) {
+      await populatePosEquipmentForCategory(currentCategory);
+    } else {
+      if (posEquipSelect) {
+        posEquipSelect.innerHTML = `<option value="">← Please choose a category first</option>`;
+        posEquipSelect.disabled = true;
+        posEquipSelect.style.background = "#f8fafc";
+      }
+      checkPosConflictAndRates();
+    }
+  };
+
+  // 2. Populate Equipment for Selected Category with Date Overlap Check
+  let populatePosEquipmentForCategory = async (category) => {
+    if (!posEquipSelect) return;
+
+    if (!category) {
+      posEquipSelect.innerHTML = `<option value="">← Please choose a category first</option>`;
+      posEquipSelect.disabled = true;
+      posEquipSelect.style.background = "#f8fafc";
+      checkPosConflictAndRates();
+      return;
+    }
+
+    posEquipSelect.disabled = false;
+    posEquipSelect.style.background = "#fff";
+
+    const { startDate, endDate } = getPosSelectedDates();
+
+    // Query active availability from backend for the selected dates
+    let bookedSet = new Set();
+    let bookedInfoMap = new Map();
+    try {
+      const availRes = await api(`/manager/machinery-availability?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`);
+      if (availRes.ok && availRes.data) {
+        (availRes.data.bookedUnits || []).forEach((b) => {
+          if (b.unitId) {
+            bookedSet.add(b.unitId.trim().toUpperCase());
+            bookedInfoMap.set(b.unitId.trim().toUpperCase(), b);
+          }
+          if (b.equipment) {
+            bookedSet.add(b.equipment.trim().toUpperCase());
+            bookedInfoMap.set(b.equipment.trim().toUpperCase(), b);
+          }
+        });
+        (availRes.data.maintenanceUnits || []).forEach((m) => {
+          if (m.unitId) {
+            bookedSet.add(m.unitId.trim().toUpperCase());
+            bookedInfoMap.set(m.unitId.trim().toUpperCase(), { reason: m.reason || "Maintenance", ...m });
+          }
+          if (m.equipment) {
+            bookedSet.add(m.equipment.trim().toUpperCase());
+            bookedInfoMap.set(m.equipment.trim().toUpperCase(), { reason: m.reason || "Maintenance", ...m });
+          }
+        });
+      }
+    } catch (_) {}
+
+    const units = await ensureMachineryUnitsData();
+    const matchingUnits = units.filter((u) => {
+      const cat = (u.category || "Machinery").trim();
+      return cat.toLowerCase() === category.toLowerCase() && u.status === "Available" && !u.isArchived;
+    });
+
+    if (!matchingUnits.length) {
+      posEquipSelect.innerHTML = `<option value="">⚠️ No ${escapeHtml(category)} units in fleet</option>`;
+      checkPosConflictAndRates();
+      return;
+    }
+
+    const currentSelectedVal = posEquipSelect.value;
+    posEquipSelect.innerHTML = matchingUnits.map((u) => {
+      const rateDay = Number(u.ratePerDay) || 1200;
+      const rateHour = Number(u.ratePerHour) || Math.round(rateDay / 8) || 150;
+      const isBooked = bookedSet.has((u.unitId || "").toUpperCase()) || bookedSet.has((u.name || "").toUpperCase());
+      const bookingInfo = bookedInfoMap.get((u.unitId || "").toUpperCase()) || bookedInfoMap.get((u.name || "").toUpperCase());
+
+      let statusTag = isBooked ? `❌ (Booked${bookingInfo?.startDate ? `: ${bookingInfo.startDate}` : ""})` : `✓ (Available)`;
+      const label = `${u.unitId} - ${u.name} ${statusTag}`;
+      const isSelected = u.name === currentSelectedVal ? "selected" : "";
+
+      return `<option value="${escapeHtml(u.name)}"
+        data-unit-id="${escapeHtml(u.unitId)}"
+        data-rate-day="${rateDay}"
+        data-rate-hour="${rateHour}"
+        data-booked="${isBooked ? "true" : "false"}"
+        data-booked-detail="${isBooked && bookingInfo ? escapeHtml(bookingInfo.memberName ? `Booked by ${bookingInfo.memberName} (${bookingInfo.startDate} to ${bookingInfo.endDate})` : (bookingInfo.reason || "Booked")) : ""}"
+        style="color: ${isBooked ? "#dc2626" : "#059669"}; font-weight: ${isBooked ? "600" : "500"};"
+        ${isSelected}>
+        ${escapeHtml(label)}
+      </option>`;
+    }).join("");
+
+    checkPosConflictAndRates();
+  };
+
+  // 3. Conflict Detection and Rate Synchronizer
+  const checkPosConflictAndRates = () => {
+    if (!posEquipSelect) return;
+    const selectedOpt = posEquipSelect.options[posEquipSelect.selectedIndex];
+
+    if (!selectedOpt || !selectedOpt.value || posEquipSelect.disabled) {
+      if (posConflictAlert) posConflictAlert.style.display = "none";
+      if (btnSubmitPosWalkin) {
+        btnSubmitPosWalkin.disabled = true;
+        btnSubmitPosWalkin.style.opacity = "0.5";
+        btnSubmitPosWalkin.style.cursor = "not-allowed";
+      }
       if (posRateInput) posRateInput.value = "0";
       updatePosWalkinTotal();
       return;
     }
 
-    const currentVal = posEquipSelect.value;
-    posEquipSelect.innerHTML = availableUnits.map((u) => {
-      const rateDay = Number(u.ratePerDay) || 1200;
-      const rateHour = Number(u.ratePerHour) || Math.round(rateDay / 8) || 150;
-      const label = `${u.unitId} - ${u.name} (${u.category || "Machinery"})`;
-      const isSelected = u.name === currentVal ? "selected" : "";
-      return `<option value="${escapeHtml(u.name)}" data-unit-id="${escapeHtml(u.unitId)}" data-rate-day="${rateDay}" data-rate-hour="${rateHour}" ${isSelected}>${escapeHtml(label)}</option>`;
-    }).join("");
+    const isBooked = selectedOpt.dataset.booked === "true";
+    const bookedDetail = selectedOpt.dataset.bookedDetail || "";
+    const { startDate, endDate } = getPosSelectedDates();
 
-    updateRateFromSelectedUnit();
-    updatePosWalkinTotal();
-  };
+    if (isBooked) {
+      if (posConflictAlert) {
+        posConflictAlert.style.display = "block";
+        if (posConflictAlertText) {
+          posConflictAlertText.textContent = `⚠️ Unit "${selectedOpt.value}" (Quantity: 1) is already booked on ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}${bookedDetail ? ` (${bookedDetail})` : ""}. Each unit is a single unique asset. Please select other dates or pick an available unit.`;
+        }
+      }
+      if (btnSubmitPosWalkin) {
+        btnSubmitPosWalkin.disabled = true;
+        btnSubmitPosWalkin.style.opacity = "0.5";
+        btnSubmitPosWalkin.style.cursor = "not-allowed";
+      }
+    } else {
+      if (posConflictAlert) posConflictAlert.style.display = "none";
+      if (btnSubmitPosWalkin) {
+        btnSubmitPosWalkin.disabled = false;
+        btnSubmitPosWalkin.style.opacity = "1";
+        btnSubmitPosWalkin.style.cursor = "pointer";
+      }
+    }
 
-  const updateRateFromSelectedUnit = () => {
-    if (!posEquipSelect || !posRateInput) return;
-    const selectedOpt = posEquipSelect.options[posEquipSelect.selectedIndex];
-    if (!selectedOpt) return;
+    // Update Rates
     const isHourly = posRentalType?.value === "hour";
     if (isHourly) {
       const rateHour = Number(selectedOpt.dataset.rateHour) || 150;
-      posRateInput.value = rateHour;
+      if (posRateInput) posRateInput.value = rateHour;
     } else {
       const rateDay = Number(selectedOpt.dataset.rateDay) || 1200;
-      posRateInput.value = rateDay;
+      if (posRateInput) posRateInput.value = rateDay;
     }
+
+    updatePosWalkinTotal();
   };
 
   const updatePosWalkinTotal = () => {
@@ -2065,7 +2220,19 @@ async function initManagerPage() {
     if (posTotalEl) posTotalEl.textContent = `₱${subtotal.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
-  // Toggle Duration Type: Per Day vs Per Hour
+  // Backwards compatibility pointer for loadMachineryUnits
+  let populatePosAvailableEquipment = async () => {
+    await populatePosCategories();
+  };
+
+  posCategorySelect?.addEventListener("change", (e) => {
+    populatePosEquipmentForCategory(e.target.value);
+  });
+
+  posEquipSelect?.addEventListener("change", () => {
+    checkPosConflictAndRates();
+  });
+
   posRentalType?.addEventListener("change", () => {
     const isHourly = posRentalType.value === "hour";
     if (posGroupDayStart) posGroupDayStart.style.display = isHourly ? "none" : "block";
@@ -2081,19 +2248,17 @@ async function initManagerPage() {
       posRateLabel.textContent = isHourly ? "Hourly Rate (₱ / Hour)" : "Daily Rate (₱ / Day)";
     }
 
-    updateRateFromSelectedUnit();
-    updatePosWalkinTotal();
-  });
-
-  posEquipSelect?.addEventListener("change", () => {
-    updateRateFromSelectedUnit();
-    updatePosWalkinTotal();
+    if (posCategorySelect?.value) {
+      populatePosEquipmentForCategory(posCategorySelect.value);
+    } else {
+      checkPosConflictAndRates();
+    }
   });
 
   posRateInput?.addEventListener("input", updatePosWalkinTotal);
   posHoursCountInput?.addEventListener("input", updatePosWalkinTotal);
 
-  // Date validation: enforce cannot rent past / done dates
+  // Date validation: enforce cannot rent past / done dates & refresh availability
   posStartDateInput?.addEventListener("change", () => {
     if (posStartDateInput.value < todayIso) {
       alert("Cannot rent for a past date. Start date reset to today.");
@@ -2105,7 +2270,11 @@ async function initManagerPage() {
         posEndDateInput.value = posStartDateInput.value;
       }
     }
-    updatePosWalkinTotal();
+    if (posCategorySelect?.value) {
+      populatePosEquipmentForCategory(posCategorySelect.value);
+    } else {
+      updatePosWalkinTotal();
+    }
   });
 
   posEndDateInput?.addEventListener("change", () => {
@@ -2113,7 +2282,11 @@ async function initManagerPage() {
       alert("Rental end date cannot be earlier than start date.");
       posEndDateInput.value = posStartDateInput.value;
     }
-    updatePosWalkinTotal();
+    if (posCategorySelect?.value) {
+      populatePosEquipmentForCategory(posCategorySelect.value);
+    } else {
+      updatePosWalkinTotal();
+    }
   });
 
   posHourDateInput?.addEventListener("change", () => {
@@ -2121,23 +2294,38 @@ async function initManagerPage() {
       alert("Cannot rent for a past date. Date reset to today.");
       posHourDateInput.value = todayIso;
     }
-    updatePosWalkinTotal();
+    if (posCategorySelect?.value) {
+      populatePosEquipmentForCategory(posCategorySelect.value);
+    } else {
+      updatePosWalkinTotal();
+    }
   });
 
-  // Call populate on init
-  populatePosAvailableEquipment();
+  // Call populate categories on init
+  populatePosCategories();
 
   document.querySelector("#pos-walkin-form")?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const farmerName = document.querySelector("#pos-farmer-name")?.value?.trim();
     const farmerPhone = document.querySelector("#pos-farmer-phone")?.value?.trim();
     const coopId = document.querySelector("#pos-coop-id")?.value?.trim() || "WALK-IN";
+    const category = posCategorySelect?.value;
     const selectedOpt = posEquipSelect?.options[posEquipSelect.selectedIndex];
     const equipment = posEquipSelect?.value;
     const machineryUnitId = selectedOpt?.dataset.unitId || "";
 
+    if (!category) {
+      alert("Please select a machinery category first.");
+      return;
+    }
+
     if (!equipment) {
       alert("Please select an available machinery unit from the fleet.");
+      return;
+    }
+
+    if (selectedOpt?.dataset.booked === "true") {
+      alert("This machinery unit is already booked on the selected dates. Each unit is unique (quantity: 1). Please select other dates.");
       return;
     }
 
@@ -2197,8 +2385,9 @@ async function initManagerPage() {
       if (posStartDateInput) posStartDateInput.value = todayIso;
       if (posEndDateInput) posEndDateInput.value = in3DaysIso;
       if (posHourDateInput) posHourDateInput.value = todayIso;
-      updateRateFromSelectedUnit();
-      updatePosWalkinTotal();
+      if (category) {
+        populatePosEquipmentForCategory(category);
+      }
       renderBookings();
       loadLedgerAndUtilization();
       if (typeof loadMachineryUnits === "function") loadMachineryUnits();

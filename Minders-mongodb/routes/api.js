@@ -1553,6 +1553,22 @@ router.post("/applications", async (req, res) => {
     );
   }
 
+  // Automatic Unique Unit Conflict Protection (Quantity: 1):
+  const bookingConflict = await Application.findOne({
+    equipment: { $regex: new RegExp(equipment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") },
+    status: { $in: ["Approved", "Checked-Out"] },
+    startDate: { $lte: endDate },
+    endDate: { $gte: startDate }
+  });
+
+  if (bookingConflict) {
+    return fail(
+      res,
+      409,
+      `Equipment "${equipment}" is already booked from ${bookingConflict.startDate} to ${bookingConflict.endDate}. Each unit is unique (quantity: 1). Please select other dates.`
+    );
+  }
+
   const account = await Account.findOne({ email: memberEmail });
   if (!account) return fail(res, 404, "Account not found.");
   const application = await Application.create({
@@ -1663,6 +1679,24 @@ router.patch("/applications/:id", async (req, res) => {
   // Cancellation prior to manager approval check
   if (newStatus === "Cancelled" && existing.status !== "Pending") {
     return fail(res, 400, `Only pending booking requests can be cancelled prior to manager approval (current status: ${existing.status}).`);
+  }
+
+  // If approving, enforce that no other booking is already approved on overlapping dates (Quantity: 1)
+  if (newStatus === "Approved") {
+    const existingConflict = await Application.findOne({
+      _id: { $ne: existing._id },
+      equipment: { $regex: new RegExp(existing.equipment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") },
+      status: { $in: ["Approved", "Checked-Out"] },
+      startDate: { $lte: existing.endDate },
+      endDate: { $gte: existing.startDate }
+    });
+    if (existingConflict) {
+      return fail(
+        res,
+        409,
+        `Cannot approve: "${existing.equipment}" (Quantity: 1) is already booked by ${existingConflict.memberName} from ${existingConflict.startDate} to ${existingConflict.endDate}.`
+      );
+    }
   }
 
   const previousStatus = existing.status;
@@ -2253,6 +2287,49 @@ router.delete("/machinery-units/:id", authManager, async (req, res) => {
 });
 
 /**
+ * GET /api/manager/machinery-availability
+ * Returns list of booked and maintenance units for given date range.
+ */
+router.get("/manager/machinery-availability", async (req, res) => {
+  const startDate = clean(req.query.startDate);
+  const endDate = clean(req.query.endDate) || startDate;
+
+  if (!startDate || !endDate) {
+    return res.json({ bookedUnits: [], maintenanceUnits: [] });
+  }
+
+  const bookings = await Application.find({
+    status: { $in: ["Approved", "Checked-Out"] },
+    startDate: { $lte: endDate },
+    endDate: { $gte: startDate }
+  }).select("equipment machineryUnitId startDate endDate memberName");
+
+  const maintenances = await MachineryMaintenance.find({
+    status: { $in: ["Out of Service", "In Repair", "Scheduled Maintenance"] },
+    startDate: { $lte: endDate },
+    endDate: { $gte: startDate }
+  }).select("equipmentName equipmentUnitId startDate endDate maintenanceType");
+
+  const bookedUnits = bookings.map((b) => ({
+    equipment: b.equipment,
+    unitId: b.machineryUnitId,
+    startDate: b.startDate,
+    endDate: b.endDate,
+    memberName: b.memberName
+  }));
+
+  const maintenanceUnits = maintenances.map((m) => ({
+    equipment: m.equipmentName,
+    unitId: m.equipmentUnitId,
+    startDate: m.startDate,
+    endDate: m.endDate,
+    reason: m.maintenanceType
+  }));
+
+  res.json({ bookedUnits, maintenanceUnits });
+});
+
+/**
  * POST /api/manager/pos-booking
  * Walk-in terminal booking for farmers without online accounts.
  */
@@ -2297,16 +2374,28 @@ router.post("/manager/pos-booking", async (req, res) => {
     return fail(res, 409, `Equipment "${equipment}" is Out of Service (${maintenanceConflict.startDate} to ${maintenanceConflict.endDate}). Cannot book for these dates.`);
   }
 
-  // Overlap verification with existing bookings for this unit
-  const bookingConflict = await Application.findOne({
-    equipment: { $regex: new RegExp(equipment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") },
+  // Overlap verification with existing bookings for this unit (Quantity: 1 per unit)
+  const bookingConflictQuery = {
     status: { $in: ["Approved", "Checked-Out"] },
     startDate: { $lte: endDate },
     endDate: { $gte: startDate }
-  });
+  };
+  if (machineryUnitId) {
+    bookingConflictQuery.$or = [
+      { machineryUnitId },
+      { equipment: { $regex: new RegExp(equipment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") } }
+    ];
+  } else {
+    bookingConflictQuery.equipment = { $regex: new RegExp(equipment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") };
+  }
+  const bookingConflict = await Application.findOne(bookingConflictQuery);
 
   if (bookingConflict) {
-    return fail(res, 409, `Equipment "${equipment}" is already booked from ${bookingConflict.startDate} to ${bookingConflict.endDate}.`);
+    return fail(
+      res,
+      409,
+      `Equipment "${equipment}" (Quantity: 1) is already booked by ${bookingConflict.memberName} from ${bookingConflict.startDate} to ${bookingConflict.endDate}. Please select other dates.`
+    );
   }
 
   const rentalFee = rentalType === "hour" ? (rate * rentalHours) : (rate * rentalDays);
