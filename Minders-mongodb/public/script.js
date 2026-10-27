@@ -1143,6 +1143,7 @@ async function initManagerPage() {
   let loadMachineryUnits = null;
   let loadManagerCalendar = null;
   let loadManagerReports = null;
+  let machineryUnitsData = [];
 
   // Field issues are loaded from the manager API below.
   const issuesEl = document.querySelector("#manager-issues");
@@ -1921,7 +1922,12 @@ async function initManagerPage() {
     }
   };
 
-  btnTogglePos?.addEventListener("click", () => togglePosPanel());
+  btnTogglePos?.addEventListener("click", () => {
+    togglePosPanel();
+    if (typeof populatePosAvailableEquipment === "function") {
+      populatePosAvailableEquipment();
+    }
+  });
   btnClosePosPanel?.addEventListener("click", () => togglePosPanel(false));
 
   const posTabWalkin = document.querySelector("#pos-tab-walkin");
@@ -1951,77 +1957,251 @@ async function initManagerPage() {
     posTabWalkin.style.color = "var(--ink-soft)";
   });
 
-  // POS Walk-in calculation
+  // ================= 2. POINT OF SALE (POS) DYNAMIC FLEET & CALCULATIONS =================
   const posEquipSelect = document.querySelector("#pos-equipment-select");
-  const posDailyRateInput = document.querySelector("#pos-daily-rate");
-  const posDepositInput = document.querySelector("#pos-deposit");
+  const posRentalType = document.querySelector("#pos-rental-type");
+  const posGroupDayStart = document.querySelector("#pos-group-day-start");
+  const posGroupDayEnd = document.querySelector("#pos-group-day-end");
+  const posGroupHourDate = document.querySelector("#pos-group-hour-date");
+  const posGroupHourDuration = document.querySelector("#pos-group-hour-duration");
   const posStartDateInput = document.querySelector("#pos-start-date");
   const posEndDateInput = document.querySelector("#pos-end-date");
+  const posHourDateInput = document.querySelector("#pos-hour-date");
+  const posHoursCountInput = document.querySelector("#pos-hours-count");
+  const posRateLabel = document.querySelector("#pos-rate-label");
+  const posRateInput = document.querySelector("#pos-rate-input");
   const posSubtotalEl = document.querySelector("#pos-breakdown-subtotal");
-  const posDaysEl = document.querySelector("#pos-breakdown-days");
-  const posDepositEl = document.querySelector("#pos-breakdown-deposit");
+  const posDurationEl = document.querySelector("#pos-breakdown-duration");
   const posTotalEl = document.querySelector("#pos-breakdown-total");
 
-  // Set default dates
+  // Prevent past dates: lock date pickers minimum to today
   const todayIso = new Date().toISOString().split("T")[0];
   const in3DaysIso = new Date(Date.now() + 3 * 86400000).toISOString().split("T")[0];
-  if (posStartDateInput) posStartDateInput.value = todayIso;
-  if (posEndDateInput) posEndDateInput.value = in3DaysIso;
 
-  const updatePosWalkinTotal = () => {
-    const rate = Number(posDailyRateInput?.value) || 120;
-    const dep = Number(posDepositInput?.value) || 250;
-    const d1 = new Date(posStartDateInput?.value || todayIso);
-    const d2 = new Date(posEndDateInput?.value || in3DaysIso);
-    const diffDays = Math.max(1, Math.round((d2 - d1) / (1000 * 3600 * 24)));
-    const subtotal = rate * diffDays;
-    const total = subtotal + dep;
+  if (posStartDateInput) {
+    posStartDateInput.min = todayIso;
+    posStartDateInput.value = todayIso;
+  }
+  if (posEndDateInput) {
+    posEndDateInput.min = todayIso;
+    posEndDateInput.value = in3DaysIso;
+  }
+  if (posHourDateInput) {
+    posHourDateInput.min = todayIso;
+    posHourDateInput.value = todayIso;
+  }
 
-    if (posDaysEl) posDaysEl.textContent = diffDays;
-    if (posSubtotalEl) posSubtotalEl.textContent = `₱${subtotal.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    if (posDepositEl) posDepositEl.textContent = `₱${dep.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    if (posTotalEl) posTotalEl.textContent = `₱${total.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  // Populate equipment from Units fleet (status === 'Available')
+  let populatePosAvailableEquipment = async () => {
+    if (!posEquipSelect) return;
+    let units = machineryUnitsData;
+    if (!units || !units.length) {
+      try {
+        const { ok, data } = await api("/machinery-units");
+        if (ok && data) {
+          units = Array.isArray(data) ? data : (Array.isArray(data.data) ? data.data : []);
+          machineryUnitsData = units;
+        }
+      } catch (_) {}
+    }
+
+    const availableUnits = (units || []).filter((u) => u.status === "Available" && !u.isArchived);
+
+    if (!availableUnits.length) {
+      posEquipSelect.innerHTML = `<option value="">⚠️ No available machinery in units fleet</option>`;
+      if (posRateInput) posRateInput.value = "0";
+      updatePosWalkinTotal();
+      return;
+    }
+
+    const currentVal = posEquipSelect.value;
+    posEquipSelect.innerHTML = availableUnits.map((u) => {
+      const rateDay = Number(u.ratePerDay) || 1200;
+      const rateHour = Number(u.ratePerHour) || Math.round(rateDay / 8) || 150;
+      const label = `${u.unitId} - ${u.name} (${u.category || "Machinery"})`;
+      const isSelected = u.name === currentVal ? "selected" : "";
+      return `<option value="${escapeHtml(u.name)}" data-unit-id="${escapeHtml(u.unitId)}" data-rate-day="${rateDay}" data-rate-hour="${rateHour}" ${isSelected}>${escapeHtml(label)}</option>`;
+    }).join("");
+
+    updateRateFromSelectedUnit();
+    updatePosWalkinTotal();
   };
 
-  posEquipSelect?.addEventListener("change", () => {
+  const updateRateFromSelectedUnit = () => {
+    if (!posEquipSelect || !posRateInput) return;
     const selectedOpt = posEquipSelect.options[posEquipSelect.selectedIndex];
-    if (selectedOpt && selectedOpt.dataset.rate && posDailyRateInput) {
-      posDailyRateInput.value = selectedOpt.dataset.rate;
+    if (!selectedOpt) return;
+    const isHourly = posRentalType?.value === "hour";
+    if (isHourly) {
+      const rateHour = Number(selectedOpt.dataset.rateHour) || 150;
+      posRateInput.value = rateHour;
+    } else {
+      const rateDay = Number(selectedOpt.dataset.rateDay) || 1200;
+      posRateInput.value = rateDay;
+    }
+  };
+
+  const updatePosWalkinTotal = () => {
+    const isHourly = posRentalType?.value === "hour";
+    const rate = Number(posRateInput?.value) || 0;
+
+    let subtotal = 0;
+    let durationText = "1 day";
+
+    if (isHourly) {
+      const hours = Math.max(1, Number(posHoursCountInput?.value) || 1);
+      subtotal = rate * hours;
+      durationText = `${hours} hr${hours === 1 ? "" : "s"}`;
+    } else {
+      const d1 = new Date(posStartDateInput?.value || todayIso);
+      const d2 = new Date(posEndDateInput?.value || todayIso);
+      const diffDays = Math.max(1, Math.round((d2 - d1) / (1000 * 3600 * 24)));
+      subtotal = rate * diffDays;
+      durationText = `${diffDays} day${diffDays === 1 ? "" : "s"}`;
+    }
+
+    if (posDurationEl) posDurationEl.textContent = durationText;
+    if (posSubtotalEl) posSubtotalEl.textContent = `₱${subtotal.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    if (posTotalEl) posTotalEl.textContent = `₱${subtotal.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  // Toggle Duration Type: Per Day vs Per Hour
+  posRentalType?.addEventListener("change", () => {
+    const isHourly = posRentalType.value === "hour";
+    if (posGroupDayStart) posGroupDayStart.style.display = isHourly ? "none" : "block";
+    if (posGroupDayEnd) posGroupDayEnd.style.display = isHourly ? "none" : "block";
+    if (posGroupHourDate) posGroupHourDate.style.display = isHourly ? "block" : "none";
+    if (posGroupHourDuration) posGroupHourDuration.style.display = isHourly ? "block" : "none";
+
+    if (posStartDateInput) posStartDateInput.required = !isHourly;
+    if (posEndDateInput) posEndDateInput.required = !isHourly;
+    if (posHourDateInput) posHourDateInput.required = isHourly;
+
+    if (posRateLabel) {
+      posRateLabel.textContent = isHourly ? "Hourly Rate (₱ / Hour)" : "Daily Rate (₱ / Day)";
+    }
+
+    updateRateFromSelectedUnit();
+    updatePosWalkinTotal();
+  });
+
+  posEquipSelect?.addEventListener("change", () => {
+    updateRateFromSelectedUnit();
+    updatePosWalkinTotal();
+  });
+
+  posRateInput?.addEventListener("input", updatePosWalkinTotal);
+  posHoursCountInput?.addEventListener("input", updatePosWalkinTotal);
+
+  // Date validation: enforce cannot rent past / done dates
+  posStartDateInput?.addEventListener("change", () => {
+    if (posStartDateInput.value < todayIso) {
+      alert("Cannot rent for a past date. Start date reset to today.");
+      posStartDateInput.value = todayIso;
+    }
+    if (posEndDateInput) {
+      posEndDateInput.min = posStartDateInput.value;
+      if (posEndDateInput.value < posStartDateInput.value) {
+        posEndDateInput.value = posStartDateInput.value;
+      }
     }
     updatePosWalkinTotal();
   });
-  posDailyRateInput?.addEventListener("input", updatePosWalkinTotal);
-  posDepositInput?.addEventListener("input", updatePosWalkinTotal);
-  posStartDateInput?.addEventListener("change", updatePosWalkinTotal);
-  posEndDateInput?.addEventListener("change", updatePosWalkinTotal);
-  updatePosWalkinTotal();
+
+  posEndDateInput?.addEventListener("change", () => {
+    if (posStartDateInput && posEndDateInput.value < posStartDateInput.value) {
+      alert("Rental end date cannot be earlier than start date.");
+      posEndDateInput.value = posStartDateInput.value;
+    }
+    updatePosWalkinTotal();
+  });
+
+  posHourDateInput?.addEventListener("change", () => {
+    if (posHourDateInput.value < todayIso) {
+      alert("Cannot rent for a past date. Date reset to today.");
+      posHourDateInput.value = todayIso;
+    }
+    updatePosWalkinTotal();
+  });
+
+  // Call populate on init
+  populatePosAvailableEquipment();
 
   document.querySelector("#pos-walkin-form")?.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const farmerName = document.querySelector("#pos-farmer-name")?.value;
-    const farmerPhone = document.querySelector("#pos-farmer-phone")?.value;
-    const coopId = document.querySelector("#pos-coop-id")?.value;
+    const farmerName = document.querySelector("#pos-farmer-name")?.value?.trim();
+    const farmerPhone = document.querySelector("#pos-farmer-phone")?.value?.trim();
+    const coopId = document.querySelector("#pos-coop-id")?.value?.trim() || "WALK-IN";
+    const selectedOpt = posEquipSelect?.options[posEquipSelect.selectedIndex];
     const equipment = posEquipSelect?.value;
-    const startDate = posStartDateInput?.value;
-    const endDate = posEndDateInput?.value;
-    const dailyRate = Number(posDailyRateInput?.value) || 120;
-    const deposit = Number(posDepositInput?.value) || 250;
-    const paymentMethod = document.querySelector("#pos-payment-method")?.value || "Cash";
+    const machineryUnitId = selectedOpt?.dataset.unitId || "";
+
+    if (!equipment) {
+      alert("Please select an available machinery unit from the fleet.");
+      return;
+    }
+
+    const rentalType = posRentalType?.value || "day";
+    const isHourly = rentalType === "hour";
+    const startDate = isHourly ? posHourDateInput?.value : posStartDateInput?.value;
+    const endDate = isHourly ? posHourDateInput?.value : posEndDateInput?.value;
+
+    if (!startDate || !endDate) {
+      alert("Please select valid rental dates.");
+      return;
+    }
+
+    if (startDate < todayIso) {
+      alert("Cannot book for a past date. The date has already passed.");
+      return;
+    }
+
+    if (endDate < startDate) {
+      alert("Rental end date cannot be earlier than start date.");
+      return;
+    }
+
+    const rate = Number(posRateInput?.value) || 0;
     const d1 = new Date(startDate);
     const d2 = new Date(endDate);
-    const rentalDays = Math.max(1, Math.round((d2 - d1) / (1000 * 3600 * 24)));
+    const rentalDays = isHourly ? 1 : Math.max(1, Math.round((d2 - d1) / (1000 * 3600 * 24)));
+    const rentalHours = isHourly ? Math.max(1, Number(posHoursCountInput?.value) || 1) : 0;
+    const paymentMethod = document.querySelector("#pos-payment-method")?.value || "Cash";
 
     const res = await api("/manager/pos-booking", {
       method: "POST",
-      body: { farmerName, farmerPhone, coopId, equipment, startDate, endDate, dailyRate, deposit, rentalDays, paymentMethod, managerEmail: getSignedInEmail() }
+      body: {
+        farmerName,
+        farmerPhone,
+        coopId,
+        equipment,
+        machineryUnitId,
+        rentalType,
+        startDate,
+        endDate,
+        rate,
+        dailyRate: rate,
+        deposit: 0,
+        rentalDays,
+        rentalHours,
+        paymentMethod,
+        managerEmail: getSignedInEmail()
+      }
     });
 
     if (res.ok) {
-      alert(`Walk-in booking created for ${farmerName}. Collected: ₱${res.data.totalCollected}. Receipt: ${res.data.txId}`);
-      document.querySelector("#pos-walkin-form")?.reset();
+      alert(`Walk-in booking confirmed for ${farmerName}.\nMachinery: ${equipment} (${machineryUnitId})\nDuration: ${isHourly ? `${rentalHours} hr(s)` : `${rentalDays} day(s)`}\nTotal Collected: ₱${Number(res.data.totalCollected).toLocaleString("en-PH", { minimumFractionDigits: 2 })}\nDeposit: ₱0.00 (Zero Deposit)\nReceipt: ${res.data.txId}`);
+      document.querySelector("#pos-farmer-name").value = "";
+      document.querySelector("#pos-farmer-phone").value = "";
+      document.querySelector("#pos-coop-id").value = "";
+      if (posStartDateInput) posStartDateInput.value = todayIso;
+      if (posEndDateInput) posEndDateInput.value = in3DaysIso;
+      if (posHourDateInput) posHourDateInput.value = todayIso;
+      updateRateFromSelectedUnit();
       updatePosWalkinTotal();
       renderBookings();
       loadLedgerAndUtilization();
+      if (typeof loadMachineryUnits === "function") loadMachineryUnits();
     } else {
       alert(res.data.error || "Failed to process walk-in booking.");
     }
@@ -2097,7 +2277,7 @@ async function initManagerPage() {
   });
 
   // ================= 3. FARM MACHINERY & UNITS FLEET MANAGEMENT =================
-  let machineryUnitsData = [];
+  machineryUnitsData = [];
   let currentMachineryStatusFilter = "All";
   let currentMachineryCategoryFilter = "All";
   let currentMachinerySearch = "";
@@ -2619,6 +2799,9 @@ async function initManagerPage() {
     machineryUnitsData = list;
     updateMachineryStats();
     applyMachineryFilters();
+    if (typeof populatePosAvailableEquipment === "function") {
+      populatePosAvailableEquipment();
+    }
   };
 
   // Initial load of machinery units

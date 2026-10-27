@@ -2261,16 +2261,28 @@ router.post("/manager/pos-booking", async (req, res) => {
   const farmerPhone = clean(req.body.farmerPhone);
   const coopId = clean(req.body.coopId) || "WALK-IN";
   const equipment = clean(req.body.equipment);
+  const machineryUnitId = clean(req.body.machineryUnitId) || "";
   const startDate = clean(req.body.startDate);
   const endDate = clean(req.body.endDate);
-  const dailyRate = Number(req.body.dailyRate) || 120;
-  const deposit = Number(req.body.deposit) || 250;
+  const rentalType = clean(req.body.rentalType) || "day";
+  const rate = Number(req.body.rate) || Number(req.body.dailyRate) || 120;
   const rentalDays = Math.max(Number(req.body.rentalDays) || 1, 1);
+  const rentalHours = Math.max(Number(req.body.rentalHours) || 1, 1);
+  const deposit = 0; // No security deposit for POS walk-in rentals
   const paymentMethod = clean(req.body.paymentMethod) || "Cash";
   const managerEmail = req.user.email;
 
   if (!farmerName || !equipment || !startDate || !endDate) {
     return fail(res, 400, "Farmer name, machinery, and valid dates are required.");
+  }
+
+  // Date validation: cannot rent if date is in the past ("done")
+  const today = new Date().toISOString().slice(0, 10);
+  if (startDate < today) {
+    return fail(res, 400, "Cannot book for a past date. The date has already passed.");
+  }
+  if (endDate < startDate) {
+    return fail(res, 400, "Rental end date cannot be earlier than start date.");
   }
 
   // Overlap verification with Out of Service records
@@ -2285,25 +2297,42 @@ router.post("/manager/pos-booking", async (req, res) => {
     return fail(res, 409, `Equipment "${equipment}" is Out of Service (${maintenanceConflict.startDate} to ${maintenanceConflict.endDate}). Cannot book for these dates.`);
   }
 
-  const rentalFee = dailyRate * rentalDays;
-  const totalPaid = rentalFee + deposit;
+  // Overlap verification with existing bookings for this unit
+  const bookingConflict = await Application.findOne({
+    equipment: { $regex: new RegExp(equipment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") },
+    status: { $in: ["Approved", "Checked-Out"] },
+    startDate: { $lte: endDate },
+    endDate: { $gte: startDate }
+  });
+
+  if (bookingConflict) {
+    return fail(res, 409, `Equipment "${equipment}" is already booked from ${bookingConflict.startDate} to ${bookingConflict.endDate}.`);
+  }
+
+  const rentalFee = rentalType === "hour" ? (rate * rentalHours) : (rate * rentalDays);
+  const totalPaid = rentalFee; // Zero deposit
+
+  const durationLabel = rentalType === "hour"
+    ? `${rentalHours} hr${rentalHours === 1 ? "" : "s"} @ ₱${rate}/hr`
+    : `${rentalDays} day${rentalDays === 1 ? "" : "s"} @ ₱${rate}/day`;
 
   // Create walk-in application
   const app = await Application.create({
     memberEmail: `walkin.${Date.now()}@coop.local`,
     memberName: `${farmerName} (${coopId})`,
     equipment,
+    machineryUnitId,
     startDate,
     endDate,
     status: "Approved",
     isWalkIn: true,
     farmerPhone,
     financials: {
-      dailyRate,
-      deposit,
+      dailyRate: rate,
+      deposit: 0,
       totalPaid,
       paymentMethod,
-      isSettled: false
+      isSettled: true
     }
   });
 
@@ -2317,7 +2346,7 @@ router.post("/manager/pos-booking", async (req, res) => {
     type: "Rental Fee",
     amount: totalPaid,
     paymentMethod,
-    notes: `Walk-in Rental (₱${rentalFee}) + Security Deposit (₱${deposit})`
+    notes: `Walk-in Rental (${durationLabel}) - Zero Security Deposit`
   });
 
   await logAudit({
@@ -2328,8 +2357,11 @@ router.post("/manager/pos-booking", async (req, res) => {
     details: {
       farmerName,
       equipment,
+      machineryUnitId,
+      rentalType,
+      durationLabel,
       totalCashCollected: totalPaid,
-      deposit,
+      deposit: 0,
       contractId: app.displayId
     },
     req

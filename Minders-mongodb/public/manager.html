@@ -815,31 +815,45 @@
                 </div>
 
                 <div>
-                  <label for="pos-equipment-select" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Equipment Unit *</label>
-                  <select id="pos-equipment-select" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
-                    <option value="John Deere 5075E" data-rate="120">John Deere 5075E Tractor (₱120/day)</option>
-                    <option value="Kuhn Disc Mower" data-rate="85">Kuhn Disc Mower (₱85/day)</option>
-                    <option value="New Holland Baler" data-rate="150">New Holland Baler (₱150/day)</option>
-                    <option value="Case IH Tractor" data-rate="135">Case IH Tractor (₱135/day)</option>
+                  <label for="pos-equipment-select" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Available Equipment Unit (from Units Fleet) *</label>
+                  <select id="pos-equipment-select" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
+                    <option value="">Loading available units...</option>
                   </select>
                 </div>
+
                 <div>
+                  <label for="pos-rental-type" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Rental Rate Type *</label>
+                  <select id="pos-rental-type" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; font-weight: 600;">
+                    <option value="day" selected>📅 Per Day (Daily)</option>
+                    <option value="hour">⏱️ Per Hour (Hourly)</option>
+                  </select>
+                </div>
+
+                <!-- Per Day Inputs Group -->
+                <div id="pos-group-day-start">
                   <label for="pos-start-date" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Rental Start Date *</label>
                   <input id="pos-start-date" type="date" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
                 </div>
-                <div>
+                <div id="pos-group-day-end">
                   <label for="pos-end-date" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Rental End Date *</label>
                   <input id="pos-end-date" type="date" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
                 </div>
 
-                <div>
-                  <label for="pos-daily-rate" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Daily Rate (₱)</label>
-                  <input id="pos-daily-rate" type="number" value="120" min="10" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+                <!-- Per Hour Inputs Group (hidden by default) -->
+                <div id="pos-group-hour-date" style="display: none;">
+                  <label for="pos-hour-date" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Rental Date *</label>
+                  <input id="pos-hour-date" type="date" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
                 </div>
-                <div>
-                  <label for="pos-deposit" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Security Deposit (₱)</label>
-                  <input id="pos-deposit" type="number" value="250" min="0" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+                <div id="pos-group-hour-duration" style="display: none;">
+                  <label for="pos-hours-count" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Duration (Hours) *</label>
+                  <input id="pos-hours-count" type="number" value="4" min="1" max="24" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
                 </div>
+
+                <div>
+                  <label id="pos-rate-label" for="pos-rate-input" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Daily Rate (₱ / Day)</label>
+                  <input id="pos-rate-input" type="number" value="120" min="1" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+                </div>
+
                 <div>
                   <label for="pos-payment-method" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Payment Method</label>
                   <select id="pos-payment-method" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
@@ -849,15 +863,15 @@
                   </select>
                 </div>
 
-                <!-- Live Total Breakdown Card -->
-                <div style="grid-column: 1 / -1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: gap; gap: 14px;">
+                <!-- Live Total Breakdown Card (Zero Security Deposit) -->
+                <div style="grid-column: 1 / -1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
                   <div style="font-size: 0.82rem; color: #475569;">
-                    <div>Calculated Rental: <strong id="pos-breakdown-subtotal">₱360.00</strong> (<span id="pos-breakdown-days">3</span> days)</div>
-                    <div>Refundable Security Deposit: <strong id="pos-breakdown-deposit">₱250.00</strong></div>
+                    <div id="pos-breakdown-details">Calculated Rental: <strong id="pos-breakdown-subtotal">₱0.00</strong> (<span id="pos-breakdown-duration">1 day</span>)</div>
+                    <div style="color: #059669; font-weight: 700; font-size: 0.75rem; margin-top: 3px;">✓ Zero Security Deposit Required</div>
                   </div>
                   <div style="text-align: right;">
                     <span style="font-size: 0.72rem; text-transform: uppercase; font-weight: 700; color: #64748b;">Total Upfront Cash to Collect</span>
-                    <div style="font-size: 1.5rem; font-weight: 900; color: #d97706;" id="pos-breakdown-total">₱610.00</div>
+                    <div style="font-size: 1.5rem; font-weight: 900; color: #d97706;" id="pos-breakdown-total">₱0.00</div>
                   </div>
                 </div>
 
