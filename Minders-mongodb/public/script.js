@@ -1447,7 +1447,11 @@ async function initManagerPage() {
       if (displayed < maxChips) {
         const equipName = b.equipment || "Equipment";
         const farmer = b.memberName ? ` (${b.memberName})` : "";
-        chipsHtml += `<div class="cal-chip cal-chip-rental" title="${escapeHtml(equipName + farmer)}">🚜 ${escapeHtml(equipName)}</div>`;
+        const endIso = formatIsoDate(b.endDate) || formatIsoDate(b.startDate);
+        const isFinished = endIso < todayStr || b.status === "Returned" || b.status === "Completed";
+        const chipClass = isFinished ? "cal-chip cal-chip-finished" : "cal-chip cal-chip-rental";
+        const label = isFinished ? `${escapeHtml(equipName)} (Finished)` : escapeHtml(equipName);
+        chipsHtml += `<div class="${chipClass}" title="${escapeHtml(equipName + farmer + (isFinished ? ' - Finished' : ''))}">${label}</div>`;
         displayed++;
       }
     });
@@ -1455,7 +1459,7 @@ async function initManagerPage() {
     dayMaintenance.forEach((m) => {
       if (displayed < maxChips) {
         const name = m.equipmentName || m.equipmentUnitId || "Maintenance";
-        chipsHtml += `<div class="cal-chip cal-chip-maintenance" title="${escapeHtml(name + ' - ' + (m.maintenanceType || 'Service'))}">🔧 ${escapeHtml(name)}</div>`;
+        chipsHtml += `<div class="cal-chip cal-chip-maintenance" title="${escapeHtml(name + ' - ' + (m.maintenanceType || 'Service'))}">${escapeHtml(name)}</div>`;
         displayed++;
       }
     });
@@ -1512,20 +1516,36 @@ async function initManagerPage() {
     filteredBookings.forEach((b) => {
       const dates = formatApplicationDates(b.startDate, b.endDate);
       const isGoogleSynced = Boolean(b.googleCalendarEventId);
+      const endIso = formatIsoDate(b.endDate) || formatIsoDate(b.startDate);
+      const isFinished = endIso < todayStr || b.status === "Returned" || b.status === "Completed";
+      const borderColor = isFinished ? "#94a3b8" : "#10b981";
+      const statusBadge = isFinished
+        ? '<span class="status-badge" style="background:#f1f5f9; color:#64748b; border:1px solid #cbd5e1; font-size:0.68rem; padding:2px 7px;">Finished</span>'
+        : `<span class="status-badge ${b.status === "Approved" ? "status-approved" : "status-active"}" style="font-size:0.68rem; padding:2px 7px;">${escapeHtml(b.status || "Approved")}</span>`;
+
+      const appId = b.applicationId || b._id || b.id;
+      const canVoid = !isFinished && (b.status === "Approved" || b.status === "Pending" || b.status === "Checked-Out");
+      const voidButton = canVoid ? `
+        <button type="button" class="action-button" style="background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; font-size:0.72rem; padding:3px 9px; border-radius:4px; font-weight:700; cursor:pointer;" data-void-booking="${escapeHtml(appId)}" data-booking-name="${escapeHtml(b.memberName || 'Farmer')}" data-booking-equip="${escapeHtml(b.equipment || 'Machinery')}">
+          Void Booking
+        </button>
+      ` : "";
+
       itemsHtml += `
-        <div class="cal-detail-item" style="border-left-color: #10b981;">
+        <div class="cal-detail-item" style="border-left-color: ${borderColor}; ${isFinished ? 'background:#f8fafc;' : ''}">
           <div style="flex:1;">
-            <div style="display:flex; align-items:center; gap:8px;">
-              <span style="font-size:0.78rem; font-weight:800; color:#0f172a;">🚜 ${escapeHtml(b.equipment || "Farm Machinery")}</span>
-              <span class="status-badge ${b.status === "Approved" ? "status-approved" : "status-active"}" style="font-size:0.68rem; padding:2px 7px;">${escapeHtml(b.status || "Approved")}</span>
-              ${isGoogleSynced ? '<span style="font-size:0.68rem; color:#0d766e; font-weight:700;">✓ Synced to Google</span>' : ''}
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span style="font-size:0.78rem; font-weight:800; color:${isFinished ? '#64748b' : '#0f172a'};">${escapeHtml(b.equipment || "Farm Machinery")}</span>
+              ${statusBadge}
+              ${isGoogleSynced ? '<span style="font-size:0.68rem; color:#0d766e; font-weight:700;">Synced to Google</span>' : ''}
             </div>
             <div style="font-size:0.75rem; color:#475569; margin-top:3px;">
               Member: <strong>${escapeHtml(b.memberName || "Member")}</strong> (${escapeHtml(b.memberEmail || "")}) &bull; Dates: <strong>${dates}</strong>
             </div>
           </div>
-          <div style="font-size:0.72rem; color:#64748b; text-align:right;">
-            Booking ID: <strong class="font-mono text-slate-800">${escapeHtml(b.displayId || String(b._id || b.id).slice(-6).toUpperCase())}</strong>
+          <div style="font-size:0.72rem; color:#64748b; text-align:right; display:flex; flex-direction:column; align-items:flex-end; gap:5px;">
+            <div>Booking ID: <strong class="font-mono text-slate-800">${escapeHtml(b.displayId || String(appId).slice(-6).toUpperCase())}</strong></div>
+            ${voidButton}
           </div>
         </div>
       `;
@@ -1537,9 +1557,9 @@ async function initManagerPage() {
         <div class="cal-detail-item" style="border-left-color: #ef4444;">
           <div style="flex:1;">
             <div style="display:flex; align-items:center; gap:8px;">
-              <span style="font-size:0.78rem; font-weight:800; color:#b91c1c;">🔧 ${escapeHtml(m.equipmentName || "Machinery Unit")}</span>
+              <span style="font-size:0.78rem; font-weight:800; color:#b91c1c;">${escapeHtml(m.equipmentName || "Machinery Unit")}</span>
               <span class="status-badge status-rejected" style="font-size:0.68rem; padding:2px 7px;">${escapeHtml(m.maintenanceType || "Maintenance")}</span>
-              ${isGoogleSynced ? '<span style="font-size:0.68rem; color:#0d766e; font-weight:700;">✓ Synced to Google</span>' : ''}
+              ${isGoogleSynced ? '<span style="font-size:0.68rem; color:#0d766e; font-weight:700;">Synced to Google</span>' : ''}
             </div>
             <div style="font-size:0.75rem; color:#475569; margin-top:3px;">
               Unit: <strong>${escapeHtml(m.equipmentUnitId)}</strong> &bull; Period: <strong>${m.startDate} &rarr; ${m.endDate}</strong> &bull; Reason: ${escapeHtml(m.reason || "Scheduled inspection")}
@@ -1841,23 +1861,26 @@ async function initManagerPage() {
         actionButtons = `
           <button class="action-button approve-button" data-booking-action="Approved" data-booking-id="${escapeHtml(booking.id)}" data-application-id="${escapeHtml(booking.applicationId || "")}">Approve</button>
           <button class="action-button reject-button" data-booking-action="Rejected" data-booking-id="${escapeHtml(booking.id)}" data-application-id="${escapeHtml(booking.applicationId || "")}">Reject</button>
+          <button class="action-button" style="background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; font-weight:600; padding:6px 10px; border-radius:6px; cursor:pointer;" data-void-booking="${escapeHtml(booking.applicationId || "")}" data-booking-name="${escapeHtml(booking.member)}" data-booking-equip="${escapeHtml(booking.equipment)}">Void</button>
         `;
       } else if (isApproved && booking.applicationId) {
         actionButtons = `
           <button class="action-button" style="background:#fef3c7; color:#92400e; border:1px solid #fde68a; font-weight:700;" data-open-inspect="checkout" data-app-id="${escapeHtml(booking.applicationId)}" data-equip="${escapeHtml(booking.equipment)}" data-farmer="${escapeHtml(booking.member)}">
-            📷 Handover Check-Out
+            Handover Check-Out
           </button>
+          <button class="action-button" style="background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; font-weight:600; padding:6px 10px; border-radius:6px; cursor:pointer; margin-left:4px;" data-void-booking="${escapeHtml(booking.applicationId)}" data-booking-name="${escapeHtml(booking.member)}" data-booking-equip="${escapeHtml(booking.equipment)}">Void</button>
         `;
       } else if (isCheckedOut && booking.applicationId) {
         actionButtons = `
           <button class="action-button" style="background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; font-weight:700;" data-open-inspect="checkin" data-app-id="${escapeHtml(booking.applicationId)}" data-equip="${escapeHtml(booking.equipment)}" data-farmer="${escapeHtml(booking.member)}">
-            📋 Return &amp; Close
+            Return &amp; Close
           </button>
+          <button class="action-button" style="background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; font-weight:600; padding:6px 10px; border-radius:6px; cursor:pointer; margin-left:4px;" data-void-booking="${escapeHtml(booking.applicationId)}" data-booking-name="${escapeHtml(booking.member)}" data-booking-equip="${escapeHtml(booking.equipment)}">Void</button>
         `;
       } else if (isReturned) {
         actionButtons = `<span style="font-size:0.75rem; color:#64748b; font-style:italic;">Contract Closed</span>`;
       } else if (booking.status === "Cancelled") {
-        actionButtons = `<span style="font-size:0.75rem; color:#64748b; font-style:italic;">Cancelled by member</span>`;
+        actionButtons = `<span style="font-size:0.75rem; color:#b91c1c; font-style:italic; font-weight:600;">Voided / Cancelled</span>`;
       } else {
         actionButtons = `<span style="font-size:0.75rem; color:#94a3b8;">${escapeHtml(booking.status)}</span>`;
       }
@@ -1899,6 +1922,44 @@ async function initManagerPage() {
       openInspectionModal(btn.dataset.appId, btn.dataset.equip, btn.dataset.farmer, btn.dataset.openInspect);
     }));
   };
+
+  // Void Booking Click Handler (Delegated for table and calendar)
+  document.addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-void-booking]");
+    if (!btn) return;
+    const appId = btn.dataset.voidBooking;
+    const farmer = btn.dataset.bookingName || "the farmer";
+    const equip = btn.dataset.bookingEquip || "this equipment";
+    if (!appId) return;
+
+    const confirmVoid = confirm(`Are you sure you want to VOID the booking for ${farmer} (${equip})?\n\nThis will cancel the booking immediately, release the machinery unit back to the available fleet, and update all schedules.`);
+    if (!confirmVoid) return;
+
+    try {
+      const res = await api(`/applications/${encodeURIComponent(appId)}`, {
+        method: "PATCH",
+        body: {
+          status: "Cancelled",
+          isVoid: true,
+          voidedByManager: true,
+          actorRole: "manager",
+          actorEmail: getSignedInEmail() || "manager@minders.test"
+        }
+      });
+
+      if (res.ok) {
+        alert(`Booking for ${farmer} (${equip}) has been successfully VOIDED.`);
+        renderBookings();
+        if (typeof loadManagerCalendar === "function") loadManagerCalendar();
+        if (typeof refreshActiveFleetAvailability === "function") refreshActiveFleetAvailability();
+        if (typeof populatePosCategories === "function") populatePosCategories();
+      } else {
+        alert(res.data?.error || "Failed to void booking.");
+      }
+    } catch (err) {
+      alert("Error voiding booking: " + err.message);
+    }
+  });
 
   renderBookings();
   window.setInterval(renderBookings, 15000);

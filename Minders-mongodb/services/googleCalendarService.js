@@ -591,6 +591,34 @@ async function disconnectManagerCalendar(managerId) {
   return { success: true };
 }
 
+/**
+ * Deletes a synced booking event from Google Calendar if present.
+ * @param {object} booking
+ * @param {object} [preferredManager]
+ */
+async function deleteBookingFromGoogleCalendar(booking, preferredManager) {
+  try {
+    const eventId = booking?.googleCalendarEventId;
+    if (!eventId) return;
+
+    const manager = await getConnectedManager(preferredManager);
+    if (!manager) return;
+
+    const calendar = getCalendarClient(manager);
+    const calendarId = manager.googleOAuth?.calendarId || manager.calendarId || "primary";
+
+    await calendar.events.delete({
+      calendarId,
+      eventId
+    });
+    console.log(`[GoogleCalendar] Deleted event ${eventId} for voided booking`);
+  } catch (err) {
+    if (err.code !== 404 && err.code !== 410) {
+      console.warn("[GoogleCalendar] Note deleting event:", err.message);
+    }
+  }
+}
+
 module.exports = {
   createOAuth2Client,
   generateAuthUrl,
@@ -600,6 +628,7 @@ module.exports = {
   watchManagerCalendar,
   syncBookingToGoogleCalendar,
   syncMaintenanceToGoogleCalendar,
+  deleteBookingFromGoogleCalendar,
   handleCalendarWebhook,
   getManagerSyncStatus,
   disconnectManagerCalendar,

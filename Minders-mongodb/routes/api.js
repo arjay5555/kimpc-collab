@@ -16,7 +16,8 @@ const authManager = require("../middleware/authManager");
 const { getMachineryUtilization } = require("../controllers/managerAnalyticsController");
 const {
   syncBookingToGoogleCalendar,
-  syncMaintenanceToGoogleCalendar
+  syncMaintenanceToGoogleCalendar,
+  deleteBookingFromGoogleCalendar
 } = require("../services/googleCalendarService");
 
 const router = express.Router();
@@ -1703,8 +1704,10 @@ router.patch("/applications/:id", async (req, res) => {
   const newStatus = clean(req.body.status);
   if (!newStatus || !STATUSES.includes(newStatus)) return fail(res, 400, "Invalid status.");
 
-  // Cancellation prior to manager approval check
-  if (newStatus === "Cancelled" && existing.status !== "Pending") {
+  const isManagerOrAdmin = ["manager", "admin"].includes(actorRole) || Boolean(req.body.isVoid || req.body.voidedByManager);
+
+  // Cancellation prior to manager approval check (members can only cancel pending requests; managers/admins can void anytime)
+  if (newStatus === "Cancelled" && !isManagerOrAdmin && existing.status !== "Pending") {
     return fail(res, 400, `Only pending booking requests can be cancelled prior to manager approval (current status: ${existing.status}).`);
   }
 
@@ -1737,14 +1740,20 @@ router.patch("/applications/:id", async (req, res) => {
     syncBookingToGoogleCalendar(existing, req.user).catch((err) => {
       console.warn("[GoogleCalendar] Background booking approval sync note:", err.message);
     });
+  } else if (newStatus === "Cancelled" || newStatus === "Rejected") {
+    // Delete event from Google Calendar if voided or rejected
+    deleteBookingFromGoogleCalendar(existing, req.user).catch((err) => {
+      console.warn("[GoogleCalendar] Background booking deletion note:", err.message);
+    });
   }
 
   // Use specific action constants for each status transition
+  const isVoid = isManagerOrAdmin && newStatus === "Cancelled" && previousStatus !== "Pending";
   const actionMap = {
     Approved: "BOOKING_APPROVED",
     Rejected: "BOOKING_REJECTED",
     Pending: "BOOKING_STATUS_UPDATED",
-    Cancelled: "BOOKING_CANCELLED"
+    Cancelled: isVoid ? "BOOKING_VOIDED" : "BOOKING_CANCELLED"
   };
   const action = actionMap[newStatus] || "BOOKING_STATUS_UPDATED";
 
