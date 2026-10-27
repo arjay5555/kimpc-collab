@@ -769,139 +769,170 @@
             </div>
             <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
               <span class="table-note" style="font-size: 0.78rem; font-weight: 700; color: #64746f; background: #f1f5f9; padding: 6px 12px; border-radius: 6px;">0 requests in queue</span>
-              <button type="button" id="btn-toggle-pos" class="button button-primary" style="display: inline-flex; align-items: center; gap: 7px; background: #d97706; color: #fff; padding: 7px 15px; font-size: 0.8rem; font-weight: 700; border-radius: 6px; border: none; cursor: pointer; box-shadow: 0 1px 3px rgba(217,119,6,0.25);">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-                <span id="btn-toggle-pos-text">+ Point of Sale (POS)</span>
+              <button type="button" id="btn-toggle-pos" class="button button-primary" style="display: inline-flex; align-items: center; gap: 7px; background: #0f172a; color: #fff; padding: 7px 15px; font-size: 0.8rem; font-weight: 700; border-radius: 6px; border: none; cursor: pointer; box-shadow: 0 1px 3px rgba(15,23,42,0.15);">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                <span id="btn-toggle-pos-text">Point of Sale (POS)</span>
               </button>
             </div>
           </div>
 
           <!-- ================= INTEGRATED POINT OF SALE (POS) & DEPOSIT SETTLEMENT ================= -->
-          <div id="pos-terminal-container" style="display: none; margin-bottom: 24px; padding: 22px; border-radius: 10px; background: #fffcf8; border: 1px solid #fed7aa; box-shadow: 0 2px 6px rgba(217,119,6,0.06);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid #fed7aa;">
+          <div id="pos-terminal-container" style="display: none; margin-bottom: 24px; padding: 24px; border-radius: 10px; background: #ffffff; border: 1px solid #e2e8f0; box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid #e2e8f0;">
               <div>
-                <h3 style="font-size: 1.15rem; font-weight: 800; margin: 0; color: #9a3412;">Point of Sale (POS) &amp; Deposit Settlement</h3>
-                <p style="font-size: 0.78rem; color: #78350f; margin: 2px 0 0;">Bypass the online booking flow for walk-in farmers and calculate post-rental deposit deductions.</p>
+                <h3 style="font-size: 1.15rem; font-weight: 700; margin: 0; color: #0f172a;">Walk-in Booking (Point of Sale)</h3>
+                <p style="font-size: 0.8rem; color: #64748b; margin: 3px 0 0;">Create direct equipment rental bookings for walk-in farmers and finalize post-rental deposit settlements.</p>
               </div>
-              <button type="button" id="btn-close-pos-panel" style="background: transparent; border: 1px solid #f97316; color: #9a3412; font-weight: 700; font-size: 0.78rem; padding: 5px 12px; border-radius: 6px; cursor: pointer;">
-                ✕ Close POS
+              <button type="button" id="btn-close-pos-panel" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #334155; font-weight: 600; font-size: 0.78rem; padding: 6px 14px; border-radius: 6px; cursor: pointer;">
+                Close POS
               </button>
             </div>
 
             <!-- POS Mode Selector Tabs -->
-            <div style="display: flex; gap: 8px; margin-bottom: 18px; border-bottom: 1px solid #fed7aa; padding-bottom: 10px;">
-              <button type="button" id="pos-tab-walkin" style="padding: 7px 15px; border-radius: 6px; font-weight: 700; font-size: 0.8rem; cursor: pointer; border: 1px solid #d97706; background: #fffbeb; color: #92400e;">
-                👤 Walk-in Farmer Booking
+            <div style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px;">
+              <button type="button" id="pos-tab-walkin" style="padding: 8px 18px; border-radius: 6px; font-weight: 700; font-size: 0.82rem; cursor: pointer; border: 1px solid #0f172a; background: #0f172a; color: #ffffff;">
+                Walk-in Booking
               </button>
-              <button type="button" id="pos-tab-settlement" style="padding: 7px 15px; border-radius: 6px; font-weight: 700; font-size: 0.8rem; cursor: pointer; border: 1px solid #cbd5e1; background: transparent; color: var(--ink-soft);">
-                💰 Return Deposit Settlement &amp; Deductions
+              <button type="button" id="pos-tab-settlement" style="padding: 8px 18px; border-radius: 6px; font-weight: 600; font-size: 0.82rem; cursor: pointer; border: 1px solid #cbd5e1; background: #ffffff; color: #64748b;">
+                Deposit Settlement &amp; Deductions
               </button>
             </div>
 
             <!-- POS Panel 1: Walk-In Form -->
             <div id="pos-walkin-panel">
-              <form id="pos-walkin-form" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
-                <div>
-                  <label for="pos-farmer-name" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Farmer Full Name *</label>
-                  <input id="pos-farmer-name" type="text" placeholder="e.g. Samuel K. Boro" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
-                </div>
-                <div>
-                  <label for="pos-farmer-phone" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Contact Phone *</label>
-                  <input id="pos-farmer-phone" type="tel" placeholder="+63 912 345 6789" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
-                </div>
-                <div>
-                  <label for="pos-coop-id" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Cooperative ID / Walk-In</label>
-                  <input id="pos-coop-id" type="text" placeholder="e.g. CM-042 or WALK-IN" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
-                </div>
-
-                <div>
-                  <label for="pos-category-select" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">1. Machinery Category *</label>
-                  <select id="pos-category-select" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; font-weight: 600;">
-                    <option value="">-- Choose Category First (e.g. Tractors) --</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label for="pos-equipment-select" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">2. Machinery Unit (Quantity: 1 per Unit) *</label>
-                  <select id="pos-equipment-select" required disabled style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #f8fafc;">
-                    <option value="">← Please choose a category first</option>
-                  </select>
-                  <small id="pos-unit-status-hint" style="display: block; margin-top: 4px; font-size: 0.7rem; color: #64748b;">All units are single assets (quantity: 1). If booked, select another date.</small>
-                </div>
-
-                <div>
-                  <label for="pos-rental-type" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Rental Rate Type *</label>
-                  <select id="pos-rental-type" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; font-weight: 600;">
-                    <option value="day" selected>📅 Per Day (Daily)</option>
-                    <option value="hour">⏱️ Per Hour (Hourly)</option>
-                  </select>
-                </div>
-
-                <!-- Per Day Inputs Group -->
-                <div id="pos-group-day-start">
-                  <label for="pos-start-date" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Rental Start Date *</label>
-                  <input id="pos-start-date" type="date" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
-                </div>
-                <div id="pos-group-day-end">
-                  <label for="pos-end-date" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Rental End Date *</label>
-                  <input id="pos-end-date" type="date" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
-                </div>
-
-                <!-- Per Hour Inputs Group (hidden by default) -->
-                <div id="pos-group-hour-date" style="display: none;">
-                  <label for="pos-hour-date" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Rental Date *</label>
-                  <input id="pos-hour-date" type="date" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
-                </div>
-                <div id="pos-group-hour-duration" style="display: none;">
-                  <label for="pos-hours-count" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Duration (Hours) *</label>
-                  <input id="pos-hours-count" type="number" value="4" min="1" max="24" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
-                </div>
-
-                <div>
-                  <label id="pos-rate-label" for="pos-rate-input" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Daily Rate (₱ / Day)</label>
-                  <input id="pos-rate-input" type="number" value="120" min="1" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px;">
-                </div>
-
-                <div>
-                  <label for="pos-payment-method" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px;">Payment Method</label>
-                  <select id="pos-payment-method" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;">
-                    <option value="Cash">Cash (Desk Payment)</option>
-                    <option value="Bank Transfer">Bank Transfer</option>
-                    <option value="Co-op Credit">Co-op Credit Line</option>
-                  </select>
-                </div>
-
-                <!-- Booked Dates Notice for Selected Unit (Shows blocked date ranges) -->
-                <div id="pos-dates-booked-notice" style="display: none; grid-column: 1 / -1; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 10px 14px; color: #9a3412; font-size: 0.8rem;">
-                  <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 1.1rem;">🔒</span>
+              <form id="pos-walkin-form">
+                
+                <!-- 1. Customer Information -->
+                <div style="margin-bottom: 20px; padding: 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h4 style="margin: 0; font-size: 0.82rem; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.03em;">1. Customer Details</h4>
+                    <button type="button" id="btn-clear-pos-farmer" style="background: none; border: none; color: #2563eb; font-size: 0.75rem; font-weight: 600; cursor: pointer; text-decoration: underline;">
+                      Clear Customer
+                    </button>
+                  </div>
+                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px;">
                     <div>
-                      <strong style="display: block; font-size: 0.82rem; color: #7c2d12;">Active Bookings for this Unit (Dates Blocked):</strong>
-                      <span id="pos-dates-booked-notice-text"></span>
+                      <label for="pos-farmer-name" style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 5px;">Farmer Full Name *</label>
+                      <input id="pos-farmer-name" type="text" placeholder="e.g. Samuel K. Boro" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #ffffff;">
+                    </div>
+                    <div>
+                      <label for="pos-farmer-phone" style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 5px;">Contact Phone *</label>
+                      <input id="pos-farmer-phone" type="tel" placeholder="+63 912 345 6789" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #ffffff;">
+                    </div>
+                    <div>
+                      <label for="pos-coop-id" style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 5px;">Cooperative ID / Member Reference</label>
+                      <input id="pos-coop-id" type="text" placeholder="e.g. CM-042 or WALK-IN" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #ffffff;">
                     </div>
                   </div>
                 </div>
 
-                <!-- Conflict Alert Banner (shown when unit is already booked on dates) -->
-                <div id="pos-conflict-alert" style="display: none; grid-column: 1 / -1; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px 16px; color: #991b1b; font-size: 0.82rem; font-weight: 600;">
-                  ⚠️ <span id="pos-conflict-alert-text">This machinery unit is already booked on the selected dates. Please select other dates.</span>
+                <!-- 2. Rental Schedule -->
+                <div style="margin-bottom: 20px; padding: 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+                  <h4 style="margin: 0 0 12px; font-size: 0.82rem; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.03em;">2. Rental Schedule</h4>
+                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px;">
+                    <div>
+                      <label for="pos-rental-type" style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 5px;">Rental Rate Type *</label>
+                      <select id="pos-rental-type" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #ffffff;">
+                        <option value="day" selected>Daily Rental</option>
+                        <option value="hour">Hourly Rental</option>
+                      </select>
+                    </div>
+
+                    <!-- Per Day Inputs Group -->
+                    <div id="pos-group-day-start">
+                      <label for="pos-start-date" style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 5px;">Rental Start Date *</label>
+                      <input id="pos-start-date" type="date" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #ffffff;">
+                    </div>
+                    <div id="pos-group-day-end">
+                      <label for="pos-end-date" style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 5px;">Rental End Date *</label>
+                      <input id="pos-end-date" type="date" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #ffffff;">
+                    </div>
+
+                    <!-- Per Hour Inputs Group -->
+                    <div id="pos-group-hour-date" style="display: none;">
+                      <label for="pos-hour-date" style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 5px;">Rental Date *</label>
+                      <input id="pos-hour-date" type="date" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #ffffff;">
+                    </div>
+                    <div id="pos-group-hour-duration" style="display: none;">
+                      <label for="pos-hours-count" style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 5px;">Duration (Hours) *</label>
+                      <input id="pos-hours-count" type="number" value="4" min="1" max="24" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #ffffff;">
+                    </div>
+                  </div>
                 </div>
 
-                <!-- Live Total Breakdown Card (Zero Security Deposit) -->
-                <div style="grid-column: 1 / -1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
-                  <div style="font-size: 0.82rem; color: #475569;">
-                    <div id="pos-breakdown-details">Calculated Rental: <strong id="pos-breakdown-subtotal">₱0.00</strong> (<span id="pos-breakdown-duration">1 day</span>)</div>
-                    <div style="color: #059669; font-weight: 700; font-size: 0.75rem; margin-top: 3px;">✓ Zero Security Deposit Required</div>
-                  </div>
-                  <div style="text-align: right;">
-                    <span style="font-size: 0.72rem; text-transform: uppercase; font-weight: 700; color: #64748b;">Total Upfront Cash to Collect</span>
-                    <div style="font-size: 1.5rem; font-weight: 900; color: #d97706;" id="pos-breakdown-total">₱0.00</div>
+                <!-- 3. Machinery Selection -->
+                <div style="margin-bottom: 20px; padding: 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+                  <h4 style="margin: 0 0 12px; font-size: 0.82rem; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.03em;">3. Machinery Selection</h4>
+                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px;">
+                    <div>
+                      <label for="pos-category-select" style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 5px;">Machinery Category *</label>
+                      <select id="pos-category-select" required style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #ffffff;">
+                        <option value="">-- Select Category --</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label for="pos-equipment-select" style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 5px;">Machinery Unit *</label>
+                      <select id="pos-equipment-select" required disabled style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #f1f5f9;">
+                        <option value="">Select category first</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
 
-                <div style="grid-column: 1 / -1;">
-                  <button type="submit" id="btn-submit-pos-walkin" class="button button-primary" style="width: 100%; padding: 12px; font-size: 0.9rem; font-weight: 800; border-radius: 8px; background: #d97706; border: none; cursor: pointer;">
-                    + Issue Walk-in Booking &amp; Record Cash Receipt
+                <!-- Hidden numeric rate storage (replaces separate editable daily rate input) -->
+                <input id="pos-rate-input" type="hidden" value="0">
+
+                <!-- 4. Payment Method & Calculation Breakdown -->
+                <div style="margin-bottom: 20px; padding: 18px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+                  <h4 style="margin: 0 0 14px; font-size: 0.82rem; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.03em;">4. Calculation Breakdown &amp; Payment</h4>
+                  
+                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 16px;">
+                    <div>
+                      <label for="pos-payment-method" style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 5px;">Payment Method *</label>
+                      <select id="pos-payment-method" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #ffffff;">
+                        <option value="Cash" selected>Cash</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <!-- Detailed Calculation Summary Card -->
+                  <div style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px;">
+                    <div style="font-size: 0.82rem; font-weight: 600; color: #334155; margin-bottom: 10px; border-bottom: 1px solid #f1f5f9; padding-bottom: 6px;">
+                      Calculation Summary
+                    </div>
+                    <div style="display: grid; gap: 8px; font-size: 0.82rem; color: #475569;">
+                      <div style="display: flex; justify-content: space-between;">
+                        <span>Selected Unit:</span>
+                        <strong id="pos-calc-unit-name" style="color: #0f172a;">None selected</strong>
+                      </div>
+                      <div style="display: flex; justify-content: space-between;">
+                        <span>Unit Rate:</span>
+                        <span id="pos-calc-unit-rate">₱0.00</span>
+                      </div>
+                      <div style="display: flex; justify-content: space-between;">
+                        <span>Rental Duration:</span>
+                        <span id="pos-calc-duration">0 days</span>
+                      </div>
+                      <div style="display: flex; justify-content: space-between;">
+                        <span>Calculation Formula:</span>
+                        <span id="pos-calc-formula" style="font-family: monospace; font-weight: 600; color: #0f172a;">₱0.00 × 0 = ₱0.00</span>
+                      </div>
+                      <div style="display: flex; justify-content: space-between;">
+                        <span>Security Deposit:</span>
+                        <span style="color: #059669; font-weight: 600;">₱0.00 (Zero Deposit)</span>
+                      </div>
+                      <div style="margin-top: 6px; padding-top: 10px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: baseline;">
+                        <span style="font-size: 0.9rem; font-weight: 700; color: #0f172a;">Total Payable:</span>
+                        <span id="pos-breakdown-total" style="font-size: 1.4rem; font-weight: 800; color: #0f172a;">₱0.00</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 5. Submit Action -->
+                <div>
+                  <button type="submit" id="btn-submit-pos-walkin" class="button button-primary" style="width: 100%; padding: 12px; font-size: 0.92rem; font-weight: 700; border-radius: 6px; background: #0f172a; color: #ffffff; border: none; cursor: pointer;">
+                    Confirm Walk-in Booking
                   </button>
                 </div>
               </form>
@@ -1584,6 +1615,6 @@
     </form>
   </dialog>
 
-  <script src="script.js?v=20261027_02"></script>
+  <script src="script.js?v=20261027_04"></script>
 </body>
 </html>

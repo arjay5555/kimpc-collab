@@ -1915,10 +1915,10 @@ async function initManagerPage() {
     const shouldOpen = forceState !== undefined ? forceState : isCurrentlyHidden;
     posTerminalContainer.style.display = shouldOpen ? "block" : "none";
     if (btnTogglePosText) {
-      btnTogglePosText.textContent = shouldOpen ? "✕ Close POS" : "+ Point of Sale (POS)";
+      btnTogglePosText.textContent = shouldOpen ? "Close POS" : "Point of Sale (POS)";
     }
     if (btnTogglePos) {
-      btnTogglePos.style.background = shouldOpen ? "#475569" : "#d97706";
+      btnTogglePos.style.background = shouldOpen ? "#475569" : "#0f172a";
     }
   };
 
@@ -1938,23 +1938,23 @@ async function initManagerPage() {
   posTabWalkin?.addEventListener("click", () => {
     if (posWalkinPanel) posWalkinPanel.style.display = "block";
     if (posSettlementPanel) posSettlementPanel.style.display = "none";
-    posTabWalkin.style.background = "#fffbeb";
-    posTabWalkin.style.borderColor = "#d97706";
-    posTabWalkin.style.color = "#92400e";
-    posTabSettlement.style.background = "transparent";
-    posTabSettlement.style.borderColor = "var(--line)";
-    posTabSettlement.style.color = "var(--ink-soft)";
+    posTabWalkin.style.background = "#0f172a";
+    posTabWalkin.style.borderColor = "#0f172a";
+    posTabWalkin.style.color = "#ffffff";
+    posTabSettlement.style.background = "#ffffff";
+    posTabSettlement.style.borderColor = "#cbd5e1";
+    posTabSettlement.style.color = "#64748b";
   });
 
   posTabSettlement?.addEventListener("click", () => {
     if (posWalkinPanel) posWalkinPanel.style.display = "none";
     if (posSettlementPanel) posSettlementPanel.style.display = "block";
-    posTabSettlement.style.background = "#fffbeb";
-    posTabSettlement.style.borderColor = "#d97706";
-    posTabSettlement.style.color = "#92400e";
-    posTabWalkin.style.background = "transparent";
-    posTabWalkin.style.borderColor = "var(--line)";
-    posTabWalkin.style.color = "var(--ink-soft)";
+    posTabSettlement.style.background = "#0f172a";
+    posTabSettlement.style.borderColor = "#0f172a";
+    posTabSettlement.style.color = "#ffffff";
+    posTabWalkin.style.background = "#ffffff";
+    posTabWalkin.style.borderColor = "#cbd5e1";
+    posTabWalkin.style.color = "#64748b";
   });
 
   // ================= 2. POINT OF SALE (POS) DYNAMIC FLEET & CALCULATIONS =================
@@ -1969,16 +1969,16 @@ async function initManagerPage() {
   const posEndDateInput = document.querySelector("#pos-end-date");
   const posHourDateInput = document.querySelector("#pos-hour-date");
   const posHoursCountInput = document.querySelector("#pos-hours-count");
-  const posRateLabel = document.querySelector("#pos-rate-label");
   const posRateInput = document.querySelector("#pos-rate-input");
-  const posDatesBookedNotice = document.querySelector("#pos-dates-booked-notice");
-  const posDatesBookedNoticeText = document.querySelector("#pos-dates-booked-notice-text");
-  const posConflictAlert = document.querySelector("#pos-conflict-alert");
-  const posConflictAlertText = document.querySelector("#pos-conflict-alert-text");
   const btnSubmitPosWalkin = document.querySelector("#btn-submit-pos-walkin");
-  const posSubtotalEl = document.querySelector("#pos-breakdown-subtotal");
-  const posDurationEl = document.querySelector("#pos-breakdown-duration");
-  const posTotalEl = document.querySelector("#pos-breakdown-total");
+  const btnClearPosFarmer = document.querySelector("#btn-clear-pos-farmer");
+
+  // Detailed Calculation Elements
+  const posCalcUnitName = document.querySelector("#pos-calc-unit-name");
+  const posCalcUnitRate = document.querySelector("#pos-calc-unit-rate");
+  const posCalcDuration = document.querySelector("#pos-calc-duration");
+  const posCalcFormula = document.querySelector("#pos-calc-formula");
+  const posBreakdownTotal = document.querySelector("#pos-breakdown-total");
 
   // Prevent past dates: lock date pickers minimum to today
   const todayIso = new Date().toISOString().split("T")[0];
@@ -1996,6 +1996,17 @@ async function initManagerPage() {
     posHourDateInput.min = todayIso;
     posHourDateInput.value = todayIso;
   }
+
+  // Clear customer button listener
+  btnClearPosFarmer?.addEventListener("click", () => {
+    const nameEl = document.querySelector("#pos-farmer-name");
+    const phoneEl = document.querySelector("#pos-farmer-phone");
+    const coopEl = document.querySelector("#pos-coop-id");
+    if (nameEl) nameEl.value = "";
+    if (phoneEl) phoneEl.value = "";
+    if (coopEl) coopEl.value = "";
+    if (nameEl) nameEl.focus();
+  });
 
   // Helper function to match unit identifiers accurately
   const isSameMachineryClient = (uId, uName, tId, tName) => {
@@ -2070,7 +2081,7 @@ async function initManagerPage() {
     const currentCategory = posCategorySelect.value;
 
     if (!categories.length) {
-      posCategorySelect.innerHTML = `<option value="">⚠️ No available machinery categories</option>`;
+      posCategorySelect.innerHTML = `<option value="">No categories available</option>`;
       if (posEquipSelect) {
         posEquipSelect.innerHTML = `<option value="">No units available</option>`;
         posEquipSelect.disabled = true;
@@ -2079,7 +2090,7 @@ async function initManagerPage() {
     }
 
     posCategorySelect.innerHTML = `
-      <option value="">-- Choose Category First (e.g. Tractor) --</option>
+      <option value="">-- Select Category --</option>
       ${categories.map((cat) => `<option value="${escapeHtml(cat)}" ${cat === currentCategory ? "selected" : ""}>${escapeHtml(cat)}</option>`).join("")}
     `;
 
@@ -2087,9 +2098,9 @@ async function initManagerPage() {
       await populatePosEquipmentForCategory(currentCategory);
     } else {
       if (posEquipSelect) {
-        posEquipSelect.innerHTML = `<option value="">← Please choose a category first</option>`;
+        posEquipSelect.innerHTML = `<option value="">Select category first</option>`;
         posEquipSelect.disabled = true;
-        posEquipSelect.style.background = "#f8fafc";
+        posEquipSelect.style.background = "#f1f5f9";
       }
       checkPosConflictAndRates();
     }
@@ -2100,15 +2111,15 @@ async function initManagerPage() {
     if (!posEquipSelect) return;
 
     if (!category) {
-      posEquipSelect.innerHTML = `<option value="">← Please choose a category first</option>`;
+      posEquipSelect.innerHTML = `<option value="">Select category first</option>`;
       posEquipSelect.disabled = true;
-      posEquipSelect.style.background = "#f8fafc";
+      posEquipSelect.style.background = "#f1f5f9";
       checkPosConflictAndRates();
       return;
     }
 
     posEquipSelect.disabled = false;
-    posEquipSelect.style.background = "#fff";
+    posEquipSelect.style.background = "#ffffff";
 
     await refreshActiveFleetAvailability();
     const { startDate, endDate } = getPosSelectedDates();
@@ -2120,75 +2131,68 @@ async function initManagerPage() {
     });
 
     if (!matchingUnits.length) {
-      posEquipSelect.innerHTML = `<option value="">⚠️ No ${escapeHtml(category)} units in fleet</option>`;
+      posEquipSelect.innerHTML = `<option value="">No ${escapeHtml(category)} units in fleet</option>`;
       checkPosConflictAndRates();
       return;
     }
 
     const currentSelectedVal = posEquipSelect.value;
-    posEquipSelect.innerHTML = matchingUnits.map((u) => {
-      const rateDay = Number(u.ratePerDay) || 1200;
-      const rateHour = Number(u.ratePerHour) || Math.round(rateDay / 8) || 150;
+    posEquipSelect.innerHTML = `
+      <option value="">-- Select Unit --</option>
+      ${matchingUnits.map((u) => {
+        const rateDay = Number(u.ratePerDay) || 1200;
+        const rateHour = Number(u.ratePerHour) || Math.round(rateDay / 8) || 150;
 
-      // Find all bookings for this unit
-      const unitBookings = cachedAllBookings.filter((b) =>
-        isSameMachineryClient(u.unitId, u.name, b.unitId, b.equipment)
-      );
-      const unitMaints = cachedAllMaintenances.filter((m) =>
-        isSameMachineryClient(u.unitId, u.name, m.unitId, m.equipment)
-      );
+        // Check if unit has overlapping booking or maintenance on the selected dates
+        const unitBookings = cachedAllBookings.filter((b) =>
+          isSameMachineryClient(u.unitId, u.name, b.unitId, b.equipment)
+        );
+        const unitMaints = cachedAllMaintenances.filter((m) =>
+          isSameMachineryClient(u.unitId, u.name, m.unitId, m.equipment)
+        );
 
-      // Overlap with currently selected dates?
-      const overlapBooking = unitBookings.find((b) => b.startDate <= endDate && b.endDate >= startDate);
-      const overlapMaint = unitMaints.find((m) => m.startDate <= endDate && m.endDate >= startDate);
-      const isBooked = Boolean(overlapBooking || overlapMaint);
-      const conflictRecord = overlapBooking || overlapMaint;
+        const overlapBooking = unitBookings.find((b) => b.startDate <= endDate && b.endDate >= startDate);
+        const overlapMaint = unitMaints.find((m) => m.startDate <= endDate && m.endDate >= startDate);
+        const isBooked = Boolean(overlapBooking || overlapMaint);
 
-      let statusTag = isBooked ? `❌ (Booked: ${conflictRecord.startDate} to ${conflictRecord.endDate})` : `✓ (Available)`;
-      const label = `${u.unitId} - ${u.name} ${statusTag}`;
-      const isSelected = u.name === currentSelectedVal ? "selected" : "";
+        const isSelected = u.name === currentSelectedVal && !isBooked ? "selected" : "";
 
-      const allBlockedRanges = [
-        ...unitBookings.map((b) => ({ startDate: b.startDate, endDate: b.endDate, reason: `Booked by ${b.memberName || "Farmer"}` })),
-        ...unitMaints.map((m) => ({ startDate: m.startDate, endDate: m.endDate, reason: m.reason || "Maintenance" }))
-      ];
+        // If booked, mark disabled so user cannot select it.
+        // Keep text clean and simple: (Unavailable) without verbose date paragraphs.
+        if (isBooked) {
+          return `<option value="${escapeHtml(u.name)}"
+            data-unit-id="${escapeHtml(u.unitId)}"
+            data-rate-day="${rateDay}"
+            data-rate-hour="${rateHour}"
+            data-booked="true"
+            disabled
+            style="color: #94a3b8;">
+            ${escapeHtml(u.unitId)} - ${escapeHtml(u.name)} (Unavailable)
+          </option>`;
+        }
 
-      return `<option value="${escapeHtml(u.name)}"
-        data-unit-id="${escapeHtml(u.unitId)}"
-        data-rate-day="${rateDay}"
-        data-rate-hour="${rateHour}"
-        data-booked="${isBooked ? "true" : "false"}"
-        data-booked-detail="${isBooked && conflictRecord ? escapeHtml(conflictRecord.memberName ? `Booked by ${conflictRecord.memberName} (${conflictRecord.startDate} to ${conflictRecord.endDate})` : (conflictRecord.reason || "Booked")) : ""}"
-        data-booked-ranges="${escapeHtml(JSON.stringify(allBlockedRanges))}"
-        style="color: ${isBooked ? "#dc2626" : "#059669"}; font-weight: ${isBooked ? "600" : "500"};"
-        ${isSelected}>
-        ${escapeHtml(label)}
-      </option>`;
-    }).join("");
+        return `<option value="${escapeHtml(u.name)}"
+          data-unit-id="${escapeHtml(u.unitId)}"
+          data-rate-day="${rateDay}"
+          data-rate-hour="${rateHour}"
+          data-booked="false"
+          style="color: #0f172a;"
+          ${isSelected}>
+          ${escapeHtml(u.unitId)} - ${escapeHtml(u.name)}
+        </option>`;
+      }).join("")}
+    `;
 
     checkPosConflictAndRates();
-  };
-
-  // Helper to test if a date range overlaps with any blocked range on the selected unit
-  const getSelectedUnitConflict = (startDate, endDate) => {
-    if (!posEquipSelect) return null;
-    const selectedOpt = posEquipSelect.options[posEquipSelect.selectedIndex];
-    if (!selectedOpt || !selectedOpt.value) return null;
-    let ranges = [];
-    try {
-      ranges = JSON.parse(selectedOpt.dataset.bookedRanges || "[]");
-    } catch (_) {}
-    return ranges.find((r) => r.startDate <= endDate && r.endDate >= startDate) || null;
   };
 
   // 3. Conflict Detection and Rate Synchronizer
   const checkPosConflictAndRates = () => {
     if (!posEquipSelect) return;
     const selectedOpt = posEquipSelect.options[posEquipSelect.selectedIndex];
+    const hasValidUnit = Boolean(selectedOpt && selectedOpt.value && !selectedOpt.disabled && !posEquipSelect.disabled);
 
-    if (!selectedOpt || !selectedOpt.value || posEquipSelect.disabled) {
-      if (posDatesBookedNotice) posDatesBookedNotice.style.display = "none";
-      if (posConflictAlert) posConflictAlert.style.display = "none";
+    if (!hasValidUnit) {
       if (btnSubmitPosWalkin) {
         btnSubmitPosWalkin.disabled = true;
         btnSubmitPosWalkin.style.opacity = "0.5";
@@ -2199,50 +2203,13 @@ async function initManagerPage() {
       return;
     }
 
-    let allBlockedRanges = [];
-    try {
-      allBlockedRanges = JSON.parse(selectedOpt.dataset.bookedRanges || "[]");
-    } catch (_) {}
-
-    // Display Active Bookings Notice for Selected Unit
-    if (allBlockedRanges.length > 0) {
-      if (posDatesBookedNotice) {
-        posDatesBookedNotice.style.display = "block";
-        if (posDatesBookedNoticeText) {
-          posDatesBookedNoticeText.innerHTML = allBlockedRanges.map((r) =>
-            `<strong style="color:#b91c1c;">${r.startDate} to ${r.endDate}</strong> (${escapeHtml(r.reason)})`
-          ).join(" · ") + ` &mdash; <em style="color:#9a3412;">These dates CANNOT be selected.</em>`;
-        }
-      }
-    } else {
-      if (posDatesBookedNotice) posDatesBookedNotice.style.display = "none";
+    if (btnSubmitPosWalkin) {
+      btnSubmitPosWalkin.disabled = false;
+      btnSubmitPosWalkin.style.opacity = "1";
+      btnSubmitPosWalkin.style.cursor = "pointer";
     }
 
-    const { startDate, endDate } = getPosSelectedDates();
-    const conflict = allBlockedRanges.find((r) => r.startDate <= endDate && r.endDate >= startDate);
-
-    if (conflict) {
-      if (posConflictAlert) {
-        posConflictAlert.style.display = "block";
-        if (posConflictAlertText) {
-          posConflictAlertText.textContent = `⚠️ Unit "${selectedOpt.value}" (Quantity: 1) is already booked on ${conflict.startDate} to ${conflict.endDate} (${conflict.reason}). You cannot select this date range. Please choose another date outside this period.`;
-        }
-      }
-      if (btnSubmitPosWalkin) {
-        btnSubmitPosWalkin.disabled = true;
-        btnSubmitPosWalkin.style.opacity = "0.5";
-        btnSubmitPosWalkin.style.cursor = "not-allowed";
-      }
-    } else {
-      if (posConflictAlert) posConflictAlert.style.display = "none";
-      if (btnSubmitPosWalkin) {
-        btnSubmitPosWalkin.disabled = false;
-        btnSubmitPosWalkin.style.opacity = "1";
-        btnSubmitPosWalkin.style.cursor = "pointer";
-      }
-    }
-
-    // Update Rates
+    // Update internal rate
     const isHourly = posRentalType?.value === "hour";
     if (isHourly) {
       const rateHour = Number(selectedOpt.dataset.rateHour) || 150;
@@ -2255,28 +2222,38 @@ async function initManagerPage() {
     updatePosWalkinTotal();
   };
 
+  // 4. Update Detailed Calculation Breakdown
   const updatePosWalkinTotal = () => {
     const isHourly = posRentalType?.value === "hour";
     const rate = Number(posRateInput?.value) || 0;
+    const selectedOpt = posEquipSelect ? posEquipSelect.options[posEquipSelect.selectedIndex] : null;
+    const hasValidUnit = Boolean(selectedOpt && selectedOpt.value && !selectedOpt.disabled);
 
     let subtotal = 0;
-    let durationText = "1 day";
+    let durationText = "0 days";
+    let formulaText = "₱0.00 × 0 = ₱0.00";
+    let unitNameText = hasValidUnit ? `${selectedOpt.value} (${selectedOpt.dataset.unitId || ""})` : "None selected";
+    let rateText = `₱${rate.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / ${isHourly ? "hour" : "day"}`;
 
     if (isHourly) {
       const hours = Math.max(1, Number(posHoursCountInput?.value) || 1);
       subtotal = rate * hours;
-      durationText = `${hours} hr${hours === 1 ? "" : "s"}`;
+      durationText = `${hours} hour${hours === 1 ? "" : "s"} (${posHourDateInput?.value || todayIso})`;
+      formulaText = `₱${rate.toLocaleString("en-PH", { minimumFractionDigits: 2 })} × ${hours} hr${hours === 1 ? "" : "s"} = ₱${subtotal.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`;
     } else {
       const d1 = new Date(posStartDateInput?.value || todayIso);
       const d2 = new Date(posEndDateInput?.value || todayIso);
       const diffDays = Math.max(1, Math.round((d2 - d1) / (1000 * 3600 * 24)));
       subtotal = rate * diffDays;
-      durationText = `${diffDays} day${diffDays === 1 ? "" : "s"}`;
+      durationText = `${diffDays} day${diffDays === 1 ? "" : "s"} (${posStartDateInput?.value || todayIso} to ${posEndDateInput?.value || todayIso})`;
+      formulaText = `₱${rate.toLocaleString("en-PH", { minimumFractionDigits: 2 })} × ${diffDays} day${diffDays === 1 ? "" : "s"} = ₱${subtotal.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`;
     }
 
-    if (posDurationEl) posDurationEl.textContent = durationText;
-    if (posSubtotalEl) posSubtotalEl.textContent = `₱${subtotal.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    if (posTotalEl) posTotalEl.textContent = `₱${subtotal.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    if (posCalcUnitName) posCalcUnitName.textContent = unitNameText;
+    if (posCalcUnitRate) posCalcUnitRate.textContent = rateText;
+    if (posCalcDuration) posCalcDuration.textContent = durationText;
+    if (posCalcFormula) posCalcFormula.textContent = formulaText;
+    if (posBreakdownTotal) posBreakdownTotal.textContent = `₱${subtotal.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   // Backwards compatibility pointer for loadMachineryUnits
@@ -2289,27 +2266,6 @@ async function initManagerPage() {
   });
 
   posEquipSelect?.addEventListener("change", () => {
-    // Check if the current dates conflict with the newly selected unit
-    const selectedOpt = posEquipSelect.options[posEquipSelect.selectedIndex];
-    if (selectedOpt && selectedOpt.value) {
-      const { startDate, endDate, isHourly } = getPosSelectedDates();
-      const conflict = getSelectedUnitConflict(startDate, endDate);
-      if (conflict) {
-        // If current dates are blocked for this unit, alert and advance date to next available day
-        alert(`⚠️ Notice: "${selectedOpt.value}" is already booked from ${conflict.startDate} to ${conflict.endDate}. The dates have been adjusted to the next available date.`);
-        const nextStart = new Date(new Date(conflict.endDate).getTime() + 86400000).toISOString().split("T")[0];
-        if (isHourly) {
-          if (posHourDateInput) posHourDateInput.value = nextStart;
-        } else {
-          if (posStartDateInput) posStartDateInput.value = nextStart;
-          const nextEnd = new Date(new Date(nextStart).getTime() + 3 * 86400000).toISOString().split("T")[0];
-          if (posEndDateInput) {
-            posEndDateInput.min = nextStart;
-            posEndDateInput.value = nextEnd;
-          }
-        }
-      }
-    }
     checkPosConflictAndRates();
   });
 
@@ -2324,10 +2280,6 @@ async function initManagerPage() {
     if (posEndDateInput) posEndDateInput.required = !isHourly;
     if (posHourDateInput) posHourDateInput.required = isHourly;
 
-    if (posRateLabel) {
-      posRateLabel.textContent = isHourly ? "Hourly Rate (₱ / Hour)" : "Daily Rate (₱ / Day)";
-    }
-
     if (posCategorySelect?.value) {
       populatePosEquipmentForCategory(posCategorySelect.value);
     } else {
@@ -2335,10 +2287,9 @@ async function initManagerPage() {
     }
   });
 
-  posRateInput?.addEventListener("input", updatePosWalkinTotal);
   posHoursCountInput?.addEventListener("input", updatePosWalkinTotal);
 
-  // Date validation: enforce cannot rent past / done dates & prevent selecting booked dates
+  // Date validation: enforce cannot rent past / done dates & refresh unit availability
   posStartDateInput?.addEventListener("change", () => {
     if (posStartDateInput.value < todayIso) {
       alert("Cannot rent for a past date. Start date reset to today.");
@@ -2348,18 +2299,6 @@ async function initManagerPage() {
       posEndDateInput.min = posStartDateInput.value;
       if (posEndDateInput.value < posStartDateInput.value) {
         posEndDateInput.value = posStartDateInput.value;
-      }
-    }
-    // Check conflict with selected unit
-    const conflict = getSelectedUnitConflict(posStartDateInput.value, posEndDateInput ? posEndDateInput.value : posStartDateInput.value);
-    if (conflict) {
-      alert(`⚠️ Date Blocked: This machinery unit is already booked from ${conflict.startDate} to ${conflict.endDate} (${conflict.reason}). You cannot select this date.`);
-      const nextDay = new Date(new Date(conflict.endDate).getTime() + 86400000).toISOString().split("T")[0];
-      posStartDateInput.value = nextDay;
-      if (posEndDateInput) {
-        posEndDateInput.min = nextDay;
-        const nextEndDay = new Date(new Date(nextDay).getTime() + 3 * 86400000).toISOString().split("T")[0];
-        posEndDateInput.value = nextEndDay;
       }
     }
     if (posCategorySelect?.value) {
@@ -2374,15 +2313,6 @@ async function initManagerPage() {
       alert("Rental end date cannot be earlier than start date.");
       posEndDateInput.value = posStartDateInput.value;
     }
-    // Check conflict with selected unit
-    const conflict = getSelectedUnitConflict(posStartDateInput ? posStartDateInput.value : posEndDateInput.value, posEndDateInput.value);
-    if (conflict) {
-      alert(`⚠️ Date Blocked: This machinery unit is already booked from ${conflict.startDate} to ${conflict.endDate} (${conflict.reason}). You cannot select this date.`);
-      const nextDay = new Date(new Date(conflict.endDate).getTime() + 86400000).toISOString().split("T")[0];
-      posStartDateInput.value = nextDay;
-      const nextEndDay = new Date(new Date(nextDay).getTime() + 3 * 86400000).toISOString().split("T")[0];
-      posEndDateInput.value = nextEndDay;
-    }
     if (posCategorySelect?.value) {
       populatePosEquipmentForCategory(posCategorySelect.value);
     } else {
@@ -2394,12 +2324,6 @@ async function initManagerPage() {
     if (posHourDateInput.value < todayIso) {
       alert("Cannot rent for a past date. Date reset to today.");
       posHourDateInput.value = todayIso;
-    }
-    const conflict = getSelectedUnitConflict(posHourDateInput.value, posHourDateInput.value);
-    if (conflict) {
-      alert(`⚠️ Date Blocked: This machinery unit is already booked on ${conflict.startDate} to ${conflict.endDate} (${conflict.reason}). You cannot select this date.`);
-      const nextDay = new Date(new Date(conflict.endDate).getTime() + 86400000).toISOString().split("T")[0];
-      posHourDateInput.value = nextDay;
     }
     if (posCategorySelect?.value) {
       populatePosEquipmentForCategory(posCategorySelect.value);
@@ -2421,18 +2345,18 @@ async function initManagerPage() {
     const equipment = posEquipSelect?.value;
     const machineryUnitId = selectedOpt?.dataset.unitId || "";
 
+    if (!farmerName || !farmerPhone) {
+      alert("Please enter the farmer's full name and contact phone.");
+      return;
+    }
+
     if (!category) {
       alert("Please select a machinery category first.");
       return;
     }
 
-    if (!equipment) {
+    if (!equipment || selectedOpt?.disabled) {
       alert("Please select an available machinery unit from the fleet.");
-      return;
-    }
-
-    if (selectedOpt?.dataset.booked === "true") {
-      alert("This machinery unit is already booked on the selected dates. Each unit is unique (quantity: 1). Please select other dates.");
       return;
     }
 
@@ -2485,15 +2409,15 @@ async function initManagerPage() {
     });
 
     if (res.ok) {
-      alert(`Walk-in booking confirmed for ${farmerName}.\nMachinery: ${equipment} (${machineryUnitId})\nDuration: ${isHourly ? `${rentalHours} hr(s)` : `${rentalDays} day(s)`}\nTotal Collected: ₱${Number(res.data.totalCollected).toLocaleString("en-PH", { minimumFractionDigits: 2 })}\nDeposit: ₱0.00 (Zero Deposit)\nReceipt: ${res.data.txId}`);
-      document.querySelector("#pos-farmer-name").value = "";
-      document.querySelector("#pos-farmer-phone").value = "";
-      document.querySelector("#pos-coop-id").value = "";
-      if (posStartDateInput) posStartDateInput.value = todayIso;
-      if (posEndDateInput) posEndDateInput.value = in3DaysIso;
-      if (posHourDateInput) posHourDateInput.value = todayIso;
+      alert(`Walk-in booking confirmed for ${farmerName}.\nMachinery: ${equipment} (${machineryUnitId})\nDuration: ${isHourly ? `${rentalHours} hour(s)` : `${rentalDays} day(s)`}\nTotal Collected: ₱${Number(res.data.totalCollected).toLocaleString("en-PH", { minimumFractionDigits: 2 })}\nDeposit: ₱0.00 (Zero Deposit)\nReceipt: ${res.data.txId}\n\nCustomer details are retained so you can book another machine for this customer.`);
+      
+      // Do NOT erase customer name, phone, or coop ID! (Allows 1 person to book multiple units)
+      // Reset only equipment selection and reload fleet availability:
+      if (posEquipSelect) {
+        posEquipSelect.value = "";
+      }
       if (category) {
-        populatePosEquipmentForCategory(category);
+        await populatePosEquipmentForCategory(category);
       }
       renderBookings();
       loadLedgerAndUtilization();
