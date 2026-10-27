@@ -1971,6 +1971,8 @@ async function initManagerPage() {
   const posHoursCountInput = document.querySelector("#pos-hours-count");
   const posRateLabel = document.querySelector("#pos-rate-label");
   const posRateInput = document.querySelector("#pos-rate-input");
+  const posDatesBookedNotice = document.querySelector("#pos-dates-booked-notice");
+  const posDatesBookedNoticeText = document.querySelector("#pos-dates-booked-notice-text");
   const posConflictAlert = document.querySelector("#pos-conflict-alert");
   const posConflictAlertText = document.querySelector("#pos-conflict-alert-text");
   const btnSubmitPosWalkin = document.querySelector("#btn-submit-pos-walkin");
@@ -1995,6 +1997,26 @@ async function initManagerPage() {
     posHourDateInput.value = todayIso;
   }
 
+  // Helper function to match unit identifiers accurately
+  const isSameMachineryClient = (uId, uName, tId, tName) => {
+    const id1 = (uId || "").trim().toUpperCase();
+    const id2 = (tId || "").trim().toUpperCase();
+    if (id1 && id2 && id1 === id2) return true;
+
+    const n1 = (uName || "").trim().toLowerCase();
+    const n2 = (tName || "").trim().toLowerCase();
+    if (!n1 || !n2) return false;
+    if (n1 === n2) return true;
+    if (n1.includes(n2) || n2.includes(n1)) return true;
+
+    const tok1 = n1.replace(/[^a-z0-9]/g, " ").split(/\s+/).filter((t) => t.length >= 3);
+    const tok2 = n2.replace(/[^a-z0-9]/g, " ").split(/\s+/).filter((t) => t.length >= 3);
+    for (const t of tok1) {
+      if (t.length >= 4 && tok2.includes(t)) return true;
+    }
+    return false;
+  };
+
   // Get current active date range for availability check
   const getPosSelectedDates = () => {
     const isHourly = posRentalType?.value === "hour";
@@ -2013,6 +2035,22 @@ async function initManagerPage() {
       }
     } catch (_) {}
     return machineryUnitsData || [];
+  };
+
+  // Cached active bookings/maintenance from API
+  let cachedAllBookings = [];
+  let cachedAllMaintenances = [];
+
+  // Fetch latest active bookings and maintenances
+  const refreshActiveFleetAvailability = async () => {
+    const { startDate, endDate } = getPosSelectedDates();
+    try {
+      const res = await api(`/machinery-availability?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`);
+      if (res.ok && res.data) {
+        cachedAllBookings = res.data.allActiveBookings || res.data.bookedUnits || [];
+        cachedAllMaintenances = res.data.allActiveMaintenance || res.data.maintenanceUnits || [];
+      }
+    } catch (_) {}
   };
 
   // 1. Populate Categories First (Tractors, Harvesters, etc.)
@@ -2072,36 +2110,8 @@ async function initManagerPage() {
     posEquipSelect.disabled = false;
     posEquipSelect.style.background = "#fff";
 
+    await refreshActiveFleetAvailability();
     const { startDate, endDate } = getPosSelectedDates();
-
-    // Query active availability from backend for the selected dates
-    let bookedSet = new Set();
-    let bookedInfoMap = new Map();
-    try {
-      const availRes = await api(`/manager/machinery-availability?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`);
-      if (availRes.ok && availRes.data) {
-        (availRes.data.bookedUnits || []).forEach((b) => {
-          if (b.unitId) {
-            bookedSet.add(b.unitId.trim().toUpperCase());
-            bookedInfoMap.set(b.unitId.trim().toUpperCase(), b);
-          }
-          if (b.equipment) {
-            bookedSet.add(b.equipment.trim().toUpperCase());
-            bookedInfoMap.set(b.equipment.trim().toUpperCase(), b);
-          }
-        });
-        (availRes.data.maintenanceUnits || []).forEach((m) => {
-          if (m.unitId) {
-            bookedSet.add(m.unitId.trim().toUpperCase());
-            bookedInfoMap.set(m.unitId.trim().toUpperCase(), { reason: m.reason || "Maintenance", ...m });
-          }
-          if (m.equipment) {
-            bookedSet.add(m.equipment.trim().toUpperCase());
-            bookedInfoMap.set(m.equipment.trim().toUpperCase(), { reason: m.reason || "Maintenance", ...m });
-          }
-        });
-      }
-    } catch (_) {}
 
     const units = await ensureMachineryUnitsData();
     const matchingUnits = units.filter((u) => {
@@ -2119,19 +2129,37 @@ async function initManagerPage() {
     posEquipSelect.innerHTML = matchingUnits.map((u) => {
       const rateDay = Number(u.ratePerDay) || 1200;
       const rateHour = Number(u.ratePerHour) || Math.round(rateDay / 8) || 150;
-      const isBooked = bookedSet.has((u.unitId || "").toUpperCase()) || bookedSet.has((u.name || "").toUpperCase());
-      const bookingInfo = bookedInfoMap.get((u.unitId || "").toUpperCase()) || bookedInfoMap.get((u.name || "").toUpperCase());
 
-      let statusTag = isBooked ? `❌ (Booked${bookingInfo?.startDate ? `: ${bookingInfo.startDate}` : ""})` : `✓ (Available)`;
+      // Find all bookings for this unit
+      const unitBookings = cachedAllBookings.filter((b) =>
+        isSameMachineryClient(u.unitId, u.name, b.unitId, b.equipment)
+      );
+      const unitMaints = cachedAllMaintenances.filter((m) =>
+        isSameMachineryClient(u.unitId, u.name, m.unitId, m.equipment)
+      );
+
+      // Overlap with currently selected dates?
+      const overlapBooking = unitBookings.find((b) => b.startDate <= endDate && b.endDate >= startDate);
+      const overlapMaint = unitMaints.find((m) => m.startDate <= endDate && m.endDate >= startDate);
+      const isBooked = Boolean(overlapBooking || overlapMaint);
+      const conflictRecord = overlapBooking || overlapMaint;
+
+      let statusTag = isBooked ? `❌ (Booked: ${conflictRecord.startDate} to ${conflictRecord.endDate})` : `✓ (Available)`;
       const label = `${u.unitId} - ${u.name} ${statusTag}`;
       const isSelected = u.name === currentSelectedVal ? "selected" : "";
+
+      const allBlockedRanges = [
+        ...unitBookings.map((b) => ({ startDate: b.startDate, endDate: b.endDate, reason: `Booked by ${b.memberName || "Farmer"}` })),
+        ...unitMaints.map((m) => ({ startDate: m.startDate, endDate: m.endDate, reason: m.reason || "Maintenance" }))
+      ];
 
       return `<option value="${escapeHtml(u.name)}"
         data-unit-id="${escapeHtml(u.unitId)}"
         data-rate-day="${rateDay}"
         data-rate-hour="${rateHour}"
         data-booked="${isBooked ? "true" : "false"}"
-        data-booked-detail="${isBooked && bookingInfo ? escapeHtml(bookingInfo.memberName ? `Booked by ${bookingInfo.memberName} (${bookingInfo.startDate} to ${bookingInfo.endDate})` : (bookingInfo.reason || "Booked")) : ""}"
+        data-booked-detail="${isBooked && conflictRecord ? escapeHtml(conflictRecord.memberName ? `Booked by ${conflictRecord.memberName} (${conflictRecord.startDate} to ${conflictRecord.endDate})` : (conflictRecord.reason || "Booked")) : ""}"
+        data-booked-ranges="${escapeHtml(JSON.stringify(allBlockedRanges))}"
         style="color: ${isBooked ? "#dc2626" : "#059669"}; font-weight: ${isBooked ? "600" : "500"};"
         ${isSelected}>
         ${escapeHtml(label)}
@@ -2141,12 +2169,25 @@ async function initManagerPage() {
     checkPosConflictAndRates();
   };
 
+  // Helper to test if a date range overlaps with any blocked range on the selected unit
+  const getSelectedUnitConflict = (startDate, endDate) => {
+    if (!posEquipSelect) return null;
+    const selectedOpt = posEquipSelect.options[posEquipSelect.selectedIndex];
+    if (!selectedOpt || !selectedOpt.value) return null;
+    let ranges = [];
+    try {
+      ranges = JSON.parse(selectedOpt.dataset.bookedRanges || "[]");
+    } catch (_) {}
+    return ranges.find((r) => r.startDate <= endDate && r.endDate >= startDate) || null;
+  };
+
   // 3. Conflict Detection and Rate Synchronizer
   const checkPosConflictAndRates = () => {
     if (!posEquipSelect) return;
     const selectedOpt = posEquipSelect.options[posEquipSelect.selectedIndex];
 
     if (!selectedOpt || !selectedOpt.value || posEquipSelect.disabled) {
+      if (posDatesBookedNotice) posDatesBookedNotice.style.display = "none";
       if (posConflictAlert) posConflictAlert.style.display = "none";
       if (btnSubmitPosWalkin) {
         btnSubmitPosWalkin.disabled = true;
@@ -2158,15 +2199,33 @@ async function initManagerPage() {
       return;
     }
 
-    const isBooked = selectedOpt.dataset.booked === "true";
-    const bookedDetail = selectedOpt.dataset.bookedDetail || "";
-    const { startDate, endDate } = getPosSelectedDates();
+    let allBlockedRanges = [];
+    try {
+      allBlockedRanges = JSON.parse(selectedOpt.dataset.bookedRanges || "[]");
+    } catch (_) {}
 
-    if (isBooked) {
+    // Display Active Bookings Notice for Selected Unit
+    if (allBlockedRanges.length > 0) {
+      if (posDatesBookedNotice) {
+        posDatesBookedNotice.style.display = "block";
+        if (posDatesBookedNoticeText) {
+          posDatesBookedNoticeText.innerHTML = allBlockedRanges.map((r) =>
+            `<strong style="color:#b91c1c;">${r.startDate} to ${r.endDate}</strong> (${escapeHtml(r.reason)})`
+          ).join(" · ") + ` &mdash; <em style="color:#9a3412;">These dates CANNOT be selected.</em>`;
+        }
+      }
+    } else {
+      if (posDatesBookedNotice) posDatesBookedNotice.style.display = "none";
+    }
+
+    const { startDate, endDate } = getPosSelectedDates();
+    const conflict = allBlockedRanges.find((r) => r.startDate <= endDate && r.endDate >= startDate);
+
+    if (conflict) {
       if (posConflictAlert) {
         posConflictAlert.style.display = "block";
         if (posConflictAlertText) {
-          posConflictAlertText.textContent = `⚠️ Unit "${selectedOpt.value}" (Quantity: 1) is already booked on ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}${bookedDetail ? ` (${bookedDetail})` : ""}. Each unit is a single unique asset. Please select other dates or pick an available unit.`;
+          posConflictAlertText.textContent = `⚠️ Unit "${selectedOpt.value}" (Quantity: 1) is already booked on ${conflict.startDate} to ${conflict.endDate} (${conflict.reason}). You cannot select this date range. Please choose another date outside this period.`;
         }
       }
       if (btnSubmitPosWalkin) {
@@ -2230,6 +2289,27 @@ async function initManagerPage() {
   });
 
   posEquipSelect?.addEventListener("change", () => {
+    // Check if the current dates conflict with the newly selected unit
+    const selectedOpt = posEquipSelect.options[posEquipSelect.selectedIndex];
+    if (selectedOpt && selectedOpt.value) {
+      const { startDate, endDate, isHourly } = getPosSelectedDates();
+      const conflict = getSelectedUnitConflict(startDate, endDate);
+      if (conflict) {
+        // If current dates are blocked for this unit, alert and advance date to next available day
+        alert(`⚠️ Notice: "${selectedOpt.value}" is already booked from ${conflict.startDate} to ${conflict.endDate}. The dates have been adjusted to the next available date.`);
+        const nextStart = new Date(new Date(conflict.endDate).getTime() + 86400000).toISOString().split("T")[0];
+        if (isHourly) {
+          if (posHourDateInput) posHourDateInput.value = nextStart;
+        } else {
+          if (posStartDateInput) posStartDateInput.value = nextStart;
+          const nextEnd = new Date(new Date(nextStart).getTime() + 3 * 86400000).toISOString().split("T")[0];
+          if (posEndDateInput) {
+            posEndDateInput.min = nextStart;
+            posEndDateInput.value = nextEnd;
+          }
+        }
+      }
+    }
     checkPosConflictAndRates();
   });
 
@@ -2258,7 +2338,7 @@ async function initManagerPage() {
   posRateInput?.addEventListener("input", updatePosWalkinTotal);
   posHoursCountInput?.addEventListener("input", updatePosWalkinTotal);
 
-  // Date validation: enforce cannot rent past / done dates & refresh availability
+  // Date validation: enforce cannot rent past / done dates & prevent selecting booked dates
   posStartDateInput?.addEventListener("change", () => {
     if (posStartDateInput.value < todayIso) {
       alert("Cannot rent for a past date. Start date reset to today.");
@@ -2268,6 +2348,18 @@ async function initManagerPage() {
       posEndDateInput.min = posStartDateInput.value;
       if (posEndDateInput.value < posStartDateInput.value) {
         posEndDateInput.value = posStartDateInput.value;
+      }
+    }
+    // Check conflict with selected unit
+    const conflict = getSelectedUnitConflict(posStartDateInput.value, posEndDateInput ? posEndDateInput.value : posStartDateInput.value);
+    if (conflict) {
+      alert(`⚠️ Date Blocked: This machinery unit is already booked from ${conflict.startDate} to ${conflict.endDate} (${conflict.reason}). You cannot select this date.`);
+      const nextDay = new Date(new Date(conflict.endDate).getTime() + 86400000).toISOString().split("T")[0];
+      posStartDateInput.value = nextDay;
+      if (posEndDateInput) {
+        posEndDateInput.min = nextDay;
+        const nextEndDay = new Date(new Date(nextDay).getTime() + 3 * 86400000).toISOString().split("T")[0];
+        posEndDateInput.value = nextEndDay;
       }
     }
     if (posCategorySelect?.value) {
@@ -2282,6 +2374,15 @@ async function initManagerPage() {
       alert("Rental end date cannot be earlier than start date.");
       posEndDateInput.value = posStartDateInput.value;
     }
+    // Check conflict with selected unit
+    const conflict = getSelectedUnitConflict(posStartDateInput ? posStartDateInput.value : posEndDateInput.value, posEndDateInput.value);
+    if (conflict) {
+      alert(`⚠️ Date Blocked: This machinery unit is already booked from ${conflict.startDate} to ${conflict.endDate} (${conflict.reason}). You cannot select this date.`);
+      const nextDay = new Date(new Date(conflict.endDate).getTime() + 86400000).toISOString().split("T")[0];
+      posStartDateInput.value = nextDay;
+      const nextEndDay = new Date(new Date(nextDay).getTime() + 3 * 86400000).toISOString().split("T")[0];
+      posEndDateInput.value = nextEndDay;
+    }
     if (posCategorySelect?.value) {
       populatePosEquipmentForCategory(posCategorySelect.value);
     } else {
@@ -2293,6 +2394,12 @@ async function initManagerPage() {
     if (posHourDateInput.value < todayIso) {
       alert("Cannot rent for a past date. Date reset to today.");
       posHourDateInput.value = todayIso;
+    }
+    const conflict = getSelectedUnitConflict(posHourDateInput.value, posHourDateInput.value);
+    if (conflict) {
+      alert(`⚠️ Date Blocked: This machinery unit is already booked on ${conflict.startDate} to ${conflict.endDate} (${conflict.reason}). You cannot select this date.`);
+      const nextDay = new Date(new Date(conflict.endDate).getTime() + 86400000).toISOString().split("T")[0];
+      posHourDateInput.value = nextDay;
     }
     if (posCategorySelect?.value) {
       populatePosEquipmentForCategory(posCategorySelect.value);

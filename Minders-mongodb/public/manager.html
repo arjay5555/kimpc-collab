@@ -871,6 +871,17 @@
                   </select>
                 </div>
 
+                <!-- Booked Dates Notice for Selected Unit (Shows blocked date ranges) -->
+                <div id="pos-dates-booked-notice" style="display: none; grid-column: 1 / -1; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 10px 14px; color: #9a3412; font-size: 0.8rem;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 1.1rem;">🔒</span>
+                    <div>
+                      <strong style="display: block; font-size: 0.82rem; color: #7c2d12;">Active Bookings for this Unit (Dates Blocked):</strong>
+                      <span id="pos-dates-booked-notice-text"></span>
+                    </div>
+                  </div>
+                </div>
+
                 <!-- Conflict Alert Banner (shown when unit is already booked on dates) -->
                 <div id="pos-conflict-alert" style="display: none; grid-column: 1 / -1; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px 16px; color: #991b1b; font-size: 0.82rem; font-weight: 600;">
                   ⚠️ <span id="pos-conflict-alert-text">This machinery unit is already booked on the selected dates. Please select other dates.</span>
@@ -1573,6 +1584,6 @@
     </form>
   </dialog>
 
-  <script src="script.js"></script>
+  <script src="script.js?v=20261027_02"></script>
 </body>
 </html>

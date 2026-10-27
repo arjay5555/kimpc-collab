@@ -1521,6 +1521,28 @@ router.post("/accounts/:email/profile-confirm", async (req, res) => {
   res.json(account);
 });
 
+// Helper to determine if an application or maintenance record refers to the same machinery unit
+function isSameMachineryMatch(appMachineryUnitId, appEquipment, targetUnitId, targetEquipment) {
+  const u1 = (appMachineryUnitId || "").trim().toUpperCase();
+  const u2 = (targetUnitId || "").trim().toUpperCase();
+  if (u1 && u2 && u1 === u2) return true;
+
+  const eq1 = (appEquipment || "").trim().toLowerCase();
+  const eq2 = (targetEquipment || "").trim().toLowerCase();
+  if (!eq1 || !eq2) return false;
+
+  if (eq1 === eq2) return true;
+  if (eq1.includes(eq2) || eq2.includes(eq1)) return true;
+
+  // Extract model tokens like "5075e", "dc70", "dc-70", "rb450", "90jx", "ga4121", "spr600"
+  const tokens1 = eq1.replace(/[^a-z0-9]/g, " ").split(/\s+/).filter((t) => t.length >= 3);
+  const tokens2 = eq2.replace(/[^a-z0-9]/g, " ").split(/\s+/).filter((t) => t.length >= 3);
+  for (const t of tokens1) {
+    if (t.length >= 4 && tokens2.includes(t)) return true;
+  }
+  return false;
+}
+
 // ---------- Equipment applications ----------
 
 // ?memberEmail=... returns one member's requests; without it, everything (manager/admin queue).
@@ -1532,18 +1554,21 @@ router.get("/applications", async (req, res) => {
 router.post("/applications", async (req, res) => {
   const memberEmail = cleanEmail(req.body.memberEmail);
   const equipment = clean(req.body.equipment);
+  const machineryUnitId = clean(req.body.machineryUnitId);
   const startDate = clean(req.body.startDate);
   const endDate = clean(req.body.endDate);
   if (!equipment || !startDate || !endDate) return fail(res, 400, "Equipment and both dates are required.");
   if (endDate < startDate) return fail(res, 400, "End date must be on or after the start date.");
 
   // Automatic Maintenance Overlap Protection:
-  const maintenanceConflict = await MachineryMaintenance.findOne({
-    equipmentName: { $regex: new RegExp(equipment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") },
+  const overlappingMaints = await MachineryMaintenance.find({
     status: { $in: ["Out of Service", "In Repair", "Scheduled Maintenance"] },
     startDate: { $lte: endDate },
     endDate: { $gte: startDate }
   });
+  const maintenanceConflict = overlappingMaints.find((m) =>
+    isSameMachineryMatch(m.equipmentUnitId, m.equipmentName, machineryUnitId, equipment)
+  );
 
   if (maintenanceConflict) {
     return fail(
@@ -1554,18 +1579,20 @@ router.post("/applications", async (req, res) => {
   }
 
   // Automatic Unique Unit Conflict Protection (Quantity: 1):
-  const bookingConflict = await Application.findOne({
-    equipment: { $regex: new RegExp(equipment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") },
+  const overlappingBookings = await Application.find({
     status: { $in: ["Approved", "Checked-Out"] },
     startDate: { $lte: endDate },
     endDate: { $gte: startDate }
   });
+  const bookingConflict = overlappingBookings.find((b) =>
+    isSameMachineryMatch(b.machineryUnitId, b.equipment, machineryUnitId, equipment)
+  );
 
   if (bookingConflict) {
     return fail(
       res,
       409,
-      `Equipment "${equipment}" is already booked from ${bookingConflict.startDate} to ${bookingConflict.endDate}. Each unit is unique (quantity: 1). Please select other dates.`
+      `Equipment "${equipment}" (Quantity: 1) is already booked by ${bookingConflict.memberName} from ${bookingConflict.startDate} to ${bookingConflict.endDate}. Each unit is unique. Please select other dates.`
     );
   }
 
@@ -1683,13 +1710,15 @@ router.patch("/applications/:id", async (req, res) => {
 
   // If approving, enforce that no other booking is already approved on overlapping dates (Quantity: 1)
   if (newStatus === "Approved") {
-    const existingConflict = await Application.findOne({
+    const overlappingBookings = await Application.find({
       _id: { $ne: existing._id },
-      equipment: { $regex: new RegExp(existing.equipment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") },
       status: { $in: ["Approved", "Checked-Out"] },
       startDate: { $lte: existing.endDate },
       endDate: { $gte: existing.startDate }
     });
+    const existingConflict = overlappingBookings.find((b) =>
+      isSameMachineryMatch(b.machineryUnitId, b.equipment, existing.machineryUnitId, existing.equipment)
+    );
     if (existingConflict) {
       return fail(
         res,
@@ -2287,53 +2316,83 @@ router.delete("/machinery-units/:id", authManager, async (req, res) => {
 });
 
 /**
- * GET /api/manager/machinery-availability
+ * GET /api/machinery-availability and /api/manager/machinery-availability
  * Returns list of booked and maintenance units for given date range.
+ * Also returns all upcoming active bookings and maintenance records.
  */
-router.get("/manager/machinery-availability", async (req, res) => {
+const handleMachineryAvailability = async (req, res) => {
   const startDate = clean(req.query.startDate);
   const endDate = clean(req.query.endDate) || startDate;
+  const todayIso = new Date().toISOString().split("T")[0];
 
-  if (!startDate || !endDate) {
-    return res.json({ bookedUnits: [], maintenanceUnits: [] });
+  // Fetch all upcoming / active bookings (Approved or Checked-Out)
+  const activeBookings = await Application.find({
+    status: { $in: ["Approved", "Checked-Out"] },
+    endDate: { $gte: todayIso }
+  }).select("equipment machineryUnitId startDate endDate memberName status");
+
+  const activeMaintenances = await MachineryMaintenance.find({
+    status: { $in: ["Out of Service", "In Repair", "Scheduled Maintenance"] },
+    endDate: { $gte: todayIso }
+  }).select("equipmentName equipmentUnitId startDate endDate maintenanceType status");
+
+  let bookedUnits = [];
+  let maintenanceUnits = [];
+
+  if (startDate && endDate) {
+    bookedUnits = activeBookings
+      .filter((b) => b.startDate <= endDate && b.endDate >= startDate)
+      .map((b) => ({
+        equipment: b.equipment,
+        unitId: b.machineryUnitId,
+        startDate: b.startDate,
+        endDate: b.endDate,
+        memberName: b.memberName,
+        status: b.status
+      }));
+
+    maintenanceUnits = activeMaintenances
+      .filter((m) => m.startDate <= endDate && m.endDate >= startDate)
+      .map((m) => ({
+        equipment: m.equipmentName,
+        unitId: m.equipmentUnitId,
+        startDate: m.startDate,
+        endDate: m.endDate,
+        reason: m.maintenanceType,
+        status: m.status
+      }));
   }
 
-  const bookings = await Application.find({
-    status: { $in: ["Approved", "Checked-Out"] },
-    startDate: { $lte: endDate },
-    endDate: { $gte: startDate }
-  }).select("equipment machineryUnitId startDate endDate memberName");
+  res.json({
+    bookedUnits,
+    maintenanceUnits,
+    allActiveBookings: activeBookings.map((b) => ({
+      equipment: b.equipment,
+      unitId: b.machineryUnitId,
+      startDate: b.startDate,
+      endDate: b.endDate,
+      memberName: b.memberName,
+      status: b.status
+    })),
+    allActiveMaintenance: activeMaintenances.map((m) => ({
+      equipment: m.equipmentName,
+      unitId: m.equipmentUnitId,
+      startDate: m.startDate,
+      endDate: m.endDate,
+      reason: m.maintenanceType,
+      status: m.status
+    }))
+  });
+};
 
-  const maintenances = await MachineryMaintenance.find({
-    status: { $in: ["Out of Service", "In Repair", "Scheduled Maintenance"] },
-    startDate: { $lte: endDate },
-    endDate: { $gte: startDate }
-  }).select("equipmentName equipmentUnitId startDate endDate maintenanceType");
-
-  const bookedUnits = bookings.map((b) => ({
-    equipment: b.equipment,
-    unitId: b.machineryUnitId,
-    startDate: b.startDate,
-    endDate: b.endDate,
-    memberName: b.memberName
-  }));
-
-  const maintenanceUnits = maintenances.map((m) => ({
-    equipment: m.equipmentName,
-    unitId: m.equipmentUnitId,
-    startDate: m.startDate,
-    endDate: m.endDate,
-    reason: m.maintenanceType
-  }));
-
-  res.json({ bookedUnits, maintenanceUnits });
-});
+router.get("/machinery-availability", handleMachineryAvailability);
+router.get("/manager/machinery-availability", handleMachineryAvailability);
 
 /**
  * POST /api/manager/pos-booking
  * Walk-in terminal booking for farmers without online accounts.
  */
-router.post("/manager/pos-booking", async (req, res) => {
+const handlePosBooking = async (req, res) => {
   const farmerName = clean(req.body.farmerName);
   const farmerPhone = clean(req.body.farmerPhone);
   const coopId = clean(req.body.coopId) || "WALK-IN";
@@ -2347,7 +2406,7 @@ router.post("/manager/pos-booking", async (req, res) => {
   const rentalHours = Math.max(Number(req.body.rentalHours) || 1, 1);
   const deposit = 0; // No security deposit for POS walk-in rentals
   const paymentMethod = clean(req.body.paymentMethod) || "Cash";
-  const managerEmail = req.user.email;
+  const managerEmail = cleanEmail(req.body.managerEmail || req.user?.email || "manager@coop.local");
 
   if (!farmerName || !equipment || !startDate || !endDate) {
     return fail(res, 400, "Farmer name, machinery, and valid dates are required.");
@@ -2363,32 +2422,33 @@ router.post("/manager/pos-booking", async (req, res) => {
   }
 
   // Overlap verification with Out of Service records
-  const maintenanceConflict = await MachineryMaintenance.findOne({
-    equipmentName: { $regex: new RegExp(equipment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") },
+  const allMaintenances = await MachineryMaintenance.find({
     status: { $in: ["Out of Service", "In Repair", "Scheduled Maintenance"] },
     startDate: { $lte: endDate },
     endDate: { $gte: startDate }
   });
+  const maintenanceConflict = allMaintenances.find((m) =>
+    isSameMachineryMatch(m.equipmentUnitId, m.equipmentName, machineryUnitId, equipment)
+  );
 
   if (maintenanceConflict) {
-    return fail(res, 409, `Equipment "${equipment}" is Out of Service (${maintenanceConflict.startDate} to ${maintenanceConflict.endDate}). Cannot book for these dates.`);
+    return fail(
+      res,
+      409,
+      `Equipment "${equipment}" is Out of Service (${maintenanceConflict.startDate} to ${maintenanceConflict.endDate}). Cannot book for these dates.`
+    );
   }
 
   // Overlap verification with existing bookings for this unit (Quantity: 1 per unit)
-  const bookingConflictQuery = {
+  const overlappingBookings = await Application.find({
     status: { $in: ["Approved", "Checked-Out"] },
     startDate: { $lte: endDate },
     endDate: { $gte: startDate }
-  };
-  if (machineryUnitId) {
-    bookingConflictQuery.$or = [
-      { machineryUnitId },
-      { equipment: { $regex: new RegExp(equipment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") } }
-    ];
-  } else {
-    bookingConflictQuery.equipment = { $regex: new RegExp(equipment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") };
-  }
-  const bookingConflict = await Application.findOne(bookingConflictQuery);
+  });
+
+  const bookingConflict = overlappingBookings.find((b) =>
+    isSameMachineryMatch(b.machineryUnitId, b.equipment, machineryUnitId, equipment)
+  );
 
   if (bookingConflict) {
     return fail(
@@ -2463,7 +2523,10 @@ router.post("/manager/pos-booking", async (req, res) => {
     totalCollected: totalPaid,
     message: `Walk-in rental booking registered. Receipt #${txId} generated.`
   });
-});
+};
+
+router.post("/pos-booking", handlePosBooking);
+router.post("/manager/pos-booking", handlePosBooking);
 
 /**
  * POST /api/manager/pos-settlement
