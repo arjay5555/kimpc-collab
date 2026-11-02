@@ -281,7 +281,7 @@ async function syncBookingToGoogleCalendar(booking, preferredManager) {
     const eventPayload = {
       summary: `🚜 Equipment Rental: ${booking.equipment} (${booking.memberName})`,
       description: [
-        `Minders Cooperative Machinery Rental`,
+        `KIMPC (Kalilangan Irrigators Multi-Purpose Cooperative) Machinery Rental`,
         `Booking Ref: ${displayId}`,
         `Equipment: ${booking.equipment}`,
         booking.machineryUnitId ? `Unit ID: ${booking.machineryUnitId}` : null,

@@ -35,14 +35,14 @@ async function sendDeleteOtpEmail({ toEmail, otpCode, targetName, targetRole, ta
     console.log(`\n================================================================`);
     console.log(`[EMAIL DISPATCH - SIMULATED (No SMTP credentials configured)]`);
     console.log(`To: ${toEmail}`);
-    console.log(`Subject: [SECURITY] Minders Deletion Verification OTP: ${otpCode}`);
+    console.log(`Subject: [SECURITY] KIMPC Deletion Verification OTP: ${otpCode}`);
     console.log(`Target: ${targetName} (${targetEmail}, Role: ${targetRole})`);
     console.log(`OTP Code: >>> ${otpCode} <<< (Expires in 5 minutes)`);
     console.log(`================================================================\n`);
     return { sent: false, simulated: true, reason: "SMTP_USER and SMTP_PASS are not configured in .env" };
   }
 
-  const fromAddress = process.env.SMTP_FROM || `"Minders Security" <${process.env.SMTP_USER}>`;
+  const fromAddress = process.env.SMTP_FROM || `"KIMPC Security" <${process.env.SMTP_USER}>`;
 
   const htmlContent = `
     <!DOCTYPE html>
@@ -64,16 +64,16 @@ async function sendDeleteOtpEmail({ toEmail, otpCode, targetName, targetRole, ta
     <body>
       <div class="card">
         <div class="header">
-          <div class="logo">M</div>
+          <div class="logo">K</div>
           <div>
-            <p class="title">Minders Portal Security</p>
-            <small style="color: #64746f;">Administrator Verification</small>
+            <p class="title">KIMPC Portal Security</p>
+            <small style="color: #64746f;">Kalilangan Irrigators Multi-Purpose Cooperative</small>
           </div>
         </div>
 
         <h2 style="font-size: 1.3rem; margin-top: 0; color: #1a202c;">Authorize Account Deletion</h2>
         <p style="font-size: 0.92rem; line-height: 1.5; color: #4a5568;">
-          You requested authorization to permanently delete the following user account from the Minders system:
+          You requested authorization to permanently delete the following user account from the KIMPC system:
         </p>
 
         <div class="warning-box">
@@ -95,7 +95,7 @@ async function sendDeleteOtpEmail({ toEmail, otpCode, targetName, targetRole, ta
         </p>
 
         <div class="footer">
-          This is an automated security notification sent by the Minders Cooperative Platform. Please do not reply directly to this email.
+          This is an automated security notification sent by the KIMPC (Kalilangan Irrigators Multi-Purpose Cooperative) Platform. Please do not reply directly to this email.
         </div>
       </div>
     </body>
@@ -106,8 +106,8 @@ async function sendDeleteOtpEmail({ toEmail, otpCode, targetName, targetRole, ta
     const info = await transporter.sendMail({
       from: fromAddress,
       to: toEmail,
-      subject: `[Minders Security] Verification OTP: ${otpCode} - Confirm Account Deletion`,
-      text: `Your Minders 6-digit verification code to delete ${targetName} (${targetEmail}) is: ${otpCode}. It expires in 5 minutes.`,
+      subject: `[KIMPC Security] Verification OTP: ${otpCode} - Confirm Account Deletion`,
+      text: `Your KIMPC 6-digit verification code to delete ${targetName} (${targetEmail}) is: ${otpCode}. It expires in 5 minutes.`,
       html: htmlContent
     });
 

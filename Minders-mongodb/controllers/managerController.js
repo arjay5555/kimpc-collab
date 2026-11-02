@@ -199,6 +199,21 @@ async function approveBooking(req, res) {
     });
   }
 
+  // Block approving bookings for units that are retired or under maintenance
+  if (booking.machineryUnitId || booking.equipment) {
+    const targetUnit = await MachineryUnit.findOne(
+      booking.machineryUnitId ? { unitId: booking.machineryUnitId } : { name: booking.equipment }
+    );
+    if (targetUnit) {
+      const cond = targetUnit.operatingCondition || targetUnit.status;
+      if (["Under Maintenance", "Maintenance", "Repair", "Retired", "Dispose"].includes(cond)) {
+        return res.status(409).json({
+          error: `Cannot approve booking: machinery unit "${targetUnit.unitId || booking.equipment}" is currently ${cond}.`
+        });
+      }
+    }
+  }
+
   const managerRemarks = clean(req.body?.remarks);
   const approved = await Application.findOneAndUpdate(
     { _id: booking._id, status: "Pending" },

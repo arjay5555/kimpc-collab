@@ -6,8 +6,8 @@ const mongoose = require("mongoose");
 const Account = require("./models/Account");
 
 const staff = [
-  { fullName: "System Admin", email: "admin@minders.test", password: "Admin123!", role: "admin" },
-  { fullName: "Alex Manager", email: "manager@minders.test", password: "Manager123!", role: "manager" }
+  { fullName: "System Admin", email: "admin@kimpc.test", password: "Admin123!", role: "admin" },
+  { fullName: "Alex Manager", email: "manager@kimpc.test", password: "Manager123!", role: "manager" }
 ];
 
 (async () => {

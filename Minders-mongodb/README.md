@@ -1,105 +1,170 @@
-# Minders (MongoDB version)
+# KIMPC (Kalilangan Irrigators Multi-Purpose Cooperative) Machinery Portal
 
-The original Minders front-end now stores accounts and equipment applications in MongoDB,
-through a small Express server.
+A web application for agricultural cooperative machinery rental, asset management, and booking dispatch built with an Express & MongoDB backend and a modern React (Vite) single-page application (SPA).
+
+---
+
+## 🏗️ Architecture Overview
+
+The system uses a decoupled client-server architecture:
 
 ```
-Browser (public/script.js)  →  fetch("/api/...")  →  Express (server.js, routes/api.js)  →  Mongoose models  →  MongoDB
+┌────────────────────────────────┐         ┌────────────────────────────────┐
+│      Frontend (React SPA)      │         │      Backend (Express API)     │
+│   Minders-mongodb/client/src   │         │    Minders-mongodb/server.js   │
+│                                │         │                                │
+│  • Member Portal (/member)     │  HTTP   │  • Auth API (/api/auth)        │
+│  • Manager Portal (/manager)   │ ──────> │  • Machinery API (/api/...)    │
+│  • Admin Portal (/admin)       │  Proxy  │  • Manager API (/api/manager)  │
+│  • Google OAuth / JWT Auth     │         │  • Google Calendar Sync        │
+└────────────────────────────────┘         └────────────────────────────────┘
+                                                           │
+                                                           ▼
+                                           ┌────────────────────────────────┐
+                                           │       MongoDB (Atlas/Local)    │
+                                           │   Mongoose Data Models         │
+                                           └────────────────────────────────┘
 ```
 
-## Run it
+- **In Development**: Vite dev server runs on `http://localhost:5173` and proxies `/api` calls to `http://localhost:3000`.
+- **In Production**: Express serves the compiled React bundle from `client/dist` directly on port `3000`.
 
-1. Install Node.js (LTS) from nodejs.org.
-2. Get a database:
-   - **MongoDB Atlas (easiest):** create a free cluster, add a database user, allow your IP under
-     Network Access, then Connect → Drivers → copy the connection string.
-   - **Local:** install MongoDB Community Server (and optionally Compass).
-3. In this folder, install packages:
+---
+
+## 📁 Project Directory Structure
+
+```
+minders/
+├── .vscode/                           # Visual Studio Code launch & debug profiles
+│   └── launch.json                    # 1-click debugging for Node backend & browser
+├── Minders-mongodb/                   # Main project folder
+│   ├── client/                        # Modern React Frontend (Vite + React 19)
+│   │   ├── public/                    # Static assets (logos, background images, favicon)
+│   │   │   └── images/
+│   │   ├── src/                       # React application source code
+│   │   │   ├── assets/                # App images & SVG icons
+│   │   │   ├── components/            # Reusable UI components (Header, ProtectedRoute)
+│   │   │   ├── context/               # Global state (AuthContext.jsx)
+│   │   │   ├── pages/                 # Role-based route views
+│   │   │   │   ├── Admin/             # AdminDashboard, AccountManagement, AuditLogs
+│   │   │   │   ├── Auth/              # Login.jsx (with Google & Facebook auth)
+│   │   │   │   ├── Manager/           # ManagerDashboard, BookingApprovals
+│   │   │   │   └── Member/            # MemberDashboard, Applications
+│   │   │   ├── services/              # API fetch client wrapper (api.js)
+│   │   │   ├── styles/                # CSS stylesheets (admin-wheelzie.css, login-coop.css)
+│   │   │   ├── App.jsx                # React Router root definitions
+│   │   │   └── main.jsx               # React entry point
+│   │   ├── dist/                      # Compiled production frontend build
+│   │   ├── package.json               # Frontend dependencies & Vite scripts
+│   │   └── vite.config.js             # Vite configuration with /api proxy to port 3000
+│   │
+│   ├── controllers/                   # Backend request controllers
+│   │   ├── managerAnalyticsController.js   # Dashboard metrics, utilization & revenue reporting
+│   │   ├── managerController.js            # Booking approvals, calendar, rescheduling
+│   │   └── managerMachineryController.js   # Fleet registration, pricing, maintenance logs
+│   │
+│   ├── middleware/                    # Express middleware
+│   │   └── authManager.js             # JWT verification & role validation (admin/manager)
+│   │
+│   ├── models/                        # Mongoose data models
+│   │   ├── Account.js                 # Users (members, managers, admins, profile data)
+│   │   ├── Application.js             # Equipment booking requests & rental schedules
+│   │   ├── AuditLog.js                # System event audit records
+│   │   ├── MachineryMaintenance.js    # Fleet maintenance & repair schedules
+│   │   ├── MachineryUnit.js           # Physical machinery unit inventory
+│   │   ├── MachineryUsage.js          # Operating runtime & idle hours logs
+│   │   ├── SystemSetting.js           # Dynamic toggles (Google login, reCAPTCHA, etc.)
+│   │   └── Transaction.js             # Payment & deposit financial transactions
+│   │
+│   ├── routes/                        # Express API route endpoints
+│   │   ├── api.js                     # Core API routes (auth, accounts, applications, units)
+│   │   ├── calendar.js                # Google Calendar 2-way sync endpoints
+│   │   └── manager.js                 # Manager operations endpoints
+│   │
+│   ├── services/                      # Reusable backend services
+│   │   ├── auditLogger.js             # Centralized audit logging utility
+│   │   ├── emailService.js            # OTP email delivery & simulation
+│   │   └── googleCalendarService.js   # Google Calendar API integration
+│   │
+│   ├── workers/                       # Scheduled background workers
+│   │   └── archiveAuditLogs.js        # Monthly audit log archiver cron worker
+│   │
+│   ├── public/                        # Legacy fallback static assets (styles & images)
+│   ├── .env                           # Environment variables (DB URI, OAuth keys)
+│   ├── .env.example                   # Template for required environment variables
+│   ├── package.json                   # Root backend package configuration & scripts
+│   ├── seed.js                        # Database seeder for default Admin & Manager accounts
+│   └── server.js                      # Main Express application entry point
+└── pic src/                           # Raw image source repository
+```
+
+---
+
+## 🚀 How to Run
+
+### 1. Prerequisites
+- **Node.js** (v18 or newer recommended, current environment: Node v24).
+- **MongoDB** (Atlas connection string or local MongoDB instance).
+
+### 2. Environment Configuration
+Ensure `.env` exists in `Minders-mongodb/` with the required parameters:
+```env
+MONGODB_URI=mongodb+srv://...
+PORT=3000
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+RECAPTCHA_SITE_KEY=...
+RECAPTCHA_SECRET_KEY=...
+```
+
+### 3. Running in Development (Recommended)
+
+Open two terminals in `Minders-mongodb/`:
+
+```bash
+# Terminal 1: Backend Server (with file watching)
+cd Minders-mongodb
+npm run dev
+
+# Terminal 2: React Frontend (with Hot-Module Reloading)
+cd Minders-mongodb
+npm run client
+```
+Access the application at **http://localhost:5173**.
+
+### 4. Running in Production
+Build the frontend and start the production server:
+```bash
+cd Minders-mongodb
+npm run build
+npm start
+```
+Access the application at **http://localhost:3000**.
+
+---
+
+## 🔑 Default Seed Accounts
+Run `npm run seed` once to initialize default administrative credentials:
+- **Admin**: `admin@minders.test` / `Admin123!`
+- **Manager**: `manager@minders.test` / `Manager123!`
+
+---
+
+## 🛡️ Security & Authentication
+- **JSON Web Tokens (JWT)**: Issued on `POST /api/login` and sent as `Authorization: Bearer <token>`.
+- **Google Sign-In**: Uses Google Identity Services OAuth 2.0 Token Client with backend verification.
+- **Role-Based Access Control**:
+  - `member`: Access to equipment booking request and profile.
+  - `manager`: Access to booking approvals, fleet status, scheduling, and analytics.
+  - `admin`: Full access to accounts, security settings, audit logs, and system operations.
+
+---
+
+## 🔧 Debugging Tips for Maintainers
+1. **VS Code F5 Debugging**: Open the repository in VS Code and select `Debug Backend Server` in the Run & Debug panel (`Ctrl+Shift+D`).
+2. **Database Queries**: Test Mongoose queries using quick Node commands:
    ```bash
-   npm install
+   node -e "require('dotenv').config(); const m = require('mongoose'); m.connect(process.env.MONGODB_URI).then(() => console.log('DB OK'));"
    ```
-4. Copy `.env.example` to `.env` and set `MONGODB_URI` (add the database name, e.g. `.../minders`).
-5. Create the first admin and manager accounts (run once):
-   ```bash
-   npm run seed
-   ```
-   - admin@minders.test / Admin123!
-   - manager@minders.test / Manager123!
-6. Start the server:
-   ```bash
-   npm start
-   ```
-7. Open **http://localhost:3000/login.html** (do not open the .html files directly from disk,
-   because the API calls need the server).
-
-Admin sign-in: `login.html?role=admin`. Manager sign-in: `login.html?role=manager`.
-
-## Folder layout
-
-| Path | Purpose |
-|---|---|
-| `public/` | The original HTML, CSS and `script.js` (now calls the API) |
-| `server.js` | Starts Express and connects to MongoDB |
-| `routes/api.js` | Existing API endpoints |
-| `routes/manager.js` | Manager endpoints for calendar, bookings, analytics and fleet |
-| `controllers/managerController.js` | Calendar feed, booking decisions, resolution and extensions |
-| `controllers/managerAnalyticsController.js` | Dashboard metrics, field issues and revenue reporting |
-| `controllers/managerMachineryController.js` | Fleet registration, pricing, maintenance and usage logs |
-| `middleware/authManager.js` | JWT and manager/admin role verification |
-| `models/Account.js` | `accounts` collection (members, managers, admins, profile data) |
-| `models/Application.js` | `applications` collection (equipment requests) |
-| `models/MachineryUsage.js` | Machinery operator, runtime and idle-time logs |
-| `seed.js` | Creates the first admin and manager |
-
-## Manager API
-
-All `/api/manager/*` endpoints require a valid `Authorization: Bearer <JWT>` token for a
-manager or admin. Machinery mutation routes under `/api/machinery-units` use the same middleware.
-The JWT is issued by `POST /api/login`; manager identity and role are rechecked against the
-account in MongoDB on every request.
-
-| Method and path | Purpose |
-|---|---|
-| `GET /api/manager/calendar/events?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD` | Returns FullCalendar-compatible all-day booking and active maintenance events plus resource labels. Booking end dates are inclusive in storage and converted to FullCalendar's exclusive `end`. |
-| `GET /api/manager/bookings?status=Pending&page=1&limit=50` | Lists booking requests (defaults to pending); supports `status=All` and an optional paired `startDate`/`endDate` overlap filter. |
-| `PATCH /api/manager/bookings/:id/approve` | Approves a pending request after checking for overlapping approved bookings and active maintenance. Optional JSON body: `{"remarks":"..."}`. |
-| `PATCH /api/manager/bookings/:id/reject` | Rejects a pending request. Optional JSON body: `{"remarks":"..."}`. |
-| `PATCH /api/manager/bookings/:id/resolve` | Reschedules or reassigns a pending/approved booking. Accepts `startDate`, `endDate`, `unitId`, or `equipment` as needed, and optional `remarks`. |
-| `PATCH /api/manager/bookings/:id/extend` | Extends an active checked-out rental. Requires a later `endDate`; rejects booking and maintenance conflicts. |
-| `GET /api/manager/dashboard/metrics` | Returns pending request count, daily/monthly rental revenue, logged-use utilization and current maintenance/late-return counts. |
-| `GET /api/manager/utilization` | Returns current-month runtime-based utilization rates grouped by machinery category. |
-| `GET /api/manager/field-issues` | Returns current maintenance flags, overdue checked-out rentals and overlapping reserved schedules. |
-| `POST /api/manager/machinery` | Registers a unit with optional daily/hourly rates, deposit and late-fee values. |
-| `PATCH /api/manager/machinery/:id/pricing` | Updates any of `ratePerDay`, `ratePerHour`, `depositRequired`, `lateFeePerDay`. |
-| `PATCH /api/manager/machinery/:id/archive` | Soft-archives a unit; refused while it has an approved or active rental. |
-| `GET /api/manager/machinery/:id/maintenance-logs` | Lists maintenance/repair records and their accumulated cost. |
-| `POST /api/manager/machinery/:id/maintenance-logs` | Adds a completed repair/maintenance log with reason, type, cost and optional runtime-hours reading. |
-| `GET /api/manager/machinery/:id/usage-logs?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD` | Lists operator, runtime-hours and idle-hours records. |
-| `POST /api/manager/machinery/:id/usage-logs` | Adds a completed usage record with `operator`, `startAt`, `endAt`, `runtimeHours`, and optional `idleHours`, `applicationId`, and `notes`. |
-| `GET /api/manager/reports/revenue/daily?date=YYYY-MM-DD&format=csv` | Daily completed transaction report; CSV export is optional. |
-| `GET /api/manager/reports/revenue/monthly?month=YYYY-MM&format=csv` | Monthly completed transaction report; CSV export is optional. |
-| `GET /api/manager/reports/revenue/annual?year=YYYY&format=csv` | Annual completed transaction report; CSV export is optional. |
-
-Manager decisions, schedule changes, extensions, pricing changes, archiving, maintenance/usage
-logs, and CSV exports are written to `AuditLog`. Maintenance history includes totals and a
-breakdown by repair/maintenance type. Existing booking records may identify only an equipment
-name; those records continue to use name-based conflict detection until a manager assigns them
-to a specific unit. Utilization is based on recorded `MachineryUsage` hours, so historical
-periods without usage logs will report zero utilization.
-
-## What replaced localStorage
-
-| Before (browser) | Now (MongoDB) |
-|---|---|
-| `minders-member-accounts` | `accounts` collection |
-| `minders-member-profiles` | fields on the account document |
-| `minders-equipment-applications` | `applications` collection |
-
-## Known limitations (good next steps)
-
-- **Legacy non-manager APIs still lack comprehensive authorization.** The manager API and
-  machinery mutation/inspection routes verify the current manager/admin role, but member and
-  other legacy API routes should be reviewed before production use.
-- **Email verification is simulated.** The "Confirm email" button just flips a flag. A real
-  version would send a signed link with Nodemailer or a similar service.
-- The sample bookings, issues and rental cards are still hard-coded demo data in `public/script.js`.
+3. **Frontend API Proxy**: All frontend requests in `client/src/services/api.js` use `/api/*`. During development, Vite forwards these to `http://localhost:3000` via `vite.config.js`.
+4. **Audit Logs**: All sensitive operations (logins, booking decisions, pricing changes) are automatically recorded to the `AuditLog` collection.
