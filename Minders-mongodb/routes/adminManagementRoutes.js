@@ -17,7 +17,81 @@ router.use(authenticate, requireAdmin);
 // 1. ACCOUNT VERIFICATION & ACTIVATION MANAGEMENT
 // ============================================================================
 
-// Verify & Activate a newly registered account
+// Verify & Activate a newly registered or suspended account
+router.patch("/admin/accounts/:email/activate", async (req, res) => {
+  try {
+    const targetEmail = cleanEmail(req.params.email);
+    const adminEmail = req.user.email;
+
+    const account = await Account.findOne({ email: targetEmail });
+    if (!account) return fail(res, 404, "Account not found.");
+
+    account.emailVerified = true;
+    account.verificationStatus = "verified";
+    account.isSuspended = false;
+    account.verifiedAt = new Date();
+    account.suspensionReason = "";
+
+    await account.save();
+
+    await logAudit({
+      action: "ACCOUNT_ACTIVATED",
+      actorEmail: adminEmail,
+      actorRole: "admin",
+      targetEmail: account.email,
+      targetName: account.fullName,
+      targetRole: account.role,
+      details: `Administrator activated and verified ${account.role} account "${account.fullName}" (${account.email}).`,
+      req,
+    });
+
+    res.json({ ok: true, account, message: `Account "${account.fullName}" has been activated successfully.` });
+  } catch (error) {
+    console.error("Account activation error:", error);
+    res.status(500).json({ error: "Failed to activate account." });
+  }
+});
+
+// Deactivate an account while preserving all records (places it below active accounts)
+router.patch("/admin/accounts/:email/deactivate", async (req, res) => {
+  try {
+    const targetEmail = cleanEmail(req.params.email);
+    const adminEmail = req.user.email;
+
+    if (targetEmail === adminEmail) {
+      return fail(res, 400, "You cannot deactivate your own active administrator account.");
+    }
+
+    const account = await Account.findOne({ email: targetEmail });
+    if (!account) return fail(res, 404, "Account not found.");
+
+    const reason = clean(req.body.reason || "Deactivated by administrator");
+
+    account.isSuspended = true;
+    account.suspendedAt = new Date();
+    account.suspensionReason = reason;
+
+    await account.save();
+
+    await logAudit({
+      action: "ACCOUNT_DEACTIVATED",
+      actorEmail: adminEmail,
+      actorRole: "admin",
+      targetEmail: account.email,
+      targetName: account.fullName,
+      targetRole: account.role,
+      details: `Administrator deactivated account "${account.fullName}" (${account.email}) while preserving all database records. Reason: ${reason}`,
+      req,
+    });
+
+    res.json({ ok: true, account, message: `Account "${account.fullName}" has been deactivated. Historical records preserved.` });
+  } catch (error) {
+    console.error("Account deactivation error:", error);
+    res.status(500).json({ error: "Failed to deactivate account." });
+  }
+});
+
+// Verify & Activate a newly registered account (alias for backward compatibility)
 router.patch("/admin/accounts/:email/verify", async (req, res) => {
   try {
     const targetEmail = cleanEmail(req.params.email);
@@ -784,3 +858,4 @@ router.get("/admin/reports", async (req, res) => {
 });
 
 module.exports = router;
+

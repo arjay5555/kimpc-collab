@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
+import { useAuth } from "../../context/AuthContext";
 import { api } from "../../services/api";
 import AdminSidebar from "../../components/AdminSidebar";
 import AdminTopbar from "../../components/AdminTopbar";
 import "../../styles/admin-kimpc.css";
 
 export default function AccountManagement() {
+  const { user: currentUser } = useAuth();
   const [activeMainTab, setActiveMainTab] = useState("directory"); // "directory" | "permissions"
 
   // Accounts state
@@ -48,23 +50,23 @@ export default function AccountManagement() {
     fetchPermissions();
   }, []);
 
-  // Account Verification: Approve & Activate
-  const handleVerifyAccount = async (account) => {
-    setFeedback({ message: `Verifying and activating ${account.fullName}...`, isError: false });
-    const res = await api(`/admin/accounts/${encodeURIComponent(account.email)}/verify`, {
+  // Account Action 1: Activate / Verify
+  const handleActivateAccount = async (account) => {
+    setFeedback({ message: `Activating ${account.fullName}...`, isError: false });
+    const res = await api(`/admin/accounts/${encodeURIComponent(account.email)}/activate`, {
       method: "PATCH",
     });
 
     if (!res.ok) {
-      setFeedback({ message: res.data?.error || "Failed to verify account.", isError: true });
+      setFeedback({ message: res.data?.error || "Failed to activate account.", isError: true });
     } else {
-      setFeedback({ message: `Account "${account.fullName}" has been verified and activated!`, isError: false });
+      setFeedback({ message: `Account "${account.fullName}" has been activated and verified successfully!`, isError: false });
       fetchAccounts();
       setTimeout(() => setFeedback({ message: "", isError: false }), 4000);
     }
   };
 
-  // Account Verification: Decline
+  // Account Action 2: Decline registration
   const handleConfirmDecline = async () => {
     if (!declineModal.account) return;
     const account = declineModal.account;
@@ -87,28 +89,37 @@ export default function AccountManagement() {
     }
   };
 
-  // Account Lifecycle: Toggle Active / Deactivate (Preserves records)
-  const handleToggleActive = async (account) => {
-    const isDeactivating = !account.isSuspended;
-    const actionLabel = isDeactivating ? "Deactivating" : "Activating";
+  // Account Action 3: Deactivate (preserves all records and places below active accounts)
+  const handleDeactivateAccount = async (account) => {
+    if (currentUser?.email && account.email.toLowerCase() === currentUser.email.toLowerCase()) {
+      setFeedback({ message: "You cannot deactivate your own active administrator account.", isError: true });
+      return;
+    }
 
-    setFeedback({ message: `${actionLabel} ${account.fullName} while preserving all records...`, isError: false });
-    const res = await api(`/admin/accounts/${encodeURIComponent(account.email)}/toggle-active`, {
+    setFeedback({ message: `Deactivating ${account.fullName} while preserving all records...`, isError: false });
+    const res = await api(`/admin/accounts/${encodeURIComponent(account.email)}/deactivate`, {
       method: "PATCH",
-      body: { reason: isDeactivating ? "Account deactivated by administrator" : "Account reactivated" },
+      body: { reason: "Deactivated by administrator" },
     });
 
     if (!res.ok) {
-      setFeedback({ message: res.data?.error || `Failed to ${actionLabel.toLowerCase()} account.`, isError: true });
+      setFeedback({ message: res.data?.error || "Failed to deactivate account.", isError: true });
     } else {
       setFeedback({
-        message: isDeactivating
-          ? `Account "${account.fullName}" has been deactivated. All historical bookings and records are preserved.`
-          : `Account "${account.fullName}" is now active and can log in.`,
+        message: `Account "${account.fullName}" has been deactivated and placed below active accounts. All historical records are preserved.`,
         isError: false,
       });
       fetchAccounts();
       setTimeout(() => setFeedback({ message: "", isError: false }), 4000);
+    }
+  };
+
+  // Legacy helper for toggle
+  const handleToggleActive = async (account) => {
+    if (account.isSuspended) {
+      await handleActivateAccount(account);
+    } else {
+      await handleDeactivateAccount(account);
     }
   };
 
@@ -198,6 +209,30 @@ export default function AccountManagement() {
     if (filterStatus === "declined") return status === "declined";
     if (filterStatus === "staff") return role === "manager" || role === "admin";
     return true;
+  });
+
+  // Sorting: Pending & Active accounts on top; Deactivated accounts placed at the VERY BOTTOM below active accounts
+  const sortedAccounts = [...filtered].sort((a, b) => {
+    const statusA = getAccountStatus(a).key;
+    const statusB = getAccountStatus(b).key;
+
+    const priority = {
+      pending: 0,
+      active: 1,
+      deactivated: 2,
+      declined: 3,
+    };
+
+    const rankA = priority[statusA] ?? 1;
+    const rankB = priority[statusB] ?? 1;
+
+    if (rankA !== rankB) {
+      return rankA - rankB; // Deactivated accounts are placed at the very bottom below active accounts
+    }
+
+    const dateA = new Date(a.createdAt || a.verifiedAt || 0).getTime();
+    const dateB = new Date(b.createdAt || b.verifiedAt || 0).getTime();
+    return dateB - dateA;
   });
 
   // KPI counts
@@ -454,23 +489,32 @@ export default function AccountManagement() {
                         Loading accounts directory...
                       </td>
                     </tr>
-                  ) : filtered.length === 0 ? (
+                  ) : sortedAccounts.length === 0 ? (
                     <tr>
                       <td colSpan="6" style={{ padding: "32px", textAlign: "center", color: "#64748b" }}>
                         No matching accounts found for the current filter.
                       </td>
                     </tr>
                   ) : (
-                    filtered.map((acc) => {
+                    sortedAccounts.map((acc) => {
                       const statusInfo = getAccountStatus(acc);
                       const isStaff = ["manager", "admin"].includes((acc.role || "").toLowerCase());
                       const isPending = statusInfo.key === "pending";
                       const isDeclined = statusInfo.key === "declined";
                       const isDeactivated = statusInfo.key === "deactivated";
                       const isActive = statusInfo.key === "active";
+                      const isSelf = Boolean(
+                        currentUser?.email && acc.email.toLowerCase() === currentUser.email.toLowerCase()
+                      );
 
                       return (
-                        <tr key={acc._id || acc.email}>
+                        <tr
+                          key={acc._id || acc.email}
+                          style={{
+                            opacity: isDeactivated ? 0.75 : 1,
+                            background: isDeactivated ? "rgba(241, 245, 249, 0.4)" : "transparent",
+                          }}
+                        >
                           <td>
                             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                               <div
@@ -478,7 +522,7 @@ export default function AccountManagement() {
                                   width: "32px",
                                   height: "32px",
                                   borderRadius: "50%",
-                                  background: isStaff ? "#0f172a" : "#166534",
+                                  background: isStaff ? "#0f172a" : isDeactivated ? "#64748b" : "#166534",
                                   color: "#ffffff",
                                   display: "flex",
                                   alignItems: "center",
@@ -493,6 +537,11 @@ export default function AccountManagement() {
                               <div>
                                 <div style={{ fontWeight: 700, color: "var(--wz-text, #0f172a)", fontSize: "0.86rem" }}>
                                   {acc.fullName || "—"}
+                                  {isSelf && (
+                                    <span style={{ marginLeft: "6px", fontSize: "0.7rem", color: "#166534", fontWeight: 700 }}>
+                                      (You)
+                                    </span>
+                                  )}
                                 </div>
                                 {acc.phone && (
                                   <div style={{ fontSize: "0.72rem", color: "#64748b" }}>{acc.phone}</div>
@@ -554,106 +603,123 @@ export default function AccountManagement() {
                           </td>
                           <td style={{ textAlign: "right" }}>
                             <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", justifyContent: "flex-end" }}>
-                              {/* New Registration: Verify & Activate */}
-                              {isPending && (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleVerifyAccount(acc)}
-                                    style={{
-                                      padding: "5px 10px",
-                                      background: "#166534",
-                                      color: "#ffffff",
-                                      border: "none",
-                                      borderRadius: "6px",
-                                      fontSize: "0.76rem",
-                                      fontWeight: 700,
-                                      cursor: "pointer",
-                                    }}
-                                    title="Verify registration and activate account"
-                                  >
-                                    Verify &amp; Activate
-                                  </button>
+                              {/* Action 1: Active Icon */}
+                              <button
+                                type="button"
+                                onClick={() => handleActivateAccount(acc)}
+                                disabled={isActive}
+                                title={isActive ? "Account is already active" : "Activate and verify this account"}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                  padding: "5px 9px",
+                                  borderRadius: "7px",
+                                  fontSize: "0.74rem",
+                                  fontWeight: 700,
+                                  cursor: isActive ? "default" : "pointer",
+                                  background: isActive ? "#dcfce7" : "#166534",
+                                  color: isActive ? "#15803d" : "#ffffff",
+                                  border: isActive ? "1px solid #86efac" : "1px solid #166534",
+                                  opacity: isActive ? 0.8 : 1,
+                                  transition: "all 0.15s ease",
+                                }}
+                              >
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                  <polyline points="20 6 9 17 4 12" />
+                                </svg>
+                                <span>Active</span>
+                              </button>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => setDeclineModal({ open: true, account: acc, reason: "" })}
-                                    style={{
-                                      padding: "5px 10px",
-                                      background: "#ffffff",
-                                      color: "#dc2626",
-                                      border: "1px solid #fca5a5",
-                                      borderRadius: "6px",
-                                      fontSize: "0.76rem",
-                                      fontWeight: 600,
-                                      cursor: "pointer",
-                                    }}
-                                    title="Decline this registration"
-                                  >
-                                    Decline
-                                  </button>
-                                </>
-                              )}
+                              {/* Action 2: Decline Icon */}
+                              <button
+                                type="button"
+                                onClick={() => setDeclineModal({ open: true, account: acc, reason: "" })}
+                                disabled={isDeclined}
+                                title={isDeclined ? "Account registration is already declined" : "Decline account registration"}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                  padding: "5px 9px",
+                                  borderRadius: "7px",
+                                  fontSize: "0.74rem",
+                                  fontWeight: 700,
+                                  cursor: isDeclined ? "default" : "pointer",
+                                  background: isDeclined ? "#fee2e2" : "#ffffff",
+                                  color: isDeclined ? "#991b1b" : "#dc2626",
+                                  border: `1px solid ${isDeclined ? "#fca5a5" : "#fca5a5"}`,
+                                  opacity: isDeclined ? 0.75 : 1,
+                                  transition: "all 0.15s ease",
+                                }}
+                              >
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                  <line x1="18" y1="6" x2="6" y2="18" />
+                                  <line x1="6" y1="6" x2="18" y2="18" />
+                                </svg>
+                                <span>Decline</span>
+                              </button>
 
-                              {/* Verified Accounts: Activate / Deactivate Toggle (Preserving Records) */}
-                              {!isPending && !isDeclined && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleToggleActive(acc)}
-                                  style={{
-                                    padding: "5px 10px",
-                                    background: isDeactivated ? "#f0fdf4" : "#fef2f2",
-                                    color: isDeactivated ? "#166534" : "#dc2626",
-                                    border: `1px solid ${isDeactivated ? "#86efac" : "#fecaca"}`,
-                                    borderRadius: "6px",
-                                    fontSize: "0.76rem",
-                                    fontWeight: 700,
-                                    cursor: "pointer",
-                                  }}
-                                  title={isDeactivatingAction => isDeactivated ? "Activate this account" : "Deactivate while preserving all records"}
-                                >
-                                  {isDeactivated ? "Activate" : "Deactivate"}
-                                </button>
-                              )}
+                              {/* Action 3: Deactivate Icon */}
+                              <button
+                                type="button"
+                                onClick={() => handleDeactivateAccount(acc)}
+                                disabled={isDeactivated || isSelf}
+                                title={
+                                  isSelf
+                                    ? "Cannot deactivate your own active admin account"
+                                    : isDeactivated
+                                    ? "Account is already deactivated (placed at the bottom below active accounts)"
+                                    : "Deactivate account (preserves all historical records & moves to bottom)"
+                                }
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                  padding: "5px 9px",
+                                  borderRadius: "7px",
+                                  fontSize: "0.74rem",
+                                  fontWeight: 700,
+                                  cursor: isDeactivated || isSelf ? "default" : "pointer",
+                                  background: isDeactivated ? "#f1f5f9" : "#ffffff",
+                                  color: isDeactivated ? "#64748b" : "#475569",
+                                  border: `1px solid ${isDeactivated ? "#cbd5e1" : "#94a3b8"}`,
+                                  opacity: isDeactivated || isSelf ? 0.65 : 1,
+                                  transition: "all 0.15s ease",
+                                }}
+                              >
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                  <circle cx="12" cy="12" r="10" />
+                                  <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+                                </svg>
+                                <span>Deactivate</span>
+                              </button>
 
-                              {/* Declined Account: Can be reviewed & approved */}
-                              {isDeclined && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleVerifyAccount(acc)}
-                                  style={{
-                                    padding: "5px 10px",
-                                    background: "#166534",
-                                    color: "#ffffff",
-                                    border: "none",
-                                    borderRadius: "6px",
-                                    fontSize: "0.76rem",
-                                    fontWeight: 700,
-                                    cursor: "pointer",
-                                  }}
-                                  title="Re-evaluate and activate this account"
-                                >
-                                  Re-activate
-                                </button>
-                              )}
-
-                              {/* Forgot Password OTP Issue Button */}
+                              {/* Action 4: Issue OTP (when requested) */}
                               {acc.forgotPasswordRequested && (
                                 <button
                                   type="button"
                                   onClick={() => handleIssueOtp(acc)}
                                   style={{
-                                    padding: "5px 10px",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "4px",
+                                    padding: "5px 9px",
                                     background: "#b45309",
                                     color: "#ffffff",
                                     border: "none",
-                                    borderRadius: "6px",
-                                    fontSize: "0.76rem",
+                                    borderRadius: "7px",
+                                    fontSize: "0.74rem",
                                     fontWeight: 700,
                                     cursor: "pointer",
                                   }}
+                                  title="Issue Temporary One-Time Password"
                                 >
-                                  Issue OTP
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                    <path d="M21 2l-2 2m-1-1l-3 3m0 0l-3 3 2 2 3-3m1-1l2 2" />
+                                    <circle cx="7.5" cy="15.5" r="5.5" />
+                                  </svg>
+                                  <span>OTP</span>
                                 </button>
                               )}
                             </div>

@@ -177,7 +177,13 @@ export default function Login() {
     });
 
     if (!ok) {
-      setLoginFeedback({ message: data.error || "Google sign-in failed.", isError: true });
+      const errMsg = data.error || "Google sign-in failed.";
+      const isWaiting = errMsg.toLowerCase().includes("waiting for verification");
+      setLoginFeedback({
+        message: isWaiting ? "waiting for verification" : errMsg,
+        isWaitingVerification: isWaiting,
+        isError: true,
+      });
       return;
     }
 
@@ -255,7 +261,13 @@ export default function Login() {
               });
 
               if (!ok) {
-                setLoginFeedback({ message: data.error || "Google sign-in failed.", isError: true });
+                const errMsg = data.error || "Google sign-in failed.";
+                const isWaiting = errMsg.toLowerCase().includes("waiting for verification");
+                setLoginFeedback({
+                  message: isWaiting ? "waiting for verification" : errMsg,
+                  isWaitingVerification: isWaiting,
+                  isError: true,
+                });
                 return;
               }
 
@@ -313,7 +325,13 @@ export default function Login() {
             body: { accessToken, userID },
           }).then(({ ok, data }) => {
             if (!ok) {
-              setLoginFeedback({ message: data.error || "Facebook sign-in failed.", isError: true });
+              const errMsg = data.error || "Facebook sign-in failed.";
+              const isWaiting = errMsg.toLowerCase().includes("waiting for verification");
+              setLoginFeedback({
+                message: isWaiting ? "waiting for verification" : errMsg,
+                isWaitingVerification: isWaiting,
+                isError: true,
+              });
               return;
             }
             const signedInUser = completeSignIn(data);
@@ -359,7 +377,13 @@ export default function Login() {
     setIsLoggingIn(false);
 
     if (!ok) {
-      setLoginFeedback({ message: data.error || "Could not sign in.", isError: true });
+      const errMsg = data.error || "Could not sign in.";
+      const isWaiting = errMsg.toLowerCase().includes("waiting for verification");
+      setLoginFeedback({
+        message: isWaiting ? "waiting for verification" : errMsg,
+        isWaitingVerification: isWaiting,
+        isError: true,
+      });
       if (typeof window.grecaptcha !== "undefined" && window.grecaptcha.reset) {
         window.grecaptcha.reset();
       }
@@ -420,9 +444,14 @@ export default function Login() {
       return;
     }
 
-    setVerifyTargetEmail(data.email || regEmail.trim().toLowerCase());
-    setVerifyFeedback({ message: "Registration saved! Confirm your email to activate.", isError: false });
-    setMode("verify");
+    setMode("login");
+    setLoginIdentifier(data.cooperativeId || regEmail.trim().toLowerCase());
+    setLoginPassword("");
+    setLoginFeedback({
+      message: "waiting for verification",
+      isWaitingVerification: true,
+      isError: true,
+    });
   };
 
   const handleVerifySubmit = async () => {
@@ -640,9 +669,36 @@ export default function Login() {
                   </button>
 
                   {loginFeedback.message && (
-                    <p className={`form-feedback ${loginFeedback.isError ? "error" : ""}`} role="status">
-                      {loginFeedback.message}
-                    </p>
+                    <div
+                      className={`form-feedback ${loginFeedback.isError ? "error" : ""}`}
+                      style={
+                        loginFeedback.isWaitingVerification || loginFeedback.message.toLowerCase().includes("waiting for verification")
+                          ? {
+                              background: "#fef3c7",
+                              color: "#92400e",
+                              border: "1px solid #fde68a",
+                              padding: "10px 14px",
+                              borderRadius: "10px",
+                              fontWeight: 700,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                              justifyContent: "center",
+                              marginTop: "12px",
+                              fontSize: "0.86rem",
+                            }
+                          : {}
+                      }
+                      role="status"
+                    >
+                      {(loginFeedback.isWaitingVerification || loginFeedback.message.toLowerCase().includes("waiting for verification")) && (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" style={{ flexShrink: 0 }}>
+                          <circle cx="12" cy="12" r="10" />
+                          <polyline points="12 6 12 12 14 14" />
+                        </svg>
+                      )}
+                      <span>{loginFeedback.message}</span>
+                    </div>
                   )}
                 </form>
 
