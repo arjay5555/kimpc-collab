@@ -16,6 +16,16 @@ export default function AccountManagement() {
   const [filterStatus, setFilterStatus] = useState("all"); // "all" | "pending" | "active" | "deactivated" | "declined" | "staff"
   const [feedback, setFeedback] = useState({ message: "", isError: false });
 
+  // 1-button action dropdown menu state
+  const [openMenuEmail, setOpenMenuEmail] = useState(null);
+
+  // Close action dropdown on outside click
+  useEffect(() => {
+    const handleGlobalClick = () => setOpenMenuEmail(null);
+    window.addEventListener("click", handleGlobalClick);
+    return () => window.removeEventListener("click", handleGlobalClick);
+  }, []);
+
   // Decline confirmation modal state
   const [declineModal, setDeclineModal] = useState({ open: false, account: null, reason: "" });
 
@@ -470,7 +480,7 @@ export default function AccountManagement() {
               </div>
             </div>
 
-            <div className="wz-table-responsive">
+            <div className="wz-table-responsive" style={{ minHeight: "380px" }}>
               <table className="wz-table">
                 <thead>
                   <tr>
@@ -496,7 +506,7 @@ export default function AccountManagement() {
                       </td>
                     </tr>
                   ) : (
-                    sortedAccounts.map((acc) => {
+                    sortedAccounts.map((acc, index) => {
                       const statusInfo = getAccountStatus(acc);
                       const isStaff = ["manager", "admin"].includes((acc.role || "").toLowerCase());
                       const isPending = statusInfo.key === "pending";
@@ -506,6 +516,7 @@ export default function AccountManagement() {
                       const isSelf = Boolean(
                         currentUser?.email && acc.email.toLowerCase() === currentUser.email.toLowerCase()
                       );
+                      const isMenuOpen = openMenuEmail === acc.email;
 
                       return (
                         <tr
@@ -601,126 +612,205 @@ export default function AccountManagement() {
                               </div>
                             )}
                           </td>
-                          <td style={{ textAlign: "right" }}>
-                            <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", justifyContent: "flex-end" }}>
-                              {/* Action 1: Active Icon */}
+                          <td style={{ textAlign: "right", position: "relative" }}>
+                            <div style={{ display: "inline-block", position: "relative" }}>
+                              {/* Single Action Button Icon */}
                               <button
                                 type="button"
-                                onClick={() => handleActivateAccount(acc)}
-                                disabled={isActive}
-                                title={isActive ? "Account is already active" : "Activate and verify this account"}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenMenuEmail(isMenuOpen ? null : acc.email);
+                                }}
+                                aria-label="Account actions menu"
+                                title="Actions"
                                 style={{
+                                  width: "32px",
+                                  height: "32px",
+                                  borderRadius: "8px",
+                                  border: isMenuOpen ? "1px solid #166534" : "1px solid var(--wz-border, #cbd5e1)",
+                                  background: isMenuOpen ? "#ecfdf5" : "var(--wz-card-bg, #ffffff)",
+                                  color: isMenuOpen ? "#166534" : "var(--wz-text, #334155)",
                                   display: "inline-flex",
                                   alignItems: "center",
-                                  gap: "4px",
-                                  padding: "5px 9px",
-                                  borderRadius: "7px",
-                                  fontSize: "0.74rem",
-                                  fontWeight: 700,
-                                  cursor: isActive ? "default" : "pointer",
-                                  background: isActive ? "#dcfce7" : "#166534",
-                                  color: isActive ? "#15803d" : "#ffffff",
-                                  border: isActive ? "1px solid #86efac" : "1px solid #166534",
-                                  opacity: isActive ? 0.8 : 1,
+                                  justifyContent: "center",
+                                  cursor: "pointer",
                                   transition: "all 0.15s ease",
+                                  boxShadow: isMenuOpen ? "0 0 0 2px rgba(22, 101, 52, 0.15)" : "0 1px 2px rgba(0,0,0,0.04)",
                                 }}
                               >
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                  <polyline points="20 6 9 17 4 12" />
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                  <circle cx="12" cy="5" r="2.2" />
+                                  <circle cx="12" cy="12" r="2.2" />
+                                  <circle cx="12" cy="19" r="2.2" />
                                 </svg>
-                                <span>Active</span>
                               </button>
 
-                              {/* Action 2: Decline Icon */}
-                              <button
-                                type="button"
-                                onClick={() => setDeclineModal({ open: true, account: acc, reason: "" })}
-                                disabled={isDeclined}
-                                title={isDeclined ? "Account registration is already declined" : "Decline account registration"}
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: "4px",
-                                  padding: "5px 9px",
-                                  borderRadius: "7px",
-                                  fontSize: "0.74rem",
-                                  fontWeight: 700,
-                                  cursor: isDeclined ? "default" : "pointer",
-                                  background: isDeclined ? "#fee2e2" : "#ffffff",
-                                  color: isDeclined ? "#991b1b" : "#dc2626",
-                                  border: `1px solid ${isDeclined ? "#fca5a5" : "#fca5a5"}`,
-                                  opacity: isDeclined ? 0.75 : 1,
-                                  transition: "all 0.15s ease",
-                                }}
-                              >
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                  <line x1="18" y1="6" x2="6" y2="18" />
-                                  <line x1="6" y1="6" x2="18" y2="18" />
-                                </svg>
-                                <span>Decline</span>
-                              </button>
-
-                              {/* Action 3: Deactivate Icon */}
-                              <button
-                                type="button"
-                                onClick={() => handleDeactivateAccount(acc)}
-                                disabled={isDeactivated || isSelf}
-                                title={
-                                  isSelf
-                                    ? "Cannot deactivate your own active admin account"
-                                    : isDeactivated
-                                    ? "Account is already deactivated (placed at the bottom below active accounts)"
-                                    : "Deactivate account (preserves all historical records & moves to bottom)"
-                                }
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: "4px",
-                                  padding: "5px 9px",
-                                  borderRadius: "7px",
-                                  fontSize: "0.74rem",
-                                  fontWeight: 700,
-                                  cursor: isDeactivated || isSelf ? "default" : "pointer",
-                                  background: isDeactivated ? "#f1f5f9" : "#ffffff",
-                                  color: isDeactivated ? "#64748b" : "#475569",
-                                  border: `1px solid ${isDeactivated ? "#cbd5e1" : "#94a3b8"}`,
-                                  opacity: isDeactivated || isSelf ? 0.65 : 1,
-                                  transition: "all 0.15s ease",
-                                }}
-                              >
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                  <circle cx="12" cy="12" r="10" />
-                                  <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
-                                </svg>
-                                <span>Deactivate</span>
-                              </button>
-
-                              {/* Action 4: Issue OTP (when requested) */}
-                              {acc.forgotPasswordRequested && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleIssueOtp(acc)}
+                              {/* Clean Floating Action Dropdown Menu */}
+                              {isMenuOpen && (
+                                <div
+                                  onClick={(e) => e.stopPropagation()}
                                   style={{
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "4px",
-                                    padding: "5px 9px",
-                                    background: "#b45309",
-                                    color: "#ffffff",
-                                    border: "none",
-                                    borderRadius: "7px",
-                                    fontSize: "0.74rem",
-                                    fontWeight: 700,
-                                    cursor: "pointer",
+                                    position: "absolute",
+                                    right: 0,
+                                    [index >= Math.max(1, sortedAccounts.length - 2) ? "bottom" : "top"]: "calc(100% + 4px)",
+                                    zIndex: 120,
+                                    minWidth: "195px",
+                                    background: "#ffffff",
+                                    border: "1px solid #e2e8f0",
+                                    borderRadius: "10px",
+                                    boxShadow: "0 10px 25px -5px rgba(0,0,0,0.18), 0 8px 10px -6px rgba(0,0,0,0.1)",
+                                    padding: "6px",
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "2px",
                                   }}
-                                  title="Issue Temporary One-Time Password"
                                 >
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                    <path d="M21 2l-2 2m-1-1l-3 3m0 0l-3 3 2 2 3-3m1-1l2 2" />
-                                    <circle cx="7.5" cy="15.5" r="5.5" />
-                                  </svg>
-                                  <span>OTP</span>
-                                </button>
+                                  {/* Action 1: Active / Verify */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOpenMenuEmail(null);
+                                      handleActivateAccount(acc);
+                                    }}
+                                    disabled={isActive}
+                                    style={{
+                                      width: "100%",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: "8px",
+                                      padding: "8px 12px",
+                                      borderRadius: "6px",
+                                      border: "none",
+                                      background: "transparent",
+                                      color: isActive ? "#94a3b8" : "#166534",
+                                      fontSize: "0.82rem",
+                                      fontWeight: 600,
+                                      cursor: isActive ? "default" : "pointer",
+                                      textAlign: "left",
+                                      transition: "background 0.15s ease",
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      if (!isActive) e.currentTarget.style.background = "#f0fdf4";
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.background = "transparent";
+                                    }}
+                                  >
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                      <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                    <span>{isActive ? "Active (Verified)" : "Active (Verify)"}</span>
+                                  </button>
+
+                                  {/* Action 2: Decline */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOpenMenuEmail(null);
+                                      setDeclineModal({ open: true, account: acc, reason: "" });
+                                    }}
+                                    disabled={isDeclined}
+                                    style={{
+                                      width: "100%",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: "8px",
+                                      padding: "8px 12px",
+                                      borderRadius: "6px",
+                                      border: "none",
+                                      background: "transparent",
+                                      color: isDeclined ? "#94a3b8" : "#dc2626",
+                                      fontSize: "0.82rem",
+                                      fontWeight: 600,
+                                      cursor: isDeclined ? "default" : "pointer",
+                                      textAlign: "left",
+                                      transition: "background 0.15s ease",
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      if (!isDeclined) e.currentTarget.style.background = "#fef2f2";
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.background = "transparent";
+                                    }}
+                                  >
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                      <line x1="18" y1="6" x2="6" y2="18" />
+                                      <line x1="6" y1="6" x2="18" y2="18" />
+                                    </svg>
+                                    <span>{isDeclined ? "Already Declined" : "Decline Account"}</span>
+                                  </button>
+
+                                  {/* Action 3: Deactivate */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOpenMenuEmail(null);
+                                      handleDeactivateAccount(acc);
+                                    }}
+                                    disabled={isDeactivated || isSelf}
+                                    style={{
+                                      width: "100%",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: "8px",
+                                      padding: "8px 12px",
+                                      borderRadius: "6px",
+                                      border: "none",
+                                      background: "transparent",
+                                      color: isDeactivated || isSelf ? "#94a3b8" : "#475569",
+                                      fontSize: "0.82rem",
+                                      fontWeight: 600,
+                                      cursor: isDeactivated || isSelf ? "default" : "pointer",
+                                      textAlign: "left",
+                                      transition: "background 0.15s ease",
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      if (!isDeactivated && !isSelf) e.currentTarget.style.background = "#f1f5f9";
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.background = "transparent";
+                                    }}
+                                  >
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                      <circle cx="12" cy="12" r="10" />
+                                      <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+                                    </svg>
+                                    <span>{isSelf ? "Self (Protected)" : isDeactivated ? "Deactivated" : "Deactivate"}</span>
+                                  </button>
+
+                                  {/* Action 4: Issue OTP (when requested) */}
+                                  {acc.forgotPasswordRequested && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOpenMenuEmail(null);
+                                        handleIssueOtp(acc);
+                                      }}
+                                      style={{
+                                        width: "100%",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "8px",
+                                        padding: "8px 12px",
+                                        borderRadius: "6px",
+                                        border: "none",
+                                        background: "#fef3c7",
+                                        color: "#b45309",
+                                        fontSize: "0.82rem",
+                                        fontWeight: 700,
+                                        cursor: "pointer",
+                                        textAlign: "left",
+                                        marginTop: "3px",
+                                      }}
+                                    >
+                                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <path d="M21 2l-2 2m-1-1l-3 3m0 0l-3 3 2 2 3-3m1-1l2 2" />
+                                        <circle cx="7.5" cy="15.5" r="5.5" />
+                                      </svg>
+                                      <span>Issue OTP</span>
+                                    </button>
+                                  )}
+                                </div>
                               )}
                             </div>
                           </td>
@@ -762,7 +852,7 @@ export default function AccountManagement() {
                 Loading role permissions matrix...
               </div>
             ) : (
-              <div className="wz-table-responsive">
+              <div className="wz-table-responsive" style={{ minHeight: "380px" }}>
                 <table className="wz-table">
                   <thead>
                     <tr>

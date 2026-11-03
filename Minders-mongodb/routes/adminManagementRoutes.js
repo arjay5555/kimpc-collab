@@ -10,8 +10,10 @@ const { fail, clean, cleanEmail, requireAdmin } = require("./routeHelpers");
 
 const router = express.Router();
 
-// Require Admin middleware for all routes in this module
-router.use(authenticate, requireAdmin);
+// Require Admin privileges for all routes in this module
+router.use(requireAdmin);
+
+const getAdminEmail = (req) => req.admin?.email || req.user?.email || cleanEmail(req.headers["x-admin-email"]) || "admin";
 
 // ============================================================================
 // 1. ACCOUNT VERIFICATION & ACTIVATION MANAGEMENT
@@ -21,7 +23,7 @@ router.use(authenticate, requireAdmin);
 router.patch("/admin/accounts/:email/activate", async (req, res) => {
   try {
     const targetEmail = cleanEmail(req.params.email);
-    const adminEmail = req.user.email;
+    const adminEmail = getAdminEmail(req);
 
     const account = await Account.findOne({ email: targetEmail });
     if (!account) return fail(res, 404, "Account not found.");
@@ -56,7 +58,7 @@ router.patch("/admin/accounts/:email/activate", async (req, res) => {
 router.patch("/admin/accounts/:email/deactivate", async (req, res) => {
   try {
     const targetEmail = cleanEmail(req.params.email);
-    const adminEmail = req.user.email;
+    const adminEmail = getAdminEmail(req);
 
     if (targetEmail === adminEmail) {
       return fail(res, 400, "You cannot deactivate your own active administrator account.");
@@ -95,7 +97,7 @@ router.patch("/admin/accounts/:email/deactivate", async (req, res) => {
 router.patch("/admin/accounts/:email/verify", async (req, res) => {
   try {
     const targetEmail = cleanEmail(req.params.email);
-    const adminEmail = req.user.email;
+    const adminEmail = getAdminEmail(req);
 
     const account = await Account.findOne({ email: targetEmail });
     if (!account) return fail(res, 404, "Account not found.");
@@ -130,7 +132,7 @@ router.patch("/admin/accounts/:email/verify", async (req, res) => {
 router.patch("/admin/accounts/:email/decline", async (req, res) => {
   try {
     const targetEmail = cleanEmail(req.params.email);
-    const adminEmail = req.user.email;
+    const adminEmail = getAdminEmail(req);
     const reason = clean(req.body.reason || "Application declined by administrator");
 
     const account = await Account.findOne({ email: targetEmail });
@@ -165,7 +167,7 @@ router.patch("/admin/accounts/:email/decline", async (req, res) => {
 router.patch("/admin/accounts/:email/toggle-active", async (req, res) => {
   try {
     const targetEmail = cleanEmail(req.params.email);
-    const adminEmail = req.user.email;
+    const adminEmail = getAdminEmail(req);
 
     if (targetEmail === adminEmail) {
       return fail(res, 400, "You cannot deactivate your own active administrator account.");
@@ -280,14 +282,14 @@ router.post("/admin/permissions", async (req, res) => {
         key: "role_permissions",
         value: newPermissions,
         description: "Role-based access control permissions matrix",
-        updatedBy: req.user.email,
+        updatedBy: getAdminEmail(req),
       },
       { upsert: true, new: true }
     );
 
     await logAudit({
       action: "ROLE_PERMISSIONS_UPDATED",
-      actorEmail: req.user.email,
+      actorEmail: getAdminEmail(req),
       actorRole: "admin",
       details: "Administrator updated role-based access control (RBAC) permissions matrix for Member, Manager, and Admin roles.",
       req,
@@ -343,14 +345,14 @@ router.post("/admin/deposit-cancellation-policies", async (req, res) => {
         key: "deposit_cancellation_policies",
         value: policies,
         description: "Cooperative machinery deposit requirements and booking cancellation rules",
-        updatedBy: req.user.email,
+        updatedBy: getAdminEmail(req),
       },
       { upsert: true, new: true }
     );
 
     await logAudit({
       action: "DEPOSIT_CANCELLATION_POLICY_UPDATED",
-      actorEmail: req.user.email,
+      actorEmail: getAdminEmail(req),
       actorRole: "admin",
       details: `Administrator updated deposit requirements (${policies.depositPercentage}%) and cancellation policies (${policies.freeCancellationHours}h notice).`,
       req,
@@ -442,14 +444,14 @@ router.post("/admin/payment-methods", async (req, res) => {
         key: "payment_methods_instructions",
         value: data,
         description: "Accepted payment channels, accounts, and member checkout instructions",
-        updatedBy: req.user.email,
+        updatedBy: getAdminEmail(req),
       },
       { upsert: true, new: true }
     );
 
     await logAudit({
       action: "PAYMENT_METHODS_UPDATED",
-      actorEmail: req.user.email,
+      actorEmail: getAdminEmail(req),
       actorRole: "admin",
       details: "Administrator updated accepted payment methods and payment instructions.",
       req,
@@ -523,12 +525,12 @@ router.post("/admin/payment-corrections", async (req, res) => {
       amount,
       paymentMethod,
       status: "Completed",
-      notes: `Authorized by ${req.user.email}. Reason: ${reason}`,
+      notes: `Authorized by ${getAdminEmail(req)}. Reason: ${reason}`,
     });
 
     await logAudit({
       action: "PAYMENT_CORRECTION_RECORDED",
-      actorEmail: req.user.email,
+      actorEmail: getAdminEmail(req),
       actorRole: "admin",
       targetName: farmer,
       details: `Administrator recorded authorized ${type} of ₱${amount.toLocaleString()} for ${farmer}. Reason: ${reason} (TxID: ${txId})`,
@@ -660,14 +662,14 @@ router.post("/admin/backups/snapshot", async (req, res) => {
         key: "database_backup_status",
         value: updatedData,
         description: "MongoDB backup metadata and sandbox restore verification history",
-        updatedBy: req.user.email,
+        updatedBy: getAdminEmail(req),
       },
       { upsert: true, new: true }
     );
 
     await logAudit({
       action: "DATABASE_SNAPSHOT_CREATED",
-      actorEmail: req.user.email,
+      actorEmail: getAdminEmail(req),
       actorRole: "admin",
       details: `Administrator triggered manual database backup snapshot "${snapId}" (${totalDocs} documents captured).`,
       req,
@@ -700,7 +702,7 @@ router.post("/admin/backups/verify-restore", async (req, res) => {
       verifiedAt: new Date().toISOString(),
       environment: "Sandbox Test Environment (Isolated)",
       result: "PASSED",
-      verifiedBy: req.user.email,
+      verifiedBy: getAdminEmail(req),
       collectionsChecked: [
         { name: "accounts", count: accountsCount, status: "Checksum Verified" },
         { name: "applications", count: appsCount, status: "Checksum Verified" },
@@ -726,14 +728,14 @@ router.post("/admin/backups/verify-restore", async (req, res) => {
         key: "database_backup_status",
         value: updatedData,
         description: "MongoDB backup metadata and sandbox restore verification history",
-        updatedBy: req.user.email,
+        updatedBy: getAdminEmail(req),
       },
       { upsert: true, new: true }
     );
 
     await logAudit({
       action: "DATABASE_RESTORE_VERIFIED",
-      actorEmail: req.user.email,
+      actorEmail: getAdminEmail(req),
       actorRole: "admin",
       details: `Administrator verified database restore in isolated sandbox test environment (100% integrity, ${durationMs}ms).`,
       req,
