@@ -14,8 +14,17 @@ const demoAccounts = [
 (async () => {
   await mongoose.connect(process.env.MONGODB_URI);
   for (const person of demoAccounts) {
-    if (await Account.exists({ email: person.email })) {
-      console.log(`Skipped (already exists): ${person.email}`);
+    const existing = await Account.findOne({ email: person.email });
+    if (existing) {
+      if (existing.verificationStatus !== "verified") {
+        existing.emailVerified = true;
+        existing.verificationStatus = "verified";
+        existing.verifiedAt = new Date();
+        await existing.save();
+        console.log(`Updated and verified existing ${person.role}: ${person.email}`);
+      } else {
+        console.log(`Skipped (already verified): ${person.email}`);
+      }
       continue;
     }
     await Account.create({
@@ -24,6 +33,7 @@ const demoAccounts = [
       passwordHash: await bcrypt.hash(person.password, 10),
       role: person.role,
       emailVerified: true,
+      verificationStatus: "verified",
       verifiedAt: new Date()
     });
     console.log(`Created ${person.role}: ${person.email}  (password: ${person.password})`);
