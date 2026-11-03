@@ -19,22 +19,33 @@ const getAdminEmail = (req) => req.admin?.email || req.user?.email || cleanEmail
 // 1. ACCOUNT VERIFICATION & ACTIVATION MANAGEMENT
 // ============================================================================
 
+// Helper to find account by exact or case-insensitive email
+const findAccountQuery = (email) => ({
+  $or: [
+    { email },
+    { email: { $regex: new RegExp(`^${email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") } },
+  ],
+});
+
 // Verify & Activate a newly registered or suspended account
-router.patch("/admin/accounts/:email/activate", async (req, res) => {
+router.all(["/admin/accounts/:email/activate", "/accounts/:email/activate"], async (req, res) => {
   try {
     const targetEmail = cleanEmail(req.params.email);
     const adminEmail = getAdminEmail(req);
 
-    const account = await Account.findOne({ email: targetEmail });
-    if (!account) return fail(res, 404, "Account not found.");
+    const account = await Account.findOneAndUpdate(
+      findAccountQuery(targetEmail),
+      {
+        emailVerified: true,
+        verificationStatus: "verified",
+        isSuspended: false,
+        verifiedAt: new Date(),
+        suspensionReason: "",
+      },
+      { new: true }
+    );
 
-    account.emailVerified = true;
-    account.verificationStatus = "verified";
-    account.isSuspended = false;
-    account.verifiedAt = new Date();
-    account.suspensionReason = "";
-
-    await account.save();
+    if (!account) return fail(res, 404, "Account not found in cooperative database.");
 
     await logAudit({
       action: "ACCOUNT_ACTIVATED",
@@ -50,12 +61,12 @@ router.patch("/admin/accounts/:email/activate", async (req, res) => {
     res.json({ ok: true, account, message: `Account "${account.fullName}" has been activated successfully.` });
   } catch (error) {
     console.error("Account activation error:", error);
-    res.status(500).json({ error: "Failed to activate account." });
+    res.status(500).json({ error: error.message || "Failed to activate account." });
   }
 });
 
 // Deactivate an account while preserving all records (places it below active accounts)
-router.patch("/admin/accounts/:email/deactivate", async (req, res) => {
+router.all(["/admin/accounts/:email/deactivate", "/accounts/:email/deactivate"], async (req, res) => {
   try {
     const targetEmail = cleanEmail(req.params.email);
     const adminEmail = getAdminEmail(req);
@@ -64,16 +75,19 @@ router.patch("/admin/accounts/:email/deactivate", async (req, res) => {
       return fail(res, 400, "You cannot deactivate your own active administrator account.");
     }
 
-    const account = await Account.findOne({ email: targetEmail });
-    if (!account) return fail(res, 404, "Account not found.");
+    const reason = clean(req.body?.reason || "Deactivated by administrator");
 
-    const reason = clean(req.body.reason || "Deactivated by administrator");
+    const account = await Account.findOneAndUpdate(
+      findAccountQuery(targetEmail),
+      {
+        isSuspended: true,
+        suspendedAt: new Date(),
+        suspensionReason: reason,
+      },
+      { new: true }
+    );
 
-    account.isSuspended = true;
-    account.suspendedAt = new Date();
-    account.suspensionReason = reason;
-
-    await account.save();
+    if (!account) return fail(res, 404, "Account not found in cooperative database.");
 
     await logAudit({
       action: "ACCOUNT_DEACTIVATED",
@@ -89,26 +103,29 @@ router.patch("/admin/accounts/:email/deactivate", async (req, res) => {
     res.json({ ok: true, account, message: `Account "${account.fullName}" has been deactivated. Historical records preserved.` });
   } catch (error) {
     console.error("Account deactivation error:", error);
-    res.status(500).json({ error: "Failed to deactivate account." });
+    res.status(500).json({ error: error.message || "Failed to deactivate account." });
   }
 });
 
 // Verify & Activate a newly registered account (alias for backward compatibility)
-router.patch("/admin/accounts/:email/verify", async (req, res) => {
+router.all(["/admin/accounts/:email/verify", "/accounts/:email/verify"], async (req, res) => {
   try {
     const targetEmail = cleanEmail(req.params.email);
     const adminEmail = getAdminEmail(req);
 
-    const account = await Account.findOne({ email: targetEmail });
-    if (!account) return fail(res, 404, "Account not found.");
+    const account = await Account.findOneAndUpdate(
+      findAccountQuery(targetEmail),
+      {
+        emailVerified: true,
+        verificationStatus: "verified",
+        isSuspended: false,
+        verifiedAt: new Date(),
+        suspensionReason: "",
+      },
+      { new: true }
+    );
 
-    account.emailVerified = true;
-    account.verificationStatus = "verified";
-    account.isSuspended = false;
-    account.verifiedAt = new Date();
-    account.suspensionReason = "";
-
-    await account.save();
+    if (!account) return fail(res, 404, "Account not found in cooperative database.");
 
     await logAudit({
       action: "ACCOUNT_VERIFIED_AND_ACTIVATED",
@@ -124,26 +141,29 @@ router.patch("/admin/accounts/:email/verify", async (req, res) => {
     res.json({ ok: true, account, message: `Account ${account.fullName} verified and activated successfully.` });
   } catch (error) {
     console.error("Account verification error:", error);
-    res.status(500).json({ error: "Failed to verify account." });
+    res.status(500).json({ error: error.message || "Failed to verify account." });
   }
 });
 
 // Decline a newly registered account
-router.patch("/admin/accounts/:email/decline", async (req, res) => {
+router.all(["/admin/accounts/:email/decline", "/accounts/:email/decline"], async (req, res) => {
   try {
     const targetEmail = cleanEmail(req.params.email);
     const adminEmail = getAdminEmail(req);
-    const reason = clean(req.body.reason || "Application declined by administrator");
+    const reason = clean(req.body?.reason || "Application declined by administrator");
 
-    const account = await Account.findOne({ email: targetEmail });
-    if (!account) return fail(res, 404, "Account not found.");
+    const account = await Account.findOneAndUpdate(
+      findAccountQuery(targetEmail),
+      {
+        emailVerified: false,
+        verificationStatus: "declined",
+        isSuspended: true,
+        suspensionReason: reason,
+      },
+      { new: true }
+    );
 
-    account.emailVerified = false;
-    account.verificationStatus = "declined";
-    account.isSuspended = true;
-    account.suspensionReason = reason;
-
-    await account.save();
+    if (!account) return fail(res, 404, "Account not found in cooperative database.");
 
     await logAudit({
       action: "ACCOUNT_REGISTRATION_DECLINED",
@@ -159,12 +179,12 @@ router.patch("/admin/accounts/:email/decline", async (req, res) => {
     res.json({ ok: true, account, message: `Account registration for ${account.fullName} has been declined.` });
   } catch (error) {
     console.error("Account decline error:", error);
-    res.status(500).json({ error: "Failed to decline account." });
+    res.status(500).json({ error: error.message || "Failed to decline account." });
   }
 });
 
 // Activate or Deactivate an account while preserving all records
-router.patch("/admin/accounts/:email/toggle-active", async (req, res) => {
+router.all(["/admin/accounts/:email/toggle-active", "/accounts/:email/toggle-active"], async (req, res) => {
   try {
     const targetEmail = cleanEmail(req.params.email);
     const adminEmail = getAdminEmail(req);
@@ -173,22 +193,23 @@ router.patch("/admin/accounts/:email/toggle-active", async (req, res) => {
       return fail(res, 400, "You cannot deactivate your own active administrator account.");
     }
 
-    const account = await Account.findOne({ email: targetEmail });
-    if (!account) return fail(res, 404, "Account not found.");
+    const existing = await Account.findOne(findAccountQuery(targetEmail));
+    if (!existing) return fail(res, 404, "Account not found in cooperative database.");
 
     // Toggle suspended state (deactivated = isSuspended: true)
-    const newSuspendedState = !account.isSuspended;
-    const reason = clean(req.body.reason || (newSuspendedState ? "Deactivated by administrator" : ""));
+    const newSuspendedState = !existing.isSuspended;
+    const reason = clean(req.body?.reason || (newSuspendedState ? "Deactivated by administrator" : ""));
 
-    account.isSuspended = newSuspendedState;
-    account.suspendedAt = newSuspendedState ? new Date() : null;
-    account.suspensionReason = newSuspendedState ? reason : "";
-    if (!newSuspendedState && account.verificationStatus === "declined") {
-      account.verificationStatus = "verified";
-      account.emailVerified = true;
-    }
-
-    await account.save();
+    const account = await Account.findOneAndUpdate(
+      { _id: existing._id },
+      {
+        isSuspended: newSuspendedState,
+        suspendedAt: newSuspendedState ? new Date() : null,
+        suspensionReason: newSuspendedState ? reason : "",
+        ...(newSuspendedState ? {} : { verificationStatus: "verified", emailVerified: true }),
+      },
+      { new: true }
+    );
 
     await logAudit({
       action: newSuspendedState ? "ACCOUNT_DEACTIVATED" : "ACCOUNT_ACTIVATED",
@@ -210,7 +231,7 @@ router.patch("/admin/accounts/:email/toggle-active", async (req, res) => {
     });
   } catch (error) {
     console.error("Toggle active error:", error);
-    res.status(500).json({ error: "Failed to update account status." });
+    res.status(500).json({ error: error.message || "Failed to update account status." });
   }
 });
 

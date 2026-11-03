@@ -65,10 +65,14 @@ export default function AccountManagement() {
     setFeedback({ message: `Activating ${account.fullName}...`, isError: false });
     const res = await api(`/admin/accounts/${encodeURIComponent(account.email)}/activate`, {
       method: "PATCH",
+      body: {},
     });
 
     if (!res.ok) {
-      setFeedback({ message: res.data?.error || "Failed to activate account.", isError: true });
+      setFeedback({
+        message: res.data?.error || `Failed to activate account (HTTP ${res.status}).`,
+        isError: true,
+      });
     } else {
       setFeedback({ message: `Account "${account.fullName}" has been activated and verified successfully!`, isError: false });
       fetchAccounts();
@@ -91,7 +95,10 @@ export default function AccountManagement() {
     setDeclineModal({ open: false, account: null, reason: "" });
 
     if (!res.ok) {
-      setFeedback({ message: res.data?.error || "Failed to decline account.", isError: true });
+      setFeedback({
+        message: res.data?.error || `Failed to decline account (HTTP ${res.status}).`,
+        isError: true,
+      });
     } else {
       setFeedback({ message: `Registration for "${account.fullName}" has been declined.`, isError: false });
       fetchAccounts();
@@ -113,7 +120,10 @@ export default function AccountManagement() {
     });
 
     if (!res.ok) {
-      setFeedback({ message: res.data?.error || "Failed to deactivate account.", isError: true });
+      setFeedback({
+        message: res.data?.error || `Failed to deactivate account (HTTP ${res.status}).`,
+        isError: true,
+      });
     } else {
       setFeedback({
         message: `Account "${account.fullName}" has been deactivated and placed below active accounts. All historical records are preserved.`,
