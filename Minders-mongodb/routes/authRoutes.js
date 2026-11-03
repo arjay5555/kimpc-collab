@@ -2,6 +2,7 @@ const express = require("express");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const Account = require("../models/Account");
+const authenticate = require("../middleware/authenticate");
 const { logAudit } = require("../services/auditLogger");
 const {
   clean,
@@ -687,6 +688,99 @@ router.post("/auth/facebook", async (req, res) => {
   } catch (error) {
     console.error("Facebook authentication error:", error);
     res.status(500).json({ error: "Facebook authentication failed. Please try again." });
+  }
+});
+
+// ---------- Authenticated User Profile & Password Management (Admin, Manager, Member) ----------
+
+// Get current authenticated user's profile information
+router.get("/auth/me", authenticate, async (req, res) => {
+  try {
+    const account = await Account.findById(req.user._id).select("-passwordHash -adminPinHash").lean();
+    if (!account) return fail(res, 404, "Account not found.");
+    res.json(account);
+  } catch (error) {
+    console.error("Fetch current profile error:", error);
+    res.status(500).json({ error: "Failed to fetch profile information." });
+  }
+});
+
+// Authenticated user changes their own password
+router.post("/auth/change-password", authenticate, async (req, res) => {
+  try {
+    const currentPassword = String(req.body.currentPassword || "").trim();
+    const newPassword = String(req.body.newPassword || "").trim();
+    const confirmPassword = String(req.body.confirmPassword || "").trim();
+
+    if (!currentPassword || !newPassword) {
+      return fail(res, 400, "Current and new passwords are required.");
+    }
+    if (newPassword.length < 6) {
+      return fail(res, 400, "New password must be at least 6 characters.");
+    }
+    if (confirmPassword && newPassword !== confirmPassword) {
+      return fail(res, 400, "New passwords do not match.");
+    }
+
+    const account = await Account.findById(req.user._id).select("+passwordHash");
+    if (!account) return fail(res, 404, "Account not found.");
+
+    const match = await bcrypt.compare(currentPassword, account.passwordHash);
+    if (!match) {
+      return fail(res, 401, "Current password is incorrect.");
+    }
+
+    account.passwordHash = await bcrypt.hash(newPassword, 10);
+    account.mustChangePassword = false;
+    await account.save();
+
+    await logAudit({
+      action: "PASSWORD_CHANGED",
+      actorEmail: account.email,
+      actorRole: account.role,
+      targetEmail: account.email,
+      targetName: account.fullName,
+      details: `${account.role} ${account.fullName} updated their account password`,
+      req,
+    });
+
+    return res.json({ ok: true, message: "Password updated successfully." });
+  } catch (error) {
+    console.error("Change password error:", error);
+    return res.status(500).json({ error: "Failed to update password." });
+  }
+});
+
+// Authenticated user updates their own profile details
+router.patch("/auth/profile", authenticate, async (req, res) => {
+  try {
+    const account = await Account.findById(req.user._id);
+    if (!account) return fail(res, 404, "Account not found.");
+
+    if (req.body.fullName) account.fullName = clean(req.body.fullName);
+    if (req.body.phone !== undefined) account.phone = clean(req.body.phone);
+    if (req.body.address !== undefined) account.address = clean(req.body.address);
+    if (req.body.city !== undefined) account.city = clean(req.body.city);
+
+    await account.save();
+
+    await logAudit({
+      action: "PROFILE_UPDATED",
+      actorEmail: account.email,
+      actorRole: account.role,
+      targetEmail: account.email,
+      targetName: account.fullName,
+      details: `${account.role} ${account.fullName} updated personal profile details`,
+      req,
+    });
+
+    const responseData = account.toJSON ? account.toJSON() : account;
+    delete responseData.passwordHash;
+    delete responseData.adminPinHash;
+    return res.json({ ok: true, user: responseData });
+  } catch (error) {
+    console.error("Update profile error:", error);
+    return res.status(500).json({ error: "Failed to update profile." });
   }
 });
 
