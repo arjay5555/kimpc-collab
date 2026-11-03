@@ -10,8 +10,18 @@ const { fail, clean, cleanEmail, requireAdmin } = require("./routeHelpers");
 
 const router = express.Router();
 
-// Require Admin privileges for all routes in this module
-router.use(requireAdmin);
+// Require Admin privileges for all admin routes in this module
+router.use(
+  [
+    "/admin",
+    "/accounts/:email/activate",
+    "/accounts/:email/deactivate",
+    "/accounts/:email/verify",
+    "/accounts/:email/decline",
+    "/accounts/:email/toggle-active",
+  ],
+  requireAdmin
+);
 
 const getAdminEmail = (req) => req.admin?.email || req.user?.email || cleanEmail(req.headers["x-admin-email"]) || "admin";
 
