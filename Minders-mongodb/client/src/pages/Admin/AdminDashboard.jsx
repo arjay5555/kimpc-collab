@@ -1,8 +1,17 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import Header from "../../components/Header";
+import { useAuth } from "../../context/AuthContext";
 import { api } from "../../services/api";
 
 export default function AdminDashboard() {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
   const [stats, setStats] = useState({ accounts: 0, bookings: 0 });
   const [settings, setSettings] = useState({
     googleLoginEnabled: true,
@@ -70,10 +79,26 @@ export default function AdminDashboard() {
       <Header activePage="admin" />
 
       <main className="app-shell" style={{ padding: "24px", maxWidth: "1200px", margin: "0 auto" }}>
-        <section className="page-intro" style={{ marginBottom: "24px" }}>
-          <p className="eyebrow">SYSTEM ADMINISTRATION / OVERVIEW</p>
-          <h1>Administrative Operations</h1>
-          <p className="muted">Configure security policies, audit cooperative transactions, and oversee access.</p>
+        <section className="page-intro" style={{ marginBottom: "24px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "12px" }}>
+          <div>
+            <p className="eyebrow">SYSTEM ADMINISTRATION / OVERVIEW</p>
+            <h1>Administrative Operations</h1>
+            <p className="muted">Configure security policies, audit cooperative transactions, and oversee access.</p>
+          </div>
+          <button
+            type="button"
+            className="button button-outline button-sm"
+            onClick={handleLogout}
+            style={{ display: "inline-flex", alignItems: "center", gap: "6px", color: "#dc2626", borderColor: "#fca5a5", cursor: "pointer", padding: "8px 14px" }}
+            title="Log out of Admin Dashboard"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+            <span>Log Out</span>
+          </button>
         </section>
 
         {feedback.message && (

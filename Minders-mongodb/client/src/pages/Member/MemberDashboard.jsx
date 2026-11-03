@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { api } from "../../services/api";
 import { formatRentalPeriod, getApplicationProgress, getApplicationsUrl, unwrapListResponse } from "../../services/memberPortal";
@@ -16,7 +16,13 @@ function StatusBadge({ application }) {
 }
 
 export default function MemberDashboard() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -54,7 +60,23 @@ export default function MemberDashboard() {
           <h1>Welcome back, {user?.fullName?.split(/\s+/)[0] || "Member"}</h1>
           <p className="member-muted">Your equipment rentals and booking requests at a glance.</p>
         </div>
-        <Link className="member-button member-button-primary" to="/member/book">Book equipment <span aria-hidden="true">→</span></Link>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="member-button member-button-outline"
+            onClick={handleLogout}
+            style={{ display: "inline-flex", alignItems: "center", gap: "6px", color: "#dc2626", borderColor: "#fca5a5" }}
+            title="Log out of Member Portal"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+            <span>Log Out</span>
+          </button>
+          <Link className="member-button member-button-primary" to="/member/book">Book equipment <span aria-hidden="true">→</span></Link>
+        </div>
       </header>
 
       <section className="member-section">

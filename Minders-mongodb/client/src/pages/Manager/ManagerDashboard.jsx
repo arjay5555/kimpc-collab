@@ -134,7 +134,7 @@ export default function ManagerDashboard() {
               <div className="wz-notif-dot" />
             </button>
 
-            <div className="wz-user-pill">
+            <div className="wz-user-pill" onClick={handleLogout} title="Click to Log Out" style={{ cursor: "pointer" }}>
               <div className="wz-avatar">
                 {user?.fullName ? user.fullName[0].toUpperCase() : "M"}
               </div>
@@ -143,6 +143,20 @@ export default function ManagerDashboard() {
                 <span className="wz-user-role">Manager</span>
               </div>
             </div>
+
+            <button
+              type="button"
+              className="wz-topbar-logout-btn"
+              onClick={handleLogout}
+              title="Log Out of KIMPC"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+              <span>Log Out</span>
+            </button>
           </div>
         </div>
 
