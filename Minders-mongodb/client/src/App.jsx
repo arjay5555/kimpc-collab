@@ -11,6 +11,7 @@ import Login from "./pages/Auth/Login";
 // Member
 import MemberDashboard from "./pages/Member/MemberDashboard";
 import Applications from "./pages/Member/Applications";
+import BookingHistory from "./pages/Member/BookingHistory";
 import EquipmentCatalog from "./pages/Member/EquipmentCatalog";
 import Notifications from "./pages/Member/Notifications";
 import Settings from "./pages/Member/Settings";
@@ -65,6 +66,16 @@ export default function App() {
           <ProtectedRoute allowedRoles={["member", "manager", "admin"]}>
             <MemberLayout>
               <Applications />
+            </MemberLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/member/history"
+        element={
+          <ProtectedRoute allowedRoles={["member", "manager", "admin"]}>
+            <MemberLayout>
+              <BookingHistory />
             </MemberLayout>
           </ProtectedRoute>
         }
