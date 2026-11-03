@@ -4,6 +4,31 @@ import { useAuth } from "../../context/AuthContext";
 import { api } from "../../services/api";
 import { formatRentalPeriod, getApplicationProgress, getApplicationsUrl, unwrapListResponse } from "../../services/memberPortal";
 
+// TEMPORARY - replace with real events from the API
+const corporationEvents = [
+  {
+    image: "https://picsum.photos/seed/kimpc-new-equipment/600/400",
+    tag: "New Equipment",
+    title: "We have new equipment!",
+    description: "The new Ag Leader Precision Boom Sprayer is now available for booking.",
+    date: "Nov 3, 2026",
+  },
+  {
+    image: "https://picsum.photos/seed/kimpc-general-assembly/600/400",
+    tag: "Event",
+    title: "Annual General Assembly",
+    description: "All members are invited to the KIMPC general assembly.",
+    date: "Nov 20, 2026",
+  },
+  {
+    image: "https://picsum.photos/seed/kimpc-maintenance-schedule/600/400",
+    tag: "Announcement",
+    title: "Equipment Maintenance Schedule",
+    description: "Tractors and harvesters will be unavailable Nov 10–12 for servicing.",
+    date: "Nov 8, 2026",
+  },
+];
+
 const rentalGroups = [
   { key: "active", title: "Active rentals", icon: "↗", matches: (app) => ["In-use"].includes(getApplicationProgress(app).label) },
   { key: "upcoming", title: "Upcoming rentals", icon: "◷", matches: (app) => getApplicationProgress(app).label === "Scheduled" },
@@ -125,6 +150,33 @@ export default function MemberDashboard() {
           </div>
         )}
         {pendingCount > 0 && <p className="member-pending-note">{pendingCount} request{pendingCount === 1 ? "" : "s"} awaiting manager approval.</p>}
+      </section>
+
+      <section className="member-section member-events-section" id="corporation-news">
+        <div className="member-section-heading">
+          <div><p className="member-eyebrow">CORPORATION NEWS</p><h2>Events &amp; announcements</h2></div>
+        </div>
+        <div className="member-events-grid">
+          {corporationEvents.map((event) => (
+            <article className="member-event-card" key={event.title}>
+              <div className="member-event-image">
+                <img src={event.image} alt="" loading="lazy" onError={(imageEvent) => { imageEvent.currentTarget.style.display = "none"; }} />
+              </div>
+              <div className="member-event-copy">
+                <span className="member-event-tag">{event.tag}</span>
+                <h3>{event.title}</h3>
+                <p className="member-event-description">{event.description}</p>
+                <div className="member-event-footer">
+                  <span className="member-event-date">
+                    <svg aria-hidden="true" viewBox="0 0 16 16" focusable="false"><rect x="2" y="3.5" width="12" height="10" rx="1.5" /><path d="M5 2v3M11 2v3M2 6.5h12" /></svg>
+                    {event.date}
+                  </span>
+                  <a className="member-event-link" href="#corporation-news">Read more →</a>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
       </section>
     </div>
   );
