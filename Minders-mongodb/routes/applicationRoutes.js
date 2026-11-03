@@ -370,18 +370,22 @@ const handleApplicationUpdate = async (req, res) => {
 router.patch("/applications/:id", handleApplicationUpdate);
 router.put("/applications/:id", handleApplicationUpdate);
 
-router.delete("/applications/:id", async (req, res) => {
+router.delete("/applications/:id", authenticate, async (req, res) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 400, "Invalid application id.");
     const existing = await Application.findById(req.params.id);
     if (!existing) return fail(res, 404, "Application not found.");
 
+    const actorEmail = cleanEmail(req.user.email);
+    const actorRole = clean(req.user.role).toLowerCase();
+    const isManagerOrAdmin = ["manager", "admin"].includes(actorRole);
+    if (!isManagerOrAdmin && (actorRole !== "member" || actorEmail !== cleanEmail(existing.memberEmail))) {
+      return fail(res, 403, "You can only cancel your own booking requests.");
+    }
+
     if (existing.status !== "Pending") {
       return fail(res, 400, `Only pending booking requests can be cancelled prior to manager approval (current status: ${existing.status}).`);
     }
-
-    const actorEmail = cleanEmail(req.body.actorEmail || req.headers["x-actor-email"] || existing.memberEmail);
-    const actorRole = clean(req.body.actorRole || req.headers["x-actor-role"] || "member");
 
     existing.status = "Cancelled";
     await existing.save();

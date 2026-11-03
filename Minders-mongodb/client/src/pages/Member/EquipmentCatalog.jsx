@@ -14,6 +14,30 @@ function formatPrice(value) {
   return new Intl.NumberFormat(undefined, { style: "currency", currency: "PHP", maximumFractionDigits: 0 }).format(Number(value) || 0);
 }
 
+function getRentalEstimate(unit, booking) {
+  if (!unit || !booking.start || !booking.end) return null;
+
+  const rateValue = booking.mode === "hourly"
+    ? (unit.ratePerHour ?? unit.memberRate)
+    : (unit.ratePerDay ?? unit.memberRate);
+  const rate = Number(rateValue);
+  if (!Number.isFinite(rate) || rate < 0) return null;
+
+  let quantity;
+  if (booking.mode === "hourly") {
+    const duration = new Date(booking.end).getTime() - new Date(booking.start).getTime();
+    if (!Number.isFinite(duration) || duration <= 0) return null;
+    quantity = Math.ceil(duration / (60 * 60 * 1000));
+  } else {
+    const start = Date.parse(`${booking.start}T00:00:00Z`);
+    const end = Date.parse(`${booking.end}T00:00:00Z`);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return null;
+    quantity = Math.floor((end - start) / (24 * 60 * 60 * 1000)) + 1;
+  }
+
+  return { rate, quantity, total: rate * quantity, unitLabel: booking.mode === "hourly" ? "hour" : "day" };
+}
+
 function formatDateTime(value) {
   if (!value) return "Date to be confirmed";
   const date = new Date(value);
@@ -90,6 +114,7 @@ export default function EquipmentCatalog() {
   }).sort((a, b) => String(a.startDate).localeCompare(String(b.startDate))), [bookings, maintenance]);
   const requestedStart = dateBoundary(booking.start);
   const requestedEnd = dateBoundary(booking.end, booking.mode === "daily");
+  const rentalEstimate = getRentalEstimate(unit, booking);
   const blockedSelection = Boolean(id && requestedStart !== null && requestedEnd !== null && blockedRanges.some((range) => {
     const blockedStart = dateBoundary(range.startDate);
     const blockedEnd = dateBoundary(range.endDate, !String(range.endDate || "").includes("T"));
@@ -292,6 +317,13 @@ export default function EquipmentCatalog() {
                   </>
                 )}
                 <label>Farm location<input required maxLength={240} placeholder="Barangay, municipality, farm name" value={booking.location} onChange={(event) => setBooking((current) => ({ ...current, location: event.target.value }))} /></label>
+                <div className="member-rental-estimate" aria-live="polite">
+                  <div className="member-rental-estimate-heading"><strong>Estimated rental cost</strong>{rentalEstimate && <strong>{formatPrice(rentalEstimate.total)}</strong>}</div>
+                  {rentalEstimate
+                    ? <p>{formatPrice(rentalEstimate.rate)} per {rentalEstimate.unitLabel} × {rentalEstimate.quantity} {rentalEstimate.unitLabel}{rentalEstimate.quantity === 1 ? "" : "s"}</p>
+                    : <p>Select a valid rental period to see the estimate.</p>}
+                  <small>Estimate covers the base rental rate only. Any applicable operator, transport, or deposit charges may be additional; final charges will be confirmed by the cooperative.</small>
+                </div>
                 <div className="member-slot-list"><strong>Availability by period</strong>{blockedRanges.length === 0 ? <p>No blocked periods are currently listed.</p> : blockedRanges.slice(0, 5).map((range, index) => <p key={`${range.startDate}-${index}`}><span>{range.label}</span> · {formatDateTime(range.startDate)} – {formatDateTime(range.endDate)}</p>)}
                   {blockedSelection && <p className="member-slot-conflict" role="alert">Not available for the selected period. Choose another slot to continue.</p>}
                   {!blockedSelection && requestedStart !== null && requestedEnd !== null && <p className="member-slot-available">Selected period is available to request.</p>}

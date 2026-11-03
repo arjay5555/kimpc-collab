@@ -46,6 +46,8 @@ export default function MemberDashboard() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [flipped, setFlipped] = useState({});
+  const [cancellingId, setCancellingId] = useState("");
+  const [actionError, setActionError] = useState("");
 
   const fetchApplications = useCallback(async () => {
     const response = await api(getApplicationsUrl(user?.email));
@@ -70,6 +72,24 @@ export default function MemberDashboard() {
   })), [applications]);
 
   const pendingCount = applications.filter((app) => getApplicationProgress(app).label === "Pending Approval").length;
+
+  const cancelApplication = async (application) => {
+    const id = application._id || application.id;
+    if (!id || !window.confirm(`Cancel your booking request for ${application.equipment}?`)) return;
+
+    setCancellingId(id);
+    setActionError("");
+    const response = await api(`/applications/${encodeURIComponent(id)}`, { method: "DELETE" });
+    setCancellingId("");
+    if (!response.ok) {
+      setActionError(response.data?.error || "Could not cancel this booking request.");
+      return;
+    }
+    const updatedApplication = response.data?.application;
+    if (updatedApplication) {
+      setApplications((current) => current.map((item) => (item._id || item.id) === id ? updatedApplication : item));
+    }
+  };
 
   return (
     <div className="member-page">
@@ -136,6 +156,7 @@ export default function MemberDashboard() {
           <div><p className="member-eyebrow">BOOKING REQUESTS</p><h2>Latest activity</h2></div>
           <Link className="member-inline-link" to="/applications">View all applications →</Link>
         </div>
+        {actionError && <p className="member-form-feedback" role="alert">{actionError}</p>}
         {!loading && !loadError && applications.length === 0 ? (
           <div className="member-empty-state"><span className="member-empty-icon" aria-hidden="true">▧</span><strong>No applications yet</strong><p>Browse the fleet and submit your first equipment request.</p><Link className="member-button member-button-primary" to="/member/book">Explore equipment</Link></div>
         ) : (
@@ -145,6 +166,7 @@ export default function MemberDashboard() {
                 <div className="member-activity-icon" aria-hidden="true">▰</div>
                 <div className="member-activity-copy"><strong>{application.equipment}</strong><span>{formatRentalPeriod(application)}</span></div>
                 <StatusBadge application={application} />
+                {(application.status || "Pending").toLowerCase() === "pending" && <button className="member-text-button member-cancel-button" type="button" disabled={cancellingId === (application._id || application.id)} onClick={() => cancelApplication(application)}>{cancellingId === (application._id || application.id) ? "Cancelling…" : "Cancel"}</button>}
               </article>
             ))}
           </div>

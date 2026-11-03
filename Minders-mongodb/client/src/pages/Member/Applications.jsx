@@ -18,6 +18,8 @@ export default function Applications() {
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("all");
   const [selected, setSelected] = useState(null);
+  const [cancellingId, setCancellingId] = useState("");
+  const [actionError, setActionError] = useState("");
 
   const fetchApplications = useCallback(async () => {
     const response = await api(getApplicationsUrl(user?.email));
@@ -44,6 +46,24 @@ export default function Applications() {
     return true;
   }), [applications, filter]);
 
+  const cancelApplication = async (application) => {
+    const id = application._id || application.id;
+    if (!id || !window.confirm(`Cancel your booking request for ${application.equipment}?`)) return;
+
+    setCancellingId(id);
+    setActionError("");
+    const response = await api(`/applications/${encodeURIComponent(id)}`, { method: "DELETE" });
+    setCancellingId("");
+    if (!response.ok) {
+      setActionError(response.data?.error || "Could not cancel this booking request.");
+      return;
+    }
+    const updatedApplication = response.data?.application;
+    if (updatedApplication) {
+      setApplications((current) => current.map((item) => (item._id || item.id) === id ? updatedApplication : item));
+    }
+  };
+
   return (
     <div className="member-page">
       <header className="member-page-heading">
@@ -68,6 +88,7 @@ export default function Applications() {
         ))}
       </div>
 
+      {actionError && <p className="member-form-feedback" role="alert">{actionError}</p>}
       {loading ? (
         <div className="member-app-table"><div className="member-table-skeleton" /><div className="member-table-skeleton" /><div className="member-table-skeleton" /></div>
       ) : error ? (
@@ -83,7 +104,10 @@ export default function Applications() {
               <span>{formatRentalPeriod(application)}</span>
               <span className="member-muted">{application.createdAt ? new Date(application.createdAt).toLocaleDateString() : "Recently"}</span>
               <span className={`member-status member-status-${getApplicationProgress(application).tone}`}>{application.status || "Pending"}</span>
-              <button className="member-text-button" type="button" onClick={() => setSelected(application)}>Details</button>
+              <div className="member-application-actions">
+                <button className="member-text-button" type="button" onClick={() => setSelected(application)}>Details</button>
+                {(application.status || "Pending").toLowerCase() === "pending" && <button className="member-text-button member-cancel-button" type="button" disabled={cancellingId === (application._id || application.id)} onClick={() => cancelApplication(application)}>{cancellingId === (application._id || application.id) ? "Cancelling…" : "Cancel"}</button>}
+              </div>
               {(application.status || "").toLowerCase() === "rejected" && application.managerRemarks && <p className="member-rejection-note"><strong>Reason:</strong> {application.managerRemarks}</p>}
             </article>
           ))}
