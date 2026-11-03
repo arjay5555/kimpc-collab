@@ -100,25 +100,7 @@ router.post("/register", async (req, res) => {
 });
 
 router.post("/verify", async (req, res) => {
-  const email = cleanEmail(req.body.email);
-  const account = await Account.findOneAndUpdate(
-    { email },
-    { emailVerified: true, verifiedAt: new Date() },
-    { returnDocument: "after" }
-  );
-  if (!account) return fail(res, 404, "Account not found.");
-
-  await logAudit({
-    action: "EMAIL_VERIFIED",
-    actorEmail: email,
-    actorRole: account.role,
-    targetEmail: email,
-    targetName: account.fullName,
-    details: `Email address was verified for ${account.fullName}`,
-    req,
-  });
-
-  res.json(account);
+  return fail(res, 403, "waiting for verification");
 });
 
 // ---------- System Settings & Public Config ----------
@@ -276,7 +258,7 @@ router.post("/login", async (req, res) => {
   }
 
   const email = account.email;
-  if (!account.emailVerified) {
+  if (!account.emailVerified || account.verificationStatus === "pending") {
     const isDeclined = account.verificationStatus === "declined";
     await logAudit({
       action: "LOGIN_FAILED",
@@ -284,7 +266,7 @@ router.post("/login", async (req, res) => {
       actorRole: account.role,
       details: isDeclined
         ? "Sign-in rejected: account registration was declined by administrator"
-        : "Sign-in rejected: account is pending administrator verification",
+        : "Sign-in rejected: waiting for verification",
       status: "Denied",
       req,
     });
@@ -293,7 +275,7 @@ router.post("/login", async (req, res) => {
       403,
       isDeclined
         ? "Your account registration was declined by the cooperative administrator. Please contact the KIMPC office for assistance."
-        : "Your account is pending administrator verification. Once verified, your account will be activated and you can sign in."
+        : "waiting for verification"
     );
   }
 
@@ -304,14 +286,14 @@ router.post("/login", async (req, res) => {
       actorRole: account.role,
       targetEmail: email,
       targetName: account.fullName,
-      details: `Sign-in rejected: account has been suspended (${account.suspensionReason || "Administrative restriction"})`,
+      details: `Sign-in rejected: account has been deactivated (${account.suspensionReason || "Administrative deactivation"})`,
       status: "Denied",
       req,
     });
     return fail(
       res,
       403,
-      `This account has been suspended by the administrator.${account.suspensionReason ? ` Reason: ${account.suspensionReason}` : " Please contact the administrator."}`
+      `This account has been deactivated by the administrator.${account.suspensionReason ? ` Reason: ${account.suspensionReason}` : " Please contact the administrator."}`
     );
   }
 
@@ -521,10 +503,15 @@ router.post("/auth/google", async (req, res) => {
         return fail(res, 403, "This account is currently archived. Please contact the administrator.");
       }
 
-      if (!account.emailVerified) {
-        account.emailVerified = true;
-        account.verifiedAt = new Date();
-        await account.save();
+      if (!account.emailVerified || account.verificationStatus === "pending") {
+        const isDeclined = account.verificationStatus === "declined";
+        return fail(
+          res,
+          403,
+          isDeclined
+            ? "Your account registration was declined by the cooperative administrator."
+            : "waiting for verification"
+        );
       }
     } else {
       const cooperativeId = await nextCooperativeId();
@@ -535,8 +522,8 @@ router.post("/auth/google", async (req, res) => {
         passwordHash: await bcrypt.hash(randomPassword, 10),
         role: "member",
         cooperativeId,
-        emailVerified: true,
-        verifiedAt: new Date(),
+        emailVerified: false,
+        verificationStatus: "pending",
       });
 
       await logAudit({
@@ -546,9 +533,11 @@ router.post("/auth/google", async (req, res) => {
         targetEmail: email,
         targetName: account.fullName,
         targetRole: "member",
-        details: `New member registered via Google sign-in (assigned ID: ${cooperativeId})`,
+        details: `New member registered via Google sign-in (assigned ID: ${cooperativeId}), waiting for admin verification`,
         req,
       });
+
+      return fail(res, 403, "waiting for verification");
     }
 
     await logAudit({
@@ -652,10 +641,15 @@ router.post("/auth/facebook", async (req, res) => {
         return fail(res, 403, "This account is currently archived. Please contact the administrator.");
       }
 
-      if (!account.emailVerified) {
-        account.emailVerified = true;
-        account.verifiedAt = new Date();
-        await account.save();
+      if (!account.emailVerified || account.verificationStatus === "pending") {
+        const isDeclined = account.verificationStatus === "declined";
+        return fail(
+          res,
+          403,
+          isDeclined
+            ? "Your account registration was declined by the cooperative administrator."
+            : "waiting for verification"
+        );
       }
     } else {
       const cooperativeId = await nextCooperativeId();
@@ -666,8 +660,8 @@ router.post("/auth/facebook", async (req, res) => {
         passwordHash: await bcrypt.hash(randomPassword, 10),
         role: "member",
         cooperativeId,
-        emailVerified: true,
-        verifiedAt: new Date(),
+        emailVerified: false,
+        verificationStatus: "pending",
       });
 
       await logAudit({
@@ -677,9 +671,11 @@ router.post("/auth/facebook", async (req, res) => {
         targetEmail: email,
         targetName: account.fullName,
         targetRole: "member",
-        details: `New member registered via Facebook sign-in (assigned ID: ${cooperativeId})`,
+        details: `New member registered via Facebook sign-in (assigned ID: ${cooperativeId}), waiting for admin verification`,
         req,
       });
+
+      return fail(res, 403, "waiting for verification");
     }
 
     await logAudit({

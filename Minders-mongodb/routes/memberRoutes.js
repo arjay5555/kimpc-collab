@@ -29,7 +29,7 @@ router.post("/notifications/announce", authManager, async (req, res) => {
   return res.status(201).json({ created: recipients.length });
 });
 
-router.use(authenticate, requireMember);
+router.use(["/member", "/notifications"], authenticate, requireMember);
 
 router.get("/member/preferences", async (req, res) => {
   res.json({

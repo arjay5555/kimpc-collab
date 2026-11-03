@@ -20,10 +20,10 @@ const adminManagementRoutes = require("./adminManagementRoutes");
 
 router.use(authRoutes);
 router.use(accountRoutes);
+router.use(adminManagementRoutes);
 router.use(applicationRoutes);
 router.use(machineryRoutes);
 router.use(transactionRoutes);
 router.use(memberRoutes);
-router.use(adminManagementRoutes);
 
 module.exports = router;

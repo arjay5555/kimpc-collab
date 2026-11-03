@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
+import { useAuth } from "../../context/AuthContext";
 import { api } from "../../services/api";
 import AdminSidebar from "../../components/AdminSidebar";
 import AdminTopbar from "../../components/AdminTopbar";
 import "../../styles/admin-kimpc.css";
 
 export default function AccountManagement() {
+  const { user: currentUser } = useAuth();
   const [activeMainTab, setActiveMainTab] = useState("directory"); // "directory" | "permissions"
 
   // Accounts state
@@ -13,6 +15,16 @@ export default function AccountManagement() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all"); // "all" | "pending" | "active" | "deactivated" | "declined" | "staff"
   const [feedback, setFeedback] = useState({ message: "", isError: false });
+
+  // 1-button action dropdown menu state
+  const [openMenuEmail, setOpenMenuEmail] = useState(null);
+
+  // Close action dropdown on outside click
+  useEffect(() => {
+    const handleGlobalClick = () => setOpenMenuEmail(null);
+    window.addEventListener("click", handleGlobalClick);
+    return () => window.removeEventListener("click", handleGlobalClick);
+  }, []);
 
   // Decline confirmation modal state
   const [declineModal, setDeclineModal] = useState({ open: false, account: null, reason: "" });
@@ -48,23 +60,27 @@ export default function AccountManagement() {
     fetchPermissions();
   }, []);
 
-  // Account Verification: Approve & Activate
-  const handleVerifyAccount = async (account) => {
-    setFeedback({ message: `Verifying and activating ${account.fullName}...`, isError: false });
-    const res = await api(`/admin/accounts/${encodeURIComponent(account.email)}/verify`, {
+  // Account Action 1: Activate / Verify
+  const handleActivateAccount = async (account) => {
+    setFeedback({ message: `Activating ${account.fullName}...`, isError: false });
+    const res = await api(`/admin/accounts/${encodeURIComponent(account.email)}/activate`, {
       method: "PATCH",
+      body: {},
     });
 
     if (!res.ok) {
-      setFeedback({ message: res.data?.error || "Failed to verify account.", isError: true });
+      setFeedback({
+        message: res.data?.error || `Failed to activate account (HTTP ${res.status}).`,
+        isError: true,
+      });
     } else {
-      setFeedback({ message: `Account "${account.fullName}" has been verified and activated!`, isError: false });
+      setFeedback({ message: `Account "${account.fullName}" has been activated and verified successfully!`, isError: false });
       fetchAccounts();
       setTimeout(() => setFeedback({ message: "", isError: false }), 4000);
     }
   };
 
-  // Account Verification: Decline
+  // Account Action 2: Decline registration
   const handleConfirmDecline = async () => {
     if (!declineModal.account) return;
     const account = declineModal.account;
@@ -79,7 +95,10 @@ export default function AccountManagement() {
     setDeclineModal({ open: false, account: null, reason: "" });
 
     if (!res.ok) {
-      setFeedback({ message: res.data?.error || "Failed to decline account.", isError: true });
+      setFeedback({
+        message: res.data?.error || `Failed to decline account (HTTP ${res.status}).`,
+        isError: true,
+      });
     } else {
       setFeedback({ message: `Registration for "${account.fullName}" has been declined.`, isError: false });
       fetchAccounts();
@@ -87,28 +106,40 @@ export default function AccountManagement() {
     }
   };
 
-  // Account Lifecycle: Toggle Active / Deactivate (Preserves records)
-  const handleToggleActive = async (account) => {
-    const isDeactivating = !account.isSuspended;
-    const actionLabel = isDeactivating ? "Deactivating" : "Activating";
+  // Account Action 3: Deactivate (preserves all records and places below active accounts)
+  const handleDeactivateAccount = async (account) => {
+    if (currentUser?.email && account.email.toLowerCase() === currentUser.email.toLowerCase()) {
+      setFeedback({ message: "You cannot deactivate your own active administrator account.", isError: true });
+      return;
+    }
 
-    setFeedback({ message: `${actionLabel} ${account.fullName} while preserving all records...`, isError: false });
-    const res = await api(`/admin/accounts/${encodeURIComponent(account.email)}/toggle-active`, {
+    setFeedback({ message: `Deactivating ${account.fullName} while preserving all records...`, isError: false });
+    const res = await api(`/admin/accounts/${encodeURIComponent(account.email)}/deactivate`, {
       method: "PATCH",
-      body: { reason: isDeactivating ? "Account deactivated by administrator" : "Account reactivated" },
+      body: { reason: "Deactivated by administrator" },
     });
 
     if (!res.ok) {
-      setFeedback({ message: res.data?.error || `Failed to ${actionLabel.toLowerCase()} account.`, isError: true });
+      setFeedback({
+        message: res.data?.error || `Failed to deactivate account (HTTP ${res.status}).`,
+        isError: true,
+      });
     } else {
       setFeedback({
-        message: isDeactivating
-          ? `Account "${account.fullName}" has been deactivated. All historical bookings and records are preserved.`
-          : `Account "${account.fullName}" is now active and can log in.`,
+        message: `Account "${account.fullName}" has been deactivated and placed below active accounts. All historical records are preserved.`,
         isError: false,
       });
       fetchAccounts();
       setTimeout(() => setFeedback({ message: "", isError: false }), 4000);
+    }
+  };
+
+  // Legacy helper for toggle
+  const handleToggleActive = async (account) => {
+    if (account.isSuspended) {
+      await handleActivateAccount(account);
+    } else {
+      await handleDeactivateAccount(account);
     }
   };
 
@@ -198,6 +229,30 @@ export default function AccountManagement() {
     if (filterStatus === "declined") return status === "declined";
     if (filterStatus === "staff") return role === "manager" || role === "admin";
     return true;
+  });
+
+  // Sorting: Pending & Active accounts on top; Deactivated accounts placed at the VERY BOTTOM below active accounts
+  const sortedAccounts = [...filtered].sort((a, b) => {
+    const statusA = getAccountStatus(a).key;
+    const statusB = getAccountStatus(b).key;
+
+    const priority = {
+      pending: 0,
+      active: 1,
+      deactivated: 2,
+      declined: 3,
+    };
+
+    const rankA = priority[statusA] ?? 1;
+    const rankB = priority[statusB] ?? 1;
+
+    if (rankA !== rankB) {
+      return rankA - rankB; // Deactivated accounts are placed at the very bottom below active accounts
+    }
+
+    const dateA = new Date(a.createdAt || a.verifiedAt || 0).getTime();
+    const dateB = new Date(b.createdAt || b.verifiedAt || 0).getTime();
+    return dateB - dateA;
   });
 
   // KPI counts
@@ -435,7 +490,7 @@ export default function AccountManagement() {
               </div>
             </div>
 
-            <div className="wz-table-responsive">
+            <div className="wz-table-responsive" style={{ minHeight: "380px" }}>
               <table className="wz-table">
                 <thead>
                   <tr>
@@ -454,23 +509,33 @@ export default function AccountManagement() {
                         Loading accounts directory...
                       </td>
                     </tr>
-                  ) : filtered.length === 0 ? (
+                  ) : sortedAccounts.length === 0 ? (
                     <tr>
                       <td colSpan="6" style={{ padding: "32px", textAlign: "center", color: "#64748b" }}>
                         No matching accounts found for the current filter.
                       </td>
                     </tr>
                   ) : (
-                    filtered.map((acc) => {
+                    sortedAccounts.map((acc, index) => {
                       const statusInfo = getAccountStatus(acc);
                       const isStaff = ["manager", "admin"].includes((acc.role || "").toLowerCase());
                       const isPending = statusInfo.key === "pending";
                       const isDeclined = statusInfo.key === "declined";
                       const isDeactivated = statusInfo.key === "deactivated";
                       const isActive = statusInfo.key === "active";
+                      const isSelf = Boolean(
+                        currentUser?.email && acc.email.toLowerCase() === currentUser.email.toLowerCase()
+                      );
+                      const isMenuOpen = openMenuEmail === acc.email;
 
                       return (
-                        <tr key={acc._id || acc.email}>
+                        <tr
+                          key={acc._id || acc.email}
+                          style={{
+                            opacity: isDeactivated ? 0.75 : 1,
+                            background: isDeactivated ? "rgba(241, 245, 249, 0.4)" : "transparent",
+                          }}
+                        >
                           <td>
                             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                               <div
@@ -478,7 +543,7 @@ export default function AccountManagement() {
                                   width: "32px",
                                   height: "32px",
                                   borderRadius: "50%",
-                                  background: isStaff ? "#0f172a" : "#166534",
+                                  background: isStaff ? "#0f172a" : isDeactivated ? "#64748b" : "#166534",
                                   color: "#ffffff",
                                   display: "flex",
                                   alignItems: "center",
@@ -493,6 +558,11 @@ export default function AccountManagement() {
                               <div>
                                 <div style={{ fontWeight: 700, color: "var(--wz-text, #0f172a)", fontSize: "0.86rem" }}>
                                   {acc.fullName || "—"}
+                                  {isSelf && (
+                                    <span style={{ marginLeft: "6px", fontSize: "0.7rem", color: "#166534", fontWeight: 700 }}>
+                                      (You)
+                                    </span>
+                                  )}
                                 </div>
                                 {acc.phone && (
                                   <div style={{ fontSize: "0.72rem", color: "#64748b" }}>{acc.phone}</div>
@@ -552,109 +622,205 @@ export default function AccountManagement() {
                               </div>
                             )}
                           </td>
-                          <td style={{ textAlign: "right" }}>
-                            <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", justifyContent: "flex-end" }}>
-                              {/* New Registration: Verify & Activate */}
-                              {isPending && (
-                                <>
+                          <td style={{ textAlign: "right", position: "relative" }}>
+                            <div style={{ display: "inline-block", position: "relative" }}>
+                              {/* Single Action Button Icon */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenMenuEmail(isMenuOpen ? null : acc.email);
+                                }}
+                                aria-label="Account actions menu"
+                                title="Actions"
+                                style={{
+                                  width: "32px",
+                                  height: "32px",
+                                  borderRadius: "8px",
+                                  border: isMenuOpen ? "1px solid #166534" : "1px solid var(--wz-border, #cbd5e1)",
+                                  background: isMenuOpen ? "#ecfdf5" : "var(--wz-card-bg, #ffffff)",
+                                  color: isMenuOpen ? "#166534" : "var(--wz-text, #334155)",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  cursor: "pointer",
+                                  transition: "all 0.15s ease",
+                                  boxShadow: isMenuOpen ? "0 0 0 2px rgba(22, 101, 52, 0.15)" : "0 1px 2px rgba(0,0,0,0.04)",
+                                }}
+                              >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                  <circle cx="12" cy="5" r="2.2" />
+                                  <circle cx="12" cy="12" r="2.2" />
+                                  <circle cx="12" cy="19" r="2.2" />
+                                </svg>
+                              </button>
+
+                              {/* Clean Floating Action Dropdown Menu */}
+                              {isMenuOpen && (
+                                <div
+                                  onClick={(e) => e.stopPropagation()}
+                                  style={{
+                                    position: "absolute",
+                                    right: 0,
+                                    [index >= Math.max(1, sortedAccounts.length - 2) ? "bottom" : "top"]: "calc(100% + 4px)",
+                                    zIndex: 120,
+                                    minWidth: "195px",
+                                    background: "#ffffff",
+                                    border: "1px solid #e2e8f0",
+                                    borderRadius: "10px",
+                                    boxShadow: "0 10px 25px -5px rgba(0,0,0,0.18), 0 8px 10px -6px rgba(0,0,0,0.1)",
+                                    padding: "6px",
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "2px",
+                                  }}
+                                >
+                                  {/* Action 1: Active / Verify */}
                                   <button
                                     type="button"
-                                    onClick={() => handleVerifyAccount(acc)}
+                                    onClick={() => {
+                                      setOpenMenuEmail(null);
+                                      handleActivateAccount(acc);
+                                    }}
+                                    disabled={isActive}
                                     style={{
-                                      padding: "5px 10px",
-                                      background: "#166534",
-                                      color: "#ffffff",
+                                      width: "100%",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: "8px",
+                                      padding: "8px 12px",
+                                      borderRadius: "6px",
                                       border: "none",
-                                      borderRadius: "6px",
-                                      fontSize: "0.76rem",
-                                      fontWeight: 700,
-                                      cursor: "pointer",
+                                      background: "transparent",
+                                      color: isActive ? "#94a3b8" : "#166534",
+                                      fontSize: "0.82rem",
+                                      fontWeight: 600,
+                                      cursor: isActive ? "default" : "pointer",
+                                      textAlign: "left",
+                                      transition: "background 0.15s ease",
                                     }}
-                                    title="Verify registration and activate account"
+                                    onMouseEnter={(e) => {
+                                      if (!isActive) e.currentTarget.style.background = "#f0fdf4";
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.background = "transparent";
+                                    }}
                                   >
-                                    Verify &amp; Activate
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                      <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                    <span>{isActive ? "Active (Verified)" : "Active (Verify)"}</span>
                                   </button>
 
+                                  {/* Action 2: Decline */}
                                   <button
                                     type="button"
-                                    onClick={() => setDeclineModal({ open: true, account: acc, reason: "" })}
-                                    style={{
-                                      padding: "5px 10px",
-                                      background: "#ffffff",
-                                      color: "#dc2626",
-                                      border: "1px solid #fca5a5",
-                                      borderRadius: "6px",
-                                      fontSize: "0.76rem",
-                                      fontWeight: 600,
-                                      cursor: "pointer",
+                                    onClick={() => {
+                                      setOpenMenuEmail(null);
+                                      setDeclineModal({ open: true, account: acc, reason: "" });
                                     }}
-                                    title="Decline this registration"
+                                    disabled={isDeclined}
+                                    style={{
+                                      width: "100%",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: "8px",
+                                      padding: "8px 12px",
+                                      borderRadius: "6px",
+                                      border: "none",
+                                      background: "transparent",
+                                      color: isDeclined ? "#94a3b8" : "#dc2626",
+                                      fontSize: "0.82rem",
+                                      fontWeight: 600,
+                                      cursor: isDeclined ? "default" : "pointer",
+                                      textAlign: "left",
+                                      transition: "background 0.15s ease",
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      if (!isDeclined) e.currentTarget.style.background = "#fef2f2";
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.background = "transparent";
+                                    }}
                                   >
-                                    Decline
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                      <line x1="18" y1="6" x2="6" y2="18" />
+                                      <line x1="6" y1="6" x2="18" y2="18" />
+                                    </svg>
+                                    <span>{isDeclined ? "Already Declined" : "Decline Account"}</span>
                                   </button>
-                                </>
-                              )}
 
-                              {/* Verified Accounts: Activate / Deactivate Toggle (Preserving Records) */}
-                              {!isPending && !isDeclined && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleToggleActive(acc)}
-                                  style={{
-                                    padding: "5px 10px",
-                                    background: isDeactivated ? "#f0fdf4" : "#fef2f2",
-                                    color: isDeactivated ? "#166534" : "#dc2626",
-                                    border: `1px solid ${isDeactivated ? "#86efac" : "#fecaca"}`,
-                                    borderRadius: "6px",
-                                    fontSize: "0.76rem",
-                                    fontWeight: 700,
-                                    cursor: "pointer",
-                                  }}
-                                  title={isDeactivatingAction => isDeactivated ? "Activate this account" : "Deactivate while preserving all records"}
-                                >
-                                  {isDeactivated ? "Activate" : "Deactivate"}
-                                </button>
-                              )}
+                                  {/* Action 3: Deactivate */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOpenMenuEmail(null);
+                                      handleDeactivateAccount(acc);
+                                    }}
+                                    disabled={isDeactivated || isSelf}
+                                    style={{
+                                      width: "100%",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: "8px",
+                                      padding: "8px 12px",
+                                      borderRadius: "6px",
+                                      border: "none",
+                                      background: "transparent",
+                                      color: isDeactivated || isSelf ? "#94a3b8" : "#475569",
+                                      fontSize: "0.82rem",
+                                      fontWeight: 600,
+                                      cursor: isDeactivated || isSelf ? "default" : "pointer",
+                                      textAlign: "left",
+                                      transition: "background 0.15s ease",
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      if (!isDeactivated && !isSelf) e.currentTarget.style.background = "#f1f5f9";
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.background = "transparent";
+                                    }}
+                                  >
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                      <circle cx="12" cy="12" r="10" />
+                                      <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+                                    </svg>
+                                    <span>{isSelf ? "Self (Protected)" : isDeactivated ? "Deactivated" : "Deactivate"}</span>
+                                  </button>
 
-                              {/* Declined Account: Can be reviewed & approved */}
-                              {isDeclined && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleVerifyAccount(acc)}
-                                  style={{
-                                    padding: "5px 10px",
-                                    background: "#166534",
-                                    color: "#ffffff",
-                                    border: "none",
-                                    borderRadius: "6px",
-                                    fontSize: "0.76rem",
-                                    fontWeight: 700,
-                                    cursor: "pointer",
-                                  }}
-                                  title="Re-evaluate and activate this account"
-                                >
-                                  Re-activate
-                                </button>
-                              )}
-
-                              {/* Forgot Password OTP Issue Button */}
-                              {acc.forgotPasswordRequested && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleIssueOtp(acc)}
-                                  style={{
-                                    padding: "5px 10px",
-                                    background: "#b45309",
-                                    color: "#ffffff",
-                                    border: "none",
-                                    borderRadius: "6px",
-                                    fontSize: "0.76rem",
-                                    fontWeight: 700,
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  Issue OTP
-                                </button>
+                                  {/* Action 4: Issue OTP (when requested) */}
+                                  {acc.forgotPasswordRequested && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOpenMenuEmail(null);
+                                        handleIssueOtp(acc);
+                                      }}
+                                      style={{
+                                        width: "100%",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "8px",
+                                        padding: "8px 12px",
+                                        borderRadius: "6px",
+                                        border: "none",
+                                        background: "#fef3c7",
+                                        color: "#b45309",
+                                        fontSize: "0.82rem",
+                                        fontWeight: 700,
+                                        cursor: "pointer",
+                                        textAlign: "left",
+                                        marginTop: "3px",
+                                      }}
+                                    >
+                                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <path d="M21 2l-2 2m-1-1l-3 3m0 0l-3 3 2 2 3-3m1-1l2 2" />
+                                        <circle cx="7.5" cy="15.5" r="5.5" />
+                                      </svg>
+                                      <span>Issue OTP</span>
+                                    </button>
+                                  )}
+                                </div>
                               )}
                             </div>
                           </td>
@@ -696,7 +862,7 @@ export default function AccountManagement() {
                 Loading role permissions matrix...
               </div>
             ) : (
-              <div className="wz-table-responsive">
+              <div className="wz-table-responsive" style={{ minHeight: "380px" }}>
                 <table className="wz-table">
                   <thead>
                     <tr>

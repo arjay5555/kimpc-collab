@@ -14,6 +14,7 @@ export default function AdminTopbar({
   settings: externalSettings = null,
   onToggleGoogle: externalToggleGoogle = null,
   onToggleFacebook: externalToggleFacebook = null,
+  onToggleRecaptcha: externalToggleRecaptcha = null,
 }) {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -30,6 +31,7 @@ export default function AdminTopbar({
   const [internalSettings, setInternalSettings] = useState({
     googleLoginEnabled: true,
     facebookLoginEnabled: true,
+    recaptchaEnabled: true,
   });
 
   // Live notifications list
@@ -67,6 +69,7 @@ export default function AdminTopbar({
           setInternalSettings({
             googleLoginEnabled: data.googleLoginEnabled !== false,
             facebookLoginEnabled: data.facebookLoginEnabled !== false,
+            recaptchaEnabled: data.recaptchaEnabled !== false,
           });
         }
       });
@@ -136,6 +139,54 @@ export default function AdminTopbar({
       }
       return next;
     });
+  };
+
+  const handleInternalToggleGoogle = async () => {
+    if (externalToggleGoogle) {
+      externalToggleGoogle();
+      return;
+    }
+    const nextState = !activeSettings.googleLoginEnabled;
+    setInternalSettings((prev) => ({ ...prev, googleLoginEnabled: nextState }));
+    const res = await api("/admin/settings/google-login", {
+      method: "POST",
+      body: { enabled: nextState },
+    });
+    if (!res.ok) {
+      setInternalSettings((prev) => ({ ...prev, googleLoginEnabled: !nextState }));
+    }
+  };
+
+  const handleInternalToggleFacebook = async () => {
+    if (externalToggleFacebook) {
+      externalToggleFacebook();
+      return;
+    }
+    const nextState = !activeSettings.facebookLoginEnabled;
+    setInternalSettings((prev) => ({ ...prev, facebookLoginEnabled: nextState }));
+    const res = await api("/admin/settings/facebook-login", {
+      method: "POST",
+      body: { enabled: nextState },
+    });
+    if (!res.ok) {
+      setInternalSettings((prev) => ({ ...prev, facebookLoginEnabled: !nextState }));
+    }
+  };
+
+  const handleInternalToggleRecaptcha = async () => {
+    if (externalToggleRecaptcha) {
+      externalToggleRecaptcha();
+      return;
+    }
+    const nextState = !activeSettings.recaptchaEnabled;
+    setInternalSettings((prev) => ({ ...prev, recaptchaEnabled: nextState }));
+    const res = await api("/admin/settings/recaptcha", {
+      method: "POST",
+      body: { enabled: nextState },
+    });
+    if (!res.ok) {
+      setInternalSettings((prev) => ({ ...prev, recaptchaEnabled: !nextState }));
+    }
   };
 
   return (
@@ -382,8 +433,9 @@ export default function AdminTopbar({
         onClose={() => setSettingsModalOpen(false)}
         initialTab={settingsInitialTab}
         settings={activeSettings}
-        onToggleGoogle={externalToggleGoogle}
-        onToggleFacebook={externalToggleFacebook}
+        onToggleGoogle={externalToggleGoogle || handleInternalToggleGoogle}
+        onToggleFacebook={externalToggleFacebook || handleInternalToggleFacebook}
+        onToggleRecaptcha={externalToggleRecaptcha || handleInternalToggleRecaptcha}
       />
     </>
   );

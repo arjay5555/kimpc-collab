@@ -10,6 +10,7 @@ export default function AdminDashboard() {
   const [settings, setSettings] = useState({
     googleLoginEnabled: true,
     facebookLoginEnabled: true,
+    recaptchaEnabled: true,
   });
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState({ message: "", isError: false });
@@ -22,6 +23,7 @@ export default function AdminDashboard() {
         setSettings({
           googleLoginEnabled: data.googleLoginEnabled !== false,
           facebookLoginEnabled: data.facebookLoginEnabled !== false,
+          recaptchaEnabled: data.recaptchaEnabled !== false,
         });
       }
     });
@@ -82,6 +84,25 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleToggleRecaptcha = async () => {
+    const nextState = !settings.recaptchaEnabled;
+    setSettings((prev) => ({ ...prev, recaptchaEnabled: nextState }));
+    const res = await api("/admin/settings/recaptcha", {
+      method: "POST",
+      body: { enabled: nextState },
+    });
+    if (!res.ok) {
+      setFeedback({ message: "Failed to update reCAPTCHA setting.", isError: true });
+      setSettings((prev) => ({ ...prev, recaptchaEnabled: !nextState }));
+    } else {
+      setFeedback({
+        message: `Google reCAPTCHA v2 is now ${nextState ? "enabled" : "disabled"}.`,
+        isError: false,
+      });
+      setTimeout(() => setFeedback({ message: "", isError: false }), 4000);
+    }
+  };
+
   const refreshAll = () => {
     setLoading(true);
     Promise.all([
@@ -119,6 +140,7 @@ export default function AdminDashboard() {
           settings={settings}
           onToggleGoogle={handleToggleGoogle}
           onToggleFacebook={handleToggleFacebook}
+          onToggleRecaptcha={handleToggleRecaptcha}
         />
 
         {/* Global Feedback Alert */}
@@ -248,7 +270,7 @@ export default function AdminDashboard() {
               <div>
                 <h2 className="wz-card-title" style={{ fontSize: "1.15rem" }}>Authentication &amp; Security Settings</h2>
                 <p style={{ margin: "2px 0 0", fontSize: "0.8rem", color: "#64748b" }}>
-                  Control global single sign-on (SSO) gateways for members and cooperative staff.
+                  Control global single sign-on (SSO) gateways and bot protection for members and cooperative staff.
                 </p>
               </div>
             </div>
@@ -364,6 +386,76 @@ export default function AdminDashboard() {
                       type="checkbox"
                       checked={settings.facebookLoginEnabled}
                       onChange={handleToggleFacebook}
+                    />
+                    <span className="wz-switch-slider" />
+                  </label>
+                </div>
+              </div>
+
+              {/* Google reCAPTCHA v2 Security */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "16px",
+                  background: "#f8fafc",
+                  borderRadius: "12px",
+                  border: "1px solid #e2e8f0",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                  <div
+                    style={{
+                      width: "40px",
+                      height: "40px",
+                      borderRadius: "10px",
+                      background: "#ffffff",
+                      border: "1px solid #e2e8f0",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontWeight: 800,
+                      color: "#0284c7",
+                      fontSize: "1.1rem",
+                    }}
+                  >
+                    <svg
+                      width="22"
+                      height="22"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                      <path d="m9 12 2 2 4-4" />
+                    </svg>
+                  </div>
+                  <div>
+                    <strong style={{ fontSize: "0.95rem", color: "#0f172a" }}>Google reCAPTCHA v2</strong>
+                    <p style={{ margin: "2px 0 0", fontSize: "0.8rem", color: "#64748b" }}>
+                      Protect member sign-in and registration forms from bots and brute-force attempts.
+                    </p>
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <span
+                    style={{
+                      fontSize: "0.78rem",
+                      fontWeight: 700,
+                      color: settings.recaptchaEnabled ? "#16a34a" : "#64748b",
+                    }}
+                  >
+                    {settings.recaptchaEnabled ? "Enabled" : "Disabled"}
+                  </span>
+                  <label className="wz-switch-toggle">
+                    <input
+                      type="checkbox"
+                      checked={settings.recaptchaEnabled}
+                      onChange={handleToggleRecaptcha}
                     />
                     <span className="wz-switch-slider" />
                   </label>

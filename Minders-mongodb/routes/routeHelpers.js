@@ -78,6 +78,7 @@ async function requireAdmin(req, res, next) {
     }
 
     req.admin = adminUser;
+    req.user = adminUser;
     next();
   } catch (error) {
     return fail(res, 500, "Internal server error during authentication check.");

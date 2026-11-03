@@ -10,6 +10,7 @@ export default function SettingsModal({
   settings = null,
   onToggleGoogle = null,
   onToggleFacebook = null,
+  onToggleRecaptcha = null,
 }) {
   const { user, updateProfile } = useAuth();
   const isAdmin = user?.role === "admin";
@@ -209,7 +210,7 @@ export default function SettingsModal({
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
               </svg>
-              <span>System OAuth</span>
+              <span>Auth &amp; Security Gateways</span>
             </button>
           )}
         </div>
@@ -457,15 +458,15 @@ export default function SettingsModal({
             </div>
           )}
 
-          {/* ================= TAB 3: System OAuth (Admin Only) ================= */}
+          {/* ================= TAB 3: System Auth & Security (Admin Only) ================= */}
           {activeTab === "oauth" && isAdmin && (
             <div>
               <div>
                 <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 800, color: "var(--wz-text, #0f172a)" }}>
-                  Single Sign-On (SSO) Gateways
+                  Authentication &amp; Security Settings
                 </h4>
                 <p style={{ margin: "2px 0 0", fontSize: "0.75rem", color: "#64748b" }}>
-                  Configure OAuth providers permitted for member and staff authentication.
+                  Configure OAuth providers and bot protection permitted for member and staff authentication.
                 </p>
               </div>
 
@@ -491,14 +492,19 @@ export default function SettingsModal({
                       <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "#64748b" }}>Allow members to authenticate via Google</p>
                     </div>
                   </div>
-                  <label className="wz-switch-toggle">
-                    <input
-                      type="checkbox"
-                      checked={!!settings?.googleLoginEnabled}
-                      onChange={onToggleGoogle || (() => {})}
-                    />
-                    <span className="wz-switch-slider" />
-                  </label>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: settings?.googleLoginEnabled ? "#16a34a" : "#64748b" }}>
+                      {settings?.googleLoginEnabled ? "Enabled" : "Disabled"}
+                    </span>
+                    <label className="wz-switch-toggle">
+                      <input
+                        type="checkbox"
+                        checked={!!settings?.googleLoginEnabled}
+                        onChange={onToggleGoogle || (() => {})}
+                      />
+                      <span className="wz-switch-slider" />
+                    </label>
+                  </div>
                 </div>
 
                 {/* Facebook Sign-In */}
@@ -522,14 +528,58 @@ export default function SettingsModal({
                       <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "#64748b" }}>Allow members to authenticate via Facebook</p>
                     </div>
                   </div>
-                  <label className="wz-switch-toggle">
-                    <input
-                      type="checkbox"
-                      checked={!!settings?.facebookLoginEnabled}
-                      onChange={onToggleFacebook || (() => {})}
-                    />
-                    <span className="wz-switch-slider" />
-                  </label>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: settings?.facebookLoginEnabled ? "#16a34a" : "#64748b" }}>
+                      {settings?.facebookLoginEnabled ? "Enabled" : "Disabled"}
+                    </span>
+                    <label className="wz-switch-toggle">
+                      <input
+                        type="checkbox"
+                        checked={!!settings?.facebookLoginEnabled}
+                        onChange={onToggleFacebook || (() => {})}
+                      />
+                      <span className="wz-switch-slider" />
+                    </label>
+                  </div>
+                </div>
+
+                {/* Google reCAPTCHA v2 */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "14px 16px",
+                    background: "#f8fafc",
+                    borderRadius: "10px",
+                    border: "1px solid var(--wz-border, #e2e8f0)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                    <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "#ffffff", border: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, color: "#0284c7" }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                        <path d="m9 12 2 2 4-4" />
+                      </svg>
+                    </div>
+                    <div>
+                      <strong style={{ fontSize: "0.88rem", color: "var(--wz-text, #0f172a)" }}>Google reCAPTCHA v2</strong>
+                      <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "#64748b" }}>Require captcha verification on member login</p>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: settings?.recaptchaEnabled ? "#16a34a" : "#64748b" }}>
+                      {settings?.recaptchaEnabled ? "Enabled" : "Disabled"}
+                    </span>
+                    <label className="wz-switch-toggle">
+                      <input
+                        type="checkbox"
+                        checked={!!settings?.recaptchaEnabled}
+                        onChange={onToggleRecaptcha || (() => {})}
+                      />
+                      <span className="wz-switch-slider" />
+                    </label>
+                  </div>
                 </div>
               </div>
             </div>
