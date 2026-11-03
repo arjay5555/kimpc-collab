@@ -13,6 +13,7 @@ const accountSchema = new mongoose.Schema(
     role: { type: String, enum: ["member", "manager", "admin"], default: "member" },
     cooperativeId: { type: String, unique: true, sparse: true },
     emailVerified: { type: Boolean, default: false },
+    verificationStatus: { type: String, enum: ["pending", "verified", "declined"], default: "pending" },
     verifiedAt: Date,
     phone: { type: String, default: "" },
     address: { type: String, default: "" },
