@@ -660,9 +660,11 @@ export default function Login() {
                     </a>
                   </div>
 
-                  <div className="coop-recaptcha-wrap">
-                    <div className="g-recaptcha" id="login-recaptcha" data-sitekey="6LfrJe0tAAAAAIIeW87yfUlJuzJOokkWT4KM6UG5"></div>
-                  </div>
+                  {recaptchaEnabled && (
+                    <div className="coop-recaptcha-wrap">
+                      <div className="g-recaptcha" id="login-recaptcha" data-sitekey="6LfrJe0tAAAAAIIeW87yfUlJuzJOokkWT4KM6UG5"></div>
+                    </div>
+                  )}
 
                   <button className="btn-coop-harvest" type="submit" disabled={isLoggingIn} id="btn-login-submit">
                     <span>{isLoggingIn ? "Logging in..." : "Log In"}</span>
