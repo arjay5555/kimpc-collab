@@ -24,12 +24,12 @@ async function authenticate(req, res, next) {
     let account = null;
     if (payload.id && mongoose.Types.ObjectId.isValid(payload.id)) {
       account = await Account.findById(payload.id).select(
-        "_id email fullName role isSuspended isArchived cooperativeId suspensionReason"
+        "_id email fullName role isSuspended isArchived cooperativeId suspensionReason memberSettings"
       );
     }
     if (!account && payload.email) {
       account = await Account.findOne({ email: String(payload.email).trim().toLowerCase() }).select(
-        "_id email fullName role isSuspended isArchived cooperativeId suspensionReason"
+        "_id email fullName role isSuspended isArchived cooperativeId suspensionReason memberSettings"
       );
     }
 

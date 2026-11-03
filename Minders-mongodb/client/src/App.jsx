@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import { getDashboardForRole } from "./services/api";
 import ProtectedRoute from "./components/ProtectedRoute";
+import MemberLayout from "./components/MemberLayout";
 
 // Auth
 import Login from "./pages/Auth/Login";
@@ -10,6 +11,9 @@ import Login from "./pages/Auth/Login";
 // Member
 import MemberDashboard from "./pages/Member/MemberDashboard";
 import Applications from "./pages/Member/Applications";
+import EquipmentCatalog from "./pages/Member/EquipmentCatalog";
+import Notifications from "./pages/Member/Notifications";
+import Settings from "./pages/Member/Settings";
 
 // Manager
 import ManagerDashboard from "./pages/Manager/ManagerDashboard";
@@ -46,7 +50,9 @@ export default function App() {
         path="/member"
         element={
           <ProtectedRoute allowedRoles={["member", "manager", "admin"]}>
-            <MemberDashboard />
+            <MemberLayout>
+              <MemberDashboard />
+            </MemberLayout>
           </ProtectedRoute>
         }
       />
@@ -54,7 +60,49 @@ export default function App() {
         path="/applications"
         element={
           <ProtectedRoute allowedRoles={["member", "manager", "admin"]}>
-            <Applications />
+            <MemberLayout>
+              <Applications />
+            </MemberLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/member/book"
+        element={
+          <ProtectedRoute allowedRoles={["member", "manager", "admin"]}>
+            <MemberLayout>
+              <EquipmentCatalog />
+            </MemberLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/member/book/:id"
+        element={
+          <ProtectedRoute allowedRoles={["member", "manager", "admin"]}>
+            <MemberLayout>
+              <EquipmentCatalog />
+            </MemberLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/member/notifications"
+        element={
+          <ProtectedRoute allowedRoles={["member", "manager", "admin"]}>
+            <MemberLayout>
+              <Notifications />
+            </MemberLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/member/settings"
+        element={
+          <ProtectedRoute allowedRoles={["member", "manager", "admin"]}>
+            <MemberLayout>
+              <Settings />
+            </MemberLayout>
           </ProtectedRoute>
         }
       />

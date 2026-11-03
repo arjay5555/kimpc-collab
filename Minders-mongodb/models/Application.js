@@ -9,6 +9,8 @@ const applicationSchema = new mongoose.Schema(
     machineryUnitId: { type: String, default: "", trim: true, index: true },
     startDate: { type: String, required: true }, // "YYYY-MM-DD", straight from <input type="date">
     endDate: { type: String, required: true },
+    bookingType: { type: String, enum: ["hourly", "daily"], default: "daily" },
+    farmLocation: { type: String, default: "", trim: true, maxlength: 240 },
     status: { 
       type: String, 
       enum: ["Pending", "Approved", "Checked-Out", "Returned", "Rejected", "Cancelled"], 

@@ -640,6 +640,67 @@ router.get("/machinery-units", optionalAuth, async (req, res) => {
 });
 
 /**
+ * GET /api/machinery-units/:id/availability
+ * Returns privacy-safe booking and maintenance periods for the next year.
+ */
+router.get("/machinery-units/:id/availability", optionalAuth, async (req, res) => {
+  try {
+    const id = req.params.id;
+    const unit = mongoose.isValidObjectId(id)
+      ? await MachineryUnit.findById(id)
+      : await MachineryUnit.findOne({ unitId: clean(id) });
+    if (!unit) return res.status(404).json({ ok: false, error: "Machinery unit not found" });
+
+    const timestamp = (value, endOfDate = false) => {
+      const raw = String(value || "").trim();
+      const normalized = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+        ? `${raw}T${endOfDate ? "23:59:59.999" : "00:00:00.000"}Z`
+        : raw;
+      const result = new Date(normalized).getTime();
+      return Number.isFinite(result) ? result : null;
+    };
+    const now = Date.now();
+    const horizon = now + 366 * 24 * 60 * 60 * 1000;
+    const overlapsHorizon = (startDate, endDate) => {
+      const start = timestamp(startDate);
+      const end = timestamp(endDate, !String(endDate || "").includes("T"));
+      return start !== null && end !== null && start <= horizon && end >= now;
+    };
+
+    const [applications, maintenance] = await Promise.all([
+      Application.find({
+        $or: [{ machineryUnitId: unit.unitId }, { equipment: unit.name }],
+        status: { $in: ["Pending", "Approved", "Checked-Out"] },
+      }).select("startDate endDate status").lean(),
+      MachineryMaintenance.find({
+        equipmentUnitId: unit.unitId,
+        status: { $in: ["Out of Service", "In Repair", "Scheduled Maintenance"] },
+      }).select("startDate endDate status").lean(),
+    ]);
+
+    const data = [
+      ...applications.filter((item) => overlapsHorizon(item.startDate, item.endDate)).map((item) => ({
+        type: "booking",
+        startDate: item.startDate,
+        endDate: item.endDate,
+        status: item.status,
+      })),
+      ...maintenance.filter((item) => overlapsHorizon(item.startDate, item.endDate)).map((item) => ({
+        type: "maintenance",
+        startDate: item.startDate,
+        endDate: item.endDate,
+        status: item.status,
+      })),
+    ].sort((a, b) => timestamp(a.startDate) - timestamp(b.startDate));
+
+    res.json({ ok: true, data });
+  } catch (error) {
+    console.error("Error fetching machinery availability:", error);
+    res.status(500).json({ ok: false, error: "Failed to fetch machinery availability." });
+  }
+});
+
+/**
  * GET /api/machinery-units/:id
  * Returns single unit details, maintenance history, and active bookings.
  */
@@ -671,13 +732,15 @@ router.get("/machinery-units/:id", optionalAuth, async (req, res) => {
     }).sort({ startDate: -1 });
 
     // Attach recent/active bookings from Application collection
-    const bookings = await Application.find({
+    let bookingsQuery = Application.find({
       $or: [{ machineryUnitId: unit.unitId }, { equipment: unit.name }]
     })
       .sort({ startDate: -1 })
-      .limit(10)
-      .select("displayId memberName startDate endDate status financials createdAt")
-      .lean();
+      .limit(10);
+    bookingsQuery = isManagerOrAdmin
+      ? bookingsQuery.select("displayId memberName startDate endDate status financials createdAt")
+      : bookingsQuery.select("startDate endDate status createdAt");
+    const bookings = await bookingsQuery.lean();
 
     res.json({
       ok: true,

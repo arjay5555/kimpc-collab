@@ -49,7 +49,7 @@ minders/
 │   │   │   │   ├── Admin/             # AdminDashboard, AccountManagement, AuditLogs
 │   │   │   │   ├── Auth/              # Login.jsx (with Google & Facebook auth)
 │   │   │   │   ├── Manager/           # ManagerDashboard, BookingApprovals
-│   │   │   │   └── Member/            # MemberDashboard, Applications
+│   │   │   │   └── Member/            # Dashboard, equipment catalog/booking, applications, notifications, settings
 │   │   │   ├── services/              # API fetch client wrapper (api.js)
 │   │   │   ├── styles/                # CSS stylesheets (admin-wheelzie.css, login-coop.css)
 │   │   │   ├── App.jsx                # React Router root definitions
@@ -69,6 +69,7 @@ minders/
 │   ├── models/                        # Mongoose data models
 │   │   ├── Account.js                 # Users (members, managers, admins, profile data)
 │   │   ├── Application.js             # Equipment booking requests & rental schedules
+│   │   ├── Notification.js            # Member in-app notifications
 │   │   ├── AuditLog.js                # System event audit records
 │   │   ├── MachineryMaintenance.js    # Fleet maintenance & repair schedules
 │   │   ├── MachineryUnit.js           # Physical machinery unit inventory
@@ -78,6 +79,7 @@ minders/
 │   │
 │   ├── routes/                        # Express API route endpoints
 │   │   ├── api.js                     # Core API routes (auth, accounts, applications, units)
+│   │   ├── memberRoutes.js            # Member profile, preferences, support, and notifications
 │   │   ├── calendar.js                # Google Calendar 2-way sync endpoints
 │   │   └── manager.js                 # Manager operations endpoints
 │   │
@@ -87,13 +89,14 @@ minders/
 │   │   └── googleCalendarService.js   # Google Calendar API integration
 │   │
 │   ├── workers/                       # Scheduled background workers
-│   │   └── archiveAuditLogs.js        # Monthly audit log archiver cron worker
+│   │   ├── archiveAuditLogs.js        # Monthly audit log archiver cron worker
+│   │   └── bookingReminderNotifications.js # Daily member booking reminders
 │   │
 │   ├── public/                        # Legacy fallback static assets (styles & images)
 │   ├── .env                           # Environment variables (DB URI, OAuth keys)
 │   ├── .env.example                   # Template for required environment variables
 │   ├── package.json                   # Root backend package configuration & scripts
-│   ├── seed.js                        # Database seeder for default Admin & Manager accounts
+│   ├── seed.js                        # Database seeder for demo Admin, Manager, and Member accounts
 │   └── server.js                      # Main Express application entry point
 └── pic src/                           # Raw image source repository
 ```
@@ -115,7 +118,11 @@ GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 RECAPTCHA_SITE_KEY=...
 RECAPTCHA_SECRET_KEY=...
+SUPPORT_EMAIL=...  # Optional: customer support inbox (requires SMTP settings)
+SUPPORT_PHONE=...  # Optional: customer service phone number
 ```
+
+Member notification reminders run daily at 08:00 Asia/Manila. Booking support email requires `SUPPORT_EMAIL`, `SMTP_USER`, and `SMTP_PASS`; member settings report an error if delivery is not configured.
 
 ### 3. Running in Development (Recommended)
 
@@ -143,10 +150,13 @@ Access the application at **http://localhost:3000**.
 
 ---
 
-## 🔑 Default Seed Accounts
-Run `npm run seed` once to initialize default administrative credentials:
-- **Admin**: `admin@minders.test` / `Admin123!`
-- **Manager**: `manager@minders.test` / `Manager123!`
+## 🔑 Demo Accounts
+Configure `MONGODB_URI` in `.env`, then run `npm run seed` from `Minders-mongodb/` to create the demo accounts:
+- **Admin**: `admin@kimpc.test` / `Admin123!`
+- **Manager**: `manager@kimpc.test` / `Manager123!`
+- **Member**: `demo.member@kimpc.test` / `Member123!`
+
+The demo member account is email-verified and can sign in using its email address. These are development credentials; change them before using a deployed environment.
 
 ---
 

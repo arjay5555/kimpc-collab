@@ -4,6 +4,7 @@ const fs = require("fs");
 const express = require("express");
 const mongoose = require("mongoose");
 const { startAuditArchiveWorker } = require("./workers/archiveAuditLogs");
+const { startBookingReminderWorker } = require("./workers/bookingReminderNotifications");
 const authManager = require("./middleware/authManager");
 const errorHandler = require("./middleware/errorHandler");
 
@@ -67,6 +68,7 @@ mongoose
 
     // Start the monthly audit-log archive cron worker.
     startAuditArchiveWorker({ runImmediately: false });
+    startBookingReminderWorker();
 
     app.listen(port, () => console.log(`KIMPC (Kalilangan Irrigators Multi-Purpose Cooperative) is running at http://localhost:${port}/login`));
   })

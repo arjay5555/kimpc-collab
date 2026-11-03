@@ -4,7 +4,10 @@ const router = express.Router();
 
 const Account = require("../models/Account");
 const Application = require("../models/Application");
+const MachineryUnit = require("../models/MachineryUnit");
 const MachineryMaintenance = require("../models/MachineryMaintenance");
+const Notification = require("../models/Notification");
+const authenticate = require("../middleware/authenticate");
 
 const authManager = require("../middleware/authManager");
 const { logAudit } = require("../services/auditLogger");
@@ -21,12 +24,27 @@ const {
   isSameMachineryMatch,
 } = require("./routeHelpers");
 
+function optionalAuthentication(req, res, next) {
+  if (!(req.headers.authorization || "").startsWith("Bearer ")) return next();
+  return authenticate(req, res, next);
+}
+
+function bookingTimestamp(value, endOfDate = false) {
+  const raw = clean(value);
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+    ? `${raw}T${endOfDate ? "23:59:59.999" : "00:00:00.000"}Z`
+    : raw;
+  const timestamp = new Date(normalized).getTime();
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
 // ---------- Equipment applications ----------
 
 // ?memberEmail=... returns one member's requests; without it, everything (manager/admin queue).
-router.get("/applications", async (req, res) => {
+router.get("/applications", optionalAuthentication, async (req, res) => {
   try {
-    const filter = req.query.memberEmail ? { memberEmail: cleanEmail(req.query.memberEmail) } : {};
+    const memberEmail = req.user?.role === "member" ? req.user.email : cleanEmail(req.query.memberEmail);
+    const filter = memberEmail ? { memberEmail } : {};
     res.json(await Application.find(filter).sort({ createdAt: -1 }));
   } catch (error) {
     console.error("Error fetching applications:", error);
@@ -34,21 +52,34 @@ router.get("/applications", async (req, res) => {
   }
 });
 
-router.post("/applications", async (req, res) => {
+router.post("/applications", optionalAuthentication, async (req, res) => {
   try {
-    const memberEmail = cleanEmail(req.body.memberEmail);
+    const memberEmail = req.user?.role === "member" ? req.user.email : cleanEmail(req.body.memberEmail);
     const equipment = clean(req.body.equipment);
     const machineryUnitId = clean(req.body.machineryUnitId);
     const startDate = clean(req.body.startDate);
     const endDate = clean(req.body.endDate);
-    if (!equipment || !startDate || !endDate) return fail(res, 400, "Equipment and both dates are required.");
-    if (endDate < startDate) return fail(res, 400, "End date must be on or after the start date.");
+    const bookingType = clean(req.body.bookingType).toLowerCase() === "hourly" ? "hourly" : "daily";
+    const farmLocation = clean(req.body.farmLocation);
+    if (!equipment || !startDate || !endDate || (req.user?.role === "member" && !farmLocation)) {
+      return fail(res, 400, "Equipment, dates, and farm location are required.");
+    }
+    if (farmLocation.length > 240) return fail(res, 400, "Farm location must be 240 characters or fewer.");
+    const startTimestamp = bookingTimestamp(startDate);
+    const endTimestamp = bookingTimestamp(endDate, bookingType === "daily");
+    if (startTimestamp === null || endTimestamp === null) return fail(res, 400, "Enter valid booking dates and times.");
+    if (endTimestamp <= startTimestamp) return fail(res, 400, "The end time must be after the start time.");
+    if (bookingType === "daily" && (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate))) {
+      return fail(res, 400, "Daily bookings require valid start and end dates.");
+    }
 
     // Block new assignments to units under maintenance or retired
+    let targetUnit = null;
     if (machineryUnitId || equipment) {
-      const targetUnit = await MachineryUnit.findOne(
+      targetUnit = await MachineryUnit.findOne(
         machineryUnitId ? { unitId: machineryUnitId } : { name: equipment }
       );
+      if (machineryUnitId && !targetUnit) return fail(res, 404, "Selected machinery unit was not found.");
       if (targetUnit) {
         const cond = targetUnit.operatingCondition || targetUnit.status;
         if (["Under Maintenance", "Maintenance", "Repair", "Retired", "Dispose"].includes(cond)) {
@@ -64,11 +95,13 @@ router.post("/applications", async (req, res) => {
     // Automatic Maintenance Overlap Protection:
     const overlappingMaints = await MachineryMaintenance.find({
       status: { $in: ["Out of Service", "In Repair", "Scheduled Maintenance"] },
-      startDate: { $lte: endDate },
-      endDate: { $gte: startDate },
     });
     const maintenanceConflict = overlappingMaints.find((m) =>
-      isSameMachineryMatch(m.equipmentUnitId, m.equipmentName, machineryUnitId, equipment)
+      isSameMachineryMatch(m.equipmentUnitId, m.equipmentName, machineryUnitId, equipment) &&
+      bookingTimestamp(m.startDate) !== null &&
+      bookingTimestamp(m.endDate, true) !== null &&
+      bookingTimestamp(m.startDate) <= endTimestamp &&
+      bookingTimestamp(m.endDate, true) >= startTimestamp
     );
 
     if (maintenanceConflict) {
@@ -81,30 +114,32 @@ router.post("/applications", async (req, res) => {
 
     // Automatic Unique Unit Conflict Protection (Quantity: 1):
     const overlappingBookings = await Application.find({
-      status: { $in: ["Approved", "Checked-Out"] },
-      startDate: { $lte: endDate },
-      endDate: { $gte: startDate },
-    });
+      status: { $in: ["Pending", "Approved", "Checked-Out"] },
+    }).select("equipment machineryUnitId startDate endDate");
     const bookingConflict = overlappingBookings.find((b) =>
-      isSameMachineryMatch(b.machineryUnitId, b.equipment, machineryUnitId, equipment)
+      isSameMachineryMatch(b.machineryUnitId, b.equipment, machineryUnitId, equipment) &&
+      bookingTimestamp(b.startDate) !== null &&
+      bookingTimestamp(b.endDate, !String(b.endDate || "").includes("T")) !== null &&
+      bookingTimestamp(b.startDate) <= endTimestamp &&
+      bookingTimestamp(b.endDate, !String(b.endDate || "").includes("T")) >= startTimestamp
     );
 
     if (bookingConflict) {
-      return fail(
-        res,
-        409,
-        `Equipment "${equipment}" (Quantity: 1) is already booked by ${bookingConflict.memberName} from ${bookingConflict.startDate} to ${bookingConflict.endDate}. Each unit is unique. Please select other dates.`
-      );
+      return fail(res, 409, "This equipment is not available during the selected period. Please choose another time.");
     }
 
-    const account = await Account.findOne({ email: memberEmail });
+    if (!memberEmail) return fail(res, 400, "Member email is required.");
+    const account = req.user?.role === "member" ? req.user : await Account.findOne({ email: memberEmail });
     if (!account) return fail(res, 404, "Account not found.");
     const application = await Application.create({
       memberEmail,
       memberName: account.fullName,
       equipment,
+      machineryUnitId: targetUnit?.unitId || machineryUnitId,
       startDate,
       endDate,
+      bookingType,
+      farmLocation,
     });
 
     await logAudit({
@@ -124,6 +159,16 @@ router.post("/applications", async (req, res) => {
       },
       req,
     });
+
+    if (account.memberSettings?.notifications?.inApp !== false) {
+      await Notification.create({
+        memberEmail,
+        title: "Booking request received",
+        message: `Your request for ${equipment} has been submitted for review.`,
+        type: "booking",
+        relatedApplicationId: application._id,
+      });
+    }
 
     res.status(201).json(application);
   } catch (error) {
@@ -254,6 +299,9 @@ const handleApplicationUpdate = async (req, res) => {
 
     const previousStatus = existing.status;
     existing.status = newStatus;
+    if (newStatus === "Rejected" && req.body.managerRemarks !== undefined) {
+      existing.managerRemarks = clean(req.body.managerRemarks);
+    }
     await existing.save();
 
     // Push approved bookings to Google Calendar (try/catch safe)
@@ -296,6 +344,21 @@ const handleApplicationUpdate = async (req, res) => {
       },
       req,
     });
+
+    if (["Approved", "Rejected"].includes(newStatus)) {
+      const member = await Account.findOne({ email: existing.memberEmail }).select("memberSettings").lean();
+      if (member?.memberSettings?.notifications?.inApp !== false) {
+        await Notification.create({
+          memberEmail: existing.memberEmail,
+          title: newStatus === "Approved" ? "Booking approved" : "Booking request update",
+          message: newStatus === "Approved"
+            ? `Your request for ${existing.equipment} has been approved.`
+            : `Your request for ${existing.equipment} was declined.${existing.managerRemarks ? ` Reason: ${existing.managerRemarks}` : ""}`,
+          type: "booking",
+          relatedApplicationId: existing._id,
+        });
+      }
+    }
 
     res.json(existing);
   } catch (error) {
@@ -407,4 +470,3 @@ router.patch("/applications/:id/inspection", authManager, async (req, res) => {
 });
 
 module.exports = router;
-

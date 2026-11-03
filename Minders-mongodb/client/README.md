@@ -16,6 +16,8 @@ client/
 │   ├── assets/                 # SVGs and static graphics
 │   ├── components/             # Reusable UI components
 │   │   ├── Header.jsx          # Top navigation bar with role-based routing & auth controls
+│   │   ├── MemberLayout.jsx    # Member-only shell and persistent sidebar layout
+│   │   ├── MemberSidebar.jsx   # Member navigation, identity, unread badge, and logout
 │   │   └── ProtectedRoute.jsx  # Route guard checking authentication and allowed roles
 │   ├── context/
 │   │   └── AuthContext.jsx     # User authentication state, login, registration, and session management
@@ -23,10 +25,12 @@ client/
 │   │   ├── Admin/              # Admin pages (AdminDashboard.jsx, AccountManagement.jsx, AuditLogs.jsx)
 │   │   ├── Auth/               # Authentication (Login.jsx with Google Identity & Facebook SDK)
 │   │   ├── Manager/            # Manager pages (ManagerDashboard.jsx, BookingApprovals.jsx)
-│   │   └── Member/             # Member pages (MemberDashboard.jsx, Applications.jsx)
+│   │   └── Member/             # Dashboard, equipment catalog/booking, applications, notifications, and settings
 │   ├── services/
-│   │   └── api.js              # Fetch wrapper attaching JWT bearer tokens and standard headers
+│   │   ├── api.js              # Fetch wrapper attaching JWT bearer tokens and standard headers
+│   │   └── memberPortal.js     # Shared member booking status and display helpers
 │   ├── styles/
+│   │   ├── member-portal.css   # Member-only responsive design system and light/dark themes
 │   │   ├── admin-wheelzie.css  # Modern SaaS dashboard stylesheet (KPI cards, SVG charts, right sidebar)
 │   │   ├── login-coop.css      # Agricultural cooperative authentication styles
 │   │   └── styles.css          # Portal base design system
@@ -63,6 +67,10 @@ npm run preview
 | `/login` | Public | Authentication & Registration |
 | `/member` | `member`, `manager`, `admin` | Member dashboard, equipment rental requests |
 | `/applications` | `member`, `manager`, `admin` | Member booking history & status |
+| `/member/book` | `member`, `manager`, `admin` | Searchable cooperative equipment catalog |
+| `/member/book/:id` | `member`, `manager`, `admin` | Equipment details, availability, and booking request |
+| `/member/notifications` | `member`, `manager`, `admin` | In-app notifications and read/delete actions |
+| `/member/settings` | `member`, `manager`, `admin` | Profile, appearance, notification, and account settings |
 | `/manager` | `manager`, `admin` | Modern SaaS fleet manager dashboard & equipment analytics |
 | `/booking-approvals` | `manager`, `admin` | Booking decision pipeline (approve, reject, void) |
 | `/admin` | `admin` | Administrative controls & security settings |
@@ -86,3 +94,5 @@ server: {
 }
 ```
 Maintainers do not need to hardcode `http://localhost:3000` inside React components. Simply use `api('/path')` from `services/api.js`.
+
+The member equipment detail page uses `GET /api/machinery-units/:id/availability` to display privacy-safe booking and maintenance periods. The picker disables occupied dates and hourly slots; the application endpoint independently checks for overlaps before creating a request.

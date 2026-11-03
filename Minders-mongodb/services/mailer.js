@@ -119,6 +119,23 @@ async function sendDeleteOtpEmail({ toEmail, otpCode, targetName, targetRole, ta
   }
 }
 
+async function sendMemberSupportEmail({ toEmail, fromEmail, fullName, subject, message }) {
+  const supportEmail = process.env.SUPPORT_EMAIL;
+  const transporter = createTransporter();
+  if (!supportEmail) throw new Error("SUPPORT_EMAIL is not configured.");
+  if (!transporter) throw new Error("SMTP_USER and SMTP_PASS are not configured.");
+
+  const fromAddress = process.env.SMTP_FROM || `"KIMPC Support" <${process.env.SMTP_USER}>`;
+  return transporter.sendMail({
+    from: fromAddress,
+    to: toEmail || supportEmail,
+    replyTo: fromEmail,
+    subject: `[KIMPC Member Support] ${subject}`,
+    text: `Member: ${fullName} (${fromEmail})\n\n${message}`,
+  });
+}
+
 module.exports = {
-  sendDeleteOtpEmail
+  sendDeleteOtpEmail,
+  sendMemberSupportEmail
 };

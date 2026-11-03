@@ -58,6 +58,14 @@ export function AuthProvider({ children }) {
     return newUser;
   };
 
+  const updateProfile = ({ fullName }) => {
+    if (fullName) {
+      sessionStorage.setItem("kimpc-account-name", fullName);
+      sessionStorage.setItem("minders-account-name", fullName);
+      setUser((current) => current ? { ...current, fullName } : current);
+    }
+  };
+
   const login = async (identifier, password, recaptchaToken = "") => {
     const res = await api("/login", {
       method: "POST",
@@ -125,6 +133,7 @@ export function AuthProvider({ children }) {
         forgotPassword,
         changeTempPassword,
         completeSignIn,
+        updateProfile,
         logout,
       }}
     >

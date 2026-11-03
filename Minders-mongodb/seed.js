@@ -1,18 +1,19 @@
-// Creates the first admin and manager accounts (run once with: npm run seed).
+// Creates demo accounts (run with: npm run seed).
 // Change these passwords after your first login.
 require("dotenv").config();
 const bcrypt = require("bcryptjs");
 const mongoose = require("mongoose");
 const Account = require("./models/Account");
 
-const staff = [
+const demoAccounts = [
   { fullName: "System Admin", email: "admin@kimpc.test", password: "Admin123!", role: "admin" },
-  { fullName: "Alex Manager", email: "manager@kimpc.test", password: "Manager123!", role: "manager" }
+  { fullName: "Alex Manager", email: "manager@kimpc.test", password: "Manager123!", role: "manager" },
+  { fullName: "Demo Member", email: "demo.member@kimpc.test", password: "Member123!", role: "member" }
 ];
 
 (async () => {
   await mongoose.connect(process.env.MONGODB_URI);
-  for (const person of staff) {
+  for (const person of demoAccounts) {
     if (await Account.exists({ email: person.email })) {
       console.log(`Skipped (already exists): ${person.email}`);
       continue;

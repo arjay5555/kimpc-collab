@@ -21,6 +21,16 @@ const accountSchema = new mongoose.Schema(
     region: { type: String, default: "" },
     postalCode: { type: String, default: "" },
     country: { type: String, default: "" },
+    memberSettings: {
+      theme: { type: String, enum: ["light", "dark"], default: "light" },
+      defaultFarmLocation: { type: String, default: "", maxlength: 240 },
+      notifications: {
+        email: { type: Boolean, default: true },
+        inApp: { type: Boolean, default: true },
+        bookingReminders: { type: Boolean, default: true },
+        systemUpdates: { type: Boolean, default: true }
+      }
+    },
     // Profile edits wait here until the member confirms them by email.
     pendingUpdate: { type: mongoose.Schema.Types.Mixed, default: null },
     // Archive status

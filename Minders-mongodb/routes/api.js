@@ -15,11 +15,13 @@ const accountRoutes = require("./accountRoutes");
 const applicationRoutes = require("./applicationRoutes");
 const machineryRoutes = require("./machineryRoutes");
 const transactionRoutes = require("./transactionRoutes");
+const memberRoutes = require("./memberRoutes");
 
 router.use(authRoutes);
 router.use(accountRoutes);
 router.use(applicationRoutes);
 router.use(machineryRoutes);
 router.use(transactionRoutes);
+router.use(memberRoutes);
 
 module.exports = router;
