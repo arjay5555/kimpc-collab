@@ -43,14 +43,24 @@ export default function ManagerTopbar({
     },
   ]);
 
-  // Fetch pending applications count for live notification
+  const [unreadMsgCount, setUnreadMsgCount] = useState(0);
+
+  // Fetch pending applications, cancellation requests, and member messages for live notifications
   useEffect(() => {
-    api("/applications").then(({ ok, data }) => {
-      if (ok && Array.isArray(data)) {
-        const pending = data.filter((a) => (a.status || "").toLowerCase() === "pending");
-        if (pending.length > 0) {
-          setNotifications((prev) => [
-            {
+    let isMounted = true;
+    const fetchAlerts = async () => {
+      try {
+        const [appRes, msgRes] = await Promise.all([
+          api("/applications"),
+          api("/manager/messages"),
+        ]);
+
+        const incomingNotifs = [];
+
+        if (appRes.ok && Array.isArray(appRes.data)) {
+          const pending = appRes.data.filter((a) => (a.status || "").toLowerCase() === "pending");
+          if (pending.length > 0) {
+            incomingNotifs.push({
               id: "pending-apps",
               type: "alert",
               title: `${pending.length} Pending Booking Approval${pending.length > 1 ? "s" : ""}`,
@@ -58,13 +68,59 @@ export default function ManagerTopbar({
               time: "Action required",
               link: "/booking-approvals",
               read: false,
-            },
-            ...prev.filter((n) => n.id !== "pending-apps"),
-          ]);
+            });
+          }
+
+          const cancelReqs = appRes.data.filter(
+            (a) => a.cancellationRequested || (a.status || "").toLowerCase() === "cancellation requested"
+          );
+          if (cancelReqs.length > 0) {
+            incomingNotifs.push({
+              id: "cancel-reqs",
+              type: "alert",
+              title: `${cancelReqs.length} Cancellation Request${cancelReqs.length > 1 ? "s" : ""}`,
+              desc: "Members requested cancellation on approved bookings.",
+              time: "Action required",
+              link: "/booking-approvals",
+              read: false,
+            });
+          }
+        }
+
+        if (msgRes.ok && msgRes.data) {
+          const unreadMsgs = (msgRes.data.messages || []).filter((m) => m.status === "unread");
+          if (isMounted) setUnreadMsgCount(unreadMsgs.length);
+          if (unreadMsgs.length > 0) {
+            incomingNotifs.push({
+              id: "unread-msgs",
+              type: "info",
+              title: `${unreadMsgs.length} New Member Question${unreadMsgs.length > 1 ? "s" : ""}`,
+              desc: `Latest from ${unreadMsgs[0].memberName || "Member"}: "${unreadMsgs[0].subject || unreadMsgs[0].message?.slice(0, 30)}"`,
+              time: "Inquiry",
+              link: "/manager/messages",
+              read: false,
+            });
+          }
+        }
+
+        if (isMounted && incomingNotifs.length > 0) {
+          setNotifications((prev) => {
+            const incomingIds = incomingNotifs.map((n) => n.id);
+            return [...incomingNotifs, ...prev.filter((n) => !incomingIds.includes(n.id))];
+          });
           setHasUnreadNotifs(true);
         }
+      } catch (err) {
+        // ignore
       }
-    });
+    };
+
+    fetchAlerts();
+    const interval = setInterval(fetchAlerts, 15000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, []);
 
   // Click outside to close notifications
@@ -137,6 +193,31 @@ export default function ManagerTopbar({
             </div>
           )}
 
+          {/* ================= Messages Icon (Envelope) ================= */}
+          <Link
+            to="/manager/messages"
+            className="wz-icon-btn"
+            title="Member Inquiries & Messages"
+            style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            {unreadMsgCount > 0 && (
+              <span
+                style={{
+                  position: "absolute",
+                  top: "2px",
+                  right: "2px",
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "50%",
+                  backgroundColor: "#0284c7",
+                }}
+              />
+            )}
+          </Link>
+
           {/* ================= Settings Icon (Gear) ================= */}
           <button
             type="button"
@@ -146,7 +227,7 @@ export default function ManagerTopbar({
           >
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
             </svg>
           </button>
 

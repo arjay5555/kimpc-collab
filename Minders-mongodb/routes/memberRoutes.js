@@ -3,6 +3,7 @@ const bcrypt = require("bcryptjs");
 const mongoose = require("mongoose");
 const Account = require("../models/Account");
 const Notification = require("../models/Notification");
+const SupportMessage = require("../models/SupportMessage");
 const authenticate = require("../middleware/authenticate");
 const authManager = require("../middleware/authManager");
 const { fail, clean, cleanEmail } = require("./routeHelpers");
@@ -104,11 +105,36 @@ router.post("/member/change-password", async (req, res) => {
   return res.json({ ok: true, message: "Password updated." });
 });
 
-router.post("/member/support-request", async (req, res) => {
+// Member sends a question / message to manager
+router.post(["/member/support-request", "/member/messages"], async (req, res) => {
   const subject = clean(req.body.subject);
   const message = clean(req.body.message);
   if (!subject || !message) return fail(res, 400, "A subject and message are required.");
   if (subject.length > 120 || message.length > 3000) return fail(res, 400, "Subject or message exceeds the allowed length.");
+
+  // Save to database so manager can view in Messages
+  const inquiry = await SupportMessage.create({
+    memberEmail: req.user.email,
+    memberName: req.user.fullName || "Cooperative Member",
+    subject,
+    message,
+    status: "unread",
+  });
+
+  // Notify all managers in-app
+  const managers = await Account.find({ role: "manager" }).select("email").lean();
+  if (managers.length > 0) {
+    await Notification.insertMany(
+      managers.map((m) => ({
+        memberEmail: m.email,
+        title: "New Member Question",
+        message: `${req.user.fullName || req.user.email} asked: "${subject}"`,
+        type: "info",
+      }))
+    );
+  }
+
+  // Backup email attempt
   try {
     await sendMemberSupportEmail({
       fromEmail: req.user.email,
@@ -116,10 +142,24 @@ router.post("/member/support-request", async (req, res) => {
       subject,
       message,
     });
-    return res.status(202).json({ ok: true, message: "Your support request was sent." });
-  } catch (error) {
-    console.error("[MemberSupport] Could not send support request:", error.message);
-    return fail(res, 503, "Support email is not configured. Please contact the cooperative office directly.");
+  } catch (err) {
+    // Ignore SMTP errors
+  }
+
+  return res.status(201).json({
+    ok: true,
+    message: "Your question has been sent to the cooperative manager.",
+    inquiry,
+  });
+});
+
+// Member views their questions and manager replies
+router.get("/member/messages", async (req, res) => {
+  try {
+    const messages = await SupportMessage.find({ memberEmail: req.user.email }).sort({ createdAt: -1 }).lean();
+    return res.json({ ok: true, messages });
+  } catch (err) {
+    return fail(res, 500, "Failed to load messages.");
   }
 });
 

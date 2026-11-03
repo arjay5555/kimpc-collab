@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { api } from "../../services/api";
 
@@ -13,16 +13,30 @@ export default function Settings() {
   const [timezone, setTimezone] = useState(localStorage.getItem("member-timezone") || "Asia/Manila");
   const [supportContact, setSupportContact] = useState({ email: "", phone: "" });
   const [supportRequest, setSupportRequest] = useState({ subject: "", message: "" });
+  const [myMessages, setMyMessages] = useState([]);
+  const [isSendingSupport, setIsSendingSupport] = useState(false);
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
+
+  const fetchMyMessages = useCallback(async () => {
+    try {
+      const res = await api("/member/messages");
+      if (res.ok && res.data) {
+        setMyMessages(res.data.messages || []);
+      }
+    } catch (err) {
+      // ignore
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
     Promise.all([
       api("/member/preferences"),
       api(`/accounts/${encodeURIComponent(user?.email || "")}`),
-    ]).then(([preferencesResponse, profileResponse]) => {
+      api("/member/messages"),
+    ]).then(([preferencesResponse, profileResponse, messagesResponse]) => {
       if (!active) return;
       if (preferencesResponse.ok) {
         const value = preferencesResponse.data;
@@ -33,6 +47,9 @@ export default function Settings() {
         window.dispatchEvent(new CustomEvent("member-theme-change", { detail: value.theme || "light" }));
       }
       if (profileResponse.ok) setProfile({ fullName: profileResponse.data.fullName || "", phone: profileResponse.data.phone || "", address: profileResponse.data.address || "", city: profileResponse.data.city || "", region: profileResponse.data.region || "" });
+      if (messagesResponse.ok && messagesResponse.data) {
+        setMyMessages(messagesResponse.data.messages || []);
+      }
       if (!preferencesResponse.ok) setError(preferencesResponse.data?.error || "Could not load saved settings.");
       setLoading(false);
     }).catch(() => {
@@ -75,10 +92,15 @@ export default function Settings() {
 
   const sendSupportRequest = async (event) => {
     event.preventDefault();
+    setIsSendingSupport(true);
+    setError("");
+    setFeedback("");
     const response = await api("/member/support-request", { method: "POST", body: supportRequest });
+    setIsSendingSupport(false);
     if (!response.ok) { setError(response.data?.error || "Could not send your support request."); return; }
     setSupportRequest({ subject: "", message: "" });
-    setFeedback(response.data?.message || "Support request sent.");
+    setFeedback(response.data?.message || "Your question has been sent to the cooperative manager.");
+    fetchMyMessages();
   };
 
   const updateNotification = (key, value) => {
@@ -98,6 +120,7 @@ export default function Settings() {
   return (
     <div className="member-page">
       <header className="member-page-heading"><div><p className="member-eyebrow">MEMBER PORTAL / PREFERENCES</p><h1>Settings</h1><p className="member-muted">Manage your profile, notifications, and portal preferences.</p></div></header>
+
       {(feedback || error) && <p className={error ? "member-form-feedback" : "member-settings-feedback"} role={error ? "alert" : "status"}>{error || feedback}</p>}
 
       <section className="member-settings-section">
@@ -153,20 +176,125 @@ export default function Settings() {
         </form>
       </section>
 
+      {/* Customer Service & Questions */}
       <section className="member-settings-section">
-        <h2>Customer service</h2><p className="member-muted">Need help with your booking? Contact the cooperative.</p>
+        <h2>Customer service &amp; Inquiries</h2>
+        <p className="member-muted">Have a question about machinery, billing, or your booking? Send a message directly to cooperative managers.</p>
+        
         <div className="member-support-links">
-          {supportContact.email ? <a href={`mailto:${supportContact.email}`}>Email {supportContact.email}</a> : <span>Support email is not configured.</span>}
-          {supportContact.phone ? <a href={`tel:${supportContact.phone}`}>Call {supportContact.phone}</a> : <span>Support phone is not configured.</span>}
+          {supportContact.email ? <a href={`mailto:${supportContact.email}`}>Email {supportContact.email}</a> : <span>Support email: operations@kimpc.coop</span>}
+          {supportContact.phone ? <a href={`tel:${supportContact.phone}`}>Call {supportContact.phone}</a> : <span>Support phone: +63 917 123 4567</span>}
         </div>
+
         <form className="member-support-form" onSubmit={sendSupportRequest}>
-          <label>Subject<input required maxLength={120} value={supportRequest.subject} onChange={(event) => setSupportRequest({ ...supportRequest, subject: event.target.value })} /></label>
-          <label>Message<textarea required maxLength={3000} rows="4" value={supportRequest.message} onChange={(event) => setSupportRequest({ ...supportRequest, message: event.target.value })} /></label>
-          <button className="member-button member-button-outline" type="submit">Send support request</button>
+          <label>
+            Question Subject
+            <input
+              required
+              maxLength={120}
+              placeholder="e.g. Question regarding tractor schedule / farm location change"
+              value={supportRequest.subject}
+              onChange={(event) => setSupportRequest({ ...supportRequest, subject: event.target.value })}
+            />
+          </label>
+          <label>
+            Message / Inquiries
+            <textarea
+              required
+              maxLength={3000}
+              rows="4"
+              placeholder="Describe your inquiry in detail. Cooperative managers will be notified and reply directly to your account..."
+              value={supportRequest.message}
+              onChange={(event) => setSupportRequest({ ...supportRequest, message: event.target.value })}
+            />
+          </label>
+          <button className="member-button member-button-primary" type="submit" disabled={isSendingSupport}>
+            {isSendingSupport ? "Sending inquiry…" : "Send Question to Manager"}
+          </button>
         </form>
-        <div className="member-faq"><h3>Frequently asked questions</h3>
+
+        {/* Member Question History & Manager Replies */}
+        <div style={{ marginTop: "32px" }}>
+          <h3 style={{ fontSize: "1.05rem", fontWeight: "700", marginBottom: "12px", color: "#0f172a" }}>
+            Your Questions &amp; Manager Responses ({myMessages.length})
+          </h3>
+
+          {myMessages.length === 0 ? (
+            <p className="member-muted" style={{ fontSize: "0.85rem", fontStyle: "italic" }}>
+              You haven't submitted any questions yet. Your questions and manager replies will appear here.
+            </p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              {myMessages.map((msg) => (
+                <article
+                  key={msg._id || msg.id}
+                  style={{
+                    padding: "16px",
+                    borderRadius: "10px",
+                    border: "1px solid #e2e8f0",
+                    background: "#ffffff",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "8px", marginBottom: "8px" }}>
+                    <div>
+                      <strong style={{ fontSize: "0.92rem", color: "#0f172a" }}>{msg.subject}</strong>
+                      <div style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "2px" }}>
+                        Sent {new Date(msg.createdAt).toLocaleString()}
+                      </div>
+                    </div>
+                    {msg.status === "replied" ? (
+                      <span style={{ fontSize: "0.74rem", fontWeight: "700", padding: "3px 10px", borderRadius: "12px", background: "#dcfce7", color: "#166534" }}>
+                        ✓ Manager Replied
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: "0.74rem", fontWeight: "600", padding: "3px 10px", borderRadius: "12px", background: "#fef3c7", color: "#92400e" }}>
+                        ⏳ Waiting for Manager
+                      </span>
+                    )}
+                  </div>
+
+                  <p style={{ margin: "0 0 10px", fontSize: "0.86rem", color: "#334155", whiteSpace: "pre-wrap" }}>
+                    {msg.message}
+                  </p>
+
+                  {/* Manager Reply Display */}
+                  {msg.status === "replied" && msg.reply && (
+                    <div
+                      style={{
+                        marginTop: "12px",
+                        padding: "12px 14px",
+                        borderRadius: "8px",
+                        background: "#f8fafc",
+                        borderLeft: "3px solid #059669",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                        <span style={{ fontSize: "0.78rem", fontWeight: "700", color: "#065f46" }}>
+                          💬 Manager Reply from {msg.repliedBy || "Operations Manager"}
+                        </span>
+                        {msg.repliedAt && (
+                          <span style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                            {new Date(msg.repliedAt).toLocaleString()}
+                          </span>
+                        )}
+                      </div>
+                      <p style={{ margin: 0, fontSize: "0.85rem", color: "#1e293b", whiteSpace: "pre-wrap" }}>
+                        {msg.reply}
+                      </p>
+                    </div>
+                  )}
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="member-faq" style={{ marginTop: "32px" }}>
+          <h3>Frequently asked questions</h3>
           <details><summary>How long does booking approval take?</summary><p>Requests are reviewed by the cooperative team. You can check the current status in Your Applications.</p></details>
-          <details><summary>Can I change my submitted rental dates?</summary><p>Contact the cooperative if a request has already been submitted. Changes depend on equipment availability and approval status.</p></details>
+          <details><summary>Can I change my submitted rental dates or location?</summary><p>You can edit your farm location and dates directly while the booking status is Pending. If the booking is already Approved, changes are locked—please contact management or submit a cancellation request.</p></details>
+          <details><summary>What happens when I cancel a booking?</summary><p>Pending bookings are cancelled immediately. For bookings already approved by the manager, cancellation requires manager review and approval.</p></details>
           <details><summary>What should I include as my farm location?</summary><p>Enter the barangay, municipality, and a farm name or landmark to help coordinate equipment delivery.</p></details>
         </div>
       </section>

@@ -536,7 +536,9 @@ export default function BookingApprovals() {
       // Map status
       let displayStatus = "Pending";
       const s = (item.status || "").toLowerCase();
-      if (s === "approved" || s === "checked-out") displayStatus = "Ongoing";
+      if (item.cancellationRequested || s === "cancellation requested") displayStatus = "Cancellation Requested";
+      else if (s === "approved") displayStatus = "Approved";
+      else if (s === "checked-out") displayStatus = "Ongoing";
       else if (s === "returned") displayStatus = "Returned";
       else if (s === "cancelled" || s === "rejected") displayStatus = "Cancelled";
       else if (s === "pending") displayStatus = "Pending";
@@ -588,6 +590,10 @@ export default function BookingApprovals() {
         paymentAmount: `₱${totalAmount.toLocaleString()}`,
         paymentStatus: item.financials?.isSettled ? "Paid" : "Pending",
         status: displayStatus,
+        cancellationRequested: Boolean(item.cancellationRequested || s === "cancellation requested"),
+        cancellationReason: item.cancellationReason || "",
+        cancellationRequestedAt: item.cancellationRequestedAt || null,
+        farmLocation: item.farmLocation || "",
         isLive: true,
       };
     });
@@ -879,6 +885,46 @@ export default function BookingApprovals() {
       }
     } else {
       setFeedback({ message: `Booking ${bookingId} marked as ${newStatus}!`, isError: false });
+    }
+  };
+
+  // Grant cancellation requested by member
+  const handleGrantCancellation = async (rawId) => {
+    if (!window.confirm("Grant member cancellation request? This will mark the booking as Cancelled, release the machinery unit, and notify the member.")) {
+      return;
+    }
+    setFeedback({ message: "Granting cancellation request...", isError: false });
+    try {
+      const res = await api(`/applications/${rawId}/grant-cancellation`, { method: "POST" });
+      if (res.ok) {
+        setFeedback({ message: "Cancellation request granted. Booking marked as Cancelled.", isError: false });
+        setViewingBooking(null);
+        fetchData();
+      } else {
+        setFeedback({ message: res.data?.error || "Failed to grant cancellation.", isError: true });
+      }
+    } catch (err) {
+      setFeedback({ message: "Error granting cancellation.", isError: true });
+    }
+  };
+
+  // Decline cancellation requested by member
+  const handleDeclineCancellation = async (rawId) => {
+    if (!window.confirm("Decline member cancellation request? This will revert the booking to Approved status and notify the member.")) {
+      return;
+    }
+    setFeedback({ message: "Declining cancellation request...", isError: false });
+    try {
+      const res = await api(`/applications/${rawId}/decline-cancellation`, { method: "POST" });
+      if (res.ok) {
+        setFeedback({ message: "Cancellation request declined. Booking reverted to Approved.", isError: false });
+        setViewingBooking(null);
+        fetchData();
+      } else {
+        setFeedback({ message: res.data?.error || "Failed to decline cancellation.", isError: true });
+      }
+    } catch (err) {
+      setFeedback({ message: "Error declining cancellation.", isError: true });
     }
   };
 
@@ -1403,7 +1449,7 @@ export default function BookingApprovals() {
                       {/* Status Pill (First Column) */}
                       <td>
                         <span
-                          className={`wz-status-pill wz-status-${b.status.toLowerCase()}`}
+                          className={`wz-status-pill wz-status-${b.status.toLowerCase().replace(/\s+/g, "-")}`}
                         >
                           <span className="wz-status-dot" />
                           {b.status}
@@ -1765,6 +1811,84 @@ export default function BookingApprovals() {
                   </div>
                 </div>
               </div>
+
+              {/* Cancellation Requested Alert & Actions */}
+              {(viewingBooking.status === "Cancellation Requested" || viewingBooking.cancellationRequested) && (
+                <div
+                  style={{
+                    background: "#fff1f2",
+                    border: "1px solid #fecdd3",
+                    borderRadius: "10px",
+                    padding: "16px",
+                    marginBottom: "16px",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{ fontSize: "1.2rem" }}>⚠️</span>
+                      <strong style={{ color: "#9f1239", fontSize: "0.95rem" }}>
+                        Member Requested Booking Cancellation
+                      </strong>
+                    </div>
+                    {viewingBooking.cancellationRequestedAt && (
+                      <span style={{ fontSize: "0.76rem", color: "#9f1239" }}>
+                        Requested {new Date(viewingBooking.cancellationRequestedAt).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                  <p style={{ margin: "8px 0 14px", fontSize: "0.85rem", color: "#881337" }}>
+                    <strong>Reason given:</strong>{" "}
+                    {viewingBooking.cancellationReason || "Member requested cancellation through the member portal."}
+                  </p>
+                  <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      onClick={() => handleGrantCancellation(viewingBooking.rawId || viewingBooking.id)}
+                      style={{
+                        padding: "8px 16px",
+                        borderRadius: "8px",
+                        border: "none",
+                        background: "#dc2626",
+                        color: "#ffffff",
+                        fontWeight: "600",
+                        fontSize: "0.84rem",
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      Grant Cancellation
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeclineCancellation(viewingBooking.rawId || viewingBooking.id)}
+                      style={{
+                        padding: "8px 16px",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        background: "#ffffff",
+                        color: "#334155",
+                        fontWeight: "600",
+                        fontSize: "0.84rem",
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                      Decline Request (Keep Approved)
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* 2. Status Selector (No color, staging only until Save is clicked) */}
               <div className="wz-status-changer-box">

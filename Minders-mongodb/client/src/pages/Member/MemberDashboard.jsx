@@ -188,7 +188,20 @@ export default function MemberDashboard() {
                 <div className="member-activity-icon" aria-hidden="true">▰</div>
                 <div className="member-activity-copy"><strong>{application.equipment}</strong><span>{formatRentalPeriod(application)}</span></div>
                 <StatusBadge application={application} />
-                {(application.status || "Pending").toLowerCase() === "pending" && <button className="member-text-button member-cancel-button" type="button" disabled={cancellingId === (application._id || application.id)} onClick={() => cancelApplication(application)}>{cancellingId === (application._id || application.id) ? "Cancelling…" : "Cancel"}</button>}
+                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  {(application.status || "Pending").toLowerCase() === "pending" && (
+                    <>
+                      <Link className="member-text-button" to="/applications">Edit</Link>
+                      <button className="member-text-button member-cancel-button" type="button" disabled={cancellingId === (application._id || application.id)} onClick={() => cancelApplication(application)}>{cancellingId === (application._id || application.id) ? "Cancelling…" : "Cancel"}</button>
+                    </>
+                  )}
+                  {(application.status || "").toLowerCase() === "approved" && !application.cancellationRequested && (
+                    <Link className="member-text-button" to="/applications" style={{ color: "#d97706" }}>Request Cancel</Link>
+                  )}
+                  {((application.status || "").toLowerCase() === "cancellation requested" || application.cancellationRequested) && (
+                    <span style={{ fontSize: "0.74rem", color: "#b45309", fontWeight: 600 }}>Reviewing</span>
+                  )}
+                </div>
               </article>
             ))}
           </div>

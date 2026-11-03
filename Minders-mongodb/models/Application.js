@@ -13,10 +13,13 @@ const applicationSchema = new mongoose.Schema(
     farmLocation: { type: String, default: "", trim: true, maxlength: 240 },
     status: { 
       type: String, 
-      enum: ["Pending", "Approved", "Checked-Out", "Returned", "Rejected", "Cancelled"], 
+      enum: ["Pending", "Approved", "Checked-Out", "Returned", "Rejected", "Cancelled", "Cancellation Requested"], 
       default: "Pending",
       index: true 
     },
+    cancellationRequested: { type: Boolean, default: false },
+    cancellationReason: { type: String, default: "" },
+    cancellationRequestedAt: { type: Date, default: null },
     managerRemarks: { type: String, default: "", trim: true },
     isWalkIn: { type: Boolean, default: false },
     farmerPhone: { type: String, default: "" },

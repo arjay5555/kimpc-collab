@@ -1254,6 +1254,13 @@
   color: #e11d48;
 }
 
+.wz-status-cancellation-requested,
+.wz-status-cancellation\ requested {
+  background-color: #fff1f2;
+  color: #be123c;
+  border: 1px solid #fecdd3;
+}
+
 .wz-status-rejected {
   background-color: #fee2e2;
   color: #b91c1c;

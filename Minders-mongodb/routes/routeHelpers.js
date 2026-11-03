@@ -5,7 +5,7 @@ const SystemSetting = require("../models/SystemSetting");
 const JWT_SECRET = process.env.JWT_SECRET || "minders-secret-jwt-key-cooperative-2026";
 const ROLES = ["member", "manager", "admin"];
 const PROFILE_FIELDS = ["fullName", "email", "phone", "address", "address2", "city", "region", "postalCode", "country"];
-const STATUSES = ["Pending", "Approved", "Checked-Out", "Returned", "Rejected", "Cancelled"];
+const STATUSES = ["Pending", "Approved", "Checked-Out", "Returned", "Rejected", "Cancelled", "Cancellation Requested"];
 
 const clean = (value) => String(value ?? "").trim();
 const cleanEmail = (value) => clean(value).toLowerCase();
@@ -38,7 +38,6 @@ function generateUserToken(account, extra = {}) {
       email: accObj.email,
       role: accObj.role,
       fullName: accObj.fullName,
-      cooperativeId: accObj.cooperativeId,
       ...extra,
     },
     JWT_SECRET,
@@ -80,8 +79,8 @@ async function requireAdmin(req, res, next) {
     req.admin = adminUser;
     req.user = adminUser;
     next();
-  } catch (error) {
-    return fail(res, 500, "Internal server error during authentication check.");
+  } catch (err) {
+    return fail(res, 500, "Authentication error.");
   }
 }
 
@@ -126,19 +125,10 @@ function isSameMachineryMatch(appMachineryUnitId, appEquipment, targetUnitId, ta
   const u2 = (targetUnitId || "").trim().toUpperCase();
   if (u1 && u2 && u1 === u2) return true;
 
-  const eq1 = (appEquipment || "").trim().toLowerCase();
-  const eq2 = (targetEquipment || "").trim().toLowerCase();
-  if (!eq1 || !eq2) return false;
+  const e1 = (appEquipment || "").trim().toLowerCase();
+  const e2 = (targetEquipment || "").trim().toLowerCase();
+  if (e1 && e2 && (e1 === e2 || e1.includes(e2) || e2.includes(e1))) return true;
 
-  if (eq1 === eq2) return true;
-  if (eq1.includes(eq2) || eq2.includes(eq1)) return true;
-
-  // Extract model tokens like "5075e", "dc70", "dc-70", "rb450", "90jx", "ga4121", "spr600"
-  const tokens1 = eq1.replace(/[^a-z0-9]/g, " ").split(/\s+/).filter((t) => t.length >= 3);
-  const tokens2 = eq2.replace(/[^a-z0-9]/g, " ").split(/\s+/).filter((t) => t.length >= 3);
-  for (const t of tokens1) {
-    if (t.length >= 4 && tokens2.includes(t)) return true;
-  }
   return false;
 }
 

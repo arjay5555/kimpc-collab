@@ -4,6 +4,7 @@ export function getApplicationProgress(application) {
   const end = application?.endDate ? new Date(application.endDate.includes("T") ? application.endDate : `${application.endDate}T23:59:59`) : null;
   const now = new Date();
 
+  if (status === "cancellation requested" || application?.cancellationRequested) return { label: "Cancellation Pending", tone: "pending" };
   if (status === "pending") return { label: "Pending Approval", tone: "pending" };
   if (status === "rejected") return { label: "Rejected", tone: "rejected" };
   if (status === "cancelled") return { label: "Cancelled", tone: "muted" };

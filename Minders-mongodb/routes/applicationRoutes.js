@@ -98,82 +98,104 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
     });
     const maintenanceConflict = overlappingMaints.find((m) =>
       isSameMachineryMatch(m.equipmentUnitId, m.equipmentName, machineryUnitId, equipment) &&
-      bookingTimestamp(m.startDate) !== null &&
-      bookingTimestamp(m.endDate, true) !== null &&
-      bookingTimestamp(m.startDate) <= endTimestamp &&
-      bookingTimestamp(m.endDate, true) >= startTimestamp
+      m.startDate <= endDate &&
+      m.endDate >= startDate
     );
 
     if (maintenanceConflict) {
       return fail(
         res,
         409,
-        `Equipment "${equipment}" is currently Out of Service for ${maintenanceConflict.maintenanceType} (${maintenanceConflict.startDate} to ${maintenanceConflict.endDate}). Bookings are temporarily blocked for these dates.`
+        `Cannot book "${equipment}": Unit is scheduled for ${maintenanceConflict.maintenanceType} from ${maintenanceConflict.startDate} to ${maintenanceConflict.endDate}.`
       );
     }
 
-    // Automatic Unique Unit Conflict Protection (Quantity: 1):
+    // Quantity: 1 Enforcement — Cannot book an already APPROVED or CHECKED-OUT machinery unit
     const overlappingBookings = await Application.find({
-      status: { $in: ["Pending", "Approved", "Checked-Out"] },
-    }).select("equipment machineryUnitId startDate endDate");
+      status: { $in: ["Approved", "Checked-Out"] },
+      startDate: { $lte: endDate },
+      endDate: { $gte: startDate },
+    });
     const bookingConflict = overlappingBookings.find((b) =>
-      isSameMachineryMatch(b.machineryUnitId, b.equipment, machineryUnitId, equipment) &&
-      bookingTimestamp(b.startDate) !== null &&
-      bookingTimestamp(b.endDate, !String(b.endDate || "").includes("T")) !== null &&
-      bookingTimestamp(b.startDate) <= endTimestamp &&
-      bookingTimestamp(b.endDate, !String(b.endDate || "").includes("T")) >= startTimestamp
+      isSameMachineryMatch(b.machineryUnitId, b.equipment, machineryUnitId, equipment)
     );
 
     if (bookingConflict) {
-      return fail(res, 409, "This equipment is not available during the selected period. Please choose another time.");
+      return fail(
+        res,
+        409,
+        `Cannot book "${equipment}": This machinery unit is already reserved from ${bookingConflict.startDate} to ${bookingConflict.endDate}. Please choose different dates.`
+      );
     }
 
-    if (!memberEmail) return fail(res, 400, "Member email is required.");
-    const account = req.user?.role === "member" ? req.user : await Account.findOne({ email: memberEmail });
-    if (!account) return fail(res, 404, "Account not found.");
+    let memberName = clean(req.body.memberName);
+    if (!memberName && memberEmail) {
+      const acct = await Account.findOne({ email: memberEmail }).select("fullName").lean();
+      memberName = acct?.fullName || memberEmail;
+    }
+
     const application = await Application.create({
-      memberEmail,
-      memberName: account.fullName,
+      memberEmail: memberEmail || "walkin@kimpc.test",
+      memberName: memberName || "Cooperative Member",
       equipment,
-      machineryUnitId: targetUnit?.unitId || machineryUnitId,
+      machineryUnitId: machineryUnitId || targetUnit?.unitId || "",
       startDate,
       endDate,
       bookingType,
       farmLocation,
+      status: "Pending",
+      isWalkIn: Boolean(req.body.isWalkIn),
+      farmerPhone: clean(req.body.farmerPhone),
+      financials: {
+        dailyRate: Number(req.body.dailyRate) || Number(targetUnit?.memberRate) || 0,
+        paymentMethod: clean(req.body.paymentMethod) || "Cash",
+      },
     });
 
     await logAudit({
-      action: "BOOKING_CREATED",
-      actorEmail: memberEmail,
-      actorRole: "member",
+      action: "BOOKING_REQUESTED",
+      actorEmail: memberEmail || req.user?.email || "anonymous",
+      actorRole: req.user?.role || "member",
       targetEmail: memberEmail,
-      targetName: account.fullName,
+      targetName: memberName,
       targetRole: "member",
       details: {
         applicationId: application.id,
         equipment,
-        startDate,
-        endDate,
+        machineryUnitId: application.machineryUnitId,
         dateRange: `${startDate} – ${endDate}`,
-        submittedAt: new Date().toISOString(),
+        bookingType,
+        farmLocation,
       },
       req,
     });
-
-    if (account.memberSettings?.notifications?.inApp !== false) {
-      await Notification.create({
-        memberEmail,
-        title: "Booking request received",
-        message: `Your request for ${equipment} has been submitted for review.`,
-        type: "booking",
-        relatedApplicationId: application._id,
-      });
-    }
 
     res.status(201).json(application);
   } catch (error) {
     console.error("Error creating application:", error);
     res.status(500).json({ error: "Failed to create application." });
+  }
+});
+
+router.get("/applications/:id", optionalAuthentication, async (req, res) => {
+  try {
+    let app = null;
+    if (mongoose.isValidObjectId(req.params.id)) {
+      app = await Application.findById(req.params.id);
+    }
+    if (!app) {
+      app = await Application.findOne({
+        $or: [
+          { displayId: req.params.id },
+          { displayId: req.params.id.toUpperCase() },
+        ],
+      });
+    }
+    if (!app) return fail(res, 404, "Application not found.");
+    res.json(app);
+  } catch (error) {
+    console.error("Error fetching application:", error);
+    res.status(500).json({ error: "Failed to fetch application." });
   }
 });
 
@@ -202,11 +224,21 @@ const handleApplicationUpdate = async (req, res) => {
     const actorEmail = cleanEmail(req.body.actorEmail || req.headers["x-actor-email"] || existing.memberEmail);
     const actorRole = clean(req.body.actorRole || req.headers["x-actor-role"] || "member");
 
-    // Check if member is editing booking details (equipment, startDate, endDate)
-    const isEditingDetails = Boolean(req.body.equipment || req.body.startDate || req.body.endDate);
-    if (isEditingDetails) {
+    // Check if member is editing booking details (farm location, equipment, startDate, endDate, bookingType)
+    const isEditingDetails = Boolean(
+      req.body.equipment ||
+      req.body.startDate ||
+      req.body.endDate ||
+      req.body.farmLocation !== undefined ||
+      req.body.bookingType
+    );
+    if (isEditingDetails && !req.body.status) {
       if (existing.status !== "Pending") {
-        return fail(res, 400, `Only pending booking requests can be edited prior to manager approval (current status: ${existing.status}).`);
+        return fail(
+          res,
+          400,
+          `Only pending booking requests can be edited. Approved or in-progress bookings cannot be edited (current status: ${existing.status}).`
+        );
       }
 
       const newEquipment = clean(req.body.equipment || existing.equipment);
@@ -238,10 +270,17 @@ const handleApplicationUpdate = async (req, res) => {
 
       const previousEquipment = existing.equipment;
       const previousDates = `${existing.startDate} – ${existing.endDate}`;
+      const previousLocation = existing.farmLocation;
 
       existing.equipment = newEquipment;
       existing.startDate = newStartDate;
       existing.endDate = newEndDate;
+      if (req.body.farmLocation !== undefined) {
+        existing.farmLocation = clean(req.body.farmLocation);
+      }
+      if (req.body.bookingType) {
+        existing.bookingType = clean(req.body.bookingType);
+      }
       await existing.save();
 
       await logAudit({
@@ -257,13 +296,15 @@ const handleApplicationUpdate = async (req, res) => {
           newEquipment,
           previousDates,
           newDates: `${newStartDate} – ${newEndDate}`,
+          previousLocation,
+          newLocation: existing.farmLocation,
           updatedBy: actorEmail,
           updatedAt: new Date().toISOString(),
         },
         req,
       });
 
-      return res.json(existing);
+      return res.json({ ok: true, message: "Booking updated successfully.", application: existing });
     }
 
     // Otherwise, handle status change
@@ -274,7 +315,7 @@ const handleApplicationUpdate = async (req, res) => {
 
     // Cancellation prior to manager approval check (members can only cancel pending requests; managers/admins can void anytime)
     if (newStatus === "Cancelled" && !isManagerOrAdmin && existing.status !== "Pending") {
-      return fail(res, 400, `Only pending booking requests can be cancelled prior to manager approval (current status: ${existing.status}).`);
+      return fail(res, 400, `Only pending booking requests can be cancelled directly. Approved bookings require manager approval.`);
     }
 
     // If approving, enforce that no other booking is already approved on overlapping dates (Quantity: 1)
@@ -302,6 +343,9 @@ const handleApplicationUpdate = async (req, res) => {
     if (newStatus === "Rejected" && req.body.managerRemarks !== undefined) {
       existing.managerRemarks = clean(req.body.managerRemarks);
     }
+    if (newStatus === "Cancelled") {
+      existing.cancellationRequested = false;
+    }
     await existing.save();
 
     // Push approved bookings to Google Calendar (try/catch safe)
@@ -323,6 +367,7 @@ const handleApplicationUpdate = async (req, res) => {
       Rejected: "BOOKING_REJECTED",
       Pending: "BOOKING_STATUS_UPDATED",
       Cancelled: isVoid ? "BOOKING_VOIDED" : "BOOKING_CANCELLED",
+      "Cancellation Requested": "CANCELLATION_REQUESTED",
     };
     const action = actionMap[newStatus] || "BOOKING_STATUS_UPDATED";
 
@@ -370,6 +415,7 @@ const handleApplicationUpdate = async (req, res) => {
 router.patch("/applications/:id", handleApplicationUpdate);
 router.put("/applications/:id", handleApplicationUpdate);
 
+// Cancel or request cancellation
 router.delete("/applications/:id", authenticate, async (req, res) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 400, "Invalid application id.");
@@ -383,34 +429,224 @@ router.delete("/applications/:id", authenticate, async (req, res) => {
       return fail(res, 403, "You can only cancel your own booking requests.");
     }
 
-    if (existing.status !== "Pending") {
-      return fail(res, 400, `Only pending booking requests can be cancelled prior to manager approval (current status: ${existing.status}).`);
+    // Direct cancel for Pending requests
+    if (existing.status === "Pending") {
+      existing.status = "Cancelled";
+      existing.cancellationRequested = false;
+      await existing.save();
+
+      await logAudit({
+        action: "BOOKING_CANCELLED",
+        actorEmail,
+        actorRole,
+        targetEmail: existing.memberEmail,
+        targetName: existing.memberName,
+        targetRole: "member",
+        details: {
+          applicationId: existing.id,
+          equipment: existing.equipment,
+          dateRange: `${existing.startDate} – ${existing.endDate}`,
+          cancelledBy: actorEmail,
+          cancelledAt: new Date().toISOString(),
+          type: "Direct pending cancellation",
+        },
+        req,
+      });
+
+      return res.json({ ok: true, direct: true, message: "Booking request cancelled successfully.", application: existing });
     }
 
-    existing.status = "Cancelled";
-    await existing.save();
+    // For Approved bookings: member must request manager approval!
+    if (existing.status === "Approved") {
+      existing.status = "Cancellation Requested";
+      existing.cancellationRequested = true;
+      existing.cancellationReason = clean(req.body?.reason || req.query?.reason) || "Member requested cancellation of approved booking";
+      existing.cancellationRequestedAt = new Date();
+      await existing.save();
 
-    await logAudit({
-      action: "BOOKING_CANCELLED",
-      actorEmail,
-      actorRole,
-      targetEmail: existing.memberEmail,
-      targetName: existing.memberName,
-      targetRole: "member",
-      details: {
-        applicationId: existing.id,
-        equipment: existing.equipment,
-        dateRange: `${existing.startDate} – ${existing.endDate}`,
-        cancelledBy: actorEmail,
-        cancelledAt: new Date().toISOString(),
-      },
-      req,
-    });
+      // Notify managers
+      const managers = await Account.find({ role: "manager" }).select("email").lean();
+      if (managers.length > 0) {
+        await Notification.insertMany(
+          managers.map((m) => ({
+            memberEmail: m.email,
+            title: "Cancellation Request Received",
+            message: `${existing.memberName} requested cancellation for approved booking ${existing.equipment} (${existing.startDate} to ${existing.endDate}).`,
+            type: "alert",
+            relatedApplicationId: existing._id,
+          }))
+        );
+      }
 
-    res.json({ ok: true, message: "Booking request cancelled successfully.", application: existing });
+      await logAudit({
+        action: "CANCELLATION_REQUESTED",
+        actorEmail,
+        actorRole,
+        targetEmail: existing.memberEmail,
+        targetName: existing.memberName,
+        targetRole: "member",
+        details: {
+          applicationId: existing.id,
+          equipment: existing.equipment,
+          dateRange: `${existing.startDate} – ${existing.endDate}`,
+          reason: existing.cancellationReason,
+        },
+        req,
+      });
+
+      return res.json({
+        ok: true,
+        direct: false,
+        pendingGrant: true,
+        message: "Cancellation request submitted. The manager has been notified to grant cancellation.",
+        application: existing,
+      });
+    }
+
+    return fail(res, 400, `Cannot cancel booking with current status "${existing.status}".`);
   } catch (error) {
     console.error("Error cancelling application:", error);
     res.status(500).json({ error: "Failed to cancel application." });
+  }
+});
+
+// Explicit Request Cancellation endpoint
+router.post("/applications/:id/request-cancellation", authenticate, async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 400, "Invalid application id.");
+    const existing = await Application.findById(req.params.id);
+    if (!existing) return fail(res, 404, "Application not found.");
+
+    const actorEmail = cleanEmail(req.user.email);
+    if (req.user.role === "member" && actorEmail !== cleanEmail(existing.memberEmail)) {
+      return fail(res, 403, "You can only request cancellation for your own bookings.");
+    }
+
+    if (existing.status === "Pending") {
+      // Pending cancels directly
+      existing.status = "Cancelled";
+      await existing.save();
+      return res.json({ ok: true, direct: true, message: "Booking request cancelled successfully.", application: existing });
+    }
+
+    if (existing.status !== "Approved") {
+      return fail(res, 400, `Cannot request cancellation for booking with status "${existing.status}".`);
+    }
+
+    existing.status = "Cancellation Requested";
+    existing.cancellationRequested = true;
+    existing.cancellationReason = clean(req.body.reason) || "Member requested cancellation";
+    existing.cancellationRequestedAt = new Date();
+    await existing.save();
+
+    // Notify managers
+    const managers = await Account.find({ role: "manager" }).select("email").lean();
+    if (managers.length > 0) {
+      await Notification.insertMany(
+        managers.map((m) => ({
+          memberEmail: m.email,
+          title: "Cancellation Request Received",
+          message: `${existing.memberName} requested cancellation for approved booking ${existing.equipment} (${existing.startDate} to ${existing.endDate}).`,
+          type: "alert",
+          relatedApplicationId: existing._id,
+        }))
+      );
+    }
+
+    return res.json({
+      ok: true,
+      direct: false,
+      pendingGrant: true,
+      message: "Cancellation request submitted. Waiting for manager approval.",
+      application: existing,
+    });
+  } catch (err) {
+    console.error("Error requesting cancellation:", err);
+    res.status(500).json({ error: "Failed to request cancellation." });
+  }
+});
+
+// Manager Grants Cancellation for Approved Booking
+router.post("/applications/:id/grant-cancellation", authManager, async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 400, "Invalid application id.");
+    const existing = await Application.findById(req.params.id);
+    if (!existing) return fail(res, 404, "Application not found.");
+
+    existing.status = "Cancelled";
+    existing.cancellationRequested = false;
+    existing.managerRemarks = "Cancellation granted by manager.";
+    await existing.save();
+
+    // Remove from Google Calendar if scheduled
+    deleteBookingFromGoogleCalendar(existing, req.user).catch((err) => {
+      console.warn("[GoogleCalendar] Booking cancellation deletion note:", err.message);
+    });
+
+    // Notify member
+    await Notification.create({
+      memberEmail: existing.memberEmail,
+      title: "Cancellation Request Granted",
+      message: `Your cancellation request for ${existing.equipment} (${existing.startDate} to ${existing.endDate}) was granted by the manager.`,
+      type: "system",
+      relatedApplicationId: existing._id,
+    });
+
+    await logAudit({
+      action: "CANCELLATION_GRANTED",
+      actorEmail: req.user?.email || "manager",
+      actorRole: req.user?.role || "manager",
+      targetEmail: existing.memberEmail,
+      targetName: existing.memberName,
+      targetRole: "member",
+      details: { applicationId: existing.id, equipment: existing.equipment },
+      req,
+    });
+
+    res.json({ ok: true, message: "Booking cancellation granted successfully.", application: existing });
+  } catch (err) {
+    console.error("Error granting cancellation:", err);
+    res.status(500).json({ error: "Failed to grant cancellation." });
+  }
+});
+
+// Manager Declines Cancellation for Approved Booking
+router.post("/applications/:id/decline-cancellation", authManager, async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 400, "Invalid application id.");
+    const existing = await Application.findById(req.params.id);
+    if (!existing) return fail(res, 404, "Application not found.");
+
+    const reason = clean(req.body.reason) || "Booking schedule must proceed as confirmed.";
+    existing.status = "Approved";
+    existing.cancellationRequested = false;
+    existing.managerRemarks = `Cancellation request declined: ${reason}`;
+    await existing.save();
+
+    // Notify member
+    await Notification.create({
+      memberEmail: existing.memberEmail,
+      title: "Cancellation Request Declined",
+      message: `Your cancellation request for ${existing.equipment} was declined by the manager: ${reason}`,
+      type: "alert",
+      relatedApplicationId: existing._id,
+    });
+
+    await logAudit({
+      action: "CANCELLATION_DECLINED",
+      actorEmail: req.user?.email || "manager",
+      actorRole: req.user?.role || "manager",
+      targetEmail: existing.memberEmail,
+      targetName: existing.memberName,
+      targetRole: "member",
+      details: { applicationId: existing.id, equipment: existing.equipment, reason },
+      req,
+    });
+
+    res.json({ ok: true, message: "Cancellation request declined.", application: existing });
+  } catch (err) {
+    console.error("Error declining cancellation:", err);
+    res.status(500).json({ error: "Failed to decline cancellation." });
   }
 });
 
