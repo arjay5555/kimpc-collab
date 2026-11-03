@@ -15,6 +15,9 @@ export default function AdminSidebar() {
 
   const isDashboardActive = currentPath === "/admin";
   const isAccountsActive = currentPath === "/account-management";
+  const isPoliciesActive = currentPath === "/admin/financial-policies";
+  const isReportsActive = currentPath === "/admin/reports";
+  const isBackupsActive = currentPath === "/admin/backups";
   const isAuditActive = currentPath === "/audit-logs";
 
   return (
@@ -27,7 +30,7 @@ export default function AdminSidebar() {
           style={{ width: "32px", height: "32px", objectFit: "contain", borderRadius: "6px" }}
         />
         <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
-          <span style={{ fontSize: "1.1rem", fontWeight: 800, color: "#0f172a", letterSpacing: "0.02em" }}>KIMPC</span>
+          <span style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--wz-text, #0f172a)", letterSpacing: "0.02em" }}>KIMPC</span>
           <span style={{ fontSize: "0.68rem", fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>Administrator</span>
         </div>
       </Link>
@@ -39,16 +42,7 @@ export default function AdminSidebar() {
           to="/admin"
           className={`wz-nav-item ${isDashboardActive ? "active" : ""}`}
         >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="3" width="7" height="7" rx="1.5" />
             <rect x="14" y="3" width="7" height="7" rx="1.5" />
             <rect x="14" y="14" width="7" height="7" rx="1.5" />
@@ -57,27 +51,56 @@ export default function AdminSidebar() {
           <span>Dashboard</span>
         </Link>
 
-        {/* Account Management */}
+        {/* Account Management & Roles */}
         <Link
           to="/account-management"
           className={`wz-nav-item ${isAccountsActive ? "active" : ""}`}
         >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
             <circle cx="9" cy="7" r="4" />
             <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
             <path d="M16 3.13a4 4 0 0 1 0 7.75" />
           </svg>
-          <span>Accounts</span>
+          <span>Accounts &amp; Roles</span>
+        </Link>
+
+        {/* Financial Policies & Payments */}
+        <Link
+          to="/admin/financial-policies"
+          className={`wz-nav-item ${isPoliciesActive ? "active" : ""}`}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="2" y="5" width="20" height="14" rx="2" />
+            <line x1="2" y1="10" x2="22" y2="10" />
+          </svg>
+          <span>Financial Policies</span>
+        </Link>
+
+        {/* Reports & Exports */}
+        <Link
+          to="/admin/reports"
+          className={`wz-nav-item ${isReportsActive ? "active" : ""}`}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="20" x2="18" y2="10" />
+            <line x1="12" y1="20" x2="12" y2="4" />
+            <line x1="6" y1="20" x2="6" y2="14" />
+          </svg>
+          <span>Reports &amp; Export</span>
+        </Link>
+
+        {/* Database & Backups */}
+        <Link
+          to="/admin/backups"
+          className={`wz-nav-item ${isBackupsActive ? "active" : ""}`}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <ellipse cx="12" cy="5" rx="9" ry="3" />
+            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+          </svg>
+          <span>Database &amp; Backups</span>
         </Link>
 
         {/* Audit Logs */}
@@ -85,16 +108,7 @@ export default function AdminSidebar() {
           to="/audit-logs"
           className={`wz-nav-item ${isAuditActive ? "active" : ""}`}
         >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
             <polyline points="9 12 11 14 15 10" />
           </svg>
@@ -120,16 +134,7 @@ export default function AdminSidebar() {
           title="Log Out of Admin Portal"
           aria-label="Log Out"
         >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
             <polyline points="16 17 21 12 16 7" />
             <line x1="21" y1="12" x2="9" y2="12" />
@@ -140,4 +145,3 @@ export default function AdminSidebar() {
     </aside>
   );
 }
-

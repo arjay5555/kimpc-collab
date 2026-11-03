@@ -16,6 +16,7 @@ const applicationRoutes = require("./applicationRoutes");
 const machineryRoutes = require("./machineryRoutes");
 const transactionRoutes = require("./transactionRoutes");
 const memberRoutes = require("./memberRoutes");
+const adminManagementRoutes = require("./adminManagementRoutes");
 
 router.use(authRoutes);
 router.use(accountRoutes);
@@ -23,5 +24,6 @@ router.use(applicationRoutes);
 router.use(machineryRoutes);
 router.use(transactionRoutes);
 router.use(memberRoutes);
+router.use(adminManagementRoutes);
 
 module.exports = router;

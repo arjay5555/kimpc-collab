@@ -82,6 +82,7 @@ router.post("/register", async (req, res) => {
     role: "member",
     cooperativeId: coopId,
     emailVerified: false,
+    verificationStatus: "pending",
   });
 
   await logAudit({
@@ -276,15 +277,24 @@ router.post("/login", async (req, res) => {
 
   const email = account.email;
   if (!account.emailVerified) {
+    const isDeclined = account.verificationStatus === "declined";
     await logAudit({
       action: "LOGIN_FAILED",
       actorEmail: email,
       actorRole: account.role,
-      details: "Sign-in rejected: email address is unverified",
+      details: isDeclined
+        ? "Sign-in rejected: account registration was declined by administrator"
+        : "Sign-in rejected: account is pending administrator verification",
       status: "Denied",
       req,
     });
-    return fail(res, 403, "Please confirm your email before signing in.");
+    return fail(
+      res,
+      403,
+      isDeclined
+        ? "Your account registration was declined by the cooperative administrator. Please contact the KIMPC office for assistance."
+        : "Your account is pending administrator verification. Once verified, your account will be activated and you can sign in."
+    );
   }
 
   if (account.isSuspended) {

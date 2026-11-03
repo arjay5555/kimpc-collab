@@ -418,29 +418,124 @@ export default function AdminDashboard() {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
-                    padding: "12px 14px",
+                    padding: "11px 13px",
                     background: "#f8fafc",
                     border: "1px solid #e2e8f0",
                     borderRadius: "10px",
                     textDecoration: "none",
                     color: "#0f172a",
                     fontWeight: 600,
-                    fontSize: "0.88rem",
+                    fontSize: "0.85rem",
                     transition: "all 0.15s ease",
                   }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = "#f1f5f9")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "#f8fafc")}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: "#e0f2fe", color: "#0284c7", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: "#e0f2fe", color: "#0284c7", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
                         <circle cx="9" cy="7" r="4" />
                       </svg>
                     </div>
-                    <span>Account Directory &amp; OTP</span>
+                    <span>Accounts &amp; Role Permissions</span>
                   </div>
-                  <span style={{ color: "#64748b", fontSize: "0.85rem" }}>→</span>
+                  <span style={{ color: "#64748b", fontSize: "0.82rem" }}>→</span>
+                </Link>
+
+                <Link
+                  to="/admin/financial-policies"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "11px 13px",
+                    background: "#f8fafc",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "10px",
+                    textDecoration: "none",
+                    color: "#0f172a",
+                    fontWeight: 600,
+                    fontSize: "0.85rem",
+                    transition: "all 0.15s ease",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#f1f5f9")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "#f8fafc")}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: "#fef3c7", color: "#d97706", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="2" y="5" width="20" height="14" rx="2" />
+                        <line x1="2" y1="10" x2="22" y2="10" />
+                      </svg>
+                    </div>
+                    <span>Deposits, Payments &amp; Refunds</span>
+                  </div>
+                  <span style={{ color: "#64748b", fontSize: "0.82rem" }}>→</span>
+                </Link>
+
+                <Link
+                  to="/admin/reports"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "11px 13px",
+                    background: "#f8fafc",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "10px",
+                    textDecoration: "none",
+                    color: "#0f172a",
+                    fontWeight: 600,
+                    fontSize: "0.85rem",
+                    transition: "all 0.15s ease",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#f1f5f9")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "#f8fafc")}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: "#ecfdf5", color: "#166534", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <line x1="18" y1="20" x2="18" y2="10" />
+                        <line x1="12" y1="20" x2="12" y2="4" />
+                        <line x1="6" y1="20" x2="6" y2="14" />
+                      </svg>
+                    </div>
+                    <span>Rental &amp; Financial Reports (CSV)</span>
+                  </div>
+                  <span style={{ color: "#64748b", fontSize: "0.82rem" }}>→</span>
+                </Link>
+
+                <Link
+                  to="/admin/backups"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "11px 13px",
+                    background: "#f8fafc",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "10px",
+                    textDecoration: "none",
+                    color: "#0f172a",
+                    fontWeight: 600,
+                    fontSize: "0.85rem",
+                    transition: "all 0.15s ease",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#f1f5f9")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "#f8fafc")}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: "#ede9fe", color: "#7c3aed", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <ellipse cx="12" cy="5" rx="9" ry="3" />
+                        <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+                        <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+                      </svg>
+                    </div>
+                    <span>Backups &amp; Sandbox Restore</span>
+                  </div>
+                  <span style={{ color: "#64748b", fontSize: "0.82rem" }}>→</span>
                 </Link>
 
                 <Link
@@ -449,28 +544,28 @@ export default function AdminDashboard() {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
-                    padding: "12px 14px",
+                    padding: "11px 13px",
                     background: "#f8fafc",
                     border: "1px solid #e2e8f0",
                     borderRadius: "10px",
                     textDecoration: "none",
                     color: "#0f172a",
                     fontWeight: 600,
-                    fontSize: "0.88rem",
+                    fontSize: "0.85rem",
                     transition: "all 0.15s ease",
                   }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = "#f1f5f9")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "#f8fafc")}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: "#fef3c7", color: "#d97706", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: "#fef3c7", color: "#d97706", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                       </svg>
                     </div>
                     <span>System Audit Trail</span>
                   </div>
-                  <span style={{ color: "#64748b", fontSize: "0.85rem" }}>→</span>
+                  <span style={{ color: "#64748b", fontSize: "0.82rem" }}>→</span>
                 </Link>
 
                 <button

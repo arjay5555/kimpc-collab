@@ -27,6 +27,9 @@ import Expenses from "./pages/Manager/Expenses";
 // Admin
 import AdminDashboard from "./pages/Admin/AdminDashboard";
 import AccountManagement from "./pages/Admin/AccountManagement";
+import AdminFinancialPolicies from "./pages/Admin/AdminFinancialPolicies";
+import AdminReports from "./pages/Admin/AdminReports";
+import AdminBackups from "./pages/Admin/AdminBackups";
 import AuditLogs from "./pages/Admin/AuditLogs";
 
 function RootRedirect() {
@@ -259,6 +262,30 @@ export default function App() {
         element={
           <ProtectedRoute allowedRoles={["admin"]}>
             <AccountManagement />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/financial-policies"
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AdminFinancialPolicies />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/reports"
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AdminReports />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/backups"
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AdminBackups />
           </ProtectedRoute>
         }
       />
