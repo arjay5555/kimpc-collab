@@ -18,6 +18,16 @@ export default function AdminDashboard() {
   const [logFilterModule, setLogFilterModule] = useState("all");
   const [logSearchQuery, setLogSearchQuery] = useState("");
   const [selectedAuditLog, setSelectedAuditLog] = useState(null);
+  const [isRefreshingAudit, setIsRefreshingAudit] = useState(false);
+
+  const handleRefreshAuditDashboard = async () => {
+    setIsRefreshingAudit(true);
+    const { ok, data } = await api("/admin/audit-logs?limit=50");
+    if (ok && data) {
+      setRecentLogs(data.logs || (Array.isArray(data) ? data : []));
+    }
+    setTimeout(() => setIsRefreshingAudit(false), 650);
+  };
 
   const getModuleBadgeStyle = (mod = "") => {
     const m = (mod || "").toLowerCase();
@@ -795,27 +805,32 @@ export default function AdminDashboard() {
 
               <button
                 type="button"
-                onClick={() => {
-                  api("/admin/audit-logs?limit=50").then(({ ok, data }) => {
-                    if (ok && data) setRecentLogs(data.logs || (Array.isArray(data) ? data : []));
-                  });
-                }}
+                onClick={handleRefreshAuditDashboard}
+                disabled={isRefreshingAudit}
+                className={`wz-icon-btn ${isRefreshingAudit ? "spinning" : ""}`}
                 style={{
-                  padding: "6px 10px",
-                  fontSize: "0.78rem",
-                  borderRadius: "8px",
-                  border: "1px solid #cbd5e1",
-                  background: "#ffffff",
-                  color: "#334155",
-                  cursor: "pointer",
-                  fontWeight: 600,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
+                  background: "var(--wz-card-bg, #ffffff)",
+                  border: "1px solid var(--wz-border, #cbd5e1)",
+                  color: isRefreshingAudit ? "#166534" : "var(--wz-text, #334155)",
+                  cursor: isRefreshingAudit ? "wait" : "pointer",
                 }}
                 title="Refresh audit logs"
+                aria-label="Refresh audit logs"
               >
-                ↻ Refresh
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polyline points="23 4 23 10 17 10" />
+                  <polyline points="1 20 1 14 7 14" />
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                </svg>
               </button>
 
               <Link

@@ -7,6 +7,7 @@ import "../../styles/admin-kimpc.css";
 export default function AuditLogs() {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [filterModule, setFilterModule] = useState("all");
   const [filterResult, setFilterResult] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -14,12 +15,13 @@ export default function AuditLogs() {
   const [feedback, setFeedback] = useState({ message: "", isError: false });
 
   const fetchLogs = async () => {
-    setLoading(true);
+    setIsRefreshing(true);
     const res = await api("/admin/audit-logs?limit=500");
     if (res.ok && res.data) {
       setLogs(res.data.logs || (Array.isArray(res.data) ? res.data : []));
     }
     setLoading(false);
+    setTimeout(() => setIsRefreshing(false), 650);
   };
 
   useEffect(() => {
@@ -286,57 +288,64 @@ export default function AuditLogs() {
                 <option value="Denied">Denied</option>
               </select>
 
-              {/* Refresh Button */}
+              {/* Refresh Button (Icon-Only with Spin Animation) */}
               <button
                 type="button"
                 onClick={fetchLogs}
+                disabled={isRefreshing}
+                className={`wz-icon-btn ${isRefreshing ? "spinning" : ""}`}
                 style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  padding: "6px 12px",
-                  background: "#ffffff",
-                  border: "1px solid #cbd5e1",
-                  borderRadius: "8px",
-                  color: "#334155",
-                  fontSize: "0.78rem",
-                  fontWeight: 600,
-                  cursor: "pointer",
+                  background: "var(--wz-card-bg, #ffffff)",
+                  border: "1px solid var(--wz-border, #cbd5e1)",
+                  color: isRefreshing ? "#166534" : "var(--wz-text, #334155)",
+                  cursor: isRefreshing ? "wait" : "pointer",
                 }}
+                title="Refresh audit logs"
+                aria-label="Refresh audit logs"
               >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <polyline points="23 4 23 10 17 10" />
                   <polyline points="1 20 1 14 7 14" />
                   <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
                 </svg>
-                <span>Refresh</span>
               </button>
 
-              {/* Export CSV Button */}
+              {/* Export CSV Button (Icon-Only) */}
               <button
                 type="button"
                 onClick={handleExportCSV}
+                className="wz-icon-btn"
                 style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  padding: "6px 12px",
                   background: "#166534",
-                  border: "none",
-                  borderRadius: "8px",
+                  border: "1px solid #14532d",
                   color: "#ffffff",
-                  fontSize: "0.78rem",
-                  fontWeight: 600,
-                  cursor: "pointer",
                 }}
                 title="Export filtered audit logs to CSV"
+                aria-label="Export audit logs to CSV"
               >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                   <polyline points="7 10 12 15 17 10" />
                   <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
-                <span>Export CSV</span>
               </button>
 
               {/* Purge Logs Button */}
