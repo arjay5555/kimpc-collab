@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { api } from "../../services/api";
+import MemberTopbar from "../../components/MemberTopbar";
 
 export default function Notifications() {
   const [notifications, setNotifications] = useState([]);
@@ -40,11 +41,19 @@ export default function Notifications() {
   };
 
   return (
-    <div className="member-page">
-      <header className="member-page-heading">
-        <div><p className="member-eyebrow">MEMBER PORTAL / UPDATES</p><h1>Notifications</h1><p className="member-muted">Booking updates, reminders, and cooperative announcements.</p></div>
-        {notifications.some((item) => !item.readAt) && <button className="member-button member-button-outline" type="button" onClick={markAllRead}>Mark all as read</button>}
-      </header>
+    <div className="member-page" style={{ width: "100%", maxWidth: "1400px", margin: "0 auto" }}>
+      <MemberTopbar
+        title="Notifications"
+        subtitle="Booking updates, reminders, and cooperative announcements."
+      />
+
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "16px" }}>
+        {notifications.some((item) => !item.readAt) && (
+          <button className="wz-btn wz-btn-outline" type="button" onClick={markAllRead} style={{ borderRadius: "8px", padding: "8px 16px", fontWeight: 600 }}>
+            Mark all as read
+          </button>
+        )}
+      </div>
       {error && <p className="member-form-feedback" role="alert">{error}</p>}
       {loading ? <div className="member-app-table"><div className="member-table-skeleton" /><div className="member-table-skeleton" /></div>
         : notifications.length === 0 ? <div className="member-empty-state"><span className="member-empty-icon" aria-hidden="true">♧</span><strong>You’re all caught up</strong><p>Important updates will appear here.</p></div>

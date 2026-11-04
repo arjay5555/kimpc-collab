@@ -62,7 +62,8 @@ export default function ProfileDropdown({
   const roleName = (user?.role || "user").toLowerCase();
   const isAdmin = roleName === "admin";
   const isManager = roleName === "manager";
-  const initial = userDetails.fullName ? userDetails.fullName[0].toUpperCase() : isAdmin ? "A" : "M";
+  const isMember = roleName === "member";
+  const initial = userDetails.fullName ? userDetails.fullName[0].toUpperCase() : isAdmin ? "A" : isManager ? "M" : "M";
 
   return (
     <div className="wz-profile-dropdown" ref={dropdownRef}>
@@ -71,17 +72,17 @@ export default function ProfileDropdown({
         <div
           className="wz-profile-avatar-large"
           style={{
-            background: isAdmin ? "#0f172a" : "#166534",
+            background: isAdmin ? "#0f172a" : isManager ? "#166534" : "#15803d",
           }}
         >
           {initial}
         </div>
         <div className="wz-profile-info">
           <div className="wz-profile-name" title={userDetails.fullName}>
-            {userDetails.fullName || (isAdmin ? "System Administrator" : "Operations Manager")}
+            {userDetails.fullName || (isAdmin ? "System Administrator" : isManager ? "Operations Manager" : "Cooperative Member")}
           </div>
-          <span className={`wz-profile-role-badge ${isAdmin ? "admin" : "manager"}`}>
-            {isAdmin ? "Administrator" : "Manager"}
+          <span className={`wz-profile-role-badge ${isAdmin ? "admin" : isManager ? "manager" : "member"}`}>
+            {isAdmin ? "Administrator" : isManager ? "Manager" : "Member"}
           </span>
         </div>
       </div>
@@ -100,7 +101,7 @@ export default function ProfileDropdown({
         <div className="wz-profile-detail-row">
           <span className="wz-profile-detail-label">Coop ID:</span>
           <span className="wz-profile-detail-value" style={{ fontFamily: "monospace", color: "#0f766e" }}>
-            {userDetails.cooperativeId || (isAdmin ? "ADMIN-01" : "MGR-01")}
+            {userDetails.cooperativeId || (isAdmin ? "ADMIN-01" : isManager ? "MGR-01" : "MEM-01")}
           </span>
         </div>
 

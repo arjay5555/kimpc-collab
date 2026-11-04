@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Outlet } from "react-router-dom";
 import MemberSidebar from "./MemberSidebar";
+import "../styles/admin-kimpc.css";
 import "../styles/member-portal.css";
 
 export default function MemberLayout({ children }) {
@@ -15,9 +16,9 @@ export default function MemberLayout({ children }) {
   }, []);
 
   return (
-    <div className="member-portal" data-theme={theme}>
+    <div className="wz-dashboard-container member-portal" data-theme={theme}>
       <MemberSidebar />
-      <main className="member-main">{children || <Outlet />}</main>
+      <main className="wz-content-wrapper member-main">{children || <Outlet />}</main>
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { api } from "../../services/api";
 import { formatRentalPeriod, getApplicationProgress, getApplicationsUrl, unwrapListResponse } from "../../services/memberPortal";
+import MemberTopbar from "../../components/MemberTopbar";
 
 const filters = [
   { key: "all", label: "All" },
@@ -184,29 +185,31 @@ export default function Applications() {
   };
 
   return (
-    <div className="member-page">
-      <header className="member-page-heading">
-        <div>
-          <p className="member-eyebrow">MEMBER PORTAL / BOOKINGS</p>
-          <h1>Your applications</h1>
-          <p className="member-muted">Track requests, edit pending details, or request cancellations.</p>
-        </div>
-        <Link className="member-button member-button-primary" to="/member/book">Book equipment <span aria-hidden="true">→</span></Link>
-      </header>
+    <div className="member-page" style={{ width: "100%", maxWidth: "1400px", margin: "0 auto" }}>
+      <MemberTopbar
+        title="Your Applications"
+        subtitle="Track booking requests, edit pending details, or request cancellations."
+      />
 
-      <div className="member-filter-tabs" role="tablist" aria-label="Filter applications">
-        {filters.map((item) => (
-          <button key={item.key} type="button" role="tab" aria-selected={filter === item.key} className={filter === item.key ? "active" : ""} onClick={() => setFilter(item.key)}>
-            {item.label}<span>{item.key === "all" ? applications.length : applications.filter((app) => {
-              const status = (app.status || "Pending").toLowerCase();
-              const isCancelPending = status === "cancellation requested" || app.cancellationRequested;
-              if (item.key === "pending") return status === "pending" && !isCancelPending;
-              if (item.key === "approved") return ["approved", "checked-out", "returned"].includes(status) && !isCancelPending;
-              if (item.key === "cancellation") return isCancelPending;
-              return ["rejected", "cancelled"].includes(status);
-            }).length}</span>
-          </button>
-        ))}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
+        <div className="member-filter-tabs" role="tablist" aria-label="Filter applications" style={{ margin: 0 }}>
+          {filters.map((item) => (
+            <button key={item.key} type="button" role="tab" aria-selected={filter === item.key} className={filter === item.key ? "active" : ""} onClick={() => setFilter(item.key)}>
+              {item.label}<span>{item.key === "all" ? applications.length : applications.filter((app) => {
+                const status = (app.status || "Pending").toLowerCase();
+                const isCancelPending = status === "cancellation requested" || app.cancellationRequested;
+                if (item.key === "pending") return status === "pending" && !isCancelPending;
+                if (item.key === "approved") return ["approved", "checked-out", "returned"].includes(status) && !isCancelPending;
+                if (item.key === "cancellation") return isCancelPending;
+                return ["rejected", "cancelled"].includes(status);
+              }).length}</span>
+            </button>
+          ))}
+        </div>
+        <Link className="wz-btn wz-btn-primary" to="/member/book" style={{ borderRadius: "8px", textDecoration: "none", padding: "8px 18px", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "6px" }}>
+          <span>Book equipment</span>
+          <span aria-hidden="true">→</span>
+        </Link>
       </div>
 
       {actionError && <p className="member-form-feedback" role="alert" style={{ color: "#dc2626", background: "#fef2f2", padding: "10px 14px", borderRadius: "8px", border: "1px solid #fecdd3" }}>{actionError}</p>}

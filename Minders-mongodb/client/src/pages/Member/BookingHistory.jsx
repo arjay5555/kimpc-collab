@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { api } from "../../services/api";
 import { formatRentalPeriod, getApplicationProgress, getApplicationsUrl, unwrapListResponse } from "../../services/memberPortal";
+import MemberTopbar from "../../components/MemberTopbar";
 
 const temporaryCompletedBookings = [
   { id: "sample-1", equipment: "Ag Leader Precision Boom Sprayer", startDate: "2026-10-25", endDate: "2026-10-26", status: "Returned" },
@@ -42,15 +43,18 @@ export default function BookingHistory() {
   const history = useMemo(() => applications.filter(isHistoryBooking), [applications]);
 
   return (
-    <div className="member-page">
-      <header className="member-page-heading">
-        <div>
-          <p className="member-eyebrow">MEMBER PORTAL / BOOKINGS</p>
-          <h1>Booking history</h1>
-          <p className="member-muted">Review equipment bookings that were completed, rejected, or cancelled.</p>
-        </div>
-        <Link className="member-button member-button-primary" to="/member/book">Book equipment <span aria-hidden="true">→</span></Link>
-      </header>
+    <div className="member-page" style={{ width: "100%", maxWidth: "1400px", margin: "0 auto" }}>
+      <MemberTopbar
+        title="Booking History"
+        subtitle="Review equipment bookings that were completed, rejected, or cancelled."
+      />
+
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "16px" }}>
+        <Link className="wz-btn wz-btn-primary" to="/member/book" style={{ borderRadius: "8px", textDecoration: "none", padding: "8px 18px", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "6px" }}>
+          <span>Book equipment</span>
+          <span aria-hidden="true">→</span>
+        </Link>
+      </div>
 
       {error && !loading ? (
         <div className="member-empty-state" role="alert">

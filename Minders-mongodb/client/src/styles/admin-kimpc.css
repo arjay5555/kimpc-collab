@@ -5026,6 +5026,11 @@
   color: #0284c7;
 }
 
+.wz-profile-role-badge.member {
+  background: #dcfce7;
+  color: #15803d;
+}
+
 .wz-profile-body {
   padding: 14px 16px;
 }

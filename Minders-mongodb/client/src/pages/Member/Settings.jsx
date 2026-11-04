@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { api } from "../../services/api";
+import MemberTopbar from "../../components/MemberTopbar";
 
 const initialPreferences = { theme: "light", defaultFarmLocation: "", notifications: { email: true, inApp: true, bookingReminders: true, systemUpdates: true } };
 
@@ -118,8 +119,11 @@ export default function Settings() {
   if (loading) return <div className="member-page"><div className="member-rental-skeleton" /></div>;
 
   return (
-    <div className="member-page">
-      <header className="member-page-heading"><div><p className="member-eyebrow">MEMBER PORTAL / PREFERENCES</p><h1>Settings</h1><p className="member-muted">Manage your profile, notifications, and portal preferences.</p></div></header>
+    <div className="member-page" style={{ width: "100%", maxWidth: "1400px", margin: "0 auto" }}>
+      <MemberTopbar
+        title="Settings"
+        subtitle="Manage your profile, farm location preferences, and portal appearance."
+      />
 
       {(feedback || error) && <p className={error ? "member-form-feedback" : "member-settings-feedback"} role={error ? "alert" : "status"}>{error || feedback}</p>}
 

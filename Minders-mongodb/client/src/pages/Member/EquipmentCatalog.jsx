@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { api } from "../../services/api";
+import MemberTopbar from "../../components/MemberTopbar";
 
 const EMPTY_BOOKING = { mode: "daily", start: "", end: "", location: "" };
 
@@ -249,8 +250,9 @@ export default function EquipmentCatalog() {
     const localDateTime = toLocalDateTimeInput(new Date());
 
     return (
-      <div className="member-page">
-        <Link className="member-inline-link member-back-link" to="/member/book">← Back to equipment</Link>
+      <div className="member-page" style={{ width: "100%", maxWidth: "1400px", margin: "0 auto" }}>
+        <MemberTopbar title="Equipment Details" subtitle={unit.name} />
+        <Link className="member-inline-link member-back-link" to="/member/book">← Back to equipment catalog</Link>
         <div className="member-product-detail">
           <section className="member-product-gallery">
             <img className="member-product-main-image" src={selectedImage || "/images/kimpc logo.png"} alt={unit.name} />
@@ -339,10 +341,14 @@ export default function EquipmentCatalog() {
   }
 
   return (
-    <div className="member-page">
-      <header className="member-page-heading">
-        <div><p className="member-eyebrow">COOPERATIVE FLEET</p><h1>Book equipment</h1><p className="member-muted">Find the right machinery for your farm and request a rental.</p></div>
-      </header>
+    <div className="member-page" style={{ width: "100%", maxWidth: "1400px", margin: "0 auto" }}>
+      <MemberTopbar
+        title="Book Equipment"
+        subtitle="Find the right agricultural machinery for your farm and submit a rental request."
+        searchQuery={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search equipment by name, brand, or model..."
+      />
       <div className="member-catalog-tools">
         <label className="member-search-field"><span aria-hidden="true">⌕</span><input aria-label="Search equipment" placeholder="Search equipment, brand, or model" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
         <select aria-label="Filter by category" value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((option) => <option key={option}>{option}</option>)}</select>
