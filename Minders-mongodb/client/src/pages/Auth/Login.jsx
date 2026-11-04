@@ -81,6 +81,8 @@ export default function Login() {
     } else {
       setMode("login");
     }
+    setLoginIdentifier("");
+    setLoginPassword("");
   }, [location.hash]);
 
   useEffect(() => {
@@ -445,7 +447,7 @@ export default function Login() {
     }
 
     setMode("login");
-    setLoginIdentifier(data.cooperativeId || regEmail.trim().toLowerCase());
+    setLoginIdentifier("");
     setLoginPassword("");
     setLoginFeedback({
       message: "waiting for verification",
@@ -474,9 +476,10 @@ export default function Login() {
     setVerifyFeedback({ message: "Account verified! Redirecting to login...", isError: false });
     setTimeout(() => {
       setMode("login");
-      setLoginIdentifier(data.cooperativeId || verifyTargetEmail);
+      setLoginIdentifier("");
+      setLoginPassword("");
       setLoginFeedback({
-        message: `Account activated! You can now log in using your Cooperative No ID (${data.cooperativeId || verifyTargetEmail}) or Email.`,
+        message: `Account activated! You can now log in using your Cooperative No. ID (${data.cooperativeId || verifyTargetEmail}) or Email.`,
         isError: false,
       });
     }, 900);
@@ -584,29 +587,35 @@ export default function Login() {
                 <p className="coop-auth-subtext">Access your cooperative machinery rental portal.</p>
 
                 <form id="member-login-form" className="coop-login-form" onSubmit={handleLoginSubmit} autoComplete="off">
+                  {/* Hidden dummy fields to prevent aggressive browser autofill */}
+                  <input type="text" name="prevent_autofill_user" style={{ display: "none" }} aria-hidden="true" tabIndex="-1" autoComplete="off" />
+                  <input type="password" name="prevent_autofill_pwd" style={{ display: "none" }} aria-hidden="true" tabIndex="-1" autoComplete="new-password" />
+
                   <div className="coop-pill-input-wrap">
                     <input
-                      id="member-email"
-                      name="email"
+                      id="member-login-identifier"
+                      name="loginIdentifier"
                       type="text"
                       className="coop-pill-input"
-                      placeholder="Cooperative No ID (e.g. M260001) or Email"
+                      placeholder="Cooperative No. ID or Email"
                       value={loginIdentifier}
                       onChange={(e) => setLoginIdentifier(e.target.value)}
+                      autoComplete="off"
                       required
-                      aria-label="Cooperative No ID or Email Address"
+                      aria-label="Cooperative No. ID or Email"
                     />
                   </div>
 
                   <div className="coop-pill-input-wrap">
                     <input
-                      id="member-password"
-                      name="password"
+                      id="member-login-password"
+                      name="loginPassword"
                       type={showLoginPassword ? "text" : "password"}
                       className="coop-pill-input coop-password-input"
                       placeholder="Password"
                       value={loginPassword}
                       onChange={(e) => setLoginPassword(e.target.value)}
+                      autoComplete="new-password"
                       minLength={6}
                       required
                       aria-label="Password"
@@ -1056,12 +1065,12 @@ export default function Login() {
             <form onSubmit={handleForgotSubmit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
               <div>
                 <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, color: "#334155", marginBottom: "4px" }}>
-                  Member ID or Email
+                  Cooperative No. ID or Email
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. M260001 or email@domain.com"
+                  placeholder="Cooperative No. ID or Email"
                   value={forgotIdentifier}
                   onChange={(e) => setForgotIdentifier(e.target.value)}
                   style={{ width: "100%", padding: "8px 12px", fontSize: "0.86rem", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }}
