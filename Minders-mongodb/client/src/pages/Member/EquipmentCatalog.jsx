@@ -84,6 +84,25 @@ export default function EquipmentCatalog() {
   const [newPhoneInput, setNewPhoneInput] = useState("");
   const [savingPhone, setSavingPhone] = useState(false);
   const [phoneSaveError, setPhoneSaveError] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("Cash");
+  const [cashTiming, setCashTiming] = useState("Upon Pickup");
+  const [gcashProof, setGcashProof] = useState("");
+  const [gcashPreview, setGcashPreview] = useState("");
+
+  const handleGCashFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setFeedback("GCash screenshot file is too large (maximum 5MB).");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setGcashProof(reader.result);
+      setGcashPreview(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const blockedRanges = useMemo(() => {
     const now = Date.now();
@@ -340,17 +359,16 @@ export default function EquipmentCatalog() {
 
   const submitBooking = async (event) => {
     event.preventDefault();
-    if (!unit || !booking.start || !booking.end || !booking.location.trim()) {
-      setFeedback("Please choose rental dates, farm area in hectares, and enter farm location.");
+    if (!unit || !booking.start || !booking.end) {
+      setFeedback("Please choose rental dates and farm area in hectares.");
       return;
     }
     if (isDatesInvalid) {
       setFeedback("This machinery is already booked on the selected dates. Please choose an available date.");
       return;
     }
-    if (!memberPhone) {
-      setFeedback("Mobile number required: You cannot proceed with booking because your profile has no mobile number.");
-      setPhonePromptOpen(true);
+    if (paymentMethod === "GCash" && !gcashProof) {
+      setFeedback("Please upload your GCash payment screenshot proof before confirming.");
       return;
     }
 
@@ -370,7 +388,10 @@ export default function EquipmentCatalog() {
         hectares: requestedHectares,
         ratePerHectare: unitRatePerHectare,
         totalAmount: estimatedCost,
-        farmLocation: booking.location.trim(),
+        paymentMethod,
+        cashPaymentOption: paymentMethod === "Cash" ? cashTiming : "",
+        gcashProof: paymentMethod === "GCash" ? gcashProof : "",
+        paymentStatus: paymentMethod === "GCash" ? "Paid" : "Pending",
         farmerPhone: memberPhone,
         memberPhone,
       },
@@ -383,6 +404,8 @@ export default function EquipmentCatalog() {
     }
     setBookingOpen(false);
     setBooking(EMPTY_BOOKING);
+    setGcashProof("");
+    setGcashPreview("");
     navigate("/applications");
   };
 
@@ -477,54 +500,7 @@ export default function EquipmentCatalog() {
               {unit.description || unit.capacity || "Cooperative-maintained machinery, available to eligible members for farm cultivation, planting, harvesting, and field operations."}
             </p>
 
-            {/* Missing Mobile Phone Warning */}
-            {!memberPhone && (
-              <div
-                style={{
-                  background: "#fff7ed",
-                  border: "1px solid #fed7aa",
-                  borderRadius: "10px",
-                  padding: "12px 16px",
-                  marginBottom: "16px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: "12px",
-                  flexWrap: "wrap",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <span style={{ fontSize: "1.4rem" }}>📱</span>
-                  <div>
-                    <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#9a3412" }}>
-                      Mobile Phone Number Required
-                    </div>
-                    <div style={{ fontSize: "0.78rem", color: "#c2410c" }}>
-                      You cannot proceed with booking because your profile has no mobile number. Please add your mobile number to continue.
-                    </div>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="wz-btn"
-                  style={{
-                    background: "#ea580c",
-                    color: "#ffffff",
-                    padding: "7px 15px",
-                    fontSize: "0.8rem",
-                    fontWeight: 700,
-                    borderRadius: "8px",
-                    border: "none",
-                    cursor: "pointer",
-                  }}
-                  onClick={() => setPhonePromptOpen(true)}
-                >
-                  Add Mobile Number
-                </button>
-              </div>
-            )}
-
-            {/* Changed Booking Button */}
+            {/* Booking Button */}
             <button
               type="button"
               className="wz-btn wz-btn-primary"
@@ -532,16 +508,16 @@ export default function EquipmentCatalog() {
               onClick={() => {
                 setFeedback("");
                 setDateError("");
-                if (!memberPhone) {
-                  setPhonePromptOpen(true);
-                  return;
-                }
                 setBooking({
                   start: "",
                   end: "",
                   hectares: 1,
-                  location: localStorage.getItem("member-default-location") || "",
+                  location: "",
                 });
+                setPaymentMethod("Cash");
+                setCashTiming("Upon Pickup");
+                setGcashProof("");
+                setGcashPreview("");
                 setBookingOpen(true);
               }}
               style={{
@@ -645,51 +621,6 @@ export default function EquipmentCatalog() {
               <p style={{ fontSize: "0.8rem", color: "#64748b", margin: "0 0 16px" }}>
                 Pricing is charged <strong>per hectare</strong> of cultivated farm land. Dates already booked cannot be selected.
               </p>
-
-              {/* Member Mobile Number Profile Status */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  background: memberPhone ? "#f0fdf4" : "#fef2f2",
-                  border: `1px solid ${memberPhone ? "#bbf7d0" : "#fecdd3"}`,
-                  padding: "9px 14px",
-                  borderRadius: "8px",
-                  marginBottom: "16px",
-                  fontSize: "0.82rem",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span>📱</span>
-                  <span>
-                    <strong>Mobile Number:</strong>{" "}
-                    {memberPhone ? (
-                      <span style={{ color: "#166534", fontWeight: 700 }}>{memberPhone}</span>
-                    ) : (
-                      <span style={{ color: "#dc2626", fontWeight: 700 }}>Missing in Profile (Cannot Proceed)</span>
-                    )}
-                  </span>
-                </div>
-                {!memberPhone && (
-                  <button
-                    type="button"
-                    onClick={() => setPhonePromptOpen(true)}
-                    style={{
-                      background: "#dc2626",
-                      color: "#ffffff",
-                      border: "none",
-                      padding: "4px 10px",
-                      borderRadius: "6px",
-                      fontSize: "0.75rem",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                    }}
-                  >
-                    Add Number
-                  </button>
-                )}
-              </div>
 
               <form className="member-form" onSubmit={submitBooking}>
                 {/* 1. Farm Area in Hectares Input */}
@@ -898,54 +829,255 @@ export default function EquipmentCatalog() {
                   </div>
                 )}
 
-                {/* 4. Farm Location */}
-                <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "#0f172a", marginTop: "4px" }}>
-                  Farm Location &amp; Barangay
-                  <input
-                    required
-                    maxLength={240}
-                    placeholder="Barangay, Municipality, Land Title / Farm Name"
-                    value={booking.location}
-                    onChange={(e) => setBooking({ ...booking, location: e.target.value })}
-                    style={{
-                      marginTop: "4px",
-                      padding: "9px 12px",
-                      borderRadius: "8px",
-                      border: "1px solid #cbd5e1",
-                    }}
-                  />
-                </label>
-
-                {/* 5. Estimated Total Summary Card */}
+                {/* 4. Estimated Total Summary Card */}
                 <div
                   style={{
                     background: "#f0fdf4",
-                    border: "1px solid #bbf7d0",
+                    border: "1.5px solid #86efac",
                     borderRadius: "10px",
                     padding: "14px 16px",
-                    marginTop: "6px",
+                    marginTop: "12px",
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                    <strong style={{ fontSize: "0.85rem", color: "#166534" }}>Estimated Rental Total:</strong>
-                    <strong style={{ fontSize: "1.35rem", color: "#14532d", fontWeight: 800 }}>
+                    <div>
+                      <strong style={{ fontSize: "0.92rem", color: "#166534" }}>Total Rental Amount:</strong>
+                      <div style={{ fontSize: "0.74rem", color: "#15803d", marginTop: "2px" }}>
+                        Calculation: {formatPrice(unitRatePerHectare)} / ha × {requestedHectares} hectare{requestedHectares > 1 ? "s" : ""}
+                      </div>
+                    </div>
+                    <strong style={{ fontSize: "1.45rem", color: "#14532d", fontWeight: 800 }}>
                       {formatPrice(estimatedCost)}
                     </strong>
                   </div>
-                  <div style={{ fontSize: "0.74rem", color: "#166534", marginTop: "3px" }}>
-                    Calculation: {formatPrice(unitRatePerHectare)} / ha × {requestedHectares} hectare{requestedHectares > 1 ? "s" : ""}
-                  </div>
                   {booking.start && booking.end && !isDatesInvalid && (
-                    <div style={{ fontSize: "0.73rem", color: "#15803d", marginTop: "2px" }}>
-                      Scheduled: {formatDisplayDate(booking.start)} – {formatDisplayDate(booking.end)}
+                    <div style={{ fontSize: "0.73rem", color: "#15803d", marginTop: "4px", borderTop: "1px dashed #bbf7d0", paddingTop: "4px" }}>
+                      📅 Scheduled: {formatDisplayDate(booking.start)} – {formatDisplayDate(booking.end)}
                     </div>
                   )}
                 </div>
 
-                {feedback && <p className="member-form-feedback" role="alert">{feedback}</p>}
+                {/* 5. Mode of Payment Selection (Cash or GCash) */}
+                <div style={{ marginTop: "14px" }}>
+                  <label style={{ fontSize: "0.82rem", fontWeight: 700, color: "#0f172a", marginBottom: "8px", display: "block" }}>
+                    Mode of Payment *
+                  </label>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                    {/* Cash Option */}
+                    <div
+                      onClick={() => setPaymentMethod("Cash")}
+                      style={{
+                        border: `2px solid ${paymentMethod === "Cash" ? "#16a34a" : "#e2e8f0"}`,
+                        background: paymentMethod === "Cash" ? "#f0fdf4" : "#ffffff",
+                        borderRadius: "10px",
+                        padding: "12px 14px",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="paymentMethod"
+                        value="Cash"
+                        checked={paymentMethod === "Cash"}
+                        onChange={() => setPaymentMethod("Cash")}
+                        style={{ accentColor: "#16a34a" }}
+                      />
+                      <div>
+                        <div style={{ fontSize: "0.88rem", fontWeight: 700, color: paymentMethod === "Cash" ? "#166534" : "#1e293b" }}>
+                          💵 Cash
+                        </div>
+                        <div style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                          Coop Depot / Field
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* GCash Option */}
+                    <div
+                      onClick={() => setPaymentMethod("GCash")}
+                      style={{
+                        border: `2px solid ${paymentMethod === "GCash" ? "#0284c7" : "#e2e8f0"}`,
+                        background: paymentMethod === "GCash" ? "#f0f9ff" : "#ffffff",
+                        borderRadius: "10px",
+                        padding: "12px 14px",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="paymentMethod"
+                        value="GCash"
+                        checked={paymentMethod === "GCash"}
+                        onChange={() => setPaymentMethod("GCash")}
+                        style={{ accentColor: "#0284c7" }}
+                      />
+                      <div>
+                        <div style={{ fontSize: "0.88rem", fontWeight: 700, color: paymentMethod === "GCash" ? "#0369a1" : "#1e293b" }}>
+                          📱 GCash
+                        </div>
+                        <div style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                          Instant E-Wallet
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Cash Options: When get or return */}
+                  {paymentMethod === "Cash" && (
+                    <div style={{ marginTop: "10px", background: "#f8fafc", padding: "12px 14px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                      <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#334155", display: "block", marginBottom: "8px" }}>
+                        When will you pay in cash?
+                      </span>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                        <label
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            background: cashTiming === "Upon Pickup" ? "#ffffff" : "#f1f5f9",
+                            border: `1.5px solid ${cashTiming === "Upon Pickup" ? "#16a34a" : "#cbd5e1"}`,
+                            padding: "8px 10px",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            fontSize: "0.78rem",
+                            fontWeight: 600,
+                            color: cashTiming === "Upon Pickup" ? "#166534" : "#475569",
+                          }}
+                        >
+                          <input
+                            type="radio"
+                            name="cashTiming"
+                            value="Upon Pickup"
+                            checked={cashTiming === "Upon Pickup"}
+                            onChange={() => setCashTiming("Upon Pickup")}
+                            style={{ accentColor: "#16a34a" }}
+                          />
+                          <span>When getting / pickup machinery</span>
+                        </label>
+
+                        <label
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            background: cashTiming === "Upon Return" ? "#ffffff" : "#f1f5f9",
+                            border: `1.5px solid ${cashTiming === "Upon Return" ? "#16a34a" : "#cbd5e1"}`,
+                            padding: "8px 10px",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            fontSize: "0.78rem",
+                            fontWeight: 600,
+                            color: cashTiming === "Upon Return" ? "#166534" : "#475569",
+                          }}
+                        >
+                          <input
+                            type="radio"
+                            name="cashTiming"
+                            value="Upon Return"
+                            checked={cashTiming === "Upon Return"}
+                            onChange={() => setCashTiming("Upon Return")}
+                            style={{ accentColor: "#16a34a" }}
+                          />
+                          <span>When returning machinery</span>
+                        </label>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* GCash Details & Screenshot Upload */}
+                  {paymentMethod === "GCash" && (
+                    <div style={{ marginTop: "10px", background: "#f0f9ff", padding: "14px", borderRadius: "8px", border: "1px solid #bae6fd" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
+                        <div>
+                          <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#0369a1" }}>
+                            KIMPC Cooperative GCash Details
+                          </div>
+                          <div style={{ fontSize: "0.78rem", color: "#0284c7" }}>
+                            Account Name: <strong>Kalilangan Irrigators MPC</strong>
+                          </div>
+                          <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#0c4a6e", letterSpacing: "0.05em", marginTop: "2px" }}>
+                            0926 463 8983
+                          </div>
+                        </div>
+                        <span style={{ background: "#0284c7", color: "#ffffff", padding: "3px 8px", borderRadius: "6px", fontSize: "0.72rem", fontWeight: 700 }}>
+                          Amount: {formatPrice(estimatedCost)}
+                        </span>
+                      </div>
+
+                      <div>
+                        <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "#0369a1", display: "block", marginBottom: "6px" }}>
+                          Upload GCash Payment Screenshot / Receipt *
+                        </label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          required={paymentMethod === "GCash"}
+                          onChange={handleGCashFileChange}
+                          style={{
+                            width: "100%",
+                            padding: "8px",
+                            background: "#ffffff",
+                            borderRadius: "6px",
+                            border: "1.5px dashed #0284c7",
+                            fontSize: "0.8rem",
+                            cursor: "pointer",
+                          }}
+                        />
+
+                        {gcashPreview && (
+                          <div style={{ marginTop: "10px", display: "flex", alignItems: "center", gap: "10px" }}>
+                            <img
+                              src={gcashPreview}
+                              alt="GCash Screenshot Preview"
+                              style={{ width: "90px", height: "120px", objectFit: "cover", borderRadius: "6px", border: "2px solid #0284c7" }}
+                            />
+                            <div>
+                              <div style={{ fontSize: "0.76rem", color: "#0369a1", fontWeight: 600 }}>
+                                Screenshot Attached ✓
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setGcashProof("");
+                                  setGcashPreview("");
+                                }}
+                                style={{
+                                  marginTop: "4px",
+                                  background: "#fee2e2",
+                                  color: "#dc2626",
+                                  border: "1px solid #fecdd3",
+                                  padding: "3px 8px",
+                                  borderRadius: "4px",
+                                  fontSize: "0.72rem",
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                Remove screenshot
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        <div style={{ fontSize: "0.72rem", color: "#64748b", marginTop: "4px" }}>
+                          Send {formatPrice(estimatedCost)} to KIMPC GCash and upload the receipt screenshot above.
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {feedback && <p className="member-form-feedback" role="alert" style={{ marginTop: "12px" }}>{feedback}</p>}
 
                 {/* Form Actions */}
-                <div className="member-form-actions" style={{ display: "flex", gap: "10px", marginTop: "12px" }}>
+                <div className="member-form-actions" style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
                   <button
                     type="button"
                     className="member-button member-button-outline"
@@ -957,19 +1089,19 @@ export default function EquipmentCatalog() {
                   <button
                     type="submit"
                     className="member-button member-button-primary"
-                    disabled={submitting || isDatesInvalid || !booking.location.trim() || !memberPhone}
+                    disabled={submitting || isDatesInvalid || (paymentMethod === "GCash" && !gcashProof)}
                     style={{
                       flex: 2,
-                      background: isDatesInvalid || !memberPhone ? "#94a3b8" : "#16a34a",
-                      cursor: isDatesInvalid || !memberPhone ? "not-allowed" : "pointer",
+                      background: isDatesInvalid || (paymentMethod === "GCash" && !gcashProof) ? "#94a3b8" : "#16a34a",
+                      cursor: isDatesInvalid || (paymentMethod === "GCash" && !gcashProof) ? "not-allowed" : "pointer",
                     }}
                   >
                     {submitting
                       ? "Submitting request…"
-                      : !memberPhone
-                      ? "Mobile Number Required in Profile"
                       : isDatesInvalid
                       ? "Choose Available Dates"
+                      : paymentMethod === "GCash" && !gcashProof
+                      ? "Upload GCash Screenshot"
                       : `Confirm Booking (${formatPrice(estimatedCost)})`}
                   </button>
                 </div>

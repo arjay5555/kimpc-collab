@@ -3964,15 +3964,25 @@
     visibility: hidden;
   }
   .wz-receipt-voucher,
-  .wz-receipt-voucher * {
+  .wz-receipt-voucher *,
+  .wz-receipt-voucher-modal,
+  .wz-receipt-voucher-modal * {
     visibility: visible;
   }
-  .wz-receipt-voucher {
+  .wz-receipt-voucher,
+  .wz-receipt-voucher-modal {
     position: absolute;
     left: 0;
     top: 0;
-    width: 100%;
-    border: none;
+    width: 100% !important;
+    max-width: 100% !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    padding: 0 !important;
+  }
+  .no-print {
+    display: none !important;
   }
 }
 

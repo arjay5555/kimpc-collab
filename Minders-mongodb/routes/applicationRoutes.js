@@ -79,8 +79,8 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
     const hectares = Math.max(0.1, Number(req.body.hectares) || 1);
     const bookingType = clean(req.body.bookingType).toLowerCase() || "hectare";
     const farmLocation = clean(req.body.farmLocation);
-    if (!equipment || !startDate || !endDate || (req.user?.role === "member" && !farmLocation)) {
-      return fail(res, 400, "Equipment, dates, and farm location are required.");
+    if (!equipment || !startDate || !endDate) {
+      return fail(res, 400, "Equipment and booking dates are required.");
     }
     if (farmLocation.length > 240) return fail(res, 400, "Farm location must be 240 characters or fewer.");
     const startTimestamp = bookingTimestamp(startDate);
@@ -170,13 +170,19 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
     const driverPhone = clean(targetUnit?.driverPhone || "");
     const now = new Date();
 
+    const paymentMethod = clean(req.body.paymentMethod) === "GCash" ? "GCash" : "Cash";
+    const cashPaymentOption = paymentMethod === "Cash" ? clean(req.body.cashPaymentOption) || "Upon Pickup" : "";
+    const gcashProof = paymentMethod === "GCash" ? clean(req.body.gcashProof) : "";
+    const paymentStatus = paymentMethod === "GCash" && gcashProof ? "Paid" : clean(req.body.paymentStatus) || "Pending";
+    const receiptNo = `REC-${now.getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
     const initialTimeline = [
       {
         event: "created",
         title: "Booking Request Submitted",
         timestamp: now,
         actor: "Member",
-        note: `Requested for ${hectares} ha (${startDate} to ${endDate}) at ${farmLocation || "Farm"}`,
+        note: `Requested for ${hectares} ha (${startDate} to ${endDate}). Payment: ${paymentMethod}${paymentMethod === "Cash" ? ` (${cashPaymentOption})` : (gcashProof ? " [GCash Proof Uploaded]" : "")}`,
       },
     ];
 
@@ -196,9 +202,12 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
       totalAmount,
       farmLocation,
       status: "Pending",
-      paymentStatus: "Pending",
+      paymentStatus,
       paymentAmount: totalAmount,
-      paymentMethod: clean(req.body.paymentMethod) || "Cash",
+      paymentMethod,
+      cashPaymentOption,
+      gcashProof,
+      receiptNo,
       isWalkIn: Boolean(req.body.isWalkIn),
       farmerPhone: memberPhone,
       memberPhone,
@@ -209,7 +218,8 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
         ratePerHectare,
         hectares,
         totalPaid: totalAmount,
-        paymentMethod: clean(req.body.paymentMethod) || "Cash",
+        paymentMethod,
+        isSettled: paymentStatus === "Paid",
       },
     });
 
@@ -227,9 +237,29 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
         dateRange: `${startDate} – ${endDate}`,
         bookingType,
         farmLocation,
+        paymentMethod,
+        totalAmount,
       },
       req,
     });
+
+    // Notify managers in-app about new member booking
+    try {
+      const managers = await Account.find({ role: "manager" }).select("email").lean();
+      if (managers.length > 0) {
+        await Notification.insertMany(
+          managers.map((m) => ({
+            memberEmail: m.email,
+            title: "New Machinery Booking Placed",
+            message: `${memberName || memberEmail} placed a booking for ${equipment} (${startDate} to ${endDate}). Payment: ${paymentMethod || "Cash"} (₱${Number(totalAmount).toLocaleString()}).`,
+            type: "booking",
+            relatedApplicationId: application._id,
+          }))
+        );
+      }
+    } catch (notifErr) {
+      console.warn("Could not send manager notification for new booking:", notifErr.message);
+    }
 
     res.status(201).json(application);
   } catch (error) {
@@ -284,6 +314,40 @@ const handleApplicationUpdate = async (req, res) => {
 
     const actorEmail = cleanEmail(req.body.actorEmail || req.headers["x-actor-email"] || existing.memberEmail);
     const actorRole = clean(req.body.actorRole || req.headers["x-actor-role"] || "member");
+
+    // Check if manager is updating payment status
+    if (req.body.paymentStatus && !req.body.status && !req.body.startDate) {
+      existing.paymentStatus = clean(req.body.paymentStatus);
+      if (!existing.financials) existing.financials = {};
+      existing.financials.isSettled = existing.paymentStatus === "Paid";
+      if (existing.paymentStatus === "Paid" && !existing.receiptNo) {
+        existing.receiptNo = `REC-${new Date().getFullYear()}-${String(existing._id).slice(-4).toUpperCase()}`;
+      }
+      if (!existing.timeline) existing.timeline = [];
+      existing.timeline.push({
+        event: "payment_settled",
+        title: "Payment Settled",
+        timestamp: new Date(),
+        actor: ["manager", "admin"].includes(actorRole) ? "Manager" : "System",
+        note: `Payment status updated to ${existing.paymentStatus} (${existing.paymentMethod || "Cash"}). Receipt: ${existing.receiptNo || "N/A"}.`,
+      });
+      await existing.save();
+
+      // Notify member in-app
+      try {
+        await Notification.create({
+          memberEmail: existing.memberEmail,
+          title: "Payment Confirmed & Receipt Ready",
+          message: `Your payment of ₱${Number(existing.totalAmount || 0).toLocaleString()} for ${existing.equipment} has been verified and settled. Receipt #${existing.receiptNo} is now ready for download.`,
+          type: "booking",
+          relatedApplicationId: existing._id,
+        });
+      } catch (notifErr) {
+        console.warn("Could not notify member of payment settlement:", notifErr.message);
+      }
+
+      return res.json({ ok: true, message: "Payment status updated.", application: existing });
+    }
 
     // Check if member is editing booking details (farm location, equipment, startDate, endDate, bookingType)
     const isEditingDetails = Boolean(

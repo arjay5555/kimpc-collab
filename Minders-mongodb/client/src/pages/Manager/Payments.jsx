@@ -1,98 +1,133 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { api } from "../../services/api";
 import ManagerSidebar from "../../components/ManagerSidebar";
 import ManagerSearchBar from "../../components/ManagerSearchBar";
 import ManagerTopbar from "../../components/ManagerTopbar";
 import "../../styles/admin-kimpc.css";
 
+function getDaysCount(startDate, endDate) {
+  if (!startDate || !endDate) return 1;
+  const d1 = new Date(startDate.includes("T") ? startDate : `${startDate}T00:00:00`);
+  const d2 = new Date(endDate.includes("T") ? endDate : `${endDate}T00:00:00`);
+  if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return 1;
+  const diff = Math.round(Math.abs(d2 - d1) / (1000 * 60 * 60 * 24)) + 1;
+  return Math.max(1, diff);
+}
+
+function formatBookingDateRange(startDate, endDate) {
+  if (!startDate) return "—";
+  if (!endDate || startDate === endDate) return startDate;
+  return `${startDate} to ${endDate}`;
+}
+
 const INITIAL_INVOICES = [
   {
     id: "INV-WZ1001",
     clientName: "Alice Johnson",
-    machineryModel: "Toyota Corolla (or Kubota M7060)",
-    ratePerDay: 50,
-    rentalPeriod: "3 Days",
-    daysCount: 3,
-    amount: 150,
-    dueDate: "2024-08-05",
+    clientPhone: "+63 917 123 4567",
+    machineryModel: "John Deere 5075E Utility Tractor",
+    ratePerDay: 2800,
+    rentalPeriod: "2 Days",
+    daysCount: 2,
+    amount: 5600,
+    dueDate: "2028-08-05",
+    paymentMethod: "Cash",
+    cashPaymentOption: "Upon Pickup",
     status: "Completed",
   },
   {
     id: "INV-WZ1002",
     clientName: "Bob Smith",
-    machineryModel: "Honda Civic (or John Deere 5075E)",
-    ratePerDay: 45,
-    rentalPeriod: "5 Days",
-    daysCount: 5,
-    amount: 225,
-    dueDate: "2024-08-06",
+    clientPhone: "+63 928 234 5678",
+    machineryModel: "Kubota DC-70 Plus Combine Harvester",
+    ratePerDay: 5500,
+    rentalPeriod: "7 Days",
+    daysCount: 7,
+    amount: 38500,
+    dueDate: "2028-08-08",
+    paymentMethod: "GCash",
     status: "Awaiting",
   },
   {
     id: "INV-WZ1003",
     clientName: "Charlie Davis",
-    machineryModel: "Ford Focus (or Yanmar Combine)",
-    ratePerDay: 55,
-    rentalPeriod: "2 Days",
-    daysCount: 2,
-    amount: 110,
-    dueDate: "2024-08-07",
-    status: "Overdue",
+    clientPhone: "+63 939 345 6789",
+    machineryModel: "New Holland Roll-Belt 450 Round Baler",
+    ratePerDay: 3200,
+    rentalPeriod: "31 Days",
+    daysCount: 31,
+    amount: 99200,
+    dueDate: "2028-09-02",
+    paymentMethod: "Bank Transfer",
+    status: "Completed",
   },
   {
     id: "INV-WZ1004",
     clientName: "Diana White",
-    machineryModel: "Chevrolet Malibu (or Massey Ferguson)",
-    ratePerDay: 50,
+    clientPhone: "+63 915 456 7890",
+    machineryModel: "Case IH Farmall 90JX 4WD Tractor",
+    ratePerDay: 3600,
     rentalPeriod: "1 Day",
     daysCount: 1,
-    amount: 50,
-    dueDate: "2024-08-08",
+    amount: 3600,
+    dueDate: "2028-08-03",
+    paymentMethod: "Cash",
+    cashPaymentOption: "Upon Pickup",
     status: "Completed",
   },
   {
     id: "INV-WZ1005",
     clientName: "Edward Green",
-    machineryModel: "Nissan Altima (or New Holland TT4)",
-    ratePerDay: 50,
-    rentalPeriod: "4 Days",
-    daysCount: 4,
-    amount: 200,
-    dueDate: "2024-08-09",
+    clientPhone: "+63 920 567 8901",
+    machineryModel: "Kuhn GA 4121 GM Rotary Rake",
+    ratePerDay: 1900,
+    rentalPeriod: "8 Days",
+    daysCount: 8,
+    amount: 15200,
+    dueDate: "2028-08-10",
+    paymentMethod: "GCash",
     status: "Awaiting",
   },
   {
     id: "INV-WZ1006",
     clientName: "Fiona Brown",
-    machineryModel: "BMW X5 (or CAT 320 Excavator)",
-    ratePerDay: 120,
-    rentalPeriod: "3 Days",
-    daysCount: 3,
-    amount: 360,
-    dueDate: "2024-08-10",
-    status: "Overdue",
+    clientPhone: "+63 916 678 9012",
+    machineryModel: "Ag Leader Precision Boom Sprayer",
+    ratePerDay: 2100,
+    rentalPeriod: "32 Days",
+    daysCount: 32,
+    amount: 67200,
+    dueDate: "2028-09-03",
+    paymentMethod: "Bank Transfer",
+    status: "Completed",
   },
   {
     id: "INV-WZ1007",
     clientName: "George Clark",
-    machineryModel: "Audi Q7 (or Mahindra 575 DI)",
-    ratePerDay: 65,
-    rentalPeriod: "4 Days",
-    daysCount: 4,
-    amount: 260,
-    dueDate: "2024-08-11",
+    clientPhone: "+63 927 789 0123",
+    machineryModel: "Isuzu Forward Flatbed Hauler",
+    ratePerDay: 4200,
+    rentalPeriod: "2 Days",
+    daysCount: 2,
+    amount: 8400,
+    dueDate: "2028-08-05",
+    paymentMethod: "Cash",
+    cashPaymentOption: "Upon Return",
     status: "Completed",
   },
   {
     id: "INV-WZ1008",
     clientName: "Helen Martinez",
-    machineryModel: "Mazda 3 (or Claas Dominator 130)",
-    ratePerDay: 90,
-    rentalPeriod: "2 Days",
-    daysCount: 2,
-    amount: 180,
-    dueDate: "2024-08-12",
-    status: "Awaiting",
+    clientPhone: "+63 918 890 1234",
+    machineryModel: "John Deere 5075E Utility Tractor",
+    ratePerDay: 2800,
+    rentalPeriod: "7 Days",
+    daysCount: 7,
+    amount: 19600,
+    dueDate: "2028-08-11",
+    paymentMethod: "GCash",
+    status: "Overdue",
   },
 ];
 
@@ -102,13 +137,145 @@ export default function Payments() {
   // Navigation sub-menu toggle
   const [financialsOpen, setFinancialsOpen] = useState(true);
 
-  // Invoices state
+  // Live applications & Invoices state
+  const [liveApplications, setLiveApplications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [feedback, setFeedback] = useState("");
+  const [receiptInvoice, setReceiptInvoice] = useState(null);
+  const [previewGcashImage, setPreviewGcashImage] = useState(null);
+
   const [invoices, setInvoices] = useState(INITIAL_INVOICES);
   const [selectedIds, setSelectedIds] = useState(["INV-WZ1004"]);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [dateRangeFilter, setDateRangeFilter] = useState("1 Aug - 20 Aug 2028");
   const [sortBy, setSortBy] = useState("date_desc");
+
+  // Fetch live applications to connect member bookings to manager financials
+  const fetchApplications = async () => {
+    try {
+      const res = await api("/applications");
+      if (res.ok && Array.isArray(res.data)) {
+        setLiveApplications(res.data);
+      }
+    } catch (err) {
+      console.error("Error loading applications for payments:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchApplications();
+    const interval = setInterval(fetchApplications, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Merge live applications into invoices
+  const allInvoices = useMemo(() => {
+    const formattedLive = liveApplications.map((app, idx) => {
+      const dailyRate = app.financials?.dailyRate || app.ratePerHectare || 2800;
+      const days = getDaysCount(app.startDate, app.endDate);
+      const total = app.totalAmount || app.financials?.totalPaid || dailyRate * days;
+      const isPaid = app.paymentStatus === "Paid" || app.financials?.isSettled;
+      const isOverdue = !isPaid && app.endDate && new Date(app.endDate) < new Date();
+
+      return {
+        id: app.receiptNo || (app.displayId ? `INV-${app.displayId}` : `INV-APP-${String(app._id || idx).slice(-6).toUpperCase()}`),
+        rawId: app._id || app.id,
+        clientName: app.memberName || app.farmerName || app.memberEmail || "Member",
+        clientPhone: app.farmerPhone || app.memberPhone || app.clientPhone || "—",
+        clientEmail: app.memberEmail || "",
+        machineryModel: app.equipment || "Machinery Unit",
+        ratePerDay: dailyRate,
+        daysCount: days,
+        hectares: app.hectares || 1,
+        rentalPeriod: app.hectares ? `${app.hectares} ha (${days}d)` : `${days} Day${days > 1 ? "s" : ""}`,
+        amount: total,
+        dueDate: app.endDate || app.startDate || "2028-08-15",
+        paymentMethod: app.paymentMethod || "Cash",
+        cashPaymentOption: app.cashPaymentOption || (app.paymentMethod === "Cash" ? "Upon Pickup" : ""),
+        gcashProof: app.gcashProof || null,
+        receiptNo: app.receiptNo || `REC-2026-${String(app._id || idx).slice(-4).toUpperCase()}`,
+        status: isPaid ? "Completed" : (isOverdue ? "Overdue" : "Awaiting"),
+        assignedDriver: app.assignedDriver || "Self-Operated",
+        startDate: app.startDate,
+        endDate: app.endDate,
+        createdAt: app.createdAt,
+        isLive: true,
+      };
+    });
+
+    return [...formattedLive, ...invoices];
+  }, [liveApplications, invoices]);
+
+  // Compute live KPI metrics
+  const kpiStats = useMemo(() => {
+    let completedSum = 0;
+    let completedCount = 0;
+    let awaitingSum = 0;
+    let awaitingCount = 0;
+    let overdueSum = 0;
+    let overdueCount = 0;
+
+    allInvoices.forEach((inv) => {
+      const amt = Number(inv.amount) || 0;
+      if (inv.status === "Completed") {
+        completedSum += amt;
+        completedCount += 1;
+      } else if (inv.status === "Overdue") {
+        overdueSum += amt;
+        overdueCount += 1;
+      } else {
+        awaitingSum += amt;
+        awaitingCount += 1;
+      }
+    });
+
+    return {
+      completedSum,
+      completedCount,
+      awaitingSum,
+      awaitingCount,
+      overdueSum,
+      overdueCount,
+    };
+  }, [allInvoices]);
+
+  // Settle invoice directly from manager financials
+  const handleSettleInvoice = async (inv) => {
+    if (!inv.rawId) {
+      setInvoices((prev) =>
+        prev.map((item) => (item.id === inv.id ? { ...item, status: "Completed" } : item))
+      );
+      setFeedback(`Invoice ${inv.id} marked as Completed.`);
+      return;
+    }
+
+    if (
+      !window.confirm(
+        `Mark payment for invoice ${inv.id} (${inv.clientName}) as Completed (Paid)? This will verify payment, issue official receipt, and notify the member.`
+      )
+    ) {
+      return;
+    }
+
+    setFeedback(`Settling payment for ${inv.id}...`);
+    try {
+      const res = await api(`/applications/${inv.rawId}`, {
+        method: "PATCH",
+        body: { paymentStatus: "Paid" },
+      });
+      if (res.ok) {
+        setFeedback(`Payment settled for ${inv.id}! Member notified and receipt ready.`);
+        fetchApplications();
+      } else {
+        setFeedback(res.data?.error || "Failed to settle payment.");
+      }
+    } catch (err) {
+      setFeedback("Network error settling payment.");
+    }
+  };
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -117,9 +284,9 @@ export default function Payments() {
     id: "",
     clientName: "",
     machineryModel: "",
-    ratePerDay: 50,
+    ratePerDay: 2800,
     daysCount: 3,
-    dueDate: "2024-08-15",
+    dueDate: "2028-08-15",
     status: "Awaiting",
   });
 
@@ -131,7 +298,7 @@ export default function Payments() {
 
   // Filtered invoices
   const filteredInvoices = useMemo(() => {
-    let result = invoices.filter((inv) => {
+    let result = allInvoices.filter((inv) => {
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
         !q ||
@@ -148,14 +315,14 @@ export default function Payments() {
     result.sort((a, b) => {
       if (sortBy === "date_asc") return (a.dueDate || "").localeCompare(b.dueDate || "");
       if (sortBy === "date_desc") return (b.dueDate || "").localeCompare(a.dueDate || "");
-      if (sortBy === "amount_desc") return (b.ratePerDay * b.daysCount || 0) - (a.ratePerDay * a.daysCount || 0);
-      if (sortBy === "amount_asc") return (a.ratePerDay * a.daysCount || 0) - (b.ratePerDay * b.daysCount || 0);
+      if (sortBy === "amount_desc") return (Number(b.amount) || 0) - (Number(a.amount) || 0);
+      if (sortBy === "amount_asc") return (Number(a.amount) || 0) - (Number(b.amount) || 0);
       if (sortBy === "client_asc") return (a.clientName || "").localeCompare(b.clientName || "");
       return 0;
     });
 
     return result;
-  }, [invoices, searchQuery, statusFilter, sortBy]);
+  }, [allInvoices, searchQuery, statusFilter, sortBy]);
 
   // Checkbox handlers
   const handleSelectAll = (e) => {
@@ -268,7 +435,7 @@ export default function Payments() {
               <div className="wz-payments-kpi-top">
                 <div className="wz-payments-kpi-info">
                   <span className="wz-payments-kpi-label">Completed Payment</span>
-                  <span className="wz-payments-kpi-val">₱22,450</span>
+                  <span className="wz-payments-kpi-val">₱{kpiStats.completedSum.toLocaleString()}</span>
                 </div>
                 <div className="wz-payments-kpi-icon">
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -278,13 +445,9 @@ export default function Payments() {
                 </div>
               </div>
               <div className="wz-payments-kpi-bottom">
-                <span className="wz-payments-kpi-subtext">350 invoices</span>
+                <span className="wz-payments-kpi-subtext">{kpiStats.completedCount} invoices settled</span>
                 <span className="wz-trend-positive">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                    <line x1="12" y1="19" x2="12" y2="5" />
-                    <polyline points="5 12 12 5 19 12" />
-                  </svg>
-                  +2.71% from last week
+                  ✓ Verified &amp; Paid
                 </span>
               </div>
             </div>
@@ -294,7 +457,7 @@ export default function Payments() {
               <div className="wz-payments-kpi-top">
                 <div className="wz-payments-kpi-info">
                   <span className="wz-payments-kpi-label">Awaiting Payment</span>
-                  <span className="wz-payments-kpi-val">₱15,300</span>
+                  <span className="wz-payments-kpi-val">₱{kpiStats.awaitingSum.toLocaleString()}</span>
                 </div>
                 <div className="wz-payments-kpi-icon">
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -304,13 +467,9 @@ export default function Payments() {
                 </div>
               </div>
               <div className="wz-payments-kpi-bottom">
-                <span className="wz-payments-kpi-subtext">215 invoices</span>
-                <span className="wz-trend-negative">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                    <line x1="12" y1="5" x2="12" y2="19" />
-                    <polyline points="19 12 12 19 5 12" />
-                  </svg>
-                  -1.25% from last week
+                <span className="wz-payments-kpi-subtext">{kpiStats.awaitingCount} invoices pending</span>
+                <span className="wz-trend-neutral" style={{ color: "#d97706" }}>
+                  ⏳ Pending verification
                 </span>
               </div>
             </div>
@@ -320,7 +479,7 @@ export default function Payments() {
               <div className="wz-payments-kpi-top">
                 <div className="wz-payments-kpi-info">
                   <span className="wz-payments-kpi-label">Overdue</span>
-                  <span className="wz-payments-kpi-val">₱12,730</span>
+                  <span className="wz-payments-kpi-val">₱{kpiStats.overdueSum.toLocaleString()}</span>
                 </div>
                 <div className="wz-payments-kpi-icon">
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -331,17 +490,41 @@ export default function Payments() {
                 </div>
               </div>
               <div className="wz-payments-kpi-bottom">
-                <span className="wz-payments-kpi-subtext">150 invoices</span>
-                <span className="wz-trend-positive">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                    <line x1="12" y1="19" x2="12" y2="5" />
-                    <polyline points="5 12 12 5 19 12" />
-                  </svg>
-                  +3.45% from last week
+                <span className="wz-payments-kpi-subtext">{kpiStats.overdueCount} invoices past due</span>
+                <span className="wz-trend-negative">
+                  ⚠️ Action required
                 </span>
               </div>
             </div>
           </section>
+
+          {/* Feedback banner */}
+          {feedback && (
+            <div
+              style={{
+                background: "#f0fdf4",
+                border: "1px solid #bbf7d0",
+                borderRadius: "10px",
+                padding: "10px 16px",
+                marginBottom: "16px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                color: "#166534",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+              }}
+            >
+              <span>{feedback}</span>
+              <button
+                type="button"
+                onClick={() => setFeedback("")}
+                style={{ background: "transparent", border: "none", cursor: "pointer", color: "#166534", fontSize: "1rem" }}
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
           {/* Filter & Actions Bar */}
           <section className="wz-fin-filter-bar">
@@ -438,7 +621,8 @@ export default function Payments() {
                     <th>Invoice ID ↕</th>
                     <th>Client Name ↕</th>
                     <th>Machinery Model ↕</th>
-                    <th>Rate per Day ↕</th>
+                    <th>Payment Method ↕</th>
+                    <th>Rate / Unit ↕</th>
                     <th>Rental Period ↕</th>
                     <th>Amount ↕</th>
                     <th>Due Date ↕</th>
@@ -449,7 +633,7 @@ export default function Payments() {
                 <tbody>
                   {filteredInvoices.length === 0 ? (
                     <tr>
-                      <td colSpan="10" style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>
+                      <td colSpan="11" style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>
                         No invoices found matching your criteria.
                       </td>
                     </tr>
@@ -471,15 +655,55 @@ export default function Payments() {
                               style={{ cursor: "pointer" }}
                             />
                           </td>
-                          <td style={{ fontWeight: "700", color: "#0f172a" }}>
+                          <td style={{ fontWeight: "700", color: "#0f172a", whiteSpace: "nowrap" }}>
                             {inv.id}
+                            {inv.isLive && (
+                              <span style={{ marginLeft: "5px", fontSize: "0.68rem", background: "#ecfdf5", color: "#059669", padding: "1px 5px", borderRadius: "4px", fontWeight: 700 }}>
+                                LIVE
+                              </span>
+                            )}
                           </td>
-                          <td style={{ fontWeight: "600" }}>{inv.clientName}</td>
-                          <td style={{ color: "#475569" }}>{inv.machineryModel}</td>
-                          <td>₱{inv.ratePerDay}</td>
+                          <td>
+                            <div style={{ fontWeight: "600", color: "#0f172a" }}>{inv.clientName}</div>
+                            {inv.clientPhone && inv.clientPhone !== "—" && (
+                              <div style={{ fontSize: "0.74rem", color: "#64748b" }}>📞 {inv.clientPhone}</div>
+                            )}
+                          </td>
+                          <td style={{ color: "#334155", fontWeight: 500 }}>{inv.machineryModel}</td>
+                          <td>
+                            <div style={{ fontSize: "0.78rem", display: "flex", alignItems: "center", gap: "4px", flexWrap: "wrap" }}>
+                              <strong style={{ color: "#0f172a" }}>{inv.paymentMethod || "Cash"}</strong>
+                              {inv.paymentMethod === "Cash" && inv.cashPaymentOption && (
+                                <span style={{ color: "#0284c7", fontSize: "0.72rem" }}>• {inv.cashPaymentOption}</span>
+                              )}
+                              {inv.paymentMethod === "GCash" && (
+                                inv.gcashProof ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setPreviewGcashImage(inv.gcashProof)}
+                                    style={{
+                                      background: "#ecfdf5",
+                                      border: "1px solid #a7f3d0",
+                                      borderRadius: "4px",
+                                      padding: "1px 5px",
+                                      color: "#047857",
+                                      fontSize: "0.7rem",
+                                      fontWeight: 700,
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    📷 Proof
+                                  </button>
+                                ) : (
+                                  <span style={{ color: "#f59e0b", fontSize: "0.7rem" }}>• Pending</span>
+                                )
+                              )}
+                            </div>
+                          </td>
+                          <td>₱{Number(inv.ratePerDay).toLocaleString()}</td>
                           <td>{inv.rentalPeriod}</td>
                           <td style={{ fontWeight: "800", color: "#0f172a" }}>
-                            ₱{inv.amount}
+                            ₱{Number(inv.amount).toLocaleString()}
                           </td>
                           <td style={{ color: "#64748b" }}>{inv.dueDate}</td>
                           <td>
@@ -494,20 +718,32 @@ export default function Payments() {
                             )}
                           </td>
                           <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
-                            <button
-                              className="wz-fin-action-btn"
-                              onClick={() => openEditModal(inv)}
-                              title="Edit invoice"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              className="wz-fin-action-btn delete"
-                              onClick={() => handleDelete(inv.id)}
-                              title="Delete invoice"
-                            >
-                              Delete
-                            </button>
+                            <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                              {inv.status !== "Completed" && (
+                                <button
+                                  className="wz-fin-action-btn"
+                                  style={{ background: "#059669", color: "#ffffff", borderColor: "#059669", fontWeight: 700 }}
+                                  onClick={() => handleSettleInvoice(inv)}
+                                  title="Mark invoice as Paid & settled"
+                                >
+                                  ✓ Settle
+                                </button>
+                              )}
+                              <button
+                                className="wz-fin-action-btn"
+                                onClick={() => setReceiptInvoice(inv)}
+                                title="View & print official receipt voucher"
+                              >
+                                Receipt
+                              </button>
+                              <button
+                                className="wz-fin-action-btn delete"
+                                onClick={() => handleDelete(inv.id)}
+                                title="Delete invoice"
+                              >
+                                Delete
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -836,6 +1072,309 @@ export default function Payments() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: OFFICIAL KIMPC RECEIPT & BILLING VOUCHER ================= */}
+      {receiptInvoice && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(15, 23, 42, 0.75)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 10000,
+            padding: "20px",
+          }}
+          onClick={() => setReceiptInvoice(null)}
+        >
+          <div
+            style={{
+              background: "#ffffff",
+              borderRadius: "16px",
+              width: "100%",
+              maxWidth: "680px",
+              maxHeight: "92vh",
+              overflowY: "auto",
+              padding: "28px",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+              border: "1px solid #e2e8f0",
+              position: "relative",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close Button */}
+            <button
+              type="button"
+              onClick={() => setReceiptInvoice(null)}
+              style={{
+                position: "absolute",
+                top: "16px",
+                right: "16px",
+                background: "#f1f5f9",
+                border: "none",
+                borderRadius: "50%",
+                width: "32px",
+                height: "32px",
+                cursor: "pointer",
+                fontSize: "1rem",
+                color: "#64748b",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              ✕
+            </button>
+
+            {/* Official KIMPC Header */}
+            <div style={{ textAlign: "center", borderBottom: "2px solid #0f172a", paddingBottom: "16px", marginBottom: "18px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", marginBottom: "4px" }}>
+                <span style={{ fontSize: "1.6rem" }}>🚜</span>
+                <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: "900", color: "#0f172a", letterSpacing: "0.5px" }}>
+                  KALILANGAN IRRIGATORS MULTI-PURPOSE COOPERATIVE (KIMPC)
+                </h3>
+              </div>
+              <p style={{ margin: "2px 0", fontSize: "0.78rem", color: "#475569" }}>
+                CDA Registration No. 9520-10012480 • Kalilangan, Bukidnon, Philippines
+              </p>
+              <p style={{ margin: "4px 0 0", fontSize: "0.85rem", fontWeight: "700", color: "#059669", textTransform: "uppercase", letterSpacing: "1px" }}>
+                Official Machinery Rental Billing Voucher &amp; Receipt
+              </p>
+            </div>
+
+            {/* Receipt Meta Grid */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", background: "#f8fafc", padding: "14px 16px", borderRadius: "10px", marginBottom: "18px", border: "1px solid #e2e8f0" }}>
+              <div>
+                <span style={{ fontSize: "0.72rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Billed To Member</span>
+                <div style={{ fontWeight: 800, color: "#0f172a", fontSize: "0.95rem" }}>
+                  {receiptInvoice.clientName}
+                </div>
+                {receiptInvoice.clientPhone && (
+                  <div style={{ fontSize: "0.78rem", color: "#475569", marginTop: "2px" }}>
+                    📞 {receiptInvoice.clientPhone}
+                  </div>
+                )}
+                {receiptInvoice.clientEmail && (
+                  <div style={{ fontSize: "0.76rem", color: "#64748b" }}>
+                    ✉️ {receiptInvoice.clientEmail}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ textAlign: "right" }}>
+                <span style={{ fontSize: "0.72rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Receipt Voucher No.</span>
+                <div style={{ fontFamily: "monospace", fontWeight: 900, color: "#0f172a", fontSize: "1.1rem" }}>
+                  {receiptInvoice.receiptNo || receiptInvoice.id}
+                </div>
+                <div style={{ fontSize: "0.78rem", color: "#475569", marginTop: "2px" }}>
+                  Due Date: <strong>{receiptInvoice.dueDate}</strong>
+                </div>
+                <div style={{ fontSize: "0.76rem", color: "#64748b" }}>
+                  Status: <strong>{receiptInvoice.status}</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Rental Breakdown Table */}
+            <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "18px", fontSize: "0.85rem" }}>
+              <thead>
+                <tr style={{ background: "#0f172a", color: "#ffffff", textAlign: "left" }}>
+                  <th style={{ padding: "10px 12px", borderRadius: "6px 0 0 0" }}>Equipment &amp; Specifications</th>
+                  <th style={{ padding: "10px 12px" }}>Area / Terms</th>
+                  <th style={{ padding: "10px 12px", textAlign: "right", borderRadius: "0 6px 0 0" }}>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
+                  <td style={{ padding: "12px" }}>
+                    <strong style={{ color: "#0f172a", display: "block" }}>{receiptInvoice.machineryModel}</strong>
+                    <span style={{ fontSize: "0.74rem", color: "#64748b" }}>
+                      Daily Rate: ₱{Number(receiptInvoice.ratePerDay).toLocaleString()} / unit
+                    </span>
+                  </td>
+                  <td style={{ padding: "12px", color: "#334155" }}>
+                    {receiptInvoice.rentalPeriod}
+                  </td>
+                  <td style={{ padding: "12px", textAlign: "right", fontWeight: 700, color: "#0f172a" }}>
+                    ₱{Number(receiptInvoice.amount).toLocaleString()}
+                  </td>
+                </tr>
+                <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
+                  <td style={{ padding: "10px 12px", color: "#475569" }}>
+                    Assigned Field Operator Service
+                    <span style={{ display: "block", fontSize: "0.72rem", color: "#64748b" }}>
+                      {receiptInvoice.assignedDriver || "Self-Operated"}
+                    </span>
+                  </td>
+                  <td style={{ padding: "10px 12px", color: "#64748b" }}>Included</td>
+                  <td style={{ padding: "10px 12px", textAlign: "right", color: "#059669" }}>₱0.00</td>
+                </tr>
+                <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
+                  <td style={{ padding: "10px 12px", color: "#475569" }}>CDA RA 9520 Member Tax Exemption</td>
+                  <td style={{ padding: "10px 12px", color: "#64748b" }}>Tax Exempt</td>
+                  <td style={{ padding: "10px 12px", textAlign: "right", color: "#059669" }}>₱0.00</td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan="2" style={{ padding: "14px 12px", fontWeight: 800, fontSize: "0.98rem", color: "#0f172a" }}>
+                    Total Rental Amount:
+                  </td>
+                  <td style={{ padding: "14px 12px", textAlign: "right", fontWeight: 900, fontSize: "1.15rem", color: "#059669" }}>
+                    ₱{Number(receiptInvoice.amount).toLocaleString()}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+
+            {/* Payment Mode Strip */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", padding: "12px 16px", background: receiptInvoice.status === "Completed" ? "#f0fdf4" : "#fffbeb", border: `1px solid ${receiptInvoice.status === "Completed" ? "#bbf7d0" : "#fef3c7"}`, borderRadius: "10px", marginBottom: "18px" }}>
+              <div>
+                <span style={{ fontSize: "0.74rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Payment Method:</span>
+                <div style={{ fontWeight: 800, color: "#0f172a", fontSize: "0.9rem", marginTop: "2px" }}>
+                  {receiptInvoice.paymentMethod === "GCash" ? "GCash (0926 463 8983 - KIMPC)" : `Cash (${receiptInvoice.cashPaymentOption === "Upon Return" ? "Upon Return" : "Upon Pickup"})`}
+                </div>
+              </div>
+
+              <div>
+                {receiptInvoice.status === "Completed" ? (
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "#059669", color: "#ffffff", padding: "6px 14px", borderRadius: "8px", fontWeight: 800, fontSize: "0.85rem", letterSpacing: "0.5px" }}>
+                    <span>✓</span> PAID &amp; SETTLED
+                  </div>
+                ) : (
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "#d97706", color: "#ffffff", padding: "6px 14px", borderRadius: "8px", fontWeight: 800, fontSize: "0.85rem", letterSpacing: "0.5px" }}>
+                    <span>⏳</span> AWAITING SETTLEMENT
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Signoff */}
+            <div style={{ borderTop: "1px dashed #cbd5e1", paddingTop: "14px", display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: "14px", fontSize: "0.75rem", color: "#64748b" }}>
+              <div>
+                <p style={{ margin: "0 0 2px", fontWeight: 600, color: "#334155" }}>✓ Digitally Verified by Cooperative Accounting</p>
+                <p style={{ margin: 0 }}>Official electronic copy pursuant to CDA &amp; RA 9520 regulations.</p>
+              </div>
+
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontFamily: "cursive", fontSize: "1.1rem", color: "#0f172a", fontWeight: 700 }}>KIMPC Administration</div>
+                <div style={{ borderTop: "1px solid #94a3b8", width: "160px", marginTop: "4px", paddingTop: "2px" }}>Authorized Signatory</div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div style={{ marginTop: "22px", display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              <button
+                type="button"
+                onClick={() => setReceiptInvoice(null)}
+                style={{
+                  padding: "9px 16px",
+                  borderRadius: "8px",
+                  border: "1px solid #cbd5e1",
+                  background: "#ffffff",
+                  color: "#334155",
+                  fontWeight: 600,
+                  fontSize: "0.85rem",
+                  cursor: "pointer",
+                }}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                style={{
+                  padding: "9px 18px",
+                  borderRadius: "8px",
+                  border: "none",
+                  background: "#0f172a",
+                  color: "#ffffff",
+                  fontWeight: 700,
+                  fontSize: "0.85rem",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="6 9 6 2 18 2 18 9" />
+                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                  <rect x="6" y="14" width="12" height="8" />
+                </svg>
+                Print / Save Receipt
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: GCASH SCREENSHOT PREVIEW ================= */}
+      {previewGcashImage && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(15, 23, 42, 0.85)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 10001,
+            padding: "20px",
+          }}
+          onClick={() => setPreviewGcashImage(null)}
+        >
+          <div
+            style={{
+              background: "#ffffff",
+              borderRadius: "16px",
+              padding: "20px",
+              maxWidth: "520px",
+              width: "90%",
+              maxHeight: "90vh",
+              overflow: "auto",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.35)",
+              textAlign: "center",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <strong style={{ fontSize: "1rem", color: "#0f172a" }}>📱 GCash Payment Screenshot Proof</strong>
+              <button
+                type="button"
+                onClick={() => setPreviewGcashImage(null)}
+                style={{ background: "#f1f5f9", border: "none", borderRadius: "50%", width: "28px", height: "28px", cursor: "pointer" }}
+              >
+                ✕
+              </button>
+            </div>
+            <img
+              src={previewGcashImage}
+              alt="Uploaded GCash Screenshot"
+              style={{ width: "100%", maxHeight: "70vh", objectFit: "contain", borderRadius: "8px", border: "1px solid #cbd5e1" }}
+            />
+            <div style={{ marginTop: "14px", display: "flex", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={() => setPreviewGcashImage(null)}
+                style={{
+                  background: "#0f172a",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: "8px",
+                  padding: "8px 16px",
+                  fontWeight: 600,
+                  fontSize: "0.85rem",
+                  cursor: "pointer",
+                }}
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

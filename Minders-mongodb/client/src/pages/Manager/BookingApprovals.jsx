@@ -259,11 +259,47 @@ export default function BookingApprovals() {
   const [bookingOverrides, setBookingOverrides] = useState({});
   const [deletedIds, setDeletedIds] = useState([]);
   const [viewingBooking, setViewingBooking] = useState(null);
+  const [previewGcashImage, setPreviewGcashImage] = useState(null);
   const [modalStatus, setModalStatus] = useState("");
   const [modalRejectionReason, setModalRejectionReason] = useState("");
   const [modalVoidReason, setModalVoidReason] = useState("");
   const [modalStartDate, setModalStartDate] = useState("2028-08-01");
   const [modalEndDate, setModalEndDate] = useState("2028-08-05");
+
+  // Manager action to verify and settle payment
+  const handleSettlePayment = async (booking) => {
+    if (!booking) return;
+    const currentRawId = booking.rawId;
+    const currentId = booking.id;
+    if (!window.confirm(`Confirm payment settlement for booking ${currentId}? This will verify the payment, issue receipt voucher, and notify the member.`)) {
+      return;
+    }
+    if (currentRawId) {
+      setFeedback({ message: `Settling payment for ${currentId}...`, isError: false });
+      try {
+        const res = await api(`/applications/${currentRawId}`, {
+          method: "PATCH",
+          body: { paymentStatus: "Paid" },
+        });
+        if (res.ok) {
+          setFeedback({ message: `Payment for booking ${currentId} marked as Paid!`, isError: false });
+          setViewingBooking((prev) => prev ? { ...prev, paymentStatus: "Paid" } : null);
+          fetchData();
+        } else {
+          setFeedback({ message: res.data?.error || "Failed to settle payment.", isError: true });
+        }
+      } catch (err) {
+        setFeedback({ message: "Network error settling payment.", isError: true });
+      }
+    } else {
+      setBookingOverrides((prev) => ({
+        ...prev,
+        [currentId]: { ...(prev[currentId] || {}), paymentStatus: "Paid" },
+      }));
+      setViewingBooking((prev) => prev ? { ...prev, paymentStatus: "Paid" } : null);
+      setFeedback({ message: `Payment for booking ${currentId} marked as Paid!`, isError: false });
+    }
+  };
 
   // Helper to extract ISO date strings or fallback
   const getBookingDates = (booking) => {
@@ -552,17 +588,20 @@ export default function BookingApprovals() {
       else if (eq.includes("sprayer")) cat = "Sprayer";
       else if (eq.includes("hauler") || eq.includes("truck")) cat = "Transport";
 
-      const dailyRate = item.financials?.dailyRate || 2800;
-      const totalAmount = item.financials?.totalPaid || dailyRate * days;
+      const dailyRate = item.financials?.dailyRate || item.ratePerHectare || 2800;
+      const totalAmount = item.totalAmount || item.financials?.totalPaid || dailyRate * days;
 
-      const clientName = item.memberName || item.memberEmail || "Member";
+      const clientName = item.memberName || item.farmerName || item.memberEmail || "Member";
       const clientEmail = item.memberEmail || item.clientEmail || `${clientName.toLowerCase().replace(/\s+/g, ".")}@example.com`;
       const clientPhone = item.farmerPhone || item.memberPhone || item.clientPhone || item.phone || (idx % 2 === 0 ? "+63 917 123 4567" : "+63 928 234 5678");
-      const clientAddress = item.memberAddress || item.clientAddress || "Malaybalay City, Bukidnon";
+      const clientAddress = item.memberAddress || item.clientAddress || "Kalilangan, Bukidnon";
       const clientAvatar = item.clientAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(clientName)}&background=0284c7&color=fff&bold=true`;
-      const coopId = item.coopId || `COOP-MB-${1010 + idx}`;
-      const receiptNo = item.receiptNo || `REC-2028-0${10 + idx}`;
-      const paymentMethod = item.paymentMethod || (idx % 2 === 0 ? "Bank Transfer" : "GCash");
+      const coopId = item.coopId || `COOP-MB-${String(item._id || idx).slice(-4).toUpperCase()}`;
+      const receiptNo = item.receiptNo || (item._id ? `REC-${new Date().getFullYear()}-${String(item._id).slice(-4).toUpperCase()}` : `REC-2028-0${10 + idx}`);
+      const paymentMethod = item.paymentMethod || "Cash";
+      const cashPaymentOption = item.cashPaymentOption || (paymentMethod === "Cash" ? "Upon Pickup" : "");
+      const gcashProof = item.gcashProof || null;
+      const hectares = item.hectares || 1;
       const assignedDriver = item.assignedDriver || (idx % 2 === 0 ? "John Adams" : "Self-Operated");
       const hasDriver = Boolean(item.assignedDriver ? item.assignedDriver !== "Self-Operated" : idx % 2 === 0);
 
@@ -580,16 +619,19 @@ export default function BookingApprovals() {
         coopId,
         receiptNo,
         paymentMethod,
+        cashPaymentOption,
+        gcashProof,
+        hectares,
         dailyRate,
         daysCount: days,
         assignedDriver,
         machineryModel: item.equipment,
         category: cat,
-        plan: `${days} Day${days === 1 ? "" : "s"}`,
+        plan: item.hectares ? `${item.hectares} ha (${days}d)` : `${days} Day${days === 1 ? "" : "s"}`,
         dateRange: `${item.startDate} to ${item.endDate}`,
         hasDriver,
-        paymentAmount: `₱${totalAmount.toLocaleString()}`,
-        paymentStatus: item.financials?.isSettled ? "Paid" : "Pending",
+        paymentAmount: `₱${Number(totalAmount).toLocaleString()}`,
+        paymentStatus: item.paymentStatus || (item.financials?.isSettled ? "Paid" : "Pending"),
         status: displayStatus,
         cancellationRequested: Boolean(item.cancellationRequested || s === "cancellation requested"),
         cancellationReason: item.cancellationReason || "",
@@ -1504,6 +1546,41 @@ export default function BookingApprovals() {
                             {b.paymentStatus}
                           </span>
                         </div>
+                        <div style={{ fontSize: "0.72rem", color: "#64748b", marginTop: "3px", display: "flex", alignItems: "center", gap: "4px", flexWrap: "wrap" }}>
+                          <span style={{ fontWeight: 600, color: "#334155" }}>{b.paymentMethod || "Cash"}</span>
+                          {b.paymentMethod === "Cash" && b.cashPaymentOption && (
+                            <span style={{ color: "#0284c7", fontWeight: 600 }}>• {b.cashPaymentOption}</span>
+                          )}
+                          {b.paymentMethod === "GCash" && (
+                            b.gcashProof ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPreviewGcashImage(b.gcashProof);
+                                }}
+                                style={{
+                                  background: "#ecfdf5",
+                                  border: "1px solid #a7f3d0",
+                                  borderRadius: "4px",
+                                  padding: "1px 6px",
+                                  color: "#047857",
+                                  fontSize: "0.7rem",
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "3px",
+                                }}
+                                title="Click to view member's uploaded GCash receipt screenshot"
+                              >
+                                📷 Proof Attached
+                              </button>
+                            ) : (
+                              <span style={{ color: "#f59e0b", fontSize: "0.7rem" }}>• No proof yet</span>
+                            )
+                          )}
+                        </div>
                       </td>
 
                       {/* Actions: ONLY 1 ICON ACTION BUTTON */}
@@ -2077,12 +2154,133 @@ export default function BookingApprovals() {
                 </div>
               </div>
 
-              {/* 4. Official Machine Rental Receipt / Voucher */}
+              {/* 4. Payment Verification & Proof Card */}
+              <div
+                style={{
+                  background: viewingBooking.paymentStatus === "Paid" ? "#f0fdf4" : "#fffbeb",
+                  border: `1px solid ${viewingBooking.paymentStatus === "Paid" ? "#bbf7d0" : "#fef3c7"}`,
+                  borderRadius: "12px",
+                  padding: "16px",
+                  marginBottom: "16px",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px", marginBottom: "10px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span style={{ fontSize: "1.2rem" }}>
+                      {viewingBooking.paymentMethod === "GCash" ? "📱" : "💵"}
+                    </span>
+                    <div>
+                      <strong style={{ fontSize: "0.92rem", color: "#0f172a" }}>
+                        Payment Method: {viewingBooking.paymentMethod || "Cash"}
+                      </strong>
+                      <div style={{ fontSize: "0.76rem", color: "#475569" }}>
+                        {viewingBooking.paymentMethod === "Cash" && (
+                          <span>Option: <strong>{viewingBooking.cashPaymentOption === "Upon Return" ? "Pay upon returning machinery" : "Pay upon pickup / dispatch"}</strong></span>
+                        )}
+                        {viewingBooking.paymentMethod === "GCash" && (
+                          <span>KIMPC GCash: <strong>0926 463 8983</strong> (Kalilangan Irrigators MPC)</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <span
+                      className={viewingBooking.paymentStatus === "Paid" ? "wz-payment-badge-paid" : "wz-payment-badge-pending"}
+                      style={{ padding: "4px 10px", fontSize: "0.78rem" }}
+                    >
+                      Payment: {viewingBooking.paymentStatus}
+                    </span>
+
+                    {viewingBooking.paymentStatus !== "Paid" && (
+                      <button
+                        type="button"
+                        onClick={() => handleSettlePayment(viewingBooking)}
+                        style={{
+                          background: "#059669",
+                          color: "#ffffff",
+                          border: "none",
+                          borderRadius: "8px",
+                          padding: "6px 14px",
+                          fontSize: "0.78rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                          boxShadow: "0 2px 6px rgba(5, 150, 105, 0.25)",
+                        }}
+                        title="Verify payment and issue official receipt"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                        Confirm &amp; Settle Payment
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* GCash Screenshot Preview */}
+                {viewingBooking.paymentMethod === "GCash" && (
+                  <div style={{ marginTop: "12px", borderTop: "1px dashed #e2e8f0", paddingTop: "12px" }}>
+                    <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#334155", display: "block", marginBottom: "6px" }}>
+                      GCash Payment Screenshot Proof:
+                    </span>
+                    {viewingBooking.gcashProof ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                        <img
+                          src={viewingBooking.gcashProof}
+                          alt="GCash Payment Proof"
+                          onClick={() => setPreviewGcashImage(viewingBooking.gcashProof)}
+                          style={{
+                            width: "80px",
+                            height: "80px",
+                            objectFit: "cover",
+                            borderRadius: "8px",
+                            border: "2px solid #059669",
+                            cursor: "pointer",
+                            boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
+                          }}
+                          title="Click to zoom in on proof screenshot"
+                        />
+                        <div>
+                          <p style={{ margin: "0 0 4px", fontSize: "0.8rem", color: "#065f46", fontWeight: 600 }}>
+                            ✓ Screenshot uploaded by member
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setPreviewGcashImage(viewingBooking.gcashProof)}
+                            style={{
+                              background: "#ffffff",
+                              border: "1px solid #cbd5e1",
+                              borderRadius: "6px",
+                              padding: "4px 10px",
+                              fontSize: "0.75rem",
+                              fontWeight: 600,
+                              color: "#334155",
+                              cursor: "pointer",
+                            }}
+                          >
+                            🔍 Click to Enlarge Screenshot
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: "0.78rem", color: "#b45309", background: "#fef3c7", padding: "8px 12px", borderRadius: "6px" }}>
+                        ⚠️ Member has not uploaded a GCash transaction screenshot yet.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* 5. Official Machine Rental Receipt / Voucher */}
               <div className="wz-receipt-voucher">
                 <div className="wz-receipt-header">
                   <div>
-                    <h5 className="wz-receipt-coop-name">BUKIDNON FARM MACHINERY COOPERATIVE</h5>
-                    <p className="wz-receipt-sub">Official Machinery Rental Billing Voucher & Settlement</p>
+                    <h5 className="wz-receipt-coop-name">KALILANGAN IRRIGATORS MULTI-PURPOSE COOPERATIVE (KIMPC)</h5>
+                    <p className="wz-receipt-sub">Official Machinery Rental Billing Voucher &amp; Settlement</p>
                   </div>
                   <div className="wz-receipt-num-box">
                     <div className="wz-receipt-num-label">Receipt No.</div>
@@ -2254,6 +2452,82 @@ export default function BookingApprovals() {
                   {getConfirmationButtonDetails().label}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* GCash Screenshot Lightbox Modal */}
+      {previewGcashImage && (
+        <div
+          className="wz-booking-modal-overlay"
+          style={{ zIndex: 10000, background: "rgba(15, 23, 42, 0.85)" }}
+          onClick={() => setPreviewGcashImage(null)}
+        >
+          <div
+            style={{
+              background: "#ffffff",
+              borderRadius: "16px",
+              padding: "20px",
+              maxWidth: "520px",
+              width: "90%",
+              maxHeight: "90vh",
+              overflow: "auto",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.35)",
+              textAlign: "center",
+              position: "relative",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "1.2rem" }}>📱</span>
+                <strong style={{ fontSize: "1rem", color: "#0f172a" }}>GCash Payment Proof Screenshot</strong>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewGcashImage(null)}
+                style={{
+                  background: "#f1f5f9",
+                  border: "none",
+                  borderRadius: "50%",
+                  width: "30px",
+                  height: "30px",
+                  cursor: "pointer",
+                  fontSize: "1rem",
+                  color: "#64748b",
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            <img
+              src={previewGcashImage}
+              alt="Uploaded GCash Screenshot"
+              style={{
+                width: "100%",
+                maxHeight: "70vh",
+                objectFit: "contain",
+                borderRadius: "10px",
+                border: "1px solid #e2e8f0",
+              }}
+            />
+            <div style={{ marginTop: "14px", display: "flex", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={() => setPreviewGcashImage(null)}
+                style={{
+                  background: "#0f172a",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: "8px",
+                  padding: "8px 18px",
+                  fontWeight: 600,
+                  fontSize: "0.84rem",
+                  cursor: "pointer",
+                }}
+              >
+                Close Preview
+              </button>
             </div>
           </div>
         </div>
