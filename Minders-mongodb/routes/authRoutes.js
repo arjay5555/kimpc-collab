@@ -371,7 +371,9 @@ const FORGOT_GENERIC_MESSAGE =
  * POST /api/auth/forgot-password & /api/forgot-password
  * Initiates email-based password reset. Generates random token, stores SHA-256 hash, and emails reset link.
  */
-router.post(["/auth/forgot-password", "/forgot-password"], async (req, res) => {
+router.post(
+  ["/auth/forgot-password", "/forgot-password", "/auth/forgot-password-request"],
+  async (req, res) => {
   const startTime = Date.now();
   const MIN_DELAY_MS = 380; // Mitigate timing-based email enumeration
 
@@ -614,11 +616,7 @@ router.post(["/auth/reset-password", "/reset-password"], async (req, res) => {
   }
 });
 
-// Forward legacy /auth/forgot-password-request to self-service email reset
-router.post("/auth/forgot-password-request", async (req, res) => {
-  req.url = "/auth/forgot-password";
-  return router.handle(req, res);
-});
+
 
 // ---------- Social Authentication (Google & Facebook) ----------
 
