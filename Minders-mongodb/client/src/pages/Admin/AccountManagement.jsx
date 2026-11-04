@@ -32,6 +32,24 @@ export default function AccountManagement() {
   // OTP modal state
   const [otpModal, setOtpModal] = useState({ open: false, account: null, code: "" });
 
+  // Add Account (Staff & Member) modal state
+  const [addModal, setAddModal] = useState({
+    open: false,
+    role: "member", // "member" | "manager" | "admin"
+    fullName: "",
+    email: "",
+    phone: "",
+    cooperativeId: "",
+    password: "",
+    adminPin: "",
+    mustChangePassword: true,
+    isSubmitting: false,
+    feedback: { message: "", isError: false },
+  });
+  const [showAddPassword, setShowAddPassword] = useState(false);
+  const [createdAccountResult, setCreatedAccountResult] = useState(null);
+  const [copiedCredentials, setCopiedCredentials] = useState(false);
+
   // Role permissions state
   const [permissions, setPermissions] = useState(null);
   const [permissionsLoading, setPermissionsLoading] = useState(false);
@@ -193,6 +211,171 @@ export default function AccountManagement() {
         [permKey]: !prev[role][permKey],
       },
     }));
+  };
+
+  // Helper to generate a random 10-character alphanumeric password
+  const generateRandomPassword = () => {
+    const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+    const lower = "abcdefghijkmnopqrstuvwxyz";
+    const digits = "23456789";
+    const special = "@#$!";
+    const all = upper + lower + digits + special;
+    let pwd = "";
+    pwd += upper[Math.floor(Math.random() * upper.length)];
+    pwd += lower[Math.floor(Math.random() * lower.length)];
+    pwd += digits[Math.floor(Math.random() * digits.length)];
+    pwd += special[Math.floor(Math.random() * special.length)];
+    for (let i = 4; i < 10; i++) {
+      pwd += all[Math.floor(Math.random() * all.length)];
+    }
+    return pwd;
+  };
+
+  // Open the Add Account Modal and prefill next sequential Cooperative ID
+  const handleOpenAddModal = async () => {
+    let nextId = "";
+    try {
+      const res = await api("/cooperative-id/next");
+      if (res.ok && res.data?.cooperativeId) {
+        nextId = res.data.cooperativeId;
+      }
+    } catch {}
+
+    setAddModal({
+      open: true,
+      role: "member",
+      fullName: "",
+      email: "",
+      phone: "",
+      cooperativeId: nextId,
+      password: generateRandomPassword(),
+      adminPin: "",
+      mustChangePassword: true,
+      isSubmitting: false,
+      feedback: { message: "", isError: false },
+    });
+    setShowAddPassword(false);
+  };
+
+  // Handle Role Change inside Add Modal
+  const handleRoleChangeInModal = async (newRole) => {
+    let coopId = addModal.cooperativeId;
+    if (newRole === "admin") {
+      coopId = "";
+    } else if (!coopId) {
+      try {
+        const res = await api("/cooperative-id/next");
+        if (res.ok && res.data?.cooperativeId) {
+          coopId = res.data.cooperativeId;
+        }
+      } catch {}
+    }
+    setAddModal((prev) => ({
+      ...prev,
+      role: newRole,
+      cooperativeId: coopId,
+      adminPin: newRole === "admin" && !prev.adminPin ? String(Math.floor(100000 + Math.random() * 900000)) : prev.adminPin,
+    }));
+  };
+
+  // Submit Add Account form
+  const handleCreateAccountSubmit = async (e) => {
+    e.preventDefault();
+    const fullName = addModal.fullName.trim();
+    const email = addModal.email.trim();
+
+    if (!fullName || !email) {
+      setAddModal((prev) => ({
+        ...prev,
+        feedback: { message: "Full Name and Email Address are required.", isError: true },
+      }));
+      return;
+    }
+
+    if (addModal.password.length < 6) {
+      setAddModal((prev) => ({
+        ...prev,
+        feedback: { message: "Password must be at least 6 characters long.", isError: true },
+      }));
+      return;
+    }
+
+    if (addModal.role === "admin" && addModal.adminPin && !/^\d{6}$/.test(addModal.adminPin.trim())) {
+      setAddModal((prev) => ({
+        ...prev,
+        feedback: { message: "Admin PIN must be exactly 6 digits.", isError: true },
+      }));
+      return;
+    }
+
+    setAddModal((prev) => ({ ...prev, isSubmitting: true, feedback: { message: "", isError: false } }));
+
+    const payload = {
+      fullName,
+      email,
+      phone: addModal.phone.trim(),
+      role: addModal.role,
+      password: addModal.password,
+      cooperativeId: addModal.cooperativeId.trim() || undefined,
+      adminPin: addModal.role === "admin" ? addModal.adminPin.trim() : undefined,
+      verificationStatus: "verified",
+      mustChangePassword: addModal.mustChangePassword,
+    };
+
+    const res = await api("/accounts", {
+      method: "POST",
+      body: payload,
+    });
+
+    if (!res.ok) {
+      setAddModal((prev) => ({
+        ...prev,
+        isSubmitting: false,
+        feedback: { message: res.data?.error || "Failed to create account.", isError: true },
+      }));
+      return;
+    }
+
+    // Success: close form and display credentials summary
+    setAddModal((prev) => ({ ...prev, open: false, isSubmitting: false }));
+    setCreatedAccountResult({
+      fullName: payload.fullName,
+      email: payload.email,
+      role: payload.role,
+      cooperativeId: res.data?.cooperativeId || payload.cooperativeId || "N/A",
+      password: payload.password,
+      oneTimePin: res.data?.oneTimePin || (payload.role === "admin" ? payload.adminPin : null),
+    });
+
+    setFeedback({
+      message: `Account for "${payload.fullName}" (${payload.role.toUpperCase()}) was created and verified successfully!`,
+      isError: false,
+    });
+
+    fetchAccounts();
+  };
+
+  // Helper to copy credentials to clipboard
+  const handleCopyCredentials = () => {
+    if (!createdAccountResult) return;
+    const { fullName, role, email, cooperativeId, password, oneTimePin } = createdAccountResult;
+    const text = [
+      `--- KIMPC Cooperative Account Credentials ---`,
+      `Full Name: ${fullName}`,
+      `Role: ${role.toUpperCase()}`,
+      cooperativeId && cooperativeId !== "N/A" ? `Cooperative No. ID: ${cooperativeId}` : null,
+      `Email Address: ${email}`,
+      `Temporary Password: ${password}`,
+      oneTimePin ? `Admin Setup PIN: ${oneTimePin}` : null,
+      `Login URL: ${window.location.origin}/login`,
+      `---------------------------------------------`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    navigator.clipboard.writeText(text);
+    setCopiedCredentials(true);
+    setTimeout(() => setCopiedCredentials(false), 3000);
   };
 
   // Account status resolver
@@ -462,6 +645,33 @@ export default function AccountManagement() {
                     </button>
                   ))}
                 </div>
+
+                <button
+                  type="button"
+                  onClick={handleOpenAddModal}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "6px 14px",
+                    background: "#166534",
+                    border: "1px solid #14532d",
+                    borderRadius: "8px",
+                    color: "#ffffff",
+                    fontSize: "0.78rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    boxShadow: "0 2px 6px rgba(22, 101, 52, 0.25)",
+                    transition: "all 0.15s ease",
+                  }}
+                  title="Create and verify a new Member or Staff account"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <line x1="12" y1="5" x2="12" y2="19" />
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                  <span>Add Account</span>
+                </button>
 
                 <button
                   type="button"
@@ -1044,6 +1254,409 @@ export default function AccountManagement() {
                   borderRadius: "8px",
                   fontWeight: 600,
                   fontSize: "0.84rem",
+                  cursor: "pointer",
+                }}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= ADD ACCOUNT (STAFF & MEMBER) MODAL ================= */}
+      {addModal.open && (
+        <div className="wz-modal-overlay">
+          <div className="wz-modal-content" style={{ maxWidth: "560px", padding: "28px", borderRadius: "16px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "18px" }}>
+              <div>
+                <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#166534", background: "#dcfce7", padding: "3px 8px", borderRadius: "4px", marginBottom: "6px" }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <line x1="12" y1="5" x2="12" y2="19" />
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                  <span>Provisioning Portal</span>
+                </div>
+                <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 800, color: "var(--wz-text, #0f172a)" }}>
+                  Add New Account
+                </h3>
+                <p style={{ margin: "4px 0 0", fontSize: "0.82rem", color: "#64748b" }}>
+                  Create and verify a new Member, Staff / Manager, or Administrator account.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAddModal({ ...addModal, open: false })}
+                style={{ background: "none", border: "none", fontSize: "1.5rem", color: "#94a3b8", cursor: "pointer", lineHeight: 1 }}
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateAccountSubmit}>
+              {/* Role Selection Tabs */}
+              <div style={{ marginBottom: "16px" }}>
+                <label className="wz-form-label" style={{ marginBottom: "8px", display: "block" }}>
+                  Select Account Role <span style={{ color: "#dc2626" }}>*</span>
+                </label>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px" }}>
+                  {[
+                    { key: "member", label: "Member", icon: "🧑‍🌾", desc: "Farmer / Renter" },
+                    { key: "manager", label: "Staff / Manager", icon: "💼", desc: "Fleet Operator" },
+                    { key: "admin", label: "Administrator", icon: "🛡️", desc: "Full Access" },
+                  ].map((r) => {
+                    const isSelected = addModal.role === r.key;
+                    return (
+                      <button
+                        key={r.key}
+                        type="button"
+                        onClick={() => handleRoleChangeInModal(r.key)}
+                        style={{
+                          padding: "10px 8px",
+                          borderRadius: "10px",
+                          border: isSelected ? "2px solid #166534" : "1px solid var(--wz-border, #cbd5e1)",
+                          background: isSelected ? "#f0fdf4" : "var(--wz-card-bg, #ffffff)",
+                          textAlign: "center",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        <div style={{ fontSize: "1.2rem", marginBottom: "2px" }}>{r.icon}</div>
+                        <div style={{ fontSize: "0.82rem", fontWeight: 700, color: isSelected ? "#166534" : "var(--wz-text, #0f172a)" }}>
+                          {r.label}
+                        </div>
+                        <div style={{ fontSize: "0.68rem", color: "#64748b" }}>{r.desc}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Form Grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" }}>
+                {/* Full Name */}
+                <div className="wz-form-group" style={{ margin: 0, gridColumn: "span 2" }}>
+                  <label className="wz-form-label">
+                    Full Name <span style={{ color: "#dc2626" }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    className="wz-form-input"
+                    placeholder="e.g. Maria Santos"
+                    value={addModal.fullName}
+                    onChange={(e) => setAddModal({ ...addModal, fullName: e.target.value })}
+                  />
+                </div>
+
+                {/* Email Address */}
+                <div className="wz-form-group" style={{ margin: 0 }}>
+                  <label className="wz-form-label">
+                    Email Address <span style={{ color: "#dc2626" }}>*</span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    className="wz-form-input"
+                    placeholder="e.g. maria@gmail.com"
+                    value={addModal.email}
+                    onChange={(e) => setAddModal({ ...addModal, email: e.target.value })}
+                  />
+                </div>
+
+                {/* Phone Number */}
+                <div className="wz-form-group" style={{ margin: 0 }}>
+                  <label className="wz-form-label">Phone Number (Optional)</label>
+                  <input
+                    type="tel"
+                    className="wz-form-input"
+                    placeholder="e.g. 0917-123-4567"
+                    value={addModal.phone}
+                    onChange={(e) => setAddModal({ ...addModal, phone: e.target.value })}
+                  />
+                </div>
+
+                {/* Cooperative ID */}
+                <div className="wz-form-group" style={{ margin: 0, gridColumn: addModal.role === "admin" ? "span 1" : "span 2" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                    <label className="wz-form-label" style={{ margin: 0 }}>
+                      Cooperative No. ID {addModal.role === "member" && <span style={{ color: "#dc2626" }}>*</span>}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const res = await api("/cooperative-id/next");
+                        if (res.ok && res.data?.cooperativeId) {
+                          setAddModal((prev) => ({ ...prev, cooperativeId: res.data.cooperativeId }));
+                        }
+                      }}
+                      style={{ background: "none", border: "none", color: "#166534", fontSize: "0.72rem", fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}
+                    >
+                      Next ID
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    className="wz-form-input"
+                    placeholder="e.g. M260011"
+                    value={addModal.cooperativeId}
+                    onChange={(e) => setAddModal({ ...addModal, cooperativeId: e.target.value })}
+                  />
+                </div>
+
+                {/* Admin Setup PIN (Only if role === 'admin') */}
+                {addModal.role === "admin" && (
+                  <div className="wz-form-group" style={{ margin: 0 }}>
+                    <label className="wz-form-label">
+                      6-Digit Admin Setup PIN
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      className="wz-form-input"
+                      placeholder="e.g. 123456 (auto if blank)"
+                      value={addModal.adminPin}
+                      onChange={(e) => setAddModal({ ...addModal, adminPin: e.target.value.replace(/\D/g, "") })}
+                    />
+                  </div>
+                )}
+
+                {/* Temporary Password */}
+                <div className="wz-form-group" style={{ margin: 0, gridColumn: "span 2" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                    <label className="wz-form-label" style={{ margin: 0 }}>
+                      Initial / Temporary Password <span style={{ color: "#dc2626" }}>*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setAddModal((prev) => ({ ...prev, password: generateRandomPassword() }))}
+                      style={{ background: "none", border: "none", color: "#166534", fontSize: "0.72rem", fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}
+                    >
+                      Generate Strong
+                    </button>
+                  </div>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      type={showAddPassword ? "text" : "password"}
+                      required
+                      minLength={6}
+                      className="wz-form-input"
+                      placeholder="Minimum 6 characters"
+                      value={addModal.password}
+                      onChange={(e) => setAddModal({ ...addModal, password: e.target.value })}
+                      style={{ paddingRight: "40px" }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowAddPassword(!showAddPassword)}
+                      style={{
+                        position: "absolute",
+                        right: "8px",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        background: "none",
+                        border: "none",
+                        color: "#64748b",
+                        cursor: "pointer",
+                        fontSize: "0.85rem",
+                      }}
+                      tabIndex={-1}
+                    >
+                      {showAddPassword ? "Hide" : "Show"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Verified & Must Change Password Toggles */}
+              <div style={{ background: "#f8fafc", padding: "10px 14px", borderRadius: "10px", border: "1px solid #e2e8f0", marginBottom: "16px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.8rem", color: "#334155", fontWeight: 600, cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={true}
+                    readOnly
+                    style={{ accentColor: "#166534", cursor: "pointer" }}
+                  />
+                  <span>Mark account as Verified &amp; Active immediately</span>
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.8rem", color: "#334155", fontWeight: 600, cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={addModal.mustChangePassword}
+                    onChange={(e) => setAddModal({ ...addModal, mustChangePassword: e.target.checked })}
+                    style={{ accentColor: "#166534", cursor: "pointer" }}
+                  />
+                  <span>Require member/staff to set their own password upon first login</span>
+                </label>
+              </div>
+
+              {/* Feedback Alert */}
+              {addModal.feedback.message && (
+                <div
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: "8px",
+                    background: addModal.feedback.isError ? "#fef2f2" : "#f0fdf4",
+                    border: `1px solid ${addModal.feedback.isError ? "#fecaca" : "#86efac"}`,
+                    color: addModal.feedback.isError ? "#991b1b" : "#166534",
+                    fontSize: "0.82rem",
+                    fontWeight: 600,
+                    marginBottom: "14px",
+                  }}
+                >
+                  {addModal.feedback.message}
+                </div>
+              )}
+
+              {/* Modal Actions */}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                <button
+                  type="button"
+                  onClick={() => setAddModal({ ...addModal, open: false })}
+                  style={{
+                    padding: "8px 16px",
+                    background: "#ffffff",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "8px",
+                    fontSize: "0.84rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addModal.isSubmitting}
+                  style={{
+                    padding: "8px 20px",
+                    background: "#166534",
+                    color: "#ffffff",
+                    border: "none",
+                    borderRadius: "8px",
+                    fontSize: "0.84rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    boxShadow: "0 2px 6px rgba(22, 101, 52, 0.3)",
+                  }}
+                >
+                  {addModal.isSubmitting ? "Creating Account..." : "Create Account"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= CREATED ACCOUNT RESULT & CREDENTIALS MODAL ================= */}
+      {createdAccountResult && (
+        <div className="wz-modal-overlay">
+          <div className="wz-modal-content" style={{ maxWidth: "480px", padding: "28px", borderRadius: "16px" }}>
+            <div style={{ textAlign: "center", marginBottom: "16px" }}>
+              <div
+                style={{
+                  width: "50px",
+                  height: "50px",
+                  borderRadius: "50%",
+                  background: "#dcfce7",
+                  color: "#166534",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginBottom: "12px",
+                }}
+              >
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </div>
+              <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 800, color: "var(--wz-text, #0f172a)" }}>
+                Account Created Successfully!
+              </h3>
+              <p style={{ margin: "6px 0 0", fontSize: "0.82rem", color: "#64748b" }}>
+                The account has been created and verified. Share these temporary login credentials with the user:
+              </p>
+            </div>
+
+            {/* Credentials Card */}
+            <div
+              style={{
+                background: "#f8fafc",
+                border: "1px solid #cbd5e1",
+                borderRadius: "12px",
+                padding: "16px",
+                marginBottom: "18px",
+              }}
+            >
+              <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: "8px", fontSize: "0.82rem" }}>
+                <span style={{ color: "#64748b", fontWeight: 600 }}>Full Name:</span>
+                <span style={{ fontWeight: 700, color: "#0f172a" }}>{createdAccountResult.fullName}</span>
+
+                <span style={{ color: "#64748b", fontWeight: 600 }}>Role:</span>
+                <span style={{ fontWeight: 700, color: "#166534", textTransform: "uppercase" }}>{createdAccountResult.role}</span>
+
+                {createdAccountResult.cooperativeId && createdAccountResult.cooperativeId !== "N/A" && (
+                  <>
+                    <span style={{ color: "#64748b", fontWeight: 600 }}>Cooperative ID:</span>
+                    <span style={{ fontWeight: 800, color: "#0f766e", fontFamily: "monospace" }}>{createdAccountResult.cooperativeId}</span>
+                  </>
+                )}
+
+                <span style={{ color: "#64748b", fontWeight: 600 }}>Email Address:</span>
+                <span style={{ fontWeight: 600, color: "#0f172a" }}>{createdAccountResult.email}</span>
+
+                <span style={{ color: "#64748b", fontWeight: 600 }}>Initial Password:</span>
+                <span style={{ fontWeight: 800, color: "#dc2626", fontFamily: "monospace" }}>{createdAccountResult.password}</span>
+
+                {createdAccountResult.oneTimePin && (
+                  <>
+                    <span style={{ color: "#64748b", fontWeight: 600 }}>Admin Setup PIN:</span>
+                    <span style={{ fontWeight: 800, color: "#7c3aed", fontFamily: "monospace" }}>{createdAccountResult.oneTimePin}</span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                type="button"
+                onClick={handleCopyCredentials}
+                style={{
+                  flex: 1,
+                  padding: "9px 14px",
+                  background: copiedCredentials ? "#166534" : "#ffffff",
+                  color: copiedCredentials ? "#ffffff" : "#0f172a",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "8px",
+                  fontSize: "0.84rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+                <span>{copiedCredentials ? "✓ Copied to Clipboard!" : "Copy Credentials"}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCreatedAccountResult(null)}
+                style={{
+                  flex: 1,
+                  padding: "9px 14px",
+                  background: "#0f172a",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontSize: "0.84rem",
+                  fontWeight: 700,
                   cursor: "pointer",
                 }}
               >

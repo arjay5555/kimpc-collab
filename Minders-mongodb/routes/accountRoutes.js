@@ -57,19 +57,35 @@ router.get("/accounts/:email", async (req, res) => {
   }
 });
 
-// Staff account created by an admin (already verified).
+// Account created by an administrator (Staff or Member, pre-verified)
 router.post("/accounts", async (req, res) => {
   try {
     const fullName = clean(req.body.fullName);
     const email = cleanEmail(req.body.email);
     const password = String(req.body.password ?? "");
     const role = clean(req.body.role);
-    const adminActor = cleanEmail(req.body.actorEmail || req.headers["x-actor-email"] || "admin");
+    const adminActor = cleanEmail(req.body.actorEmail || req.headers["x-actor-email"] || req.user?.email || "admin");
 
-    if (!fullName || !email) return fail(res, 400, "Name and email are required.");
-    if (!ROLES.includes(role)) return fail(res, 400, "Choose a valid role.");
+    if (!fullName || !email) return fail(res, 400, "Full name and email are required.");
+    if (!ROLES.includes(role)) return fail(res, 400, "Please select a valid role (Member, Staff/Manager, or Admin).");
     if (password.length < 6) return fail(res, 400, "Password must be at least 6 characters.");
     if (await Account.exists({ email })) return fail(res, 409, "An account already exists for this email address.");
+
+    let cooperativeId = clean(req.body.cooperativeId);
+    if (!cooperativeId && (role === "member" || role === "manager")) {
+      cooperativeId = await nextCooperativeId();
+    }
+    if (cooperativeId) {
+      const existingCoop = await Account.findOne({
+        $or: [
+          { cooperativeId },
+          { cooperativeId: cooperativeId.toUpperCase() },
+        ],
+      });
+      if (existingCoop) {
+        return fail(res, 409, `Cooperative ID "${cooperativeId}" is already assigned to another account (${existingCoop.fullName}).`);
+      }
+    }
 
     let adminPinHash = null;
     let mustChangePin = false;
@@ -89,15 +105,20 @@ router.post("/accounts", async (req, res) => {
       mustChangePin = true;
     }
 
+    const phone = clean(req.body.phone);
     const account = await Account.create({
       fullName,
       email,
+      phone,
+      cooperativeId: cooperativeId || undefined,
       passwordHash: await bcrypt.hash(password, 10),
       role,
       emailVerified: true,
+      verificationStatus: req.body.verificationStatus || "verified",
       verifiedAt: new Date(),
       adminPinHash,
       mustChangePin,
+      mustChangePassword: Boolean(req.body.mustChangePassword),
     });
 
     await logAudit({
@@ -107,7 +128,7 @@ router.post("/accounts", async (req, res) => {
       targetEmail: email,
       targetName: fullName,
       targetRole: role,
-      details: `Admin (${adminActor}) provisioned verified staff account for "${fullName}" with role ${role}${role === "admin" ? " (assigned 6-digit One-Time Setup PIN)" : ""}`,
+      details: `Admin provisioned verified ${role} account for "${fullName}" (${email})${cooperativeId ? ` [Coop ID: ${cooperativeId}]` : ""}${role === "admin" ? " (assigned 6-digit Setup PIN)" : ""}`,
       req,
     });
 
@@ -119,7 +140,7 @@ router.post("/accounts", async (req, res) => {
     res.status(201).json(responseJson);
   } catch (error) {
     console.error("Error creating account:", error);
-    res.status(500).json({ error: "Failed to create account." });
+    res.status(500).json({ error: error.message || "Failed to create account." });
   }
 });
 
