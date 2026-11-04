@@ -14,6 +14,36 @@ const applicationSchema = new mongoose.Schema(
     ratePerHectare: { type: Number, default: 0 },
     totalAmount: { type: Number, default: 0 },
     farmLocation: { type: String, default: "", trim: true, maxlength: 240 },
+    machineryModel: { type: String, default: "", trim: true },
+    assignedDriver: { type: String, default: "Self-Operated", trim: true },
+    driverPhone: { type: String, default: "", trim: true },
+    paymentStatus: { type: String, enum: ["Paid", "Pending", "Settled", "Refunded"], default: "Pending" },
+    paymentAmount: { type: Number, default: 0 },
+    paymentMethod: { type: String, default: "Cash" },
+    approvedAt: { type: Date, default: null },
+    dispatchedAt: { type: Date, default: null },
+    returnedAt: { type: Date, default: null },
+    cancelledAt: { type: Date, default: null },
+    rescheduledAt: { type: Date, default: null },
+    rescheduleHistory: [
+      {
+        previousStartDate: { type: String },
+        previousEndDate: { type: String },
+        newStartDate: { type: String },
+        newEndDate: { type: String },
+        rescheduledAt: { type: Date, default: Date.now },
+        reason: { type: String, default: "" },
+      }
+    ],
+    timeline: [
+      {
+        event: { type: String },
+        title: { type: String },
+        timestamp: { type: Date, default: Date.now },
+        actor: { type: String, default: "Member" },
+        note: { type: String, default: "" },
+      }
+    ],
     status: { 
       type: String, 
       enum: ["Pending", "Approved", "Checked-Out", "Returned", "Rejected", "Cancelled", "Cancellation Requested"], 

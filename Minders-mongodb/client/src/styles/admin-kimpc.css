@@ -5624,3 +5624,175 @@
   width: 28px !important;
   height: 28px !important;
 }
+
+/* ============================================================
+   Member Applications & Booking History Timeline
+   ============================================================ */
+.app-timeline-container {
+  margin-top: 18px;
+  padding: 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.app-timeline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.app-timeline-header-title {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.app-timeline-list {
+  position: relative;
+  padding-left: 28px;
+  margin: 0;
+  list-style: none;
+}
+
+.app-timeline-list::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 11px;
+  width: 2px;
+  background: #cbd5e1;
+}
+
+.app-timeline-item {
+  position: relative;
+  margin-bottom: 18px;
+}
+
+.app-timeline-item:last-child {
+  margin-bottom: 0;
+}
+
+.app-timeline-node {
+  position: absolute;
+  left: -28px;
+  top: 2px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  z-index: 1;
+}
+
+.app-timeline-node.node-created {
+  border-color: #3b82f6;
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.app-timeline-node.node-rescheduled {
+  border-color: #f59e0b;
+  background: #fffbeb;
+  color: #d97706;
+}
+
+.app-timeline-node.node-approved {
+  border-color: #10b981;
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.app-timeline-node.node-dispatched {
+  border-color: #8b5cf6;
+  background: #f5f3ff;
+  color: #7c3aed;
+}
+
+.app-timeline-node.node-returned {
+  border-color: #059669;
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.app-timeline-node.node-cancellation_requested {
+  border-color: #f97316;
+  background: #fff7ed;
+  color: #ea580c;
+}
+
+.app-timeline-node.node-cancellation_granted,
+.app-timeline-node.node-cancelled,
+.app-timeline-node.node-voided {
+  border-color: #ef4444;
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.app-timeline-node.node-rejected,
+.app-timeline-node.node-cancellation_declined {
+  border-color: #64748b;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.app-timeline-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.app-timeline-card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.app-timeline-item-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.app-timeline-item-time {
+  font-size: 0.72rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.app-timeline-item-note {
+  font-size: 0.78rem;
+  color: #334155;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.app-timeline-actor {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #f1f5f9;
+  color: #475569;
+  margin-left: 6px;
+}

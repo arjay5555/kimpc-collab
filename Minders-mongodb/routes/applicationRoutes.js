@@ -134,12 +134,29 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
 
     const ratePerHectare = Number(req.body.ratePerHectare) || Number(targetUnit?.memberRate) || Number(targetUnit?.ratePerHectare) || 2500;
     const totalAmount = Math.round(ratePerHectare * hectares);
+    const machineryModel = clean(targetUnit?.model || req.body.machineryModel || targetUnit?.brand ? `${targetUnit.brand} ${targetUnit.model}` : "Standard Model");
+    const assignedDriver = clean(targetUnit?.assignedDriver || (targetUnit?.operatorIncluded ? "Coop Operator Assigned" : "Self-Operated"));
+    const driverPhone = clean(targetUnit?.driverPhone || "");
+    const now = new Date();
+
+    const initialTimeline = [
+      {
+        event: "created",
+        title: "Booking Request Submitted",
+        timestamp: now,
+        actor: "Member",
+        note: `Requested for ${hectares} ha (${startDate} to ${endDate}) at ${farmLocation || "Farm"}`,
+      },
+    ];
 
     const application = await Application.create({
       memberEmail: memberEmail || "walkin@kimpc.test",
       memberName: memberName || "Cooperative Member",
       equipment,
       machineryUnitId: machineryUnitId || targetUnit?.unitId || "",
+      machineryModel,
+      assignedDriver,
+      driverPhone,
       startDate,
       endDate,
       bookingType: "hectare",
@@ -148,8 +165,12 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
       totalAmount,
       farmLocation,
       status: "Pending",
+      paymentStatus: "Pending",
+      paymentAmount: totalAmount,
+      paymentMethod: clean(req.body.paymentMethod) || "Cash",
       isWalkIn: Boolean(req.body.isWalkIn),
       farmerPhone: clean(req.body.farmerPhone),
+      timeline: initialTimeline,
       financials: {
         dailyRate: ratePerHectare,
         ratePerHectare,
@@ -279,6 +300,47 @@ const handleApplicationUpdate = async (req, res) => {
       const previousDates = `${existing.startDate} – ${existing.endDate}`;
       const previousLocation = existing.farmLocation;
 
+      const isDatesChanged = newStartDate !== existing.startDate || newEndDate !== existing.endDate;
+      if (isDatesChanged) {
+        // Enforce conflict checking when rescheduling
+        const overlappingBookings = await Application.find({
+          _id: { $ne: existing._id },
+          status: { $in: ["Pending", "Approved", "Checked-Out"] },
+          startDate: { $lte: newEndDate },
+          endDate: { $gte: newStartDate },
+        });
+        const conflict = overlappingBookings.find((b) =>
+          isSameMachineryMatch(b.machineryUnitId, b.equipment, existing.machineryUnitId, existing.equipment)
+        );
+        if (conflict) {
+          return fail(
+            res,
+            409,
+            `Cannot reschedule to these dates: Machinery "${existing.equipment}" is already booked by another reservation from ${conflict.startDate} to ${conflict.endDate}. Please choose different dates.`
+          );
+        }
+
+        existing.rescheduledAt = new Date();
+        if (!existing.rescheduleHistory) existing.rescheduleHistory = [];
+        existing.rescheduleHistory.push({
+          previousStartDate: existing.startDate,
+          previousEndDate: existing.endDate,
+          newStartDate,
+          newEndDate,
+          rescheduledAt: new Date(),
+          reason: clean(req.body.rescheduleReason || "Member rescheduled rental dates"),
+        });
+
+        if (!existing.timeline) existing.timeline = [];
+        existing.timeline.push({
+          event: "rescheduled",
+          title: "Booking Rescheduled",
+          timestamp: new Date(),
+          actor: actorRole === "manager" ? "Manager" : "Member",
+          note: `Dates moved from ${previousDates} ➔ ${newStartDate} – ${newEndDate} (${existing.hectares || 1} ha)`,
+        });
+      }
+
       existing.equipment = newEquipment;
       existing.startDate = newStartDate;
       existing.endDate = newEndDate;
@@ -356,11 +418,64 @@ const handleApplicationUpdate = async (req, res) => {
 
     const previousStatus = existing.status;
     existing.status = newStatus;
-    if (newStatus === "Rejected" && req.body.managerRemarks !== undefined) {
-      existing.managerRemarks = clean(req.body.managerRemarks);
-    }
-    if (newStatus === "Cancelled") {
+    const nowTs = new Date();
+
+    if (newStatus === "Approved") {
+      existing.approvedAt = nowTs;
+      if (!existing.timeline) existing.timeline = [];
+      existing.timeline.push({
+        event: "approved",
+        title: "Booking Approved",
+        timestamp: nowTs,
+        actor: actorRole === "admin" ? "Admin" : "Manager",
+        note: "Booking approved and scheduled for machinery dispatch.",
+      });
+    } else if (newStatus === "Checked-Out") {
+      existing.dispatchedAt = nowTs;
+      if (!existing.timeline) existing.timeline = [];
+      existing.timeline.push({
+        event: "dispatched",
+        title: "Machinery Given / Dispatched",
+        timestamp: nowTs,
+        actor: "Manager",
+        note: `Machinery handed over and dispatched with ${existing.assignedDriver || "assigned driver"}.`,
+      });
+    } else if (newStatus === "Returned") {
+      existing.returnedAt = nowTs;
+      if (!existing.timeline) existing.timeline = [];
+      existing.timeline.push({
+        event: "returned",
+        title: "Machinery Returned",
+        timestamp: nowTs,
+        actor: "Manager",
+        note: "Machinery safely returned to depot.",
+      });
+    } else if (newStatus === "Rejected") {
+      if (req.body.managerRemarks !== undefined) {
+        existing.managerRemarks = clean(req.body.managerRemarks);
+      }
+      if (!existing.timeline) existing.timeline = [];
+      existing.timeline.push({
+        event: "rejected",
+        title: "Booking Declined",
+        timestamp: nowTs,
+        actor: actorRole === "admin" ? "Admin" : "Manager",
+        note: existing.managerRemarks || "Booking declined by management.",
+      });
+    } else if (newStatus === "Cancelled") {
       existing.cancellationRequested = false;
+      existing.cancelledAt = nowTs;
+      const isVoid = isManagerOrAdmin && previousStatus !== "Pending";
+      const reason = clean(req.body.reason || req.body.cancellationReason || existing.cancellationReason) || (isVoid ? "Voided by manager" : "Cancelled by member");
+      existing.cancellationReason = reason;
+      if (!existing.timeline) existing.timeline = [];
+      existing.timeline.push({
+        event: isVoid ? "voided" : "cancelled",
+        title: isVoid ? "Booking Voided by Manager" : "Booking Cancelled",
+        timestamp: nowTs,
+        actor: isManagerOrAdmin ? "Manager" : "Member",
+        note: `Reason: ${reason}`,
+      });
     }
     await existing.save();
 
@@ -449,6 +564,18 @@ router.delete("/applications/:id", authenticate, async (req, res) => {
     if (existing.status === "Pending") {
       existing.status = "Cancelled";
       existing.cancellationRequested = false;
+      const nowTs = new Date();
+      existing.cancelledAt = nowTs;
+      const reason = clean(req.body?.reason || req.query?.reason) || "Direct cancellation by member";
+      existing.cancellationReason = reason;
+      if (!existing.timeline) existing.timeline = [];
+      existing.timeline.push({
+        event: "cancelled",
+        title: "Booking Cancelled",
+        timestamp: nowTs,
+        actor: "Member",
+        note: `Reason: ${reason}`,
+      });
       await existing.save();
 
       await logAudit({
@@ -463,7 +590,7 @@ router.delete("/applications/:id", authenticate, async (req, res) => {
           equipment: existing.equipment,
           dateRange: `${existing.startDate} – ${existing.endDate}`,
           cancelledBy: actorEmail,
-          cancelledAt: new Date().toISOString(),
+          cancelledAt: nowTs.toISOString(),
           type: "Direct pending cancellation",
         },
         req,
@@ -477,7 +604,16 @@ router.delete("/applications/:id", authenticate, async (req, res) => {
       existing.status = "Cancellation Requested";
       existing.cancellationRequested = true;
       existing.cancellationReason = clean(req.body?.reason || req.query?.reason) || "Member requested cancellation of approved booking";
-      existing.cancellationRequestedAt = new Date();
+      const nowTs = new Date();
+      existing.cancellationRequestedAt = nowTs;
+      if (!existing.timeline) existing.timeline = [];
+      existing.timeline.push({
+        event: "cancellation_requested",
+        title: "Cancellation Requested",
+        timestamp: nowTs,
+        actor: "Member",
+        note: `Reason: ${existing.cancellationReason}`,
+      });
       await existing.save();
 
       // Notify managers
@@ -541,6 +677,18 @@ router.post("/applications/:id/request-cancellation", authenticate, async (req, 
     if (existing.status === "Pending") {
       // Pending cancels directly
       existing.status = "Cancelled";
+      const nowTs = new Date();
+      existing.cancelledAt = nowTs;
+      const reason = clean(req.body?.reason) || "Member cancelled booking request";
+      existing.cancellationReason = reason;
+      if (!existing.timeline) existing.timeline = [];
+      existing.timeline.push({
+        event: "cancelled",
+        title: "Booking Cancelled",
+        timestamp: nowTs,
+        actor: "Member",
+        note: `Reason: ${reason}`,
+      });
       await existing.save();
       return res.json({ ok: true, direct: true, message: "Booking request cancelled successfully.", application: existing });
     }
@@ -549,10 +697,19 @@ router.post("/applications/:id/request-cancellation", authenticate, async (req, 
       return fail(res, 400, `Cannot request cancellation for booking with status "${existing.status}".`);
     }
 
+    const nowTs = new Date();
     existing.status = "Cancellation Requested";
     existing.cancellationRequested = true;
     existing.cancellationReason = clean(req.body.reason) || "Member requested cancellation";
-    existing.cancellationRequestedAt = new Date();
+    existing.cancellationRequestedAt = nowTs;
+    if (!existing.timeline) existing.timeline = [];
+    existing.timeline.push({
+      event: "cancellation_requested",
+      title: "Cancellation Requested",
+      timestamp: nowTs,
+      actor: "Member",
+      note: `Reason: ${existing.cancellationReason}`,
+    });
     await existing.save();
 
     // Notify managers
@@ -591,7 +748,17 @@ router.post("/applications/:id/grant-cancellation", authManager, async (req, res
 
     existing.status = "Cancelled";
     existing.cancellationRequested = false;
+    const nowTs = new Date();
+    existing.cancelledAt = nowTs;
     existing.managerRemarks = "Cancellation granted by manager.";
+    if (!existing.timeline) existing.timeline = [];
+    existing.timeline.push({
+      event: "cancellation_granted",
+      title: "Cancellation Granted by Manager",
+      timestamp: nowTs,
+      actor: "Manager",
+      note: existing.cancellationReason ? `Cancellation granted. Reason: ${existing.cancellationReason}` : "Cancellation granted by manager.",
+    });
     await existing.save();
 
     // Remove from Google Calendar if scheduled
@@ -637,6 +804,15 @@ router.post("/applications/:id/decline-cancellation", authManager, async (req, r
     existing.status = "Approved";
     existing.cancellationRequested = false;
     existing.managerRemarks = `Cancellation request declined: ${reason}`;
+    const nowTs = new Date();
+    if (!existing.timeline) existing.timeline = [];
+    existing.timeline.push({
+      event: "cancellation_declined",
+      title: "Cancellation Declined by Manager",
+      timestamp: nowTs,
+      actor: "Manager",
+      note: `Declined: ${reason}`,
+    });
     await existing.save();
 
     // Notify member
@@ -692,9 +868,27 @@ router.patch("/applications/:id/inspection", authManager, async (req, res) => {
     if (isCheckout) {
       application.checkoutInspection = inspectionData;
       application.status = "Checked-Out";
+      application.dispatchedAt = inspectionData.inspectedAt;
+      if (!application.timeline) application.timeline = [];
+      application.timeline.push({
+        event: "dispatched",
+        title: "Machinery Given / Dispatched",
+        timestamp: inspectionData.inspectedAt,
+        actor: "Manager",
+        note: `Pre-rental checkout inspection passed (${inspectionData.fuelLevel} fuel, ${inspectionData.odometerHours} hrs). Machinery given and handed over to driver/operator.`,
+      });
     } else {
       application.checkinInspection = inspectionData;
       application.status = "Returned";
+      application.returnedAt = inspectionData.inspectedAt;
+      if (!application.timeline) application.timeline = [];
+      application.timeline.push({
+        event: "returned",
+        title: "Machinery Returned & Inspected",
+        timestamp: inspectionData.inspectedAt,
+        actor: "Manager",
+        note: `Post-rental check-in completed (${inspectionData.fuelLevel} fuel, ${inspectionData.odometerHours} hrs). Notes: ${inspectionData.notes}`,
+      });
     }
 
     await application.save();
