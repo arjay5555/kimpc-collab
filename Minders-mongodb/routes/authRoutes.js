@@ -422,7 +422,7 @@ router.post(
       const rawToken = crypto.randomBytes(32).toString("hex");
       const hashedToken = crypto.createHash("sha256").update(rawToken).digest("hex");
 
-      const expiryMinutes = Math.max(5, Number(process.env.PASSWORD_RESET_EXPIRY_MINUTES) || 30);
+      const expiryMinutes = Math.max(1, Number(process.env.PASSWORD_RESET_EXPIRY_MINUTES) || 5);
       const expiresAt = new Date(Date.now() + expiryMinutes * 60 * 1000);
 
       // Store SHA-256 hash and expiry, replacing any previous token

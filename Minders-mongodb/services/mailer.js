@@ -126,7 +126,7 @@ async function dispatchEmail({ to, subject, html, text, replyTo }) {
 /**
  * Send password reset link to user.
  */
-async function sendPasswordResetEmail({ toEmail, resetLink, fullName, expiryMinutes = 30 }) {
+async function sendPasswordResetEmail({ toEmail, resetLink, fullName, expiryMinutes = 5 }) {
   const name = fullName ? fullName.trim() : "KIMPC Member";
   const subject = "[KIMPC Security] Reset Your Password";
 
