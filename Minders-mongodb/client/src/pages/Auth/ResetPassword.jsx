@@ -470,31 +470,44 @@ export default function ResetPassword() {
           </div>
         </section>
 
-        {/* Right Column: Fleet Widget Backdrop */}
+        {/* Right Column: Floating Active Fleet Stats Card (Glassmorphism) */}
         <div className="coop-floating-widget-wrap">
-          <div className="coop-glass-widget">
-            <div className="coop-widget-header">
-              <span className="coop-widget-dot"></span>
-              <span>KIMPC Cooperative Security</span>
+          <aside className="coop-floating-card">
+            <div className="coop-float-header">
+              <span className="coop-float-title">Active Fleet This Week</span>
+              <div className="coop-float-nav">
+                <span className="coop-nav-dot active"></span>
+                <span className="coop-nav-dot"></span>
+                <span className="coop-nav-dot"></span>
+                <span style={{ marginLeft: "2px", fontWeight: "700", cursor: "pointer" }}>&rsaquo;</span>
+              </div>
             </div>
-            <p className="coop-widget-tagline">
-              Single-use tokens with cryptographic SHA-256 verification ensure your cooperative account is protected.
+
+            <div className="coop-stats-grid">
+              <div className="coop-stat-cell">
+                <strong className="coop-stat-num">14</strong>
+                <span className="coop-stat-lbl">Tractors<br />Available</span>
+              </div>
+              <div className="coop-stat-cell">
+                <strong className="coop-stat-num">6</strong>
+                <span className="coop-stat-lbl">Harvesters</span>
+              </div>
+              <div className="coop-stat-cell">
+                <strong className="coop-stat-num">20+</strong>
+                <span className="coop-stat-lbl">Implements</span>
+              </div>
+              <div className="coop-stat-cell">
+                <strong className="coop-stat-num">24/7</strong>
+                <span className="coop-stat-lbl">Happy<br />Farmers</span>
+              </div>
+            </div>
+
+            <p className="coop-floating-quote">
+              Fast, reliable, and<br />
+              shared by our<br />
+              community.
             </p>
-            <div className="coop-stat-strip">
-              <div className="coop-stat-item">
-                <span className="coop-stat-num">Single-Use</span>
-                <span className="coop-stat-lbl">Token Reuse Block</span>
-              </div>
-              <div className="coop-stat-item">
-                <span className="coop-stat-num">Bcrypt</span>
-                <span className="coop-stat-lbl">Salted Hash</span>
-              </div>
-              <div className="coop-stat-item">
-                <span className="coop-stat-num">Immediate</span>
-                <span className="coop-stat-lbl">Session Revoke</span>
-              </div>
-            </div>
-          </div>
+          </aside>
         </div>
       </main>
     </div>

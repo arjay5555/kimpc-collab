@@ -155,7 +155,7 @@ export default function ForgotPassword() {
                     {feedback.message}
                   </p>
                   <p style={{ margin: "14px 0 0", fontSize: "0.78rem", color: "#64748b" }}>
-                    The link will expire in 30 minutes. Be sure to check your spam or junk folder if you don't see it shortly.
+                    The link will expire in 5 minutes. Be sure to check your spam or junk folder if you don't see it shortly.
                   </p>
                 </div>
               ) : (
@@ -215,31 +215,44 @@ export default function ForgotPassword() {
           </div>
         </section>
 
-        {/* Right Column: Fleet Widget Backdrop */}
+        {/* Right Column: Floating Active Fleet Stats Card (Glassmorphism) */}
         <div className="coop-floating-widget-wrap">
-          <div className="coop-glass-widget">
-            <div className="coop-widget-header">
-              <span className="coop-widget-dot"></span>
-              <span>KIMPC Cooperative Security</span>
+          <aside className="coop-floating-card">
+            <div className="coop-float-header">
+              <span className="coop-float-title">Active Fleet This Week</span>
+              <div className="coop-float-nav">
+                <span className="coop-nav-dot active"></span>
+                <span className="coop-nav-dot"></span>
+                <span className="coop-nav-dot"></span>
+                <span style={{ marginLeft: "2px", fontWeight: "700", cursor: "pointer" }}>&rsaquo;</span>
+              </div>
             </div>
-            <p className="coop-widget-tagline">
-              Fast, verified, and secure account recovery for members, staff, and administrators.
+
+            <div className="coop-stats-grid">
+              <div className="coop-stat-cell">
+                <strong className="coop-stat-num">14</strong>
+                <span className="coop-stat-lbl">Tractors<br />Available</span>
+              </div>
+              <div className="coop-stat-cell">
+                <strong className="coop-stat-num">6</strong>
+                <span className="coop-stat-lbl">Harvesters</span>
+              </div>
+              <div className="coop-stat-cell">
+                <strong className="coop-stat-num">20+</strong>
+                <span className="coop-stat-lbl">Implements</span>
+              </div>
+              <div className="coop-stat-cell">
+                <strong className="coop-stat-num">24/7</strong>
+                <span className="coop-stat-lbl">Happy<br />Farmers</span>
+              </div>
+            </div>
+
+            <p className="coop-floating-quote">
+              Fast, reliable, and<br />
+              shared by our<br />
+              community.
             </p>
-            <div className="coop-stat-strip">
-              <div className="coop-stat-item">
-                <span className="coop-stat-num">30m</span>
-                <span className="coop-stat-lbl">Link Expiry</span>
-              </div>
-              <div className="coop-stat-item">
-                <span className="coop-stat-num">SHA-256</span>
-                <span className="coop-stat-lbl">Token Hash</span>
-              </div>
-              <div className="coop-stat-item">
-                <span className="coop-stat-num">Active</span>
-                <span className="coop-stat-lbl">Session Revoke</span>
-              </div>
-            </div>
-          </div>
+          </aside>
         </div>
       </main>
     </div>

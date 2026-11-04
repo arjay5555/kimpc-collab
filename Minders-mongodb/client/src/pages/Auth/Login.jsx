@@ -69,6 +69,8 @@ export default function Login() {
   useEffect(() => {
     if (location.hash === "#signup" || location.hash === "#register") {
       setMode("signup");
+    } else if (location.hash === "#forgot" || location.hash === "#recovery") {
+      setMode("forgot");
     } else {
       setMode("login");
     }
@@ -473,7 +475,7 @@ export default function Login() {
     e.preventDefault();
     const cleanId = forgotIdentifier.trim();
     if (!cleanId) {
-      setForgotFeedback({ message: "Please enter your registered email address.", isError: true });
+      setForgotFeedback({ message: "Please enter your Cooperative No. ID or registered email.", isError: true });
       return;
     }
 
@@ -483,18 +485,15 @@ export default function Login() {
     try {
       const res = await api("/auth/forgot-password", {
         method: "POST",
-        body: { email: cleanId },
+        body: { identifier: cleanId },
       });
       setIsSubmittingForgot(false);
 
       if (res.ok) {
         setForgotFeedback({
-          message: res.data?.message || "If an eligible account exists for this email, we’ll send a password reset link.",
+          message: res.data?.message || "If an eligible account exists for this Cooperative No. ID or email, we’ll send a password reset link to the registered email address.",
           isError: false,
         });
-        setTimeout(() => {
-          setShowForgotModal(false);
-        }, 3000);
       } else {
         setForgotFeedback({
           message: res.data?.error || "Could not process request. Please try again.",
@@ -610,12 +609,17 @@ export default function Login() {
                       />
                       <span>Remember me</span>
                     </label>
-                    <Link
-                      to="/forgot-password"
+                    <a
+                      href="#forgot"
                       className="coop-forgot-link"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setMode("forgot");
+                        setForgotFeedback({ message: "", isError: false });
+                      }}
                     >
                       Forgot Password?
-                    </Link>
+                    </a>
                   </div>
 
                   {recaptchaEnabled && (
@@ -923,6 +927,69 @@ export default function Login() {
               </p>
             </div>
           )}
+
+          {/* VIEW 4: Forgot Password Container */}
+          {mode === "forgot" && (
+            <div id="forgot-view" className="coop-auth-view active">
+              <div>
+                <h1 className="coop-login-headline">Account Recovery</h1>
+                <p className="coop-auth-subtext">
+                  Enter your Cooperative No. ID or registered email address. We will send a secure link to reset your password.
+                </p>
+
+                <form className="coop-login-form" onSubmit={handleForgotSubmit} autoComplete="off">
+                  <div className="coop-pill-input-wrap">
+                    <input
+                      id="forgot-login-identifier"
+                      name="forgotIdentifier"
+                      type="text"
+                      className="coop-pill-input"
+                      placeholder="Cooperative No. ID or Email"
+                      value={forgotIdentifier}
+                      onChange={(e) => setForgotIdentifier(e.target.value)}
+                      required
+                      autoFocus
+                      aria-label="Cooperative No. ID or Email"
+                    />
+                  </div>
+
+                  <button
+                    className="btn-coop-harvest"
+                    type="submit"
+                    disabled={isSubmittingForgot}
+                    id="btn-forgot-submit"
+                    style={{ marginTop: "12px" }}
+                  >
+                    <span>{isSubmittingForgot ? "Sending Reset Link..." : "Send Reset Link"}</span>
+                  </button>
+
+                  {forgotFeedback.message && (
+                    <p
+                      className={`form-feedback ${forgotFeedback.isError ? "is-error" : "is-success"}`}
+                      role="status"
+                    >
+                      {forgotFeedback.message}
+                    </p>
+                  )}
+                </form>
+              </div>
+
+              <p className="coop-card-footer">
+                Remember your credentials?{" "}
+                <a
+                  className="coop-join-link"
+                  href="#login"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setMode("login");
+                    setForgotFeedback({ message: "", isError: false });
+                  }}
+                >
+                  &larr; Return to Sign In
+                </a>
+              </p>
+            </div>
+          )}
         </section>
 
         {/* Right Column: Floating Active Fleet Stats Card (Glassmorphism) */}
@@ -965,95 +1032,6 @@ export default function Login() {
           </aside>
         </div>
       </main>
-
-      {/* Forgot Password Request Dialog */}
-      {showForgotModal && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100%",
-            height: "100%",
-            background: "rgba(0,0,0,0.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 9999,
-          }}
-        >
-          <div
-            style={{
-              background: "#fff",
-              width: "100%",
-              maxWidth: "440px",
-              padding: "24px",
-              borderRadius: "12px",
-              border: "1px solid #e2e8f0",
-              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
-              <div>
-                <p style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#0d9488", margin: "0 0 4px" }}>
-                  Account Recovery
-                </p>
-                <h3 style={{ margin: 0, fontSize: "1.2rem", color: "#0f172a" }}>Forgot Password?</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowForgotModal(false)}
-                style={{ background: "none", border: "none", fontSize: "1.5rem", cursor: "pointer", color: "#64748b", lineHeight: 1 }}
-              >
-                &times;
-              </button>
-            </div>
-            <p style={{ fontSize: "0.82rem", color: "#475569", margin: "0 0 16px", lineHeight: 1.45 }}>
-              Enter your Cooperative No. ID or registered email address. We will send a secure link to reset your password to the registered email associated with your account.
-            </p>
-            <form onSubmit={handleForgotSubmit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <div>
-                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, color: "#334155", marginBottom: "4px" }}>
-                  Cooperative No. ID or Email
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Cooperative No. ID or Email"
-                  value={forgotIdentifier}
-                  onChange={(e) => setForgotIdentifier(e.target.value)}
-                  style={{ width: "100%", padding: "8px 12px", fontSize: "0.86rem", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }}
-                />
-              </div>
-
-              {forgotFeedback.message && (
-                <p className={`form-feedback ${forgotFeedback.isError ? "error" : ""}`} style={{ margin: 0, fontSize: "0.78rem" }}>
-                  {forgotFeedback.message}
-                </p>
-              )}
-
-              <div style={{ display: "flex", gap: "10px", marginTop: "6px" }}>
-                <button
-                  type="button"
-                  onClick={() => setShowForgotModal(false)}
-                  className="button button-outline"
-                  style={{ flex: 1, padding: "8px 14px", fontSize: "0.82rem" }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmittingForgot}
-                  className="button button-primary"
-                  style={{ flex: 1.4, padding: "8px 14px", fontSize: "0.82rem" }}
-                >
-                  {isSubmittingForgot ? "Sending..." : "Send Reset Link"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
