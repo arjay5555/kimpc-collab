@@ -1421,7 +1421,7 @@ export default function BookingApprovals() {
 
           {/* Table Container */}
           <div className="wz-table-responsive">
-            <table className="wz-table">
+            <table className="wz-table wz-bookings-table">
               <thead>
                 <tr>
                   <th>Status <span className="wz-sort-arrow">↕</span></th>
@@ -1446,12 +1446,11 @@ export default function BookingApprovals() {
                 ) : (
                   filteredBookings.map((b) => (
                     <tr key={b.id}>
-                      {/* Status Pill (First Column) */}
+                      {/* Status Pill (First Column - No Dot) */}
                       <td>
                         <span
                           className={`wz-status-pill wz-status-${b.status.toLowerCase().replace(/\s+/g, "-")}`}
                         >
-                          <span className="wz-status-dot" />
                           {b.status}
                         </span>
                       </td>
@@ -1736,7 +1735,6 @@ export default function BookingApprovals() {
                       className={`wz-status-pill wz-status-${viewingBooking.status.toLowerCase()}`}
                       style={{ fontSize: "0.74rem" }}
                     >
-                      <span className="wz-status-dot" />
                       {viewingBooking.status}
                     </span>
                   </div>

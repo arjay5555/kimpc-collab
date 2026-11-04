@@ -5537,3 +5537,85 @@
 .wz-icon-btn.spinning svg {
   animation: spinAudit 0.65s linear infinite;
 }
+
+/* Compact Manager Bookings Table - Optimized to eliminate horizontal scroll on desktop */
+.wz-bookings-table {
+  width: 100%;
+  font-size: 0.75rem !important;
+  table-layout: auto;
+}
+
+.wz-bookings-table th {
+  padding: 8px 6px !important;
+  font-size: 0.72rem !important;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.wz-bookings-table td {
+  padding: 8px 6px !important;
+  font-size: 0.75rem !important;
+  white-space: nowrap;
+}
+
+.wz-bookings-table .wz-status-pill {
+  padding: 3px 8px !important;
+  font-size: 0.69rem !important;
+  border-radius: 10px !important;
+  letter-spacing: 0;
+  gap: 0 !important;
+}
+
+.wz-bookings-table .wz-status-dot {
+  display: none !important;
+}
+
+.wz-bookings-table .wz-booking-id {
+  font-size: 0.75rem !important;
+}
+
+.wz-bookings-table .wz-client-name {
+  font-size: 0.75rem !important;
+}
+
+.wz-bookings-table .wz-machinery-cell {
+  gap: 4px !important;
+}
+
+.wz-bookings-table .wz-machinery-cell span:first-child {
+  font-size: 0.75rem !important;
+}
+
+.wz-bookings-table .wz-machinery-badge {
+  font-size: 0.64rem !important;
+  padding: 1px 5px !important;
+}
+
+.wz-bookings-table .wz-payment-wrap {
+  gap: 5px !important;
+}
+
+.wz-bookings-table .wz-payment-amount {
+  font-size: 0.75rem !important;
+}
+
+.wz-bookings-table .wz-payment-badge-paid,
+.wz-bookings-table .wz-payment-badge-pending {
+  font-size: 0.67rem !important;
+}
+
+.wz-bookings-table .wz-driver-icon {
+  width: 18px !important;
+  height: 18px !important;
+}
+
+.wz-bookings-table .wz-driver-icon svg {
+  width: 10px !important;
+  height: 10px !important;
+}
+
+.wz-bookings-table .wz-action-icon-btn {
+  width: 28px !important;
+  height: 28px !important;
+}
