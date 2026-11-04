@@ -60,6 +60,113 @@ function hasBookedDatesInRange(startKey, endKey, blockedRanges) {
   return false;
 }
 
+function CalendarIcon({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+  );
+}
+
+function BanknoteIcon({ size = 18, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2" y="6" width="20" height="12" rx="2" />
+      <circle cx="12" cy="12" r="2" />
+      <path d="M6 12h.01M18 12h.01" />
+    </svg>
+  );
+}
+
+function MobileIcon({ size = 18, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+      <line x1="12" y1="18" x2="12.01" y2="18" />
+    </svg>
+  );
+}
+
+function UploadCloudIcon({ size = 22, color = "#0284c7" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" />
+      <line x1="12" y1="3" x2="12" y2="15" />
+    </svg>
+  );
+}
+
+function CheckIcon({ size = 14, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+function CheckCircleIcon({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>
+  );
+}
+
+function AlertCircleIcon({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="8" x2="12" y2="12" />
+      <line x1="12" y1="16" x2="12.01" y2="16" />
+    </svg>
+  );
+}
+
+function CloseIcon({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+
+function CopyIcon({ size = 13, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+function LockIcon({ size = 13, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  );
+}
+
+function TractorIcon({ size = 18, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 17h1" />
+      <path d="M7 17a4 4 0 1 0 8 0H7" />
+      <circle cx="18" cy="18" r="2" />
+      <path d="M15 11h3a2 2 0 0 1 2 2v2" />
+      <path d="M7 11V5a2 2 0 0 1 2-2h4l2 4v4" />
+      <path d="M11 5v6" />
+    </svg>
+  );
+}
+
 export default function EquipmentCatalog() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -88,6 +195,15 @@ export default function EquipmentCatalog() {
   const [cashTiming, setCashTiming] = useState("Upon Pickup");
   const [gcashProof, setGcashProof] = useState("");
   const [gcashPreview, setGcashPreview] = useState("");
+  const [copiedGcash, setCopiedGcash] = useState(false);
+
+  const handleCopyGcash = () => {
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText("09264638983");
+      setCopiedGcash(true);
+      setTimeout(() => setCopiedGcash(false), 2000);
+    }
+  };
 
   const handleGCashFileChange = (e) => {
     const file = e.target.files?.[0];
@@ -127,22 +243,6 @@ export default function EquipmentCatalog() {
 
   const today = new Date();
   const minDate = dateKey(today);
-
-  // Generate 28-day upcoming selector grid
-  const upcomingCalendarDays = useMemo(() => {
-    return Array.from({ length: 28 }, (_, index) => {
-      const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + index, 12);
-      const key = dateKey(d);
-      const isBooked = isDateKeyBooked(key, blockedRanges);
-      return {
-        key,
-        dayNum: d.getDate(),
-        weekday: d.toLocaleDateString(undefined, { weekday: "short" }),
-        monthName: d.toLocaleDateString(undefined, { month: "short" }),
-        isBooked,
-      };
-    });
-  }, [blockedRanges]);
 
   const loadCatalog = useCallback(async () => {
     setLoading(true);
@@ -266,6 +366,15 @@ export default function EquipmentCatalog() {
   const requestedHectares = Math.max(0.1, Number(booking.hectares) || 1);
   const estimatedCost = Math.round(unitRatePerHectare * requestedHectares);
 
+  const scheduledDaysCount = useMemo(() => {
+    if (!booking.start || !booking.end || booking.end < booking.start) return 0;
+    const s = new Date(`${booking.start}T00:00:00`);
+    const e = new Date(`${booking.end}T00:00:00`);
+    if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return 0;
+    const diffTime = e.getTime() - s.getTime();
+    return Math.max(1, Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1);
+  }, [booking.start, booking.end]);
+
   // Check if current date selection is blocked
   const isStartBooked = isDateKeyBooked(booking.start, blockedRanges);
   const isEndBooked = isDateKeyBooked(booking.end, blockedRanges);
@@ -322,39 +431,6 @@ export default function EquipmentCatalog() {
       return;
     }
     setBooking((prev) => ({ ...prev, end: val }));
-  };
-
-  // Quick select an available date from the interactive strip
-  const handleSelectDay = (dayKey) => {
-    if (isDateKeyBooked(dayKey, blockedRanges)) {
-      return; // Can never select an already booked date
-    }
-    setDateError("");
-    setFeedback("");
-    if (!booking.start || (booking.start && booking.end && booking.start !== booking.end)) {
-      // Pick as new start date
-      setBooking((prev) => ({ ...prev, start: dayKey, end: dayKey }));
-    } else if (booking.start && !booking.end) {
-      if (dayKey < booking.start) {
-        setBooking((prev) => ({ ...prev, start: dayKey, end: dayKey }));
-      } else {
-        if (hasBookedDatesInRange(booking.start, dayKey, blockedRanges)) {
-          setDateError("Cannot select range across already booked dates.");
-          return;
-        }
-        setBooking((prev) => ({ ...prev, end: dayKey }));
-      }
-    } else {
-      if (dayKey < booking.start) {
-        setBooking((prev) => ({ ...prev, start: dayKey, end: dayKey }));
-      } else {
-        if (hasBookedDatesInRange(booking.start, dayKey, blockedRanges)) {
-          setDateError("Cannot select range across already booked dates.");
-          return;
-        }
-        setBooking((prev) => ({ ...prev, end: dayKey }));
-      }
-    }
   };
 
   const submitBooking = async (event) => {
@@ -506,6 +582,10 @@ export default function EquipmentCatalog() {
               className="wz-btn wz-btn-primary"
               disabled={availability !== "Available"}
               onClick={() => {
+                if (!memberPhone) {
+                  setPhonePromptOpen(true);
+                  return;
+                }
                 setFeedback("");
                 setDateError("");
                 setBooking({
@@ -532,7 +612,7 @@ export default function EquipmentCatalog() {
                 boxShadow: "0 4px 14px rgba(22, 101, 52, 0.2)",
               }}
             >
-              <span>🚜</span>
+              <TractorIcon size={18} />
               <span>Book Machinery (Per Hectare)</span>
               <span aria-hidden="true">→</span>
             </button>
@@ -575,8 +655,8 @@ export default function EquipmentCatalog() {
                         fontSize: "0.78rem",
                       }}
                     >
-                      <span style={{ fontWeight: 700, color: "#be123c" }}>
-                        🔒 {range.label}
+                      <span style={{ fontWeight: 700, color: "#be123c", display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                        <LockIcon size={12} /> {range.label}
                       </span>
                       <span style={{ color: "#475569", fontWeight: 500 }}>
                         {formatDisplayDate(range.startDate)} – {formatDisplayDate(range.endDate)}
@@ -589,7 +669,7 @@ export default function EquipmentCatalog() {
           </section>
         </div>
 
-        {/* ================= Booking Modal Dialog ================= */}
+        {/* ================= KIMPC Machinery Reservation Modal Dialog ================= */}
         {bookingOpen && (
           <div
             className="member-modal-backdrop"
@@ -597,512 +677,967 @@ export default function EquipmentCatalog() {
             onMouseDown={(event) => {
               if (event.target === event.currentTarget) setBookingOpen(false);
             }}
+            style={{
+              padding: "20px 14px",
+              background: "rgba(15, 23, 42, 0.65)",
+              backdropFilter: "blur(4px)",
+              zIndex: 1000,
+            }}
           >
             <section
               className="member-modal"
               role="dialog"
               aria-modal="true"
               aria-labelledby="booking-title"
-              style={{ width: "min(100%, 580px)", maxHeight: "90vh", overflowY: "auto" }}
+              style={{
+                width: "min(100%, 620px)",
+                maxHeight: "92vh",
+                overflowY: "auto",
+                background: "#ffffff",
+                borderRadius: "16px",
+                padding: 0,
+                border: "1px solid #e2e8f0",
+                boxShadow: "0 25px 50px -12px rgba(15, 23, 42, 0.25)",
+              }}
             >
-              <button
-                className="member-modal-close"
-                type="button"
-                aria-label="Close booking form"
-                onClick={() => setBookingOpen(false)}
+              {/* Modal Header */}
+              <div
+                style={{
+                  padding: "20px 24px 16px",
+                  borderBottom: "1px solid #f1f5f9",
+                  position: "relative",
+                  background: "#ffffff",
+                }}
               >
-                ×
-              </button>
+                <button
+                  type="button"
+                  aria-label="Close reservation dialog"
+                  onClick={() => setBookingOpen(false)}
+                  style={{
+                    position: "absolute",
+                    top: "16px",
+                    right: "18px",
+                    width: "32px",
+                    height: "32px",
+                    borderRadius: "8px",
+                    border: "1px solid #e2e8f0",
+                    background: "#f8fafc",
+                    color: "#64748b",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "#fee2e2";
+                    e.currentTarget.style.color = "#dc2626";
+                    e.currentTarget.style.borderColor = "#fecdd3";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "#f8fafc";
+                    e.currentTarget.style.color = "#64748b";
+                    e.currentTarget.style.borderColor = "#e2e8f0";
+                  }}
+                >
+                  <CloseIcon size={16} />
+                </button>
 
-              <p className="member-eyebrow" style={{ color: "#166534" }}>KIMPC MACHINERY RESERVATION</p>
-              <h2 id="booking-title" style={{ fontSize: "1.35rem", fontWeight: 800, color: "#0f172a", margin: "0 0 4px" }}>
-                Book {unit.name}
-              </h2>
-              <p style={{ fontSize: "0.8rem", color: "#64748b", margin: "0 0 16px" }}>
-                Pricing is charged <strong>per hectare</strong> of cultivated farm land. Dates already booked cannot be selected.
-              </p>
-
-              <form className="member-form" onSubmit={submitBooking}>
-                {/* 1. Farm Area in Hectares Input */}
-                <div style={{ background: "#f8fafc", padding: "14px", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
-                  <label style={{ fontSize: "0.82rem", fontWeight: 700, color: "#0f172a", display: "flex", justifyContent: "space-between" }}>
-                    <span>Farm Area to Cultivate (in Hectares)</span>
-                    <span style={{ color: "#15803d", fontWeight: 700 }}>Rate: {formatPrice(unitRatePerHectare)} / ha</span>
-                  </label>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "6px" }}>
-                    <input
-                      type="number"
-                      min="0.1"
-                      step="0.1"
-                      required
-                      placeholder="e.g. 2.5"
-                      value={booking.hectares}
-                      onChange={(e) => {
-                        const val = parseFloat(e.target.value);
-                        setBooking((prev) => ({
-                          ...prev,
-                          hectares: isNaN(val) ? "" : Math.max(0.1, val),
-                        }));
-                      }}
-                      style={{
-                        width: "160px",
-                        padding: "9px 14px",
-                        borderRadius: "8px",
-                        border: "1px solid #cbd5e1",
-                        fontSize: "1rem",
-                        fontWeight: 700,
-                        color: "#0f172a",
-                      }}
-                    />
-                    <span style={{ fontSize: "0.85rem", color: "#64748b", fontWeight: 600 }}>Hectare(s)</span>
-                  </div>
-
-                  {/* Preset quick buttons */}
-                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "8px" }}>
-                    {[0.5, 1, 2, 3, 5, 10].map((preset) => (
-                      <button
-                        key={preset}
-                        type="button"
-                        onClick={() => setBooking((prev) => ({ ...prev, hectares: preset }))}
-                        style={{
-                          padding: "4px 10px",
-                          borderRadius: "6px",
-                          border: booking.hectares === preset ? "1.5px solid #16a34a" : "1px solid #cbd5e1",
-                          background: booking.hectares === preset ? "#dcfce7" : "#ffffff",
-                          color: booking.hectares === preset ? "#15803d" : "#475569",
-                          fontSize: "0.75rem",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                        }}
-                      >
-                        {preset} ha
-                      </button>
-                    ))}
-                  </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                  <span
+                    style={{
+                      fontSize: "0.68rem",
+                      fontWeight: 800,
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      color: "#15803d",
+                      background: "#dcfce7",
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                    }}
+                  >
+                    KIMPC Machinery Service
+                  </span>
+                  <span style={{ fontSize: "0.72rem", color: "#94a3b8" }}>•</span>
+                  <span style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 500 }}>
+                    Official Member Reservation
+                  </span>
                 </div>
 
-                {/* 2. Interactive Date Picker Strip (booked dates are disabled & unclickable) */}
-                <div style={{ marginTop: "6px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                    <label style={{ fontSize: "0.82rem", fontWeight: 700, color: "#0f172a", margin: 0 }}>
-                      Select Scheduled Work Dates (Upcoming 4 Weeks)
-                    </label>
-                    <div style={{ display: "flex", gap: "8px", fontSize: "0.7rem" }}>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", color: "#166534" }}>
-                        <span style={{ width: "8px", height: "8px", borderRadius: "2px", background: "#dcfce7", border: "1px solid #16a34a", display: "inline-block" }} />
-                        Available
-                      </span>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", color: "#991b1b" }}>
-                        <span style={{ width: "8px", height: "8px", borderRadius: "2px", background: "#fee2e2", border: "1px solid #f87171", display: "inline-block" }} />
-                        Booked (Disabled)
-                      </span>
+                <h2
+                  id="booking-title"
+                  style={{
+                    fontSize: "1.32rem",
+                    fontWeight: 800,
+                    color: "#0f172a",
+                    margin: "0 0 14px",
+                    lineHeight: 1.25,
+                  }}
+                >
+                  Reserve {unit.name}
+                </h2>
+
+                {/* Machinery Identity Card */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "12px 14px",
+                    borderRadius: "10px",
+                    background: "#f8fafc",
+                    border: "1px solid #e2e8f0",
+                    gap: "12px",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
+                    <img
+                      src={selectedImage || unit.imageUrl || "/images/kimpc logo.png"}
+                      alt={unit.name}
+                      style={{
+                        width: "50px",
+                        height: "50px",
+                        borderRadius: "8px",
+                        objectFit: "cover",
+                        border: "1px solid #cbd5e1",
+                        background: "#ffffff",
+                        flexShrink: 0,
+                      }}
+                    />
+                    <div style={{ minWidth: 0 }}>
+                      <div
+                        style={{
+                          fontSize: "0.92rem",
+                          fontWeight: 700,
+                          color: "#0f172a",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
+                        {unit.name}
+                      </div>
+                      <div style={{ fontSize: "0.76rem", color: "#64748b", marginTop: "2px" }}>
+                        {unit.brand} · {unit.model} · <span style={{ color: "#15803d", fontWeight: 600 }}>{unit.category}</span>
+                      </div>
                     </div>
                   </div>
 
-                  {/* 28-day scrollable / grid date picker */}
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(7, 1fr)",
-                      gap: "5px",
-                      padding: "8px",
-                      background: "#f8fafc",
-                      border: "1px solid #e2e8f0",
-                      borderRadius: "10px",
-                      maxHeight: "160px",
-                      overflowY: "auto",
-                    }}
-                  >
-                    {upcomingCalendarDays.map((d) => {
-                      const isSelectedStart = booking.start === d.key;
-                      const isSelectedEnd = booking.end === d.key;
-                      const isSelected = isSelectedStart || isSelectedEnd;
-                      const inRange = Boolean(
-                        booking.start &&
-                        booking.end &&
-                        d.key >= booking.start &&
-                        d.key <= booking.end
-                      );
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div style={{ fontSize: "0.68rem", color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>
+                      Coop Member Rate
+                    </div>
+                    <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "#15803d" }}>
+                      {formatPrice(unitRatePerHectare)}
+                      <span style={{ fontSize: "0.74rem", fontWeight: 500, color: "#64748b", marginLeft: "2px" }}>
+                        / ha
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-                      if (d.isBooked) {
-                        return (
-                          <div
-                            key={d.key}
-                            title={`Already booked on ${d.key}`}
+              {/* Modal Body Form */}
+              <form onSubmit={submitBooking} style={{ padding: "20px 24px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+                  
+                  {/* Step 01: Farmland Cultivation Scope */}
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                      <span
+                        style={{
+                          width: "22px",
+                          height: "22px",
+                          borderRadius: "50%",
+                          background: "#dcfce7",
+                          color: "#15803d",
+                          fontSize: "0.72rem",
+                          fontWeight: 800,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                        }}
+                      >
+                        1
+                      </span>
+                      <label style={{ fontSize: "0.86rem", fontWeight: 700, color: "#0f172a", margin: 0 }}>
+                        Farmland Area to Cultivate
+                      </label>
+                    </div>
+                    <p style={{ fontSize: "0.76rem", color: "#64748b", margin: "0 0 10px 30px" }}>
+                      Machinery services are billed strictly per hectare of cultivated land.
+                    </p>
+
+                    <div style={{ marginLeft: "30px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                        {/* Number Input with unit addon */}
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            border: "1px solid #cbd5e1",
+                            borderRadius: "8px",
+                            overflow: "hidden",
+                            background: "#ffffff",
+                            boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                          }}
+                        >
+                          <input
+                            type="number"
+                            min="0.1"
+                            step="0.1"
+                            required
+                            placeholder="1.0"
+                            value={booking.hectares}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              setBooking((prev) => ({
+                                ...prev,
+                                hectares: isNaN(val) ? "" : Math.max(0.1, val),
+                              }));
+                            }}
                             style={{
-                              background: "#fee2e2",
-                              border: "1px solid #fecdd3",
-                              color: "#991b1b",
-                              borderRadius: "6px",
-                              padding: "4px 2px",
-                              textAlign: "center",
-                              cursor: "not-allowed",
-                              opacity: 0.65,
+                              width: "110px",
+                              padding: "9px 12px",
+                              border: "none",
+                              outline: "none",
+                              fontSize: "1.05rem",
+                              fontWeight: 800,
+                              color: "#0f172a",
+                            }}
+                          />
+                          <span
+                            style={{
+                              padding: "9px 14px",
+                              background: "#f1f5f9",
+                              fontSize: "0.8rem",
+                              fontWeight: 700,
+                              color: "#475569",
+                              borderLeft: "1px solid #e2e8f0",
                               userSelect: "none",
                             }}
                           >
-                            <div style={{ fontSize: "0.62rem", fontWeight: 600 }}>{d.weekday}</div>
-                            <div style={{ fontSize: "0.82rem", fontWeight: 800, textDecoration: "line-through" }}>{d.dayNum}</div>
-                            <span style={{ fontSize: "0.55rem", fontWeight: 700, color: "#b91c1c" }}>Booked</span>
-                          </div>
-                        );
-                      }
-
-                      return (
-                        <button
-                          key={d.key}
-                          type="button"
-                          onClick={() => handleSelectDay(d.key)}
-                          style={{
-                            background: isSelected ? "#16a34a" : inRange ? "#dcfce7" : "#ffffff",
-                            border: isSelected ? "2px solid #14532d" : "1px solid #cbd5e1",
-                            color: isSelected ? "#ffffff" : inRange ? "#14532d" : "#0f172a",
-                            borderRadius: "6px",
-                            padding: "4px 2px",
-                            textAlign: "center",
-                            cursor: "pointer",
-                            transition: "all 0.12s ease",
-                          }}
-                        >
-                          <div style={{ fontSize: "0.62rem", fontWeight: 600 }}>{d.weekday}</div>
-                          <div style={{ fontSize: "0.82rem", fontWeight: 800 }}>{d.dayNum}</div>
-                          <span style={{ fontSize: "0.55rem", fontWeight: 600, color: isSelected ? "#ffffff" : "#166534" }}>
-                            {isSelected ? "Selected" : "Open"}
+                            Hectares (ha)
                           </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* 3. Start and End Date Inputs */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginTop: "8px" }}>
-                  <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "#0f172a" }}>
-                    Start Date
-                    <input
-                      required
-                      type="date"
-                      min={minDate}
-                      value={booking.start}
-                      onChange={(e) => handleStartDateChange(e.target.value)}
-                      style={{
-                        marginTop: "4px",
-                        padding: "8px 10px",
-                        borderRadius: "8px",
-                        border: isStartBooked ? "2px solid #ef4444" : "1px solid #cbd5e1",
-                      }}
-                    />
-                  </label>
-
-                  <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "#0f172a" }}>
-                    End Date
-                    <input
-                      required
-                      type="date"
-                      min={booking.start || minDate}
-                      value={booking.end}
-                      onChange={(e) => handleEndDateChange(e.target.value)}
-                      style={{
-                        marginTop: "4px",
-                        padding: "8px 10px",
-                        borderRadius: "8px",
-                        border: isEndBooked || isRangeBlocked ? "2px solid #ef4444" : "1px solid #cbd5e1",
-                      }}
-                    />
-                  </label>
-                </div>
-
-                {/* Date Conflict Error */}
-                {dateError && (
-                  <div
-                    style={{
-                      background: "#fef2f2",
-                      border: "1px solid #fecdd3",
-                      color: "#b91c1c",
-                      padding: "8px 12px",
-                      borderRadius: "8px",
-                      fontSize: "0.76rem",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {dateError}
-                  </div>
-                )}
-
-                {/* 4. Estimated Total Summary Card */}
-                <div
-                  style={{
-                    background: "#f0fdf4",
-                    border: "1.5px solid #86efac",
-                    borderRadius: "10px",
-                    padding: "14px 16px",
-                    marginTop: "12px",
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                    <div>
-                      <strong style={{ fontSize: "0.92rem", color: "#166534" }}>Total Rental Amount:</strong>
-                      <div style={{ fontSize: "0.74rem", color: "#15803d", marginTop: "2px" }}>
-                        Calculation: {formatPrice(unitRatePerHectare)} / ha × {requestedHectares} hectare{requestedHectares > 1 ? "s" : ""}
-                      </div>
-                    </div>
-                    <strong style={{ fontSize: "1.45rem", color: "#14532d", fontWeight: 800 }}>
-                      {formatPrice(estimatedCost)}
-                    </strong>
-                  </div>
-                  {booking.start && booking.end && !isDatesInvalid && (
-                    <div style={{ fontSize: "0.73rem", color: "#15803d", marginTop: "4px", borderTop: "1px dashed #bbf7d0", paddingTop: "4px" }}>
-                      📅 Scheduled: {formatDisplayDate(booking.start)} – {formatDisplayDate(booking.end)}
-                    </div>
-                  )}
-                </div>
-
-                {/* 5. Mode of Payment Selection (Cash or GCash) */}
-                <div style={{ marginTop: "14px" }}>
-                  <label style={{ fontSize: "0.82rem", fontWeight: 700, color: "#0f172a", marginBottom: "8px", display: "block" }}>
-                    Mode of Payment *
-                  </label>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                    {/* Cash Option */}
-                    <div
-                      onClick={() => setPaymentMethod("Cash")}
-                      style={{
-                        border: `2px solid ${paymentMethod === "Cash" ? "#16a34a" : "#e2e8f0"}`,
-                        background: paymentMethod === "Cash" ? "#f0fdf4" : "#ffffff",
-                        borderRadius: "10px",
-                        padding: "12px 14px",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "10px",
-                        transition: "all 0.15s ease",
-                      }}
-                    >
-                      <input
-                        type="radio"
-                        name="paymentMethod"
-                        value="Cash"
-                        checked={paymentMethod === "Cash"}
-                        onChange={() => setPaymentMethod("Cash")}
-                        style={{ accentColor: "#16a34a" }}
-                      />
-                      <div>
-                        <div style={{ fontSize: "0.88rem", fontWeight: 700, color: paymentMethod === "Cash" ? "#166534" : "#1e293b" }}>
-                          💵 Cash
                         </div>
-                        <div style={{ fontSize: "0.72rem", color: "#64748b" }}>
-                          Coop Depot / Field
-                        </div>
-                      </div>
-                    </div>
 
-                    {/* GCash Option */}
-                    <div
-                      onClick={() => setPaymentMethod("GCash")}
-                      style={{
-                        border: `2px solid ${paymentMethod === "GCash" ? "#0284c7" : "#e2e8f0"}`,
-                        background: paymentMethod === "GCash" ? "#f0f9ff" : "#ffffff",
-                        borderRadius: "10px",
-                        padding: "12px 14px",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "10px",
-                        transition: "all 0.15s ease",
-                      }}
-                    >
-                      <input
-                        type="radio"
-                        name="paymentMethod"
-                        value="GCash"
-                        checked={paymentMethod === "GCash"}
-                        onChange={() => setPaymentMethod("GCash")}
-                        style={{ accentColor: "#0284c7" }}
-                      />
-                      <div>
-                        <div style={{ fontSize: "0.88rem", fontWeight: 700, color: paymentMethod === "GCash" ? "#0369a1" : "#1e293b" }}>
-                          📱 GCash
-                        </div>
-                        <div style={{ fontSize: "0.72rem", color: "#64748b" }}>
-                          Instant E-Wallet
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Cash Options: When get or return */}
-                  {paymentMethod === "Cash" && (
-                    <div style={{ marginTop: "10px", background: "#f8fafc", padding: "12px 14px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-                      <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#334155", display: "block", marginBottom: "8px" }}>
-                        When will you pay in cash?
-                      </span>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-                        <label
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "8px",
-                            background: cashTiming === "Upon Pickup" ? "#ffffff" : "#f1f5f9",
-                            border: `1.5px solid ${cashTiming === "Upon Pickup" ? "#16a34a" : "#cbd5e1"}`,
-                            padding: "8px 10px",
-                            borderRadius: "6px",
-                            cursor: "pointer",
-                            fontSize: "0.78rem",
-                            fontWeight: 600,
-                            color: cashTiming === "Upon Pickup" ? "#166534" : "#475569",
-                          }}
-                        >
-                          <input
-                            type="radio"
-                            name="cashTiming"
-                            value="Upon Pickup"
-                            checked={cashTiming === "Upon Pickup"}
-                            onChange={() => setCashTiming("Upon Pickup")}
-                            style={{ accentColor: "#16a34a" }}
-                          />
-                          <span>When getting / pickup machinery</span>
-                        </label>
-
-                        <label
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "8px",
-                            background: cashTiming === "Upon Return" ? "#ffffff" : "#f1f5f9",
-                            border: `1.5px solid ${cashTiming === "Upon Return" ? "#16a34a" : "#cbd5e1"}`,
-                            padding: "8px 10px",
-                            borderRadius: "6px",
-                            cursor: "pointer",
-                            fontSize: "0.78rem",
-                            fontWeight: 600,
-                            color: cashTiming === "Upon Return" ? "#166534" : "#475569",
-                          }}
-                        >
-                          <input
-                            type="radio"
-                            name="cashTiming"
-                            value="Upon Return"
-                            checked={cashTiming === "Upon Return"}
-                            onChange={() => setCashTiming("Upon Return")}
-                            style={{ accentColor: "#16a34a" }}
-                          />
-                          <span>When returning machinery</span>
-                        </label>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* GCash Details & Screenshot Upload */}
-                  {paymentMethod === "GCash" && (
-                    <div style={{ marginTop: "10px", background: "#f0f9ff", padding: "14px", borderRadius: "8px", border: "1px solid #bae6fd" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
-                        <div>
-                          <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#0369a1" }}>
-                            KIMPC Cooperative GCash Details
-                          </div>
-                          <div style={{ fontSize: "0.78rem", color: "#0284c7" }}>
-                            Account Name: <strong>Kalilangan Irrigators MPC</strong>
-                          </div>
-                          <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#0c4a6e", letterSpacing: "0.05em", marginTop: "2px" }}>
-                            0926 463 8983
-                          </div>
-                        </div>
-                        <span style={{ background: "#0284c7", color: "#ffffff", padding: "3px 8px", borderRadius: "6px", fontSize: "0.72rem", fontWeight: 700 }}>
-                          Amount: {formatPrice(estimatedCost)}
-                        </span>
-                      </div>
-
-                      <div>
-                        <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "#0369a1", display: "block", marginBottom: "6px" }}>
-                          Upload GCash Payment Screenshot / Receipt *
-                        </label>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          required={paymentMethod === "GCash"}
-                          onChange={handleGCashFileChange}
-                          style={{
-                            width: "100%",
-                            padding: "8px",
-                            background: "#ffffff",
-                            borderRadius: "6px",
-                            border: "1.5px dashed #0284c7",
-                            fontSize: "0.8rem",
-                            cursor: "pointer",
-                          }}
-                        />
-
-                        {gcashPreview && (
-                          <div style={{ marginTop: "10px", display: "flex", alignItems: "center", gap: "10px" }}>
-                            <img
-                              src={gcashPreview}
-                              alt="GCash Screenshot Preview"
-                              style={{ width: "90px", height: "120px", objectFit: "cover", borderRadius: "6px", border: "2px solid #0284c7" }}
-                            />
-                            <div>
-                              <div style={{ fontSize: "0.76rem", color: "#0369a1", fontWeight: 600 }}>
-                                Screenshot Attached ✓
-                              </div>
+                        {/* Quick Presets */}
+                        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+                          {[0.5, 1, 2, 3, 5, 10].map((preset) => {
+                            const isCurrent = Number(booking.hectares) === preset;
+                            return (
                               <button
+                                key={preset}
                                 type="button"
-                                onClick={() => {
-                                  setGcashProof("");
-                                  setGcashPreview("");
-                                }}
+                                onClick={() => setBooking((prev) => ({ ...prev, hectares: preset }))}
                                 style={{
-                                  marginTop: "4px",
-                                  background: "#fee2e2",
-                                  color: "#dc2626",
-                                  border: "1px solid #fecdd3",
-                                  padding: "3px 8px",
-                                  borderRadius: "4px",
-                                  fontSize: "0.72rem",
-                                  fontWeight: 600,
+                                  padding: "6px 12px",
+                                  borderRadius: "6px",
+                                  border: isCurrent ? "1.5px solid #16a34a" : "1px solid #cbd5e1",
+                                  background: isCurrent ? "#dcfce7" : "#ffffff",
+                                  color: isCurrent ? "#15803d" : "#475569",
+                                  fontSize: "0.78rem",
+                                  fontWeight: 700,
                                   cursor: "pointer",
+                                  transition: "all 0.12s ease",
                                 }}
                               >
-                                Remove screenshot
+                                {preset} ha
                               </button>
-                            </div>
-                          </div>
-                        )}
-                        <div style={{ fontSize: "0.72rem", color: "#64748b", marginTop: "4px" }}>
-                          Send {formatPrice(estimatedCost)} to KIMPC GCash and upload the receipt screenshot above.
+                            );
+                          })}
                         </div>
                       </div>
+
+                      {/* Formula preview */}
+                      <div
+                        style={{
+                          marginTop: "8px",
+                          fontSize: "0.75rem",
+                          color: "#166534",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Subtotal: {formatPrice(unitRatePerHectare)} × {requestedHectares} ha ={" "}
+                        <span style={{ fontWeight: 800 }}>{formatPrice(estimatedCost)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Step 02: Scheduled Work Dates */}
+                  <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: "16px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                      <span
+                        style={{
+                          width: "22px",
+                          height: "22px",
+                          borderRadius: "50%",
+                          background: "#dcfce7",
+                          color: "#15803d",
+                          fontSize: "0.72rem",
+                          fontWeight: 800,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                        }}
+                      >
+                        2
+                      </span>
+                      <label style={{ fontSize: "0.86rem", fontWeight: 700, color: "#0f172a", margin: 0 }}>
+                        Scheduled Work Dates
+                      </label>
+                    </div>
+                    <p style={{ fontSize: "0.76rem", color: "#64748b", margin: "0 0 10px 30px" }}>
+                      Choose dispatch start date and anticipated completion date. Reserved dates are blocked.
+                    </p>
+
+                    <div style={{ marginLeft: "30px" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
+                        <div>
+                          <label
+                            style={{
+                              fontSize: "0.76rem",
+                              fontWeight: 700,
+                              color: "#475569",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "5px",
+                              marginBottom: "5px",
+                            }}
+                          >
+                            <CalendarIcon size={14} /> Start Date
+                          </label>
+                          <input
+                            required
+                            type="date"
+                            min={minDate}
+                            value={booking.start}
+                            onChange={(e) => handleStartDateChange(e.target.value)}
+                            style={{
+                              width: "100%",
+                              padding: "9px 12px",
+                              borderRadius: "8px",
+                              border: isStartBooked ? "2px solid #ef4444" : "1px solid #cbd5e1",
+                              fontSize: "0.88rem",
+                              fontWeight: 600,
+                              color: "#0f172a",
+                              background: "#ffffff",
+                              outline: "none",
+                            }}
+                          />
+                        </div>
+
+                        <div>
+                          <label
+                            style={{
+                              fontSize: "0.76rem",
+                              fontWeight: 700,
+                              color: "#475569",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "5px",
+                              marginBottom: "5px",
+                            }}
+                          >
+                            <CalendarIcon size={14} /> End Date
+                          </label>
+                          <input
+                            required
+                            type="date"
+                            min={booking.start || minDate}
+                            value={booking.end}
+                            onChange={(e) => handleEndDateChange(e.target.value)}
+                            style={{
+                              width: "100%",
+                              padding: "9px 12px",
+                              borderRadius: "8px",
+                              border: isEndBooked || isRangeBlocked ? "2px solid #ef4444" : "1px solid #cbd5e1",
+                              fontSize: "0.88rem",
+                              fontWeight: 600,
+                              color: "#0f172a",
+                              background: "#ffffff",
+                              outline: "none",
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Duration Badge */}
+                      {booking.start && booking.end && !isDatesInvalid && (
+                        <div
+                          style={{
+                            marginTop: "8px",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            padding: "4px 10px",
+                            borderRadius: "6px",
+                            background: "#dcfce7",
+                            color: "#15803d",
+                            fontSize: "0.75rem",
+                            fontWeight: 700,
+                          }}
+                        >
+                          <CheckIcon size={13} />
+                          <span>
+                            {scheduledDaysCount} Calendar Day{scheduledDaysCount > 1 ? "s" : ""} Scheduled (
+                            {formatDisplayDate(booking.start)} – {formatDisplayDate(booking.end)})
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Date Conflict Alert */}
+                      {dateError && (
+                        <div
+                          style={{
+                            marginTop: "8px",
+                            background: "#fef2f2",
+                            border: "1px solid #fecdd3",
+                            color: "#b91c1c",
+                            padding: "8px 12px",
+                            borderRadius: "8px",
+                            fontSize: "0.76rem",
+                            fontWeight: 600,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                          }}
+                        >
+                          <AlertCircleIcon size={16} />
+                          <span>{dateError}</span>
+                        </div>
+                      )}
+
+                      {/* Current Reservations Reference (Clean Pill List) */}
+                      {blockedRanges.length > 0 && (
+                        <div
+                          style={{
+                            marginTop: "10px",
+                            padding: "8px 12px",
+                            borderRadius: "8px",
+                            background: "#f8fafc",
+                            border: "1px solid #e2e8f0",
+                            fontSize: "0.74rem",
+                            color: "#64748b",
+                          }}
+                        >
+                          <div style={{ fontWeight: 700, color: "#334155", marginBottom: "4px" }}>
+                            Current reserved periods for this machinery:
+                          </div>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                            {blockedRanges.map((range, index) => (
+                              <span
+                                key={`${range.startDate}-${index}`}
+                                style={{
+                                  background: "#fee2e2",
+                                  color: "#991b1b",
+                                  border: "1px solid #fecdd3",
+                                  borderRadius: "4px",
+                                  padding: "2px 6px",
+                                  fontSize: "0.7rem",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {formatDisplayDate(range.startDate)} – {formatDisplayDate(range.endDate)} ({range.label})
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Step 03: Mode of Payment */}
+                  <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: "16px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                      <span
+                        style={{
+                          width: "22px",
+                          height: "22px",
+                          borderRadius: "50%",
+                          background: "#dcfce7",
+                          color: "#15803d",
+                          fontSize: "0.72rem",
+                          fontWeight: 800,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                        }}
+                      >
+                        3
+                      </span>
+                      <label style={{ fontSize: "0.86rem", fontWeight: 700, color: "#0f172a", margin: 0 }}>
+                        Payment Method
+                      </label>
+                    </div>
+                    <p style={{ fontSize: "0.76rem", color: "#64748b", margin: "0 0 10px 30px" }}>
+                      Choose between Cash settlement or instant cooperative GCash transfer.
+                    </p>
+
+                    <div style={{ marginLeft: "30px" }}>
+                      {/* Segmented Cards */}
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
+                        {/* Cash Card */}
+                        <div
+                          onClick={() => setPaymentMethod("Cash")}
+                          style={{
+                            border: `2px solid ${paymentMethod === "Cash" ? "#15803d" : "#e2e8f0"}`,
+                            background: paymentMethod === "Cash" ? "#f0fdf4" : "#ffffff",
+                            borderRadius: "10px",
+                            padding: "12px 14px",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "12px",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: "38px",
+                              height: "38px",
+                              borderRadius: "8px",
+                              background: paymentMethod === "Cash" ? "#dcfce7" : "#f1f5f9",
+                              color: paymentMethod === "Cash" ? "#15803d" : "#64748b",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              flexShrink: 0,
+                            }}
+                          >
+                            <BanknoteIcon size={20} />
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div
+                              style={{
+                                fontSize: "0.88rem",
+                                fontWeight: 700,
+                                color: paymentMethod === "Cash" ? "#166534" : "#0f172a",
+                              }}
+                            >
+                              Cash Payment
+                            </div>
+                            <div style={{ fontSize: "0.72rem", color: "#64748b", marginTop: "1px" }}>
+                              Coop Depot / Field
+                            </div>
+                          </div>
+                          <div
+                            style={{
+                              width: "16px",
+                              height: "16px",
+                              borderRadius: "50%",
+                              border: `2px solid ${paymentMethod === "Cash" ? "#15803d" : "#cbd5e1"}`,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              flexShrink: 0,
+                            }}
+                          >
+                            {paymentMethod === "Cash" && (
+                              <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#15803d" }} />
+                            )}
+                          </div>
+                        </div>
+
+                        {/* GCash Card */}
+                        <div
+                          onClick={() => setPaymentMethod("GCash")}
+                          style={{
+                            border: `2px solid ${paymentMethod === "GCash" ? "#0284c7" : "#e2e8f0"}`,
+                            background: paymentMethod === "GCash" ? "#f0f9ff" : "#ffffff",
+                            borderRadius: "10px",
+                            padding: "12px 14px",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "12px",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: "38px",
+                              height: "38px",
+                              borderRadius: "8px",
+                              background: paymentMethod === "GCash" ? "#e0f2fe" : "#f1f5f9",
+                              color: paymentMethod === "GCash" ? "#0284c7" : "#64748b",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              flexShrink: 0,
+                            }}
+                          >
+                            <MobileIcon size={20} />
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div
+                              style={{
+                                fontSize: "0.88rem",
+                                fontWeight: 700,
+                                color: paymentMethod === "GCash" ? "#0369a1" : "#0f172a",
+                              }}
+                            >
+                              GCash E-Wallet
+                            </div>
+                            <div style={{ fontSize: "0.72rem", color: "#64748b", marginTop: "1px" }}>
+                              Instant E-Transfer
+                            </div>
+                          </div>
+                          <div
+                            style={{
+                              width: "16px",
+                              height: "16px",
+                              borderRadius: "50%",
+                              border: `2px solid ${paymentMethod === "GCash" ? "#0284c7" : "#cbd5e1"}`,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              flexShrink: 0,
+                            }}
+                          >
+                            {paymentMethod === "GCash" && (
+                              <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#0284c7" }} />
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Cash Timing Options */}
+                      {paymentMethod === "Cash" && (
+                        <div
+                          style={{
+                            marginTop: "12px",
+                            padding: "12px 14px",
+                            borderRadius: "8px",
+                            background: "#f8fafc",
+                            border: "1px solid #e2e8f0",
+                          }}
+                        >
+                          <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#334155", marginBottom: "8px" }}>
+                            Cash Settlement Timing:
+                          </div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                            <button
+                              type="button"
+                              onClick={() => setCashTiming("Upon Pickup")}
+                              style={{
+                                padding: "8px 12px",
+                                borderRadius: "6px",
+                                border: `1.5px solid ${cashTiming === "Upon Pickup" ? "#15803d" : "#cbd5e1"}`,
+                                background: cashTiming === "Upon Pickup" ? "#ffffff" : "#f8fafc",
+                                color: cashTiming === "Upon Pickup" ? "#15803d" : "#475569",
+                                fontSize: "0.78rem",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                                textAlign: "center",
+                                transition: "all 0.12s ease",
+                              }}
+                            >
+                              Upon Machinery Pickup
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setCashTiming("Upon Return")}
+                              style={{
+                                padding: "8px 12px",
+                                borderRadius: "6px",
+                                border: `1.5px solid ${cashTiming === "Upon Return" ? "#15803d" : "#cbd5e1"}`,
+                                background: cashTiming === "Upon Return" ? "#ffffff" : "#f8fafc",
+                                color: cashTiming === "Upon Return" ? "#15803d" : "#475569",
+                                fontSize: "0.78rem",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                                textAlign: "center",
+                                transition: "all 0.12s ease",
+                              }}
+                            >
+                              Upon Machinery Return
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* GCash Payment Panel */}
+                      {paymentMethod === "GCash" && (
+                        <div
+                          style={{
+                            marginTop: "12px",
+                            padding: "14px",
+                            borderRadius: "10px",
+                            background: "#f0f9ff",
+                            border: "1px solid #bae6fd",
+                          }}
+                        >
+                          {/* Coop GCash Details */}
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              background: "#ffffff",
+                              padding: "10px 14px",
+                              borderRadius: "8px",
+                              border: "1px solid #e0f2fe",
+                              marginBottom: "12px",
+                            }}
+                          >
+                            <div>
+                              <div style={{ fontSize: "0.7rem", color: "#0369a1", fontWeight: 700, textTransform: "uppercase" }}>
+                                KIMPC Official GCash
+                              </div>
+                              <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#0f172a" }}>
+                                Kalilangan Irrigators MPC
+                              </div>
+                              <div style={{ fontSize: "1rem", fontWeight: 800, color: "#0369a1", letterSpacing: "0.04em", marginTop: "2px" }}>
+                                0926 463 8983
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={handleCopyGcash}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "5px",
+                                padding: "6px 10px",
+                                borderRadius: "6px",
+                                border: "1px solid #bae6fd",
+                                background: copiedGcash ? "#dcfce7" : "#e0f2fe",
+                                color: copiedGcash ? "#15803d" : "#0369a1",
+                                fontSize: "0.72rem",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                              }}
+                            >
+                              <CopyIcon size={12} />
+                              <span>{copiedGcash ? "Copied!" : "Copy Number"}</span>
+                            </button>
+                          </div>
+
+                          {/* Screenshot Upload Dropzone */}
+                          <div>
+                            <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "#0369a1", display: "block", marginBottom: "6px" }}>
+                              Attach GCash Payment Screenshot / Receipt *
+                            </label>
+
+                            {!gcashPreview ? (
+                              <label
+                                style={{
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  padding: "18px 14px",
+                                  borderRadius: "8px",
+                                  border: "2px dashed #93c5fd",
+                                  background: "#ffffff",
+                                  cursor: "pointer",
+                                  transition: "all 0.15s ease",
+                                }}
+                              >
+                                <UploadCloudIcon size={24} />
+                                <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#0284c7", marginTop: "6px" }}>
+                                  Click or tap to upload receipt
+                                </span>
+                                <span style={{ fontSize: "0.7rem", color: "#64748b", marginTop: "2px" }}>
+                                  PNG, JPG or JPEG (Max 5MB)
+                                </span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  required={paymentMethod === "GCash"}
+                                  onChange={handleGCashFileChange}
+                                  style={{ display: "none" }}
+                                />
+                              </label>
+                            ) : (
+                              <div
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                  padding: "10px 14px",
+                                  background: "#ffffff",
+                                  borderRadius: "8px",
+                                  border: "1px solid #93c5fd",
+                                }}
+                              >
+                                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                                  <img
+                                    src={gcashPreview}
+                                    alt="Receipt proof"
+                                    style={{
+                                      width: "48px",
+                                      height: "64px",
+                                      objectFit: "cover",
+                                      borderRadius: "6px",
+                                      border: "1px solid #cbd5e1",
+                                    }}
+                                  />
+                                  <div>
+                                    <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#15803d", display: "flex", alignItems: "center", gap: "4px" }}>
+                                      <CheckCircleIcon size={14} /> Screenshot Attached
+                                    </div>
+                                    <div style={{ fontSize: "0.7rem", color: "#64748b", marginTop: "2px" }}>
+                                      Ready for verification
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setGcashProof("");
+                                    setGcashPreview("");
+                                  }}
+                                  style={{
+                                    padding: "5px 10px",
+                                    borderRadius: "6px",
+                                    border: "1px solid #fecdd3",
+                                    background: "#fee2e2",
+                                    color: "#dc2626",
+                                    fontSize: "0.72rem",
+                                    fontWeight: 700,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Step 04: Reservation & Cost Breakdown */}
+                  <div
+                    style={{
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "12px",
+                      background: "#f8fafc",
+                      padding: "14px 18px",
+                      marginTop: "6px",
+                    }}
+                  >
+                    <div style={{ fontSize: "0.74rem", fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "8px" }}>
+                      Reservation Cost Breakdown
+                    </div>
+
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px", fontSize: "0.78rem" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b" }}>
+                        <span>Subsidized Rate ({formatPrice(unitRatePerHectare)} × {requestedHectares} ha)</span>
+                        <span style={{ fontWeight: 600, color: "#0f172a" }}>{formatPrice(estimatedCost)}</span>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b" }}>
+                        <span>Cooperative Machinery Operator</span>
+                        <span style={{ fontWeight: 600, color: "#15803d" }}>Included</span>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b" }}>
+                        <span>CDA Cooperative Tax (RA 9520)</span>
+                        <span style={{ fontWeight: 600, color: "#15803d" }}>Tax-Exempt</span>
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop: "10px",
+                        paddingTop: "10px",
+                        borderTop: "1px solid #cbd5e1",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "baseline",
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: "0.88rem", fontWeight: 800, color: "#0f172a" }}>
+                          Total Subsidized Amount:
+                        </div>
+                        <div style={{ fontSize: "0.72rem", color: "#64748b", marginTop: "2px" }}>
+                          Payment: {paymentMethod} {paymentMethod === "Cash" ? `(${cashTiming})` : "(Receipt Verified)"}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: "1.45rem", fontWeight: 800, color: "#15803d" }}>
+                        {formatPrice(estimatedCost)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {feedback && (
+                    <div
+                      style={{
+                        padding: "10px 14px",
+                        borderRadius: "8px",
+                        background: "#fef2f2",
+                        border: "1px solid #fecdd3",
+                        color: "#b91c1c",
+                        fontSize: "0.78rem",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {feedback}
                     </div>
                   )}
                 </div>
 
-                {feedback && <p className="member-form-feedback" role="alert" style={{ marginTop: "12px" }}>{feedback}</p>}
-
-                {/* Form Actions */}
-                <div className="member-form-actions" style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
+                {/* Modal Footer Actions */}
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: "12px",
+                    marginTop: "20px",
+                    paddingTop: "16px",
+                    borderTop: "1px solid #f1f5f9",
+                  }}
+                >
                   <button
                     type="button"
-                    className="member-button member-button-outline"
                     onClick={() => setBookingOpen(false)}
-                    style={{ flex: 1 }}
+                    style={{
+                      padding: "10px 18px",
+                      borderRadius: "8px",
+                      border: "1px solid #cbd5e1",
+                      background: "#ffffff",
+                      color: "#475569",
+                      fontSize: "0.85rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
                   >
                     Cancel
                   </button>
+
                   <button
                     type="submit"
-                    className="member-button member-button-primary"
                     disabled={submitting || isDatesInvalid || (paymentMethod === "GCash" && !gcashProof)}
                     style={{
-                      flex: 2,
-                      background: isDatesInvalid || (paymentMethod === "GCash" && !gcashProof) ? "#94a3b8" : "#16a34a",
+                      flex: 1,
+                      padding: "11px 22px",
+                      borderRadius: "8px",
+                      border: "none",
+                      background: isDatesInvalid || (paymentMethod === "GCash" && !gcashProof) ? "#94a3b8" : "#15803d",
+                      color: "#ffffff",
+                      fontSize: "0.9rem",
+                      fontWeight: 800,
                       cursor: isDatesInvalid || (paymentMethod === "GCash" && !gcashProof) ? "not-allowed" : "pointer",
+                      boxShadow: isDatesInvalid || (paymentMethod === "GCash" && !gcashProof) ? "none" : "0 4px 12px rgba(21, 128, 61, 0.25)",
+                      transition: "all 0.15s ease",
                     }}
                   >
                     {submitting
-                      ? "Submitting request…"
+                      ? "Submitting Reservation…"
                       : isDatesInvalid
-                      ? "Choose Available Dates"
+                      ? "Select Available Dates"
                       : paymentMethod === "GCash" && !gcashProof
-                      ? "Upload GCash Screenshot"
-                      : `Confirm Booking (${formatPrice(estimatedCost)})`}
+                      ? "Upload GCash Screenshot Proof"
+                      : `Confirm Reservation · ${formatPrice(estimatedCost)}`}
                   </button>
                 </div>
               </form>
@@ -1118,47 +1653,75 @@ export default function EquipmentCatalog() {
             onMouseDown={(e) => {
               if (e.target === e.currentTarget) setPhonePromptOpen(false);
             }}
+            style={{
+              padding: "20px 14px",
+              background: "rgba(15, 23, 42, 0.65)",
+              backdropFilter: "blur(4px)",
+              zIndex: 1000,
+            }}
           >
             <section
               className="member-modal"
               role="dialog"
               aria-modal="true"
               aria-labelledby="phone-prompt-title"
-              style={{ maxWidth: "480px", width: "95%" }}
+              style={{
+                maxWidth: "460px",
+                width: "95%",
+                borderRadius: "16px",
+                background: "#ffffff",
+                padding: "24px 28px",
+                border: "1px solid #e2e8f0",
+                boxShadow: "0 20px 45px -10px rgba(15, 23, 42, 0.2)",
+              }}
             >
               <button
-                className="member-modal-close"
                 type="button"
-                aria-label="Close"
+                aria-label="Close dialog"
                 onClick={() => setPhonePromptOpen(false)}
+                style={{
+                  position: "absolute",
+                  top: "16px",
+                  right: "18px",
+                  width: "30px",
+                  height: "30px",
+                  borderRadius: "8px",
+                  border: "1px solid #e2e8f0",
+                  background: "#f8fafc",
+                  color: "#64748b",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                }}
               >
-                ×
+                <CloseIcon size={14} />
               </button>
-              <div style={{ textAlign: "center", marginBottom: "16px" }}>
+              <div style={{ textAlign: "center", marginBottom: "18px" }}>
                 <div
                   style={{
-                    width: "52px",
-                    height: "52px",
-                    borderRadius: "50%",
-                    background: "#fff7ed",
-                    color: "#ea580c",
+                    width: "48px",
+                    height: "48px",
+                    borderRadius: "12px",
+                    background: "#eff6ff",
+                    border: "1px solid #bfdbfe",
+                    color: "#2563eb",
                     display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    fontSize: "1.6rem",
-                    marginBottom: "10px",
+                    marginBottom: "12px",
                   }}
                 >
-                  📱
+                  <MobileIcon size={22} color="#2563eb" />
                 </div>
                 <h3
                   id="phone-prompt-title"
-                  style={{ fontSize: "1.25rem", fontWeight: 800, color: "#0f172a", margin: "0 0 6px" }}
+                  style={{ fontSize: "1.2rem", fontWeight: 800, color: "#0f172a", margin: "0 0 6px" }}
                 >
-                  Mobile Number Required
+                  Mobile Contact Number Required
                 </h3>
-                <p style={{ fontSize: "0.84rem", color: "#64748b", margin: 0, lineHeight: 1.45 }}>
-                  You cannot proceed with equipment booking without a mobile number in your profile. Our cooperative dispatchers and machinery drivers need your contact number to coordinate field operations.
+                <p style={{ fontSize: "0.82rem", color: "#64748b", margin: 0, lineHeight: 1.45 }}>
+                  A verified mobile contact number is required to book cooperative equipment. Our machinery operators and dispatchers will call or SMS you to coordinate field logistics.
                 </p>
               </div>
 
@@ -1167,9 +1730,9 @@ export default function EquipmentCatalog() {
                   <label
                     style={{
                       display: "block",
-                      fontSize: "0.82rem",
+                      fontSize: "0.8rem",
                       fontWeight: 700,
-                      color: "#0f172a",
+                      color: "#334155",
                       marginBottom: "6px",
                     }}
                   >
@@ -1189,6 +1752,8 @@ export default function EquipmentCatalog() {
                       border: "1px solid #cbd5e1",
                       fontSize: "0.95rem",
                       fontWeight: 600,
+                      color: "#0f172a",
+                      outline: "none",
                     }}
                   />
                   {phoneSaveError && (
@@ -1201,15 +1766,33 @@ export default function EquipmentCatalog() {
                 <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
                   <button
                     type="button"
-                    className="member-button member-button-outline"
                     onClick={() => setPhonePromptOpen(false)}
+                    style={{
+                      padding: "9px 16px",
+                      borderRadius: "8px",
+                      border: "1px solid #cbd5e1",
+                      background: "#ffffff",
+                      color: "#475569",
+                      fontSize: "0.82rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={savingPhone}
-                    className="member-button member-button-primary"
+                    style={{
+                      padding: "9px 18px",
+                      borderRadius: "8px",
+                      border: "none",
+                      background: "#15803d",
+                      color: "#ffffff",
+                      fontSize: "0.82rem",
+                      fontWeight: 700,
+                      cursor: savingPhone ? "wait" : "pointer",
+                    }}
                   >
                     {savingPhone ? "Saving Profile…" : "Save to Profile & Continue"}
                   </button>
