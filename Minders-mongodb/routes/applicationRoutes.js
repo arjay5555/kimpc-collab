@@ -45,7 +45,24 @@ router.get("/applications", optionalAuthentication, async (req, res) => {
   try {
     const memberEmail = req.user?.role === "member" ? req.user.email : cleanEmail(req.query.memberEmail);
     const filter = memberEmail ? { memberEmail } : {};
-    res.json(await Application.find(filter).sort({ createdAt: -1 }));
+    const applications = await Application.find(filter).sort({ createdAt: -1 }).lean();
+
+    // Ensure memberPhone / farmerPhone / clientPhone are populated from Account if missing
+    const missingEmails = [...new Set(applications.filter((a) => !a.farmerPhone && !a.memberPhone && a.memberEmail).map((a) => a.memberEmail))];
+    if (missingEmails.length > 0) {
+      const accounts = await Account.find({ email: { $in: missingEmails } }).select("email phone").lean();
+      const phoneMap = new Map(accounts.map((acc) => [acc.email, acc.phone]));
+      applications.forEach((a) => {
+        if (!a.farmerPhone && !a.memberPhone && a.memberEmail) {
+          const ph = phoneMap.get(a.memberEmail) || "";
+          a.farmerPhone = ph;
+          a.memberPhone = ph;
+          a.clientPhone = ph;
+        }
+      });
+    }
+
+    res.json(applications);
   } catch (error) {
     console.error("Error fetching applications:", error);
     res.status(500).json({ error: "Failed to fetch applications." });
@@ -127,9 +144,23 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
     }
 
     let memberName = clean(req.body.memberName);
-    if (!memberName && memberEmail) {
-      const acct = await Account.findOne({ email: memberEmail }).select("fullName").lean();
-      memberName = acct?.fullName || memberEmail;
+    let memberPhone = clean(req.body.farmerPhone || req.body.memberPhone || req.body.phone || req.body.clientPhone);
+    let memberAccount = null;
+
+    if (memberEmail) {
+      memberAccount = await Account.findOne({ email: memberEmail }).select("fullName phone role").lean();
+      if (!memberName) memberName = memberAccount?.fullName || memberEmail;
+      if (!memberPhone) memberPhone = clean(memberAccount?.phone);
+    }
+
+    // ENFORCE: Members cannot proceed with booking if they have not input their mobile number in their profile!
+    const isMemberBooking = req.user?.role === "member" || memberAccount?.role === "member" || (!req.user && memberEmail);
+    if (isMemberBooking && !memberPhone) {
+      return fail(
+        res,
+        400,
+        "Mobile number required: You cannot proceed with booking because your profile has no mobile number. Please update your mobile number in your profile first."
+      );
     }
 
     const ratePerHectare = Number(req.body.ratePerHectare) || Number(targetUnit?.memberRate) || Number(targetUnit?.ratePerHectare) || 2500;
@@ -169,7 +200,9 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
       paymentAmount: totalAmount,
       paymentMethod: clean(req.body.paymentMethod) || "Cash",
       isWalkIn: Boolean(req.body.isWalkIn),
-      farmerPhone: clean(req.body.farmerPhone),
+      farmerPhone: memberPhone,
+      memberPhone,
+      clientPhone: memberPhone,
       timeline: initialTimeline,
       financials: {
         dailyRate: ratePerHectare,

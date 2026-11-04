@@ -557,20 +557,21 @@ export default function BookingApprovals() {
 
       const clientName = item.memberName || item.memberEmail || "Member";
       const clientEmail = item.memberEmail || item.clientEmail || `${clientName.toLowerCase().replace(/\s+/g, ".")}@example.com`;
-      const clientPhone = item.memberPhone || item.clientPhone || "+63 917 123 4567";
+      const clientPhone = item.farmerPhone || item.memberPhone || item.clientPhone || item.phone || (idx % 2 === 0 ? "+63 917 123 4567" : "+63 928 234 5678");
       const clientAddress = item.memberAddress || item.clientAddress || "Malaybalay City, Bukidnon";
       const clientAvatar = item.clientAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(clientName)}&background=0284c7&color=fff&bold=true`;
       const coopId = item.coopId || `COOP-MB-${1010 + idx}`;
       const receiptNo = item.receiptNo || `REC-2028-0${10 + idx}`;
       const paymentMethod = item.paymentMethod || (idx % 2 === 0 ? "Bank Transfer" : "GCash");
-      const assignedDriver = idx % 2 === 0 ? "John Adams" : "Self-Operated";
+      const assignedDriver = item.assignedDriver || (idx % 2 === 0 ? "John Adams" : "Self-Operated");
+      const hasDriver = Boolean(item.assignedDriver ? item.assignedDriver !== "Self-Operated" : idx % 2 === 0);
 
       return {
         id: item.displayId || `BK-WZ${1010 + idx}`,
         rawId: item._id || item.id,
         bookingDate: item.submittedAt
           ? new Date(item.submittedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-          : "Aug 1, 2028",
+          : (item.createdAt ? new Date(item.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Aug 1, 2028"),
         clientName,
         clientEmail,
         clientPhone,
@@ -586,7 +587,7 @@ export default function BookingApprovals() {
         category: cat,
         plan: `${days} Day${days === 1 ? "" : "s"}`,
         dateRange: `${item.startDate} to ${item.endDate}`,
-        hasDriver: idx % 2 === 0,
+        hasDriver,
         paymentAmount: `₱${totalAmount.toLocaleString()}`,
         paymentStatus: item.financials?.isSettled ? "Paid" : "Pending",
         status: displayStatus,
@@ -623,6 +624,7 @@ export default function BookingApprovals() {
       const matchesSearch =
         !searchQuery.trim() ||
         b.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (b.clientPhone && b.clientPhone.toLowerCase().includes(searchQuery.toLowerCase())) ||
         b.machineryModel.toLowerCase().includes(searchQuery.toLowerCase()) ||
         b.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
         b.category.toLowerCase().includes(searchQuery.toLowerCase());
@@ -1428,10 +1430,9 @@ export default function BookingApprovals() {
                   <th>Booking ID <span className="wz-sort-arrow">↕</span></th>
                   <th>Booking Date <span className="wz-sort-arrow">↕</span></th>
                   <th>Client Name <span className="wz-sort-arrow">↕</span></th>
+                  <th>Phone Number <span className="wz-sort-arrow">↕</span></th>
                   <th>Machinery Model <span className="wz-sort-arrow">↕</span></th>
-                  <th>Plan <span className="wz-sort-arrow">↕</span></th>
                   <th>Date <span className="wz-sort-arrow">↕</span></th>
-                  <th style={{ textAlign: "center" }}>Driver <span className="wz-sort-arrow">↕</span></th>
                   <th>Payment <span className="wz-sort-arrow">↕</span></th>
                   <th style={{ textAlign: "center" }}>Actions</th>
                 </tr>
@@ -1439,7 +1440,7 @@ export default function BookingApprovals() {
               <tbody>
                 {filteredBookings.length === 0 ? (
                   <tr>
-                    <td colSpan="10" style={{ padding: "36px", textAlign: "center", color: "#64748b" }}>
+                    <td colSpan="9" style={{ padding: "36px", textAlign: "center", color: "#64748b" }}>
                       No machinery bookings found matching your search.
                     </td>
                   </tr>
@@ -1464,6 +1465,20 @@ export default function BookingApprovals() {
                       {/* Client Name */}
                       <td className="wz-client-name">{b.clientName}</td>
 
+                      {/* Client Phone Number */}
+                      <td style={{ fontSize: "0.78rem", color: "#334155", fontWeight: 600 }}>
+                        {b.clientPhone && b.clientPhone !== "—" ? (
+                          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "#16a34a", flexShrink: 0 }}>
+                              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                            </svg>
+                            <span>{b.clientPhone}</span>
+                          </div>
+                        ) : (
+                          <span style={{ color: "#94a3b8" }}>—</span>
+                        )}
+                      </td>
+
                       {/* Machinery Model + Category Badge */}
                       <td>
                         <div className="wz-machinery-cell">
@@ -1472,28 +1487,8 @@ export default function BookingApprovals() {
                         </div>
                       </td>
 
-                      {/* Plan Duration */}
-                      <td style={{ color: "#475569", fontWeight: 500 }}>{b.plan}</td>
-
                       {/* Date Range */}
                       <td style={{ fontSize: "0.82rem", color: "#64748b" }}>{b.dateRange}</td>
-
-                      {/* Driver Status Icon */}
-                      <td style={{ textAlign: "center" }}>
-                        {b.hasDriver ? (
-                          <div className="wz-driver-icon wz-driver-assigned" title="Driver Assigned">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                              <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                          </div>
-                        ) : (
-                          <div className="wz-driver-icon wz-driver-unassigned" title="No Driver (Self-Operated)">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                              <line x1="5" y1="12" x2="19" y2="12" />
-                            </svg>
-                          </div>
-                        )}
-                      </td>
 
                       {/* Payment */}
                       <td>

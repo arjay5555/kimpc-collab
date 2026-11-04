@@ -769,6 +769,10 @@ export default function Applications() {
                 <dd>{selected.hectares ? `${selected.hectares} hectare${selected.hectares > 1 ? "s" : ""}` : "1 hectare"}</dd>
               </div>
               <div>
+                <dt>Client Phone</dt>
+                <dd>{selected.farmerPhone || selected.memberPhone || selected.clientPhone || "—"}</dd>
+              </div>
+              <div>
                 <dt>Assigned Driver</dt>
                 <dd>{selected.assignedDriver || "Self-Operated"}{selected.driverPhone ? ` (${selected.driverPhone})` : ""}</dd>
               </div>

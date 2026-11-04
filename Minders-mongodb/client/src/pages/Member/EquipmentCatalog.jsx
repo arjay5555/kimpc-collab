@@ -79,6 +79,11 @@ export default function EquipmentCatalog() {
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [dateError, setDateError] = useState("");
+  const [memberPhone, setMemberPhone] = useState("");
+  const [phonePromptOpen, setPhonePromptOpen] = useState(false);
+  const [newPhoneInput, setNewPhoneInput] = useState("");
+  const [savingPhone, setSavingPhone] = useState(false);
+  const [phoneSaveError, setPhoneSaveError] = useState("");
 
   const blockedRanges = useMemo(() => {
     const now = Date.now();
@@ -174,6 +179,51 @@ export default function EquipmentCatalog() {
       }
     });
   }, []);
+
+  const fetchMemberProfile = useCallback(() => {
+    if (!user?.email) return;
+    api(`/accounts/${encodeURIComponent(user.email)}`).then((res) => {
+      if (res.ok && res.data) {
+        setMemberPhone((res.data.phone || "").trim());
+      }
+    });
+  }, [user?.email]);
+
+  useEffect(() => {
+    fetchMemberProfile();
+  }, [fetchMemberProfile]);
+
+  const handleSavePhone = async (e) => {
+    e.preventDefault();
+    const cleanPhone = newPhoneInput.trim();
+    if (!cleanPhone || cleanPhone.length < 7) {
+      setPhoneSaveError("Please enter a valid mobile number (e.g. 09171234567 or +63 917 123 4567).");
+      return;
+    }
+    setSavingPhone(true);
+    setPhoneSaveError("");
+    const res = await api("/member/profile", {
+      method: "PATCH",
+      body: { phone: cleanPhone },
+    });
+    setSavingPhone(false);
+    if (!res.ok) {
+      setPhoneSaveError(res.data?.error || "Could not save mobile number.");
+    } else {
+      setMemberPhone(cleanPhone);
+      setPhonePromptOpen(false);
+      setNewPhoneInput("");
+      setFeedback("Mobile phone number saved! You can now proceed with your booking.");
+      // Open booking modal
+      setBooking({
+        start: "",
+        end: "",
+        hectares: 1,
+        location: localStorage.getItem("member-default-location") || "",
+      });
+      setBookingOpen(true);
+    }
+  };
 
   const categories = useMemo(() => ["All categories", ...new Set(units.map((item) => item.category).filter(Boolean))], [units]);
 
@@ -298,6 +348,11 @@ export default function EquipmentCatalog() {
       setFeedback("This machinery is already booked on the selected dates. Please choose an available date.");
       return;
     }
+    if (!memberPhone) {
+      setFeedback("Mobile number required: You cannot proceed with booking because your profile has no mobile number.");
+      setPhonePromptOpen(true);
+      return;
+    }
 
     setSubmitting(true);
     setFeedback("");
@@ -316,6 +371,8 @@ export default function EquipmentCatalog() {
         ratePerHectare: unitRatePerHectare,
         totalAmount: estimatedCost,
         farmLocation: booking.location.trim(),
+        farmerPhone: memberPhone,
+        memberPhone,
       },
     });
 
@@ -420,6 +477,53 @@ export default function EquipmentCatalog() {
               {unit.description || unit.capacity || "Cooperative-maintained machinery, available to eligible members for farm cultivation, planting, harvesting, and field operations."}
             </p>
 
+            {/* Missing Mobile Phone Warning */}
+            {!memberPhone && (
+              <div
+                style={{
+                  background: "#fff7ed",
+                  border: "1px solid #fed7aa",
+                  borderRadius: "10px",
+                  padding: "12px 16px",
+                  marginBottom: "16px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "12px",
+                  flexWrap: "wrap",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <span style={{ fontSize: "1.4rem" }}>📱</span>
+                  <div>
+                    <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#9a3412" }}>
+                      Mobile Phone Number Required
+                    </div>
+                    <div style={{ fontSize: "0.78rem", color: "#c2410c" }}>
+                      You cannot proceed with booking because your profile has no mobile number. Please add your mobile number to continue.
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="wz-btn"
+                  style={{
+                    background: "#ea580c",
+                    color: "#ffffff",
+                    padding: "7px 15px",
+                    fontSize: "0.8rem",
+                    fontWeight: 700,
+                    borderRadius: "8px",
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => setPhonePromptOpen(true)}
+                >
+                  Add Mobile Number
+                </button>
+              </div>
+            )}
+
             {/* Changed Booking Button */}
             <button
               type="button"
@@ -428,6 +532,10 @@ export default function EquipmentCatalog() {
               onClick={() => {
                 setFeedback("");
                 setDateError("");
+                if (!memberPhone) {
+                  setPhonePromptOpen(true);
+                  return;
+                }
                 setBooking({
                   start: "",
                   end: "",
@@ -537,6 +645,51 @@ export default function EquipmentCatalog() {
               <p style={{ fontSize: "0.8rem", color: "#64748b", margin: "0 0 16px" }}>
                 Pricing is charged <strong>per hectare</strong> of cultivated farm land. Dates already booked cannot be selected.
               </p>
+
+              {/* Member Mobile Number Profile Status */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  background: memberPhone ? "#f0fdf4" : "#fef2f2",
+                  border: `1px solid ${memberPhone ? "#bbf7d0" : "#fecdd3"}`,
+                  padding: "9px 14px",
+                  borderRadius: "8px",
+                  marginBottom: "16px",
+                  fontSize: "0.82rem",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span>📱</span>
+                  <span>
+                    <strong>Mobile Number:</strong>{" "}
+                    {memberPhone ? (
+                      <span style={{ color: "#166534", fontWeight: 700 }}>{memberPhone}</span>
+                    ) : (
+                      <span style={{ color: "#dc2626", fontWeight: 700 }}>Missing in Profile (Cannot Proceed)</span>
+                    )}
+                  </span>
+                </div>
+                {!memberPhone && (
+                  <button
+                    type="button"
+                    onClick={() => setPhonePromptOpen(true)}
+                    style={{
+                      background: "#dc2626",
+                      color: "#ffffff",
+                      border: "none",
+                      padding: "4px 10px",
+                      borderRadius: "6px",
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Add Number
+                  </button>
+                )}
+              </div>
 
               <form className="member-form" onSubmit={submitBooking}>
                 {/* 1. Farm Area in Hectares Input */}
@@ -804,18 +957,129 @@ export default function EquipmentCatalog() {
                   <button
                     type="submit"
                     className="member-button member-button-primary"
-                    disabled={submitting || isDatesInvalid || !booking.location.trim()}
+                    disabled={submitting || isDatesInvalid || !booking.location.trim() || !memberPhone}
                     style={{
                       flex: 2,
-                      background: isDatesInvalid ? "#94a3b8" : "#16a34a",
-                      cursor: isDatesInvalid ? "not-allowed" : "pointer",
+                      background: isDatesInvalid || !memberPhone ? "#94a3b8" : "#16a34a",
+                      cursor: isDatesInvalid || !memberPhone ? "not-allowed" : "pointer",
                     }}
                   >
                     {submitting
                       ? "Submitting request…"
+                      : !memberPhone
+                      ? "Mobile Number Required in Profile"
                       : isDatesInvalid
                       ? "Choose Available Dates"
                       : `Confirm Booking (${formatPrice(estimatedCost)})`}
+                  </button>
+                </div>
+              </form>
+            </section>
+          </div>
+        )}
+
+        {/* ================= Mobile Phone Number Required Modal ================= */}
+        {phonePromptOpen && (
+          <div
+            className="member-modal-backdrop"
+            role="presentation"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) setPhonePromptOpen(false);
+            }}
+          >
+            <section
+              className="member-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="phone-prompt-title"
+              style={{ maxWidth: "480px", width: "95%" }}
+            >
+              <button
+                className="member-modal-close"
+                type="button"
+                aria-label="Close"
+                onClick={() => setPhonePromptOpen(false)}
+              >
+                ×
+              </button>
+              <div style={{ textAlign: "center", marginBottom: "16px" }}>
+                <div
+                  style={{
+                    width: "52px",
+                    height: "52px",
+                    borderRadius: "50%",
+                    background: "#fff7ed",
+                    color: "#ea580c",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "1.6rem",
+                    marginBottom: "10px",
+                  }}
+                >
+                  📱
+                </div>
+                <h3
+                  id="phone-prompt-title"
+                  style={{ fontSize: "1.25rem", fontWeight: 800, color: "#0f172a", margin: "0 0 6px" }}
+                >
+                  Mobile Number Required
+                </h3>
+                <p style={{ fontSize: "0.84rem", color: "#64748b", margin: 0, lineHeight: 1.45 }}>
+                  You cannot proceed with equipment booking without a mobile number in your profile. Our cooperative dispatchers and machinery drivers need your contact number to coordinate field operations.
+                </p>
+              </div>
+
+              <form onSubmit={handleSavePhone}>
+                <div style={{ marginBottom: "16px" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.82rem",
+                      fontWeight: 700,
+                      color: "#0f172a",
+                      marginBottom: "6px",
+                    }}
+                  >
+                    Your Mobile Number
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    autoFocus
+                    placeholder="e.g. 09171234567 or +63 917 123 4567"
+                    value={newPhoneInput}
+                    onChange={(e) => setNewPhoneInput(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "10px 14px",
+                      borderRadius: "8px",
+                      border: "1px solid #cbd5e1",
+                      fontSize: "0.95rem",
+                      fontWeight: 600,
+                    }}
+                  />
+                  {phoneSaveError && (
+                    <p style={{ color: "#dc2626", fontSize: "0.78rem", marginTop: "6px", marginBottom: 0 }}>
+                      {phoneSaveError}
+                    </p>
+                  )}
+                </div>
+
+                <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+                  <button
+                    type="button"
+                    className="member-button member-button-outline"
+                    onClick={() => setPhonePromptOpen(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingPhone}
+                    className="member-button member-button-primary"
+                  >
+                    {savingPhone ? "Saving Profile…" : "Save to Profile & Continue"}
                   </button>
                 </div>
               </form>

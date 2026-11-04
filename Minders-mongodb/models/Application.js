@@ -56,6 +56,8 @@ const applicationSchema = new mongoose.Schema(
     managerRemarks: { type: String, default: "", trim: true },
     isWalkIn: { type: Boolean, default: false },
     farmerPhone: { type: String, default: "" },
+    memberPhone: { type: String, default: "" },
+    clientPhone: { type: String, default: "" },
     checkoutInspection: {
       odometerHours: { type: Number, default: 0 },
       fuelLevel: { type: String, default: "100%" },
