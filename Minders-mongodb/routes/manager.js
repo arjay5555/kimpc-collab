@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const SupportMessage = require("../models/SupportMessage");
 const Notification = require("../models/Notification");
 const { clean, fail } = require("./routeHelpers");
+const { logAudit } = require("../services/auditLogger");
 
 const {
   getCalendarEvents,
@@ -88,6 +89,19 @@ router.patch("/messages/:id/reply", async (req, res) => {
       title: `Manager Reply: ${msg.subject}`,
       message: reply,
       type: "system",
+    });
+
+    // Log audit event
+    await logAudit({
+      action: "MEMBER_INQUIRY_REPLIED",
+      module: "Member Messages",
+      actorEmail: req.user?.email || "manager@kimpc.test",
+      actorName: req.user?.fullName || "Operations Manager",
+      actorRole: req.user?.role || "manager",
+      affectedRecord: `${msg.memberName} (${msg.memberEmail}) - "${msg.subject}"`,
+      details: `Manager replied to inquiry: "${reply.slice(0, 80)}${reply.length > 80 ? '...' : ''}"`,
+      status: "Success",
+      req,
     });
 
     res.json({ ok: true, message: "Reply sent to member successfully.", data: msg });

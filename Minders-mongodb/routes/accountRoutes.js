@@ -866,7 +866,66 @@ router.get("/audit-logs", async (req, res) => {
       ];
     }
 
-    const logs = await AuditLog.find(query).sort({ createdAt: -1 }).limit(limit);
+    const rawLogs = await AuditLog.find(query).sort({ createdAt: -1 }).limit(limit).lean();
+
+    const logs = rawLogs.map((log) => {
+      const resolvedModule = log.module && log.module !== "General" && log.module !== "System"
+        ? log.module
+        : deriveModule(log.action);
+
+      const resolvedAffected = log.affectedRecord && log.affectedRecord !== "—"
+        ? log.affectedRecord
+        : deriveAffectedRecord(log);
+
+      const actorEmail = log.actorEmail || log.actor?.email || "system@kimpc.coop";
+      const actorName = log.actorName || log.actor?.fullName || (actorEmail.includes("@") ? actorEmail.split("@")[0] : "System");
+      const actorRole = log.actorRole || log.actor?.role || "admin";
+
+      let detailsText = "";
+      if (typeof log.details === "object" && log.details !== null) {
+        try {
+          detailsText = Object.entries(log.details)
+            .map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`)
+            .join(" • ");
+        } catch (e) {
+          detailsText = JSON.stringify(log.details);
+        }
+      } else {
+        detailsText = String(log.details || "—");
+      }
+
+      return {
+        _id: String(log._id),
+        id: String(log._id),
+        createdAt: log.createdAt,
+        timestamp: log.createdAt,
+        date: log.createdAt
+          ? new Date(log.createdAt).toLocaleString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "Recently",
+        performedBy: {
+          name: actorName,
+          email: actorEmail,
+          role: actorRole,
+        },
+        actorEmail,
+        actorName,
+        actorRole,
+        module: resolvedModule,
+        action: log.action,
+        affectedRecord: resolvedAffected,
+        result: log.status || "Success",
+        status: log.status || "Success",
+        details: detailsText,
+        rawDetails: log.details,
+        ip: log.ip || "",
+      };
+    });
 
     if (includeStats) {
       const allActive = await AuditLog.countDocuments({ isArchived: { $ne: true } });
@@ -877,7 +936,7 @@ router.get("/audit-logs", async (req, res) => {
       return res.json({ logs, stats: { total: allActive, deletions, modifications, logins, bookings } });
     }
 
-    res.json(logs);
+    res.json({ ok: true, logs, total: logs.length });
   } catch (error) {
     console.error("Error fetching audit logs:", error);
     res.status(500).json({ error: "Failed to fetch audit logs." });

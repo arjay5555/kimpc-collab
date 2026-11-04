@@ -15,6 +15,30 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState({ message: "", isError: false });
   const [recentLogs, setRecentLogs] = useState([]);
+  const [logFilterModule, setLogFilterModule] = useState("all");
+  const [logSearchQuery, setLogSearchQuery] = useState("");
+  const [selectedAuditLog, setSelectedAuditLog] = useState(null);
+
+  const getModuleBadgeStyle = (mod = "") => {
+    const m = (mod || "").toLowerCase();
+    if (m.includes("account")) return { bg: "#e0f2fe", text: "#0369a1", border: "#bae6fd" };
+    if (m.includes("booking")) return { bg: "#dcfce7", text: "#15803d", border: "#bbf7d0" };
+    if (m.includes("auth")) return { bg: "#f0fdf4", text: "#166534", border: "#bbf7d0" };
+    if (m.includes("security") || m.includes("setting")) return { bg: "#fef3c7", text: "#b45309", border: "#fde68a" };
+    if (m.includes("financial") || m.includes("payment")) return { bg: "#f3e8ff", text: "#7e22ce", border: "#e9d5ff" };
+    if (m.includes("backup")) return { bg: "#ffe4e6", text: "#be123c", border: "#fecdd3" };
+    if (m.includes("machin") || m.includes("fleet")) return { bg: "#cffafe", text: "#0e7490", border: "#a5f3fc" };
+    if (m.includes("message")) return { bg: "#ede9fe", text: "#6d28d9", border: "#ddd6fe" };
+    return { bg: "#f1f5f9", text: "#475569", border: "#e2e8f0" };
+  };
+
+  const getResultBadgeStyle = (res = "") => {
+    const r = (res || "").toLowerCase();
+    if (r === "success") return { bg: "#dcfce7", text: "#15803d", border: "#86efac" };
+    if (r === "failed") return { bg: "#fee2e2", text: "#b91c1c", border: "#fca5a5" };
+    if (r === "denied") return { bg: "#fef3c7", text: "#b45309", border: "#fde68a" };
+    return { bg: "#f1f5f9", text: "#475569", border: "#cbd5e1" };
+  };
 
   useEffect(() => {
     // Load config
@@ -44,10 +68,10 @@ export default function AdminDashboard() {
     });
 
     // Load recent audit logs preview
-    api("/admin/audit-logs").then(({ ok, data }) => {
+    api("/admin/audit-logs?limit=50").then(({ ok, data }) => {
       if (ok && data) {
         const list = data.logs || (Array.isArray(data) ? data : []);
-        setRecentLogs(list.slice(0, 5));
+        setRecentLogs(list);
       }
     });
   }, []);
@@ -108,7 +132,7 @@ export default function AdminDashboard() {
     Promise.all([
       api("/accounts"),
       api("/applications"),
-      api("/admin/audit-logs"),
+      api("/admin/audit-logs?limit=50"),
     ]).then(([accRes, appRes, logRes]) => {
       if (accRes.ok && Array.isArray(accRes.data)) {
         setStats((p) => ({ ...p, accounts: accRes.data.length }));
@@ -118,7 +142,7 @@ export default function AdminDashboard() {
       }
       if (logRes.ok && logRes.data) {
         const list = logRes.data.logs || (Array.isArray(logRes.data) ? logRes.data : []);
-        setRecentLogs(list.slice(0, 5));
+        setRecentLogs(list);
       }
       setLoading(false);
       setFeedback({ message: "Dashboard metrics refreshed successfully.", isError: false });
@@ -709,82 +733,426 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Recent Audit Activity Table */}
+        {/* Functional System Audit Logs Table with all 7 columns */}
         <div className="wz-table-card">
-          <div className="wz-table-toolbar">
+          <div className="wz-table-toolbar" style={{ flexWrap: "wrap", gap: "12px" }}>
             <div>
-              <h3 className="wz-table-title">Recent Administrative &amp; Security Events</h3>
-              <p style={{ margin: "2px 0 0", fontSize: "0.78rem", color: "#64748b" }}>
-                Latest security events captured by the cooperative audit logger.
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <h3 className="wz-table-title" style={{ margin: 0 }}>System Audit Logs</h3>
+                <span style={{ fontSize: "0.74rem", background: "#f1f5f9", padding: "2px 8px", borderRadius: "12px", color: "#475569", fontWeight: 700 }}>
+                  Live Trail
+                </span>
+              </div>
+              <p style={{ margin: "3px 0 0", fontSize: "0.78rem", color: "#64748b" }}>
+                Complete verifiable audit trail recording Date &amp; Time, Performed By, Module, Action, Affected Record, Result, and Details.
               </p>
             </div>
-            <Link
-              to="/audit-logs"
-              style={{
-                fontSize: "0.82rem",
-                fontWeight: 600,
-                color: "#166534",
-                textDecoration: "none",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "4px",
-              }}
-            >
-              View Full Audit Logs →
-            </Link>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+              {/* Search within Audit Logs */}
+              <input
+                type="text"
+                placeholder="Search audit trail..."
+                value={logSearchQuery}
+                onChange={(e) => setLogSearchQuery(e.target.value)}
+                style={{
+                  padding: "6px 12px",
+                  fontSize: "0.8rem",
+                  borderRadius: "8px",
+                  border: "1px solid #cbd5e1",
+                  background: "#ffffff",
+                  color: "#0f172a",
+                  outline: "none",
+                  width: "180px",
+                }}
+              />
+
+              {/* Module Filter Select */}
+              <select
+                value={logFilterModule}
+                onChange={(e) => setLogFilterModule(e.target.value)}
+                style={{
+                  padding: "6px 10px",
+                  fontSize: "0.8rem",
+                  borderRadius: "8px",
+                  border: "1px solid #cbd5e1",
+                  background: "#ffffff",
+                  color: "#0f172a",
+                  outline: "none",
+                  fontWeight: 600,
+                }}
+              >
+                <option value="all">All Modules</option>
+                <option value="Accounts & Roles">Accounts &amp; Roles</option>
+                <option value="Bookings">Bookings</option>
+                <option value="Authentication">Authentication</option>
+                <option value="Security Settings">Security Settings</option>
+                <option value="Financial Policies">Financial Policies</option>
+                <option value="Database Backups">Database Backups</option>
+                <option value="Machinery Fleet">Machinery Fleet</option>
+                <option value="Member Messages">Member Messages</option>
+              </select>
+
+              <button
+                type="button"
+                onClick={() => {
+                  api("/admin/audit-logs?limit=50").then(({ ok, data }) => {
+                    if (ok && data) setRecentLogs(data.logs || (Array.isArray(data) ? data : []));
+                  });
+                }}
+                style={{
+                  padding: "6px 10px",
+                  fontSize: "0.78rem",
+                  borderRadius: "8px",
+                  border: "1px solid #cbd5e1",
+                  background: "#ffffff",
+                  color: "#334155",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+                title="Refresh audit logs"
+              >
+                ↻ Refresh
+              </button>
+
+              <Link
+                to="/audit-logs"
+                style={{
+                  fontSize: "0.8rem",
+                  fontWeight: 700,
+                  color: "#166534",
+                  textDecoration: "none",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                View Full Audit Logs →
+              </Link>
+            </div>
           </div>
 
           <div className="wz-table-responsive">
             <table className="wz-table">
               <thead>
                 <tr>
-                  <th>Timestamp</th>
-                  <th>Action</th>
-                  <th>Actor / User</th>
-                  <th>Details</th>
+                  <th style={{ minWidth: "140px" }}>Date &amp; Time</th>
+                  <th style={{ minWidth: "160px" }}>Performed By</th>
+                  <th style={{ minWidth: "130px" }}>Module</th>
+                  <th style={{ minWidth: "160px" }}>Action</th>
+                  <th style={{ minWidth: "160px" }}>Affected Record</th>
+                  <th style={{ minWidth: "90px", textAlign: "center" }}>Result</th>
+                  <th style={{ minWidth: "220px" }}>Details</th>
                 </tr>
               </thead>
               <tbody>
-                {recentLogs.length === 0 ? (
-                  <tr>
-                    <td colSpan="4" style={{ textAlign: "center", padding: "28px", color: "#64748b" }}>
-                      No recent audit events logged.
-                    </td>
-                  </tr>
-                ) : (
-                  recentLogs.map((log, index) => (
-                    <tr key={log._id || index}>
-                      <td style={{ color: "#64748b", whiteSpace: "nowrap", fontSize: "0.82rem" }}>
-                        {log.createdAt ? new Date(log.createdAt).toLocaleString() : "Recently"}
-                      </td>
-                      <td>
-                        <span
-                          style={{
-                            padding: "3px 8px",
-                            background: "#f1f5f9",
-                            borderRadius: "6px",
-                            fontFamily: "monospace",
-                            fontSize: "0.76rem",
-                            fontWeight: 600,
-                            color: "#334155",
-                          }}
-                        >
-                          {log.action}
-                        </span>
-                      </td>
-                      <td style={{ fontWeight: 600, fontSize: "0.84rem" }}>
-                        {log.actorEmail || log.email || "System"}
-                      </td>
-                      <td style={{ color: "#475569", fontSize: "0.82rem" }}>
-                        {log.details || log.description || "—"}
-                      </td>
-                    </tr>
-                  ))
-                )}
+                {(() => {
+                  const filtered = recentLogs.filter((log) => {
+                    if (logFilterModule !== "all") {
+                      const mod = (log.module || "").toLowerCase();
+                      if (!mod.includes(logFilterModule.toLowerCase().split(" ")[0])) return false;
+                    }
+                    if (logSearchQuery.trim()) {
+                      const q = logSearchQuery.toLowerCase();
+                      const matchActor = (log.actorEmail || log.actorName || log.performedBy?.name || "").toLowerCase().includes(q);
+                      const matchAction = (log.action || "").toLowerCase().includes(q);
+                      const matchModule = (log.module || "").toLowerCase().includes(q);
+                      const matchRecord = (log.affectedRecord || "").toLowerCase().includes(q);
+                      const matchDetails = (log.details || "").toLowerCase().includes(q);
+                      if (!matchActor && !matchAction && !matchModule && !matchRecord && !matchDetails) return false;
+                    }
+                    return true;
+                  });
+
+                  if (filtered.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan="7" style={{ textAlign: "center", padding: "32px", color: "#64748b" }}>
+                          No audit log records found matching your filters.
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  return filtered.slice(0, 15).map((log, index) => {
+                    const modBadge = getModuleBadgeStyle(log.module);
+                    const resBadge = getResultBadgeStyle(log.result || log.status);
+                    const actorName = log.performedBy?.name || log.actorName || (log.actorEmail ? log.actorEmail.split("@")[0] : "System");
+                    const actorEmail = log.performedBy?.email || log.actorEmail || "system";
+                    const actorRole = log.performedBy?.role || log.actorRole || "admin";
+
+                    return (
+                      <tr
+                        key={log._id || log.id || index}
+                        style={{ cursor: "pointer", transition: "background 0.15s ease" }}
+                        onClick={() => setSelectedAuditLog(log)}
+                        title="Click to view full event audit details"
+                      >
+                        {/* 1. Date & Time */}
+                        <td style={{ color: "#475569", whiteSpace: "nowrap", fontSize: "0.8rem", fontWeight: 500 }}>
+                          {log.date || (log.createdAt ? new Date(log.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "Recently")}
+                        </td>
+
+                        {/* 2. Performed By */}
+                        <td>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <div
+                              style={{
+                                width: "26px",
+                                height: "26px",
+                                borderRadius: "50%",
+                                background: actorRole === "admin" ? "#166534" : actorRole === "manager" ? "#0284c7" : "#0f172a",
+                                color: "#ffffff",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: "0.72rem",
+                                fontWeight: 800,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {(actorName || "S")[0].toUpperCase()}
+                            </div>
+                            <div style={{ lineHeight: 1.2 }}>
+                              <div style={{ fontWeight: 700, fontSize: "0.82rem", color: "#0f172a" }}>
+                                {actorName}
+                              </div>
+                              <div style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                                <span style={{ textTransform: "capitalize", fontWeight: 600, color: actorRole === "admin" ? "#166534" : "#0284c7" }}>
+                                  {actorRole}
+                                </span>{" "}
+                                • {actorEmail}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* 3. Module */}
+                        <td>
+                          <span
+                            style={{
+                              padding: "3px 9px",
+                              borderRadius: "6px",
+                              fontSize: "0.74rem",
+                              fontWeight: 700,
+                              background: modBadge.bg,
+                              color: modBadge.text,
+                              border: `1px solid ${modBadge.border}`,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {log.module || "System"}
+                          </span>
+                        </td>
+
+                        {/* 4. Action */}
+                        <td>
+                          <span
+                            style={{
+                              padding: "3px 8px",
+                              borderRadius: "6px",
+                              fontFamily: "monospace",
+                              fontSize: "0.74rem",
+                              fontWeight: 700,
+                              background: "#f1f5f9",
+                              color: "#1e293b",
+                              border: "1px solid #e2e8f0",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {log.action}
+                          </span>
+                        </td>
+
+                        {/* 5. Affected Record */}
+                        <td>
+                          <div style={{ fontWeight: 600, fontSize: "0.82rem", color: "#0f172a" }}>
+                            {log.affectedRecord || "—"}
+                          </div>
+                        </td>
+
+                        {/* 6. Result */}
+                        <td style={{ textAlign: "center" }}>
+                          <span
+                            style={{
+                              padding: "3px 8px",
+                              borderRadius: "6px",
+                              fontSize: "0.72rem",
+                              fontWeight: 700,
+                              background: resBadge.bg,
+                              color: resBadge.text,
+                              border: `1px solid ${resBadge.border}`,
+                              display: "inline-block",
+                            }}
+                          >
+                            {log.result || log.status || "Success"}
+                          </span>
+                        </td>
+
+                        {/* 7. Details */}
+                        <td style={{ color: "#334155", fontSize: "0.82rem", maxWidth: "260px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={log.details}>
+                          {log.details || "—"}
+                        </td>
+                      </tr>
+                    );
+                  });
+                })()}
               </tbody>
             </table>
           </div>
         </div>
+
+        {/* Audit Log Record Detail Modal */}
+        {selectedAuditLog && (
+          <div
+            className="wz-modal-overlay"
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(15, 23, 42, 0.6)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 9999,
+              padding: "16px",
+            }}
+            onClick={() => setSelectedAuditLog(null)}
+          >
+            <div
+              style={{
+                background: "#ffffff",
+                borderRadius: "14px",
+                maxWidth: "600px",
+                width: "100%",
+                padding: "24px",
+                boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                <div>
+                  <span
+                    style={{
+                      padding: "3px 9px",
+                      borderRadius: "6px",
+                      fontSize: "0.74rem",
+                      fontWeight: 700,
+                      background: getModuleBadgeStyle(selectedAuditLog.module).bg,
+                      color: getModuleBadgeStyle(selectedAuditLog.module).text,
+                      border: `1px solid ${getModuleBadgeStyle(selectedAuditLog.module).border}`,
+                    }}
+                  >
+                    {selectedAuditLog.module || "System"}
+                  </span>
+                  <h3 style={{ margin: "8px 0 0", fontSize: "1.2rem", fontWeight: 800, color: "#0f172a" }}>
+                    Audit Event Details
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedAuditLog(null)}
+                  style={{ background: "none", border: "none", fontSize: "1.4rem", cursor: "pointer", color: "#94a3b8" }}
+                >
+                  &times;
+                </button>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "16px" }}>
+                <div style={{ padding: "10px", background: "#f8fafc", borderRadius: "8px" }}>
+                  <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600 }}>DATE &amp; TIME</div>
+                  <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#0f172a", marginTop: "2px" }}>
+                    {selectedAuditLog.date || new Date(selectedAuditLog.createdAt).toLocaleString()}
+                  </div>
+                </div>
+
+                <div style={{ padding: "10px", background: "#f8fafc", borderRadius: "8px" }}>
+                  <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600 }}>RESULT / STATUS</div>
+                  <div style={{ fontSize: "0.86rem", fontWeight: 700, color: selectedAuditLog.result === "Success" ? "#166534" : "#dc2626", marginTop: "2px" }}>
+                    {selectedAuditLog.result || selectedAuditLog.status || "Success"}
+                  </div>
+                </div>
+
+                <div style={{ padding: "10px", background: "#f8fafc", borderRadius: "8px" }}>
+                  <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600 }}>PERFORMED BY</div>
+                  <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#0f172a", marginTop: "2px" }}>
+                    {selectedAuditLog.performedBy?.name || selectedAuditLog.actorName || selectedAuditLog.actorEmail || "System"}
+                  </div>
+                  <div style={{ fontSize: "0.74rem", color: "#64748b" }}>
+                    Role: {selectedAuditLog.performedBy?.role || selectedAuditLog.actorRole || "admin"}
+                  </div>
+                </div>
+
+                <div style={{ padding: "10px", background: "#f8fafc", borderRadius: "8px" }}>
+                  <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600 }}>AFFECTED RECORD</div>
+                  <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#0f172a", marginTop: "2px" }}>
+                    {selectedAuditLog.affectedRecord || "—"}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: "16px" }}>
+                <div style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 700, marginBottom: "6px" }}>
+                  ACTION &amp; HUMAN DETAILS
+                </div>
+                <div style={{ padding: "12px", background: "#f1f5f9", borderRadius: "8px", fontSize: "0.86rem", color: "#1e293b", lineHeight: 1.4 }}>
+                  <strong>Action:</strong> <code style={{ fontFamily: "monospace", color: "#0284c7" }}>{selectedAuditLog.action}</code>
+                  <div style={{ marginTop: "6px" }}>{selectedAuditLog.details}</div>
+                  {selectedAuditLog.ip && (
+                    <div style={{ fontSize: "0.74rem", color: "#64748b", marginTop: "6px" }}>
+                      Origin IP: {selectedAuditLog.ip}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {selectedAuditLog.rawDetails && typeof selectedAuditLog.rawDetails === "object" && (
+                <div style={{ marginBottom: "16px" }}>
+                  <div style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 700, marginBottom: "6px" }}>
+                    RAW PAYLOAD (JSON)
+                  </div>
+                  <pre
+                    style={{
+                      padding: "10px",
+                      background: "#0f172a",
+                      color: "#38bdf8",
+                      borderRadius: "8px",
+                      fontSize: "0.75rem",
+                      overflowX: "auto",
+                      maxHeight: "150px",
+                    }}
+                  >
+                    {JSON.stringify(selectedAuditLog.rawDetails, null, 2)}
+                  </pre>
+                </div>
+              )}
+
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedAuditLog(null)}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    background: "#ffffff",
+                    color: "#334155",
+                    fontWeight: 600,
+                    fontSize: "0.82rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

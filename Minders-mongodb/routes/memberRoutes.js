@@ -5,6 +5,7 @@ const Account = require("../models/Account");
 const Notification = require("../models/Notification");
 const SupportMessage = require("../models/SupportMessage");
 const authenticate = require("../middleware/authenticate");
+const { logAudit } = require("../services/auditLogger");
 const authManager = require("../middleware/authManager");
 const { fail, clean, cleanEmail } = require("./routeHelpers");
 const { sendMemberSupportEmail } = require("../services/mailer");
@@ -133,6 +134,19 @@ router.post(["/member/support-request", "/member/messages"], async (req, res) =>
       }))
     );
   }
+
+  // Log audit event
+  await logAudit({
+    action: "MEMBER_QUESTION_SUBMITTED",
+    module: "Member Messages",
+    actorEmail: req.user.email,
+    actorName: req.user.fullName || "Cooperative Member",
+    actorRole: req.user.role || "member",
+    affectedRecord: `Question: "${subject}"`,
+    details: `Member submitted question: "${subject}"`,
+    status: "Success",
+    req,
+  });
 
   // Backup email attempt
   try {

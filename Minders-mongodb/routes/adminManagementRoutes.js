@@ -5,7 +5,8 @@ const Transaction = require("../models/Transaction");
 const MachineryUnit = require("../models/MachineryUnit");
 const SystemSetting = require("../models/SystemSetting");
 const authenticate = require("../middleware/authenticate");
-const { logAudit } = require("../services/auditLogger");
+const AuditLog = require("../models/AuditLog");
+const { logAudit, deriveModule, deriveAffectedRecord } = require("../services/auditLogger");
 const { fail, clean, cleanEmail, requireAdmin } = require("./routeHelpers");
 
 const router = express.Router();
@@ -383,6 +384,8 @@ router.post("/admin/deposit-cancellation-policies", async (req, res) => {
 
     await logAudit({
       action: "DEPOSIT_CANCELLATION_POLICY_UPDATED",
+      module: "Financial Policies",
+      affectedRecord: "Deposit and Cancellation Policies",
       actorEmail: getAdminEmail(req),
       actorRole: "admin",
       details: `Administrator updated deposit requirements (${policies.depositPercentage}%) and cancellation policies (${policies.freeCancellationHours}h notice).`,
@@ -887,6 +890,150 @@ router.get("/admin/reports", async (req, res) => {
   } catch (error) {
     console.error("Reports query error:", error);
     res.status(500).json({ error: "Failed to generate reports." });
+  }
+});
+
+// ============================================================================
+// 7. SYSTEM AUDIT LOGS ENDPOINTS (ADMIN ONLY)
+// ============================================================================
+
+router.get("/admin/audit-logs", async (req, res) => {
+  try {
+    const search = clean(req.query.search);
+    const moduleFilter = clean(req.query.module);
+    const actionFilter = clean(req.query.action);
+    const statusFilter = clean(req.query.status);
+    const limit = Math.min(Number(req.query.limit) || 200, 1000);
+
+    const query = { isArchived: { $ne: true } };
+
+    if (actionFilter && actionFilter !== "ALL" && actionFilter !== "all") {
+      query.action = { $regex: new RegExp(actionFilter, "i") };
+    }
+    if (statusFilter && statusFilter !== "ALL" && statusFilter !== "all") {
+      query.status = statusFilter;
+    }
+    if (moduleFilter && moduleFilter !== "ALL" && moduleFilter !== "all") {
+      query.$or = [
+        { module: moduleFilter },
+        { action: { $regex: new RegExp(moduleFilter.split(" ")[0], "i") } }
+      ];
+    }
+
+    if (search) {
+      const searchRegex = { $regex: search, $options: "i" };
+      query.$or = [
+        { actorEmail: searchRegex },
+        { actorName: searchRegex },
+        { action: searchRegex },
+        { module: searchRegex },
+        { affectedRecord: searchRegex },
+        { targetEmail: searchRegex },
+        { targetName: searchRegex },
+        { details: searchRegex },
+      ];
+    }
+
+    const rawLogs = await AuditLog.find(query).sort({ createdAt: -1 }).limit(limit).lean();
+
+    const enrichedLogs = rawLogs.map((log) => {
+      const resolvedModule = log.module && log.module !== "General" && log.module !== "System"
+        ? log.module
+        : deriveModule(log.action);
+
+      const resolvedAffected = log.affectedRecord && log.affectedRecord !== "—"
+        ? log.affectedRecord
+        : deriveAffectedRecord(log);
+
+      const actorEmail = log.actorEmail || log.actor?.email || "system@kimpc.coop";
+      const actorName = log.actorName || log.actor?.fullName || (actorEmail.includes("@") ? actorEmail.split("@")[0] : "System");
+      const actorRole = log.actorRole || log.actor?.role || "admin";
+
+      let detailsText = "";
+      if (typeof log.details === "object" && log.details !== null) {
+        try {
+          detailsText = Object.entries(log.details)
+            .map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`)
+            .join(" • ");
+        } catch (e) {
+          detailsText = JSON.stringify(log.details);
+        }
+      } else {
+        detailsText = String(log.details || "—");
+      }
+
+      return {
+        _id: String(log._id),
+        id: String(log._id),
+        createdAt: log.createdAt,
+        timestamp: log.createdAt,
+        date: log.createdAt
+          ? new Date(log.createdAt).toLocaleString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "Recently",
+        performedBy: {
+          name: actorName,
+          email: actorEmail,
+          role: actorRole,
+        },
+        actorEmail,
+        actorName,
+        actorRole,
+        module: resolvedModule,
+        action: log.action,
+        affectedRecord: resolvedAffected,
+        result: log.status || "Success",
+        status: log.status || "Success",
+        details: detailsText,
+        rawDetails: log.details,
+        ip: log.ip || "",
+      };
+    });
+
+    const total = await AuditLog.countDocuments({ isArchived: { $ne: true } });
+    const successCount = await AuditLog.countDocuments({ isArchived: { $ne: true }, status: "Success" });
+    const failedCount = await AuditLog.countDocuments({ isArchived: { $ne: true }, status: { $in: ["Failed", "Denied"] } });
+
+    res.json({
+      ok: true,
+      logs: enrichedLogs,
+      total,
+      stats: {
+        total,
+        successCount,
+        failedCount,
+      },
+    });
+  } catch (error) {
+    console.error("Audit logs query error:", error);
+    res.status(500).json({ error: "Failed to fetch audit logs." });
+  }
+});
+
+router.delete("/admin/audit-logs", async (req, res) => {
+  try {
+    const adminEmail = getAdminEmail(req);
+    const count = await AuditLog.countDocuments();
+    await AuditLog.deleteMany({});
+    await logAudit({
+      action: "AUDIT_LOGS_PURGED",
+      module: "Security Settings",
+      actorEmail: adminEmail,
+      actorRole: "admin",
+      affectedRecord: `All System Audit Logs (${count} records)`,
+      details: `Administrator purged all ${count} audit trail records from the database.`,
+      status: "Success",
+      req,
+    });
+    res.json({ ok: true, message: `Successfully purged ${count} audit log records.` });
+  } catch (error) {
+    console.error("Purge audit logs error:", error);
+    res.status(500).json({ error: "Failed to purge audit logs." });
   }
 });
 

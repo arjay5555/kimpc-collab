@@ -16,15 +16,13 @@ const demoAccounts = [
   for (const person of demoAccounts) {
     const existing = await Account.findOne({ email: person.email });
     if (existing) {
-      if (existing.verificationStatus !== "verified") {
-        existing.emailVerified = true;
-        existing.verificationStatus = "verified";
-        existing.verifiedAt = new Date();
-        await existing.save();
-        console.log(`Updated and verified existing ${person.role}: ${person.email}`);
-      } else {
-        console.log(`Skipped (already verified): ${person.email}`);
-      }
+      existing.emailVerified = true;
+      existing.verificationStatus = "verified";
+      existing.verifiedAt = new Date();
+      existing.isSuspended = false;
+      existing.passwordHash = await bcrypt.hash(person.password, 10);
+      await existing.save();
+      console.log(`Synced ${person.role}: ${person.email}  (password: ${person.password})`);
       continue;
     }
     await Account.create({
