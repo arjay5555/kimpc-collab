@@ -835,17 +835,17 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="wz-table-responsive">
-            <table className="wz-table">
+          <div className="wz-table-responsive" style={{ overflowX: "hidden", width: "100%" }}>
+            <table className="wz-table" style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse" }}>
               <thead>
-                <tr>
-                  <th style={{ minWidth: "140px" }}>Date &amp; Time</th>
-                  <th style={{ minWidth: "160px" }}>Performed By</th>
-                  <th style={{ minWidth: "130px" }}>Module</th>
-                  <th style={{ minWidth: "160px" }}>Action</th>
-                  <th style={{ minWidth: "160px" }}>Affected Record</th>
-                  <th style={{ minWidth: "90px", textAlign: "center" }}>Result</th>
-                  <th style={{ minWidth: "220px" }}>Details</th>
+                <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                  <th style={{ width: "13%", fontSize: "0.68rem", fontWeight: 700, padding: "8px 8px", color: "#475569", textTransform: "uppercase", letterSpacing: "0.02em" }}>Date &amp; Time</th>
+                  <th style={{ width: "21%", fontSize: "0.68rem", fontWeight: 700, padding: "8px 8px", color: "#475569", textTransform: "uppercase", letterSpacing: "0.02em" }}>Performed By</th>
+                  <th style={{ width: "15%", fontSize: "0.68rem", fontWeight: 700, padding: "8px 8px", color: "#475569", textTransform: "uppercase", letterSpacing: "0.02em" }}>Module</th>
+                  <th style={{ width: "18%", fontSize: "0.68rem", fontWeight: 700, padding: "8px 8px", color: "#475569", textTransform: "uppercase", letterSpacing: "0.02em" }}>Action</th>
+                  <th style={{ width: "19%", fontSize: "0.68rem", fontWeight: 700, padding: "8px 8px", color: "#475569", textTransform: "uppercase", letterSpacing: "0.02em" }}>Affected Record</th>
+                  <th style={{ width: "8%", fontSize: "0.68rem", fontWeight: 700, padding: "8px 4px", textAlign: "center", color: "#475569", textTransform: "uppercase", letterSpacing: "0.02em" }}>Result</th>
+                  <th style={{ width: "6%", fontSize: "0.68rem", fontWeight: 700, padding: "8px 4px", textAlign: "center", color: "#475569", textTransform: "uppercase", letterSpacing: "0.02em" }}>Details</th>
                 </tr>
               </thead>
               <tbody>
@@ -870,7 +870,7 @@ export default function AdminDashboard() {
                   if (filtered.length === 0) {
                     return (
                       <tr>
-                        <td colSpan="7" style={{ textAlign: "center", padding: "32px", color: "#64748b" }}>
+                        <td colSpan="7" style={{ textAlign: "center", padding: "28px", color: "#64748b", fontSize: "0.78rem" }}>
                           No audit log records found matching your filters.
                         </td>
                       </tr>
@@ -884,43 +884,57 @@ export default function AdminDashboard() {
                     const actorEmail = log.performedBy?.email || log.actorEmail || "system";
                     const actorRole = log.performedBy?.role || log.actorRole || "admin";
 
+                    const d = log.createdAt ? new Date(log.createdAt) : null;
+                    const isValid = d && !isNaN(d.getTime());
+                    const datePart = isValid
+                      ? d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                      : "Recently";
+                    const timePart = isValid
+                      ? d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
+                      : "";
+
                     return (
                       <tr
                         key={log._id || log.id || index}
-                        style={{ cursor: "pointer", transition: "background 0.15s ease" }}
-                        onClick={() => setSelectedAuditLog(log)}
-                        title="Click to view full event audit details"
+                        style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.15s ease" }}
                       >
-                        {/* 1. Date & Time */}
-                        <td style={{ color: "#475569", whiteSpace: "nowrap", fontSize: "0.8rem", fontWeight: 500 }}>
-                          {log.date || (log.createdAt ? new Date(log.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "Recently")}
+                        {/* 1. Date & Time (2 lines) */}
+                        <td style={{ padding: "8px 8px", lineHeight: 1.2 }}>
+                          <div style={{ color: "#0f172a", fontWeight: 700, fontSize: "0.72rem", whiteSpace: "nowrap" }}>
+                            {datePart}
+                          </div>
+                          {timePart && (
+                            <div style={{ color: "#64748b", fontSize: "0.66rem", fontWeight: 500, marginTop: "1px", whiteSpace: "nowrap" }}>
+                              {timePart}
+                            </div>
+                          )}
                         </td>
 
                         {/* 2. Performed By */}
-                        <td>
-                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <td style={{ padding: "8px 8px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                             <div
                               style={{
-                                width: "26px",
-                                height: "26px",
+                                width: "22px",
+                                height: "22px",
                                 borderRadius: "50%",
                                 background: actorRole === "admin" ? "#166534" : actorRole === "manager" ? "#0284c7" : "#0f172a",
                                 color: "#ffffff",
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
-                                fontSize: "0.72rem",
+                                fontSize: "0.68rem",
                                 fontWeight: 800,
                                 flexShrink: 0,
                               }}
                             >
                               {(actorName || "S")[0].toUpperCase()}
                             </div>
-                            <div style={{ lineHeight: 1.2 }}>
-                              <div style={{ fontWeight: 700, fontSize: "0.82rem", color: "#0f172a" }}>
+                            <div style={{ lineHeight: 1.15, minWidth: 0, overflow: "hidden" }}>
+                              <div style={{ fontWeight: 700, fontSize: "0.74rem", color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={actorName}>
                                 {actorName}
                               </div>
-                              <div style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                              <div style={{ fontSize: "0.66rem", color: "#64748b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={actorEmail}>
                                 <span style={{ textTransform: "capitalize", fontWeight: 600, color: actorRole === "admin" ? "#166534" : "#0284c7" }}>
                                   {actorRole}
                                 </span>{" "}
@@ -931,70 +945,118 @@ export default function AdminDashboard() {
                         </td>
 
                         {/* 3. Module */}
-                        <td>
+                        <td style={{ padding: "8px 8px" }}>
                           <span
                             style={{
-                              padding: "3px 9px",
-                              borderRadius: "6px",
-                              fontSize: "0.74rem",
+                              display: "inline-block",
+                              padding: "2px 6px",
+                              borderRadius: "4px",
+                              fontSize: "0.66rem",
                               fontWeight: 700,
                               background: modBadge.bg,
                               color: modBadge.text,
                               border: `1px solid ${modBadge.border}`,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
                               whiteSpace: "nowrap",
+                              maxWidth: "100%",
                             }}
+                            title={log.module || "System"}
                           >
                             {log.module || "System"}
                           </span>
                         </td>
 
                         {/* 4. Action */}
-                        <td>
+                        <td style={{ padding: "8px 8px" }}>
                           <span
                             style={{
-                              padding: "3px 8px",
-                              borderRadius: "6px",
+                              display: "inline-block",
+                              padding: "2px 5px",
+                              borderRadius: "4px",
                               fontFamily: "monospace",
-                              fontSize: "0.74rem",
+                              fontSize: "0.66rem",
                               fontWeight: 700,
                               background: "#f1f5f9",
                               color: "#1e293b",
                               border: "1px solid #e2e8f0",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
                               whiteSpace: "nowrap",
+                              maxWidth: "100%",
                             }}
+                            title={log.action}
                           >
                             {log.action}
                           </span>
                         </td>
 
                         {/* 5. Affected Record */}
-                        <td>
-                          <div style={{ fontWeight: 600, fontSize: "0.82rem", color: "#0f172a" }}>
+                        <td style={{ padding: "8px 8px" }}>
+                          <div
+                            style={{
+                              fontWeight: 600,
+                              fontSize: "0.74rem",
+                              color: "#0f172a",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                            title={log.affectedRecord || "—"}
+                          >
                             {log.affectedRecord || "—"}
                           </div>
                         </td>
 
                         {/* 6. Result */}
-                        <td style={{ textAlign: "center" }}>
+                        <td style={{ textAlign: "center", padding: "8px 4px" }}>
                           <span
                             style={{
-                              padding: "3px 8px",
-                              borderRadius: "6px",
-                              fontSize: "0.72rem",
+                              padding: "2px 6px",
+                              borderRadius: "4px",
+                              fontSize: "0.66rem",
                               fontWeight: 700,
                               background: resBadge.bg,
                               color: resBadge.text,
                               border: `1px solid ${resBadge.border}`,
                               display: "inline-block",
+                              whiteSpace: "nowrap",
                             }}
                           >
                             {log.result || log.status || "Success"}
                           </span>
                         </td>
 
-                        {/* 7. Details */}
-                        <td style={{ color: "#334155", fontSize: "0.82rem", maxWidth: "260px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={log.details}>
-                          {log.details || "—"}
+                        {/* 7. Details (Clickable Icon) */}
+                        <td style={{ textAlign: "center", padding: "6px 4px" }}>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedAuditLog(log);
+                            }}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              width: "24px",
+                              height: "24px",
+                              borderRadius: "5px",
+                              border: "1px solid #cbd5e1",
+                              background: "#ffffff",
+                              color: "#0284c7",
+                              cursor: "pointer",
+                              padding: 0,
+                              transition: "all 0.15s ease",
+                            }}
+                            title="Click to view full event audit details"
+                            aria-label="View Details"
+                          >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                              <circle cx="12" cy="12" r="3" />
+                            </svg>
+                          </button>
                         </td>
                       </tr>
                     );
