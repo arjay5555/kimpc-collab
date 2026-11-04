@@ -42,15 +42,6 @@ export default function Login() {
   const [forgotFeedback, setForgotFeedback] = useState({ message: "", isError: false });
   const [isSubmittingForgot, setIsSubmittingForgot] = useState(false);
 
-  // Temp OTP modal
-  const [showTempModal, setShowTempModal] = useState(false);
-  const [tempUserData, setTempUserData] = useState(null);
-  const [tempUsedPassword, setTempUsedPassword] = useState("");
-  const [tempNewPassword, setTempNewPassword] = useState("");
-  const [tempConfirmPassword, setTempConfirmPassword] = useState("");
-  const [tempFeedback, setTempFeedback] = useState({ message: "", isError: false });
-  const [isSavingTemp, setIsSavingTemp] = useState(false);
-
   // Social login flags
   const DEFAULT_GOOGLE_CLIENT_ID = "1042055157169-ijq2fs7mffqjscvro4eli4928iq0nii4.apps.googleusercontent.com";
   const [googleEnabled, setGoogleEnabled] = useState(true);
@@ -392,13 +383,6 @@ export default function Login() {
       return;
     }
 
-    if (data.mustChangePassword) {
-      setTempUserData(data);
-      setTempUsedPassword(loginPassword);
-      setShowTempModal(true);
-      return;
-    }
-
     const signedInUser = completeSignIn(data);
     navigate(getDashboardForRole(signedInUser.role));
   };
@@ -521,41 +505,6 @@ export default function Login() {
       setIsSubmittingForgot(false);
       setForgotFeedback({ message: "Network error. Please try again.", isError: true });
     }
-  };
-
-  const handleSaveTempPassword = async (e) => {
-    e.preventDefault();
-    if (tempNewPassword.length < 6) {
-      setTempFeedback({ message: "Permanent password must be at least 6 characters.", isError: true });
-      return;
-    }
-    if (tempNewPassword !== tempConfirmPassword) {
-      setTempFeedback({ message: "Passwords do not match.", isError: true });
-      return;
-    }
-
-    setIsSavingTemp(true);
-    setTempFeedback({ message: "Saving password...", isError: false });
-
-    const { ok, data } = await changeTempPassword({
-      email: tempUserData.email,
-      tempPassword: tempUsedPassword,
-      newPassword: tempNewPassword,
-      confirmPassword: tempConfirmPassword,
-    });
-    setIsSavingTemp(false);
-
-    if (!ok) {
-      setTempFeedback({ message: data.error || "Could not change password.", isError: true });
-      return;
-    }
-
-    setTempFeedback({ message: "Permanent password set successfully! Redirecting...", isError: false });
-    setTimeout(() => {
-      setShowTempModal(false);
-      const signedInUser = completeSignIn(tempUserData);
-      navigate(getDashboardForRole(signedInUser.role));
-    }, 900);
   };
 
   return (
@@ -1060,7 +1009,7 @@ export default function Login() {
               </button>
             </div>
             <p style={{ fontSize: "0.82rem", color: "#475569", margin: "0 0 16px", lineHeight: 1.45 }}>
-              Enter your Member ID or registered cooperative email address. Your administrator will verify your account and issue a temporary One-Time Password (OTP).
+              Enter your Cooperative No. ID or registered email address. We will send a secure link to reset your password to the registered email associated with your account.
             </p>
             <form onSubmit={handleForgotSubmit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
               <div>
@@ -1098,7 +1047,7 @@ export default function Login() {
                   className="button button-primary"
                   style={{ flex: 1.4, padding: "8px 14px", fontSize: "0.82rem" }}
                 >
-                  {isSubmittingForgot ? "Submitting..." : "Submit Request"}
+                  {isSubmittingForgot ? "Sending..." : "Send Reset Link"}
                 </button>
               </div>
             </form>

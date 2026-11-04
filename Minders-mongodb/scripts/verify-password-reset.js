@@ -4,7 +4,6 @@ const bcrypt = require("bcryptjs");
 require("dotenv").config({ path: require("path").join(__dirname, "..", ".env") });
 
 const Account = require("../models/Account");
-const { sendPasswordResetEmail } = require("../services/mailer");
 
 const BASE_URL = `http://localhost:${process.env.PORT || 3000}`;
 
@@ -17,69 +16,79 @@ async function runTests() {
   console.log("✓ Connected to MongoDB");
 
   const testEmail = "test-reset-verify@kimpc.test";
+  const testCoopId = "M269999";
   const initialPassword = "initialPassword123!";
   const newPassword = "newSecurePassword456#";
 
   // Clean up any existing test user
   await Account.deleteOne({ email: testEmail });
 
-  // 1. Create a verified test account
+  // 1. Create a verified test account with cooperative ID
   const testAccount = await Account.create({
     fullName: "Test Reset Member",
     email: testEmail,
     passwordHash: await bcrypt.hash(initialPassword, 10),
     role: "member",
-    cooperativeId: "M269999",
+    cooperativeId: testCoopId,
     emailVerified: true,
     verificationStatus: "verified",
     tokenVersion: 0,
   });
-  console.log("✓ Test account created:", testEmail);
+  console.log(`✓ Test account created: ${testEmail} (Cooperative ID: ${testCoopId})`);
 
-  // 2. Test Forgot Password - Unknown Email
-  console.log("\n--- Test 1: Forgot Password for Unknown Email (Generic Response) ---");
+  // 2. Test Forgot Password - Unknown Identifier
+  console.log("\n--- Test 1: Forgot Password for Unknown Identifier (Generic Response) ---");
   const unknownRes = await fetch(`${BASE_URL}/api/auth/forgot-password`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: "nonexistent-ghost-account@kimpc.test" }),
+    body: JSON.stringify({ identifier: "nonexistent-ghost-account@kimpc.test" }),
   });
   const unknownData = await unknownRes.json();
   if (unknownRes.status === 200 && unknownData.message?.includes("If an eligible account exists")) {
-    console.log("✓ Correctly returned generic message for unknown email without leaking existence.");
+    console.log("✓ Correctly returned generic message for unknown identifier without leaking existence.");
   } else {
     throw new Error(`Expected generic 200 response, got ${unknownRes.status}: ${JSON.stringify(unknownData)}`);
   }
 
-  // 3. Test Forgot Password - Eligible Account
-  console.log("\n--- Test 2: Forgot Password for Eligible Account ---");
-  const forgotRes = await fetch(`${BASE_URL}/api/auth/forgot-password`, {
+  // 3. Test Forgot Password - Using Cooperative ID (e.g. M269999)
+  console.log("\n--- Test 2: Forgot Password using Cooperative ID (M269999) ---");
+  const forgotCoopRes = await fetch(`${BASE_URL}/api/auth/forgot-password`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: testEmail }),
+    body: JSON.stringify({ identifier: testCoopId }),
   });
-  const forgotData = await forgotRes.json();
-  if (forgotRes.status === 200 && forgotData.message?.includes("If an eligible account exists")) {
-    console.log("✓ Correctly returned generic message for eligible account.");
+  const forgotCoopData = await forgotCoopRes.json();
+  if (forgotCoopRes.status === 200 && forgotCoopData.message?.includes("If an eligible account exists")) {
+    console.log("✓ Correctly accepted Cooperative ID and returned generic success message.");
   } else {
-    throw new Error(`Forgot password failed: ${JSON.stringify(forgotData)}`);
+    throw new Error(`Forgot password by Cooperative ID failed: ${JSON.stringify(forgotCoopData)}`);
   }
 
-  // Verify DB state
-  const accWithToken1 = await Account.findOne({ email: testEmail });
+  // Verify DB state that reset token was generated for that account's email
+  const accWithToken1 = await Account.findOne({ cooperativeId: testCoopId });
   if (!accWithToken1.resetPasswordToken || !accWithToken1.resetPasswordExpires) {
-    throw new Error("Token or expiry not stored in MongoDB!");
+    throw new Error("Token or expiry not stored in MongoDB for Cooperative ID lookup!");
   }
   const tokenHash1 = accWithToken1.resetPasswordToken;
-  console.log("✓ Reset token hash stored in MongoDB:", tokenHash1.slice(0, 16) + "...");
-  console.log("✓ Reset token expiration set to:", accWithToken1.resetPasswordExpires);
+  console.log("✓ Reset token hash generated & stored for linked email:", accWithToken1.email);
+  console.log("✓ Hash:", tokenHash1.slice(0, 16) + "...");
+  console.log("✓ Expiration set to:", accWithToken1.resetPasswordExpires);
 
-  // 4. Test Token Replacement
-  console.log("\n--- Test 3: Token Replacement on Repeated Request ---");
-  await fetch(`${BASE_URL}/api/auth/forgot-password`, {
+  // 4. Test Forgot Password - Using Email Address
+  console.log("\n--- Test 3: Forgot Password using Email Address ---");
+  const forgotEmailRes = await fetch(`${BASE_URL}/api/auth/forgot-password`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: testEmail }),
+    body: JSON.stringify({ identifier: testEmail }),
   });
+  const forgotEmailData = await forgotEmailRes.json();
+  if (forgotEmailRes.status === 200 && forgotEmailData.message?.includes("If an eligible account exists")) {
+    console.log("✓ Correctly accepted Email address and returned generic success message.");
+  } else {
+    throw new Error(`Forgot password by Email failed: ${JSON.stringify(forgotEmailData)}`);
+  }
+
+  // Verify token replacement
   const accWithToken2 = await Account.findOne({ email: testEmail });
   if (accWithToken2.resetPasswordToken === tokenHash1) {
     throw new Error("Previous token was not replaced by the new request!");

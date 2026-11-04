@@ -365,7 +365,7 @@ setInterval(() => {
 }, 10 * 60 * 1000).unref();
 
 const FORGOT_GENERIC_MESSAGE =
-  "If an eligible account exists for this email, we’ll send a password reset link.";
+  "If an eligible account exists for this Cooperative No. ID or email, we’ll send a password reset link to the registered email address.";
 
 /**
  * POST /api/auth/forgot-password & /api/forgot-password
@@ -376,27 +376,36 @@ router.post(["/auth/forgot-password", "/forgot-password"], async (req, res) => {
   const MIN_DELAY_MS = 380; // Mitigate timing-based email enumeration
 
   try {
-    const rawIdentifier = req.body.email || req.body.identifier;
-    const email = cleanEmail(rawIdentifier);
+    const rawIdentifier = clean(req.body.email || req.body.identifier);
 
-    if (!email) {
-      return fail(res, 400, "Please enter your registered email address.");
+    if (!rawIdentifier) {
+      return fail(res, 400, "Please enter your Cooperative No. ID or registered email.");
     }
 
-    // Rate limiting checks by IP and Email
+    // Rate limiting checks by IP and Identifier
     const clientIp = (req.ip || req.headers["x-forwarded-for"] || "127.0.0.1")
       .split(",")[0]
       .trim();
 
-    const ipAllowed = checkResetRateLimit(`ip:${clientIp}`, 6, 15 * 60 * 1000);
-    const emailAllowed = checkResetRateLimit(`email:${email}`, 4, 15 * 60 * 1000);
+    const ipAllowed = checkResetRateLimit(`ip:${clientIp}`, 8, 15 * 60 * 1000);
+    const idAllowed = checkResetRateLimit(`id:${rawIdentifier.toLowerCase()}`, 5, 15 * 60 * 1000);
 
-    if (!ipAllowed || !emailAllowed) {
+    if (!ipAllowed || !idAllowed) {
       return fail(res, 429, "Too many password reset requests. Please try again in 15 minutes.");
     }
 
-    // Locate account matching email (supports Member, Manager, and Admin)
-    const account = await Account.findOne({ email });
+    const emailCandidate = cleanEmail(rawIdentifier);
+    const coopUpper = rawIdentifier.toUpperCase();
+
+    // Locate account matching either email OR Cooperative No. ID (case-insensitive)
+    const account = await Account.findOne({
+      $or: [
+        { email: emailCandidate },
+        { cooperativeId: rawIdentifier },
+        { cooperativeId: coopUpper },
+        { cooperativeId: { $regex: new RegExp(`^${rawIdentifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") } },
+      ],
+    });
 
     // Enforce account eligibility rules
     const isEligible =
@@ -448,12 +457,12 @@ router.post(["/auth/forgot-password", "/forgot-password"], async (req, res) => {
         req,
       });
     } else {
-      // Audit log attempt for non-existent / ineligible email without leaking to client
+      // Audit log attempt for non-existent / ineligible identifier without leaking to client
       await logAudit({
         action: "PASSWORD_RESET_REQUESTED",
-        actorEmail: email,
+        actorEmail: rawIdentifier,
         actorRole: "guest",
-        targetEmail: email,
+        targetEmail: rawIdentifier,
         details: "Password reset requested for unknown or ineligible account (generic response returned).",
         status: "Success",
         req,
@@ -605,94 +614,10 @@ router.post(["/auth/reset-password", "/reset-password"], async (req, res) => {
   }
 });
 
+// Forward legacy /auth/forgot-password-request to self-service email reset
 router.post("/auth/forgot-password-request", async (req, res) => {
-  const identifier = clean(req.body.identifier || req.body.email);
-  if (!identifier) return fail(res, 400, "Please enter your Member ID or registered email.");
-
-  const account = await Account.findOne({
-    $or: [
-      { email: cleanEmail(identifier) },
-      { cooperativeId: identifier },
-      { cooperativeId: identifier.toUpperCase() },
-    ],
-  });
-
-  if (!account) {
-    return fail(res, 404, "No account was found matching that Member ID or email address.");
-  }
-
-  account.forgotPasswordRequested = true;
-  await account.save();
-
-  await logAudit({
-    action: "FORGOT_PASSWORD_REQUEST",
-    actorEmail: account.email,
-    actorRole: account.role,
-    targetEmail: account.email,
-    targetName: account.fullName,
-    details: `Member requested password assistance for ${account.fullName} (${account.email}). Administrator can issue temporary OTP.`,
-    req,
-  });
-
-  res.json({
-    ok: true,
-    message:
-      "Your password recovery request has been submitted. Please contact your cooperative administrator to receive your temporary One-Time Password (OTP).",
-  });
-});
-
-router.post("/auth/change-temp-password", async (req, res) => {
-  const email = cleanEmail(req.body.email);
-  const tempPassword = String(req.body.tempPassword || "").trim();
-  const newPassword = String(req.body.newPassword || "").trim();
-  const confirmPassword = String(req.body.confirmPassword || "").trim();
-
-  if (!email || !newPassword || !confirmPassword) {
-    return fail(res, 400, "Email, new password, and confirmation are required.");
-  }
-
-  if (newPassword.length < 6) {
-    return fail(res, 400, "New password must be at least 6 characters.");
-  }
-
-  if (newPassword !== confirmPassword) {
-    return fail(res, 400, "Confirmation password does not match.");
-  }
-
-  const account = await Account.findOne({ email });
-  if (!account) return fail(res, 404, "Account not found.");
-
-  if (!account.mustChangePassword) {
-    return fail(res, 400, "This account is not flagged for a temporary password change.");
-  }
-
-  if (tempPassword && !(await bcrypt.compare(tempPassword, account.passwordHash))) {
-    return fail(res, 401, "The temporary one-time password provided is incorrect.");
-  }
-
-  account.passwordHash = await bcrypt.hash(newPassword, 10);
-  account.mustChangePassword = false;
-  account.forgotPasswordRequested = false;
-  account.oneTimePasswordSetAt = null;
-  await account.save();
-
-  await logAudit({
-    action: "PASSWORD_CHANGED_FROM_OTP",
-    actorEmail: account.email,
-    actorRole: account.role,
-    targetEmail: account.email,
-    targetName: account.fullName,
-    details: `Member ${account.fullName} successfully set permanent password after logging in with administrator-issued OTP.`,
-    req,
-  });
-
-  const responseData = account.toJSON ? account.toJSON() : account;
-  responseData.token = generateUserToken(account);
-  res.json({
-    ok: true,
-    account: responseData,
-    message: "Permanent password established successfully! You are now securely logged in.",
-  });
+  req.url = "/auth/forgot-password";
+  return router.handle(req, res);
 });
 
 // ---------- Social Authentication (Google & Facebook) ----------

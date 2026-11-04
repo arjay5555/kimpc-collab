@@ -788,38 +788,7 @@ export default function AccountManagement() {
                                     <span>{isSelf ? "Self (Protected)" : isDeactivated ? "Deactivated" : "Deactivate"}</span>
                                   </button>
 
-                                  {/* Action 4: Issue OTP (when requested) */}
-                                  {acc.forgotPasswordRequested && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setOpenMenuEmail(null);
-                                        handleIssueOtp(acc);
-                                      }}
-                                      style={{
-                                        width: "100%",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: "8px",
-                                        padding: "8px 12px",
-                                        borderRadius: "6px",
-                                        border: "none",
-                                        background: "#fef3c7",
-                                        color: "#b45309",
-                                        fontSize: "0.82rem",
-                                        fontWeight: 700,
-                                        cursor: "pointer",
-                                        textAlign: "left",
-                                        marginTop: "3px",
-                                      }}
-                                    >
-                                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                        <path d="M21 2l-2 2m-1-1l-3 3m0 0l-3 3 2 2 3-3m1-1l2 2" />
-                                        <circle cx="7.5" cy="15.5" r="5.5" />
-                                      </svg>
-                                      <span>Issue OTP</span>
-                                    </button>
-                                  )}
+
                                 </div>
                               )}
                             </div>

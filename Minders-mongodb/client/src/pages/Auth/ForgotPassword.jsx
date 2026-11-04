@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { api } from "../../services/api";
 import "../../styles/login-coop.css";
 
 export default function ForgotPassword() {
-  const navigate = useNavigate();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState({ message: "", isError: false, isSuccess: false });
 
@@ -18,11 +17,11 @@ export default function ForgotPassword() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const cleanEmailVal = email.trim().toLowerCase();
+    const cleanId = identifier.trim();
 
-    if (!cleanEmailVal) {
+    if (!cleanId) {
       setFeedback({
-        message: "Please enter your registered email address.",
+        message: "Please enter your Cooperative No. ID or registered email.",
         isError: true,
         isSuccess: false,
       });
@@ -35,7 +34,7 @@ export default function ForgotPassword() {
     try {
       const res = await api("/auth/forgot-password", {
         method: "POST",
-        body: { email: cleanEmailVal },
+        body: { identifier: cleanId },
       });
 
       setIsSubmitting(false);
@@ -44,11 +43,11 @@ export default function ForgotPassword() {
         setFeedback({
           message:
             res.data?.message ||
-            "If an eligible account exists for this email, we’ll send a password reset link.",
+            "If an eligible account exists for this Cooperative No. ID or email, we’ve sent a password reset link to the registered email address.",
           isError: false,
           isSuccess: true,
         });
-        setEmail("");
+        setIdentifier("");
       } else {
         setFeedback({
           message: res.data?.error || "Could not process request. Please try again.",
@@ -117,7 +116,7 @@ export default function ForgotPassword() {
                 Forgot Password?
               </h1>
               <p className="coop-auth-subtext" style={{ marginBottom: "22px" }}>
-                Enter your registered cooperative email address. If an eligible account exists, we will email you a secure link to reset your password.
+                Enter your Cooperative No. ID or registered email address. We will send a secure password reset link to the email linked to your account.
               </p>
 
               {feedback.isSuccess ? (
@@ -163,16 +162,16 @@ export default function ForgotPassword() {
                 <form className="coop-login-form" onSubmit={handleSubmit} autoComplete="off">
                   <div className="coop-pill-input-wrap">
                     <input
-                      id="forgot-email"
-                      name="email"
-                      type="email"
+                      id="forgot-identifier"
+                      name="identifier"
+                      type="text"
                       className="coop-pill-input"
-                      placeholder="Registered Email Address"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="Cooperative No. ID or Email"
+                      value={identifier}
+                      onChange={(e) => setIdentifier(e.target.value)}
                       required
                       autoFocus
-                      aria-label="Registered Email Address"
+                      aria-label="Cooperative No. ID or Email"
                     />
                   </div>
 
