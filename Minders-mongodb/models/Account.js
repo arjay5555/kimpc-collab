@@ -49,6 +49,11 @@ const accountSchema = new mongoose.Schema(
     mustChangePassword: { type: Boolean, default: false },
     forgotPasswordRequested: { type: Boolean, default: false },
     oneTimePasswordSetAt: { type: Date, default: null },
+    // Email Password Reset Link Recovery
+    resetPasswordToken: { type: String, default: null, index: true },
+    resetPasswordExpires: { type: Date, default: null, index: true },
+    // Token / Session version for revoking active JWTs upon password change
+    tokenVersion: { type: Number, default: 0 },
     // Google Calendar OAuth & Synchronization credentials
     googleOAuth: {
       accessToken: { type: String, default: "" },
@@ -78,7 +83,9 @@ const accountSchema = new mongoose.Schema(
         );
         delete ret._id;
         delete ret.__v;
-        delete ret.passwordHash; // never send password hashes to the browser
+        delete ret.passwordHash;
+        delete ret.resetPasswordToken; // never send reset token hash
+        delete ret.resetPasswordExpires; // never send password hashes to the browser
         delete ret.adminPinHash; // never send PIN hash to the browser
         if (ret.googleOAuth) {
           delete ret.googleOAuth.accessToken;

@@ -4,6 +4,7 @@ const bcrypt = require("bcryptjs");
 const Account = require("../models/Account");
 const authenticate = require("../middleware/authenticate");
 const { logAudit } = require("../services/auditLogger");
+const { sendPasswordResetEmail, sendPasswordChangedNotificationEmail } = require("../services/mailer");
 const {
   clean,
   cleanEmail,
@@ -336,6 +337,272 @@ router.post("/login", async (req, res) => {
   const responseData = account.toJSON ? account.toJSON() : (account.toObject ? account.toObject() : account);
   responseData.token = generateUserToken(account);
   res.json(responseData);
+});
+
+
+// ---------- Email-Based Password Reset Recovery ----------
+
+// In-memory rate limiting map (IP: max 5 requests / 15m; Email: max 3 requests / 15m)
+const resetRateLimits = new Map();
+function checkResetRateLimit(key, maxLimit, windowMs = 15 * 60 * 1000) {
+  const now = Date.now();
+  const record = resetRateLimits.get(key) || { count: 0, resetAt: now + windowMs };
+  if (now > record.resetAt) {
+    record.count = 0;
+    record.resetAt = now + windowMs;
+  }
+  record.count += 1;
+  resetRateLimits.set(key, record);
+  return record.count <= maxLimit;
+}
+
+// Periodically clean up expired rate limit entries
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, record] of resetRateLimits.entries()) {
+    if (now > record.resetAt) resetRateLimits.delete(key);
+  }
+}, 10 * 60 * 1000).unref();
+
+const FORGOT_GENERIC_MESSAGE =
+  "If an eligible account exists for this email, we’ll send a password reset link.";
+
+/**
+ * POST /api/auth/forgot-password & /api/forgot-password
+ * Initiates email-based password reset. Generates random token, stores SHA-256 hash, and emails reset link.
+ */
+router.post(["/auth/forgot-password", "/forgot-password"], async (req, res) => {
+  const startTime = Date.now();
+  const MIN_DELAY_MS = 380; // Mitigate timing-based email enumeration
+
+  try {
+    const rawIdentifier = req.body.email || req.body.identifier;
+    const email = cleanEmail(rawIdentifier);
+
+    if (!email) {
+      return fail(res, 400, "Please enter your registered email address.");
+    }
+
+    // Rate limiting checks by IP and Email
+    const clientIp = (req.ip || req.headers["x-forwarded-for"] || "127.0.0.1")
+      .split(",")[0]
+      .trim();
+
+    const ipAllowed = checkResetRateLimit(`ip:${clientIp}`, 6, 15 * 60 * 1000);
+    const emailAllowed = checkResetRateLimit(`email:${email}`, 4, 15 * 60 * 1000);
+
+    if (!ipAllowed || !emailAllowed) {
+      return fail(res, 429, "Too many password reset requests. Please try again in 15 minutes.");
+    }
+
+    // Locate account matching email (supports Member, Manager, and Admin)
+    const account = await Account.findOne({ email });
+
+    // Enforce account eligibility rules
+    const isEligible =
+      account &&
+      !account.isSuspended &&
+      !account.isArchived &&
+      account.emailVerified !== false &&
+      account.verificationStatus !== "declined";
+
+    if (isEligible) {
+      // Generate unguessable 256-bit cryptographically secure token
+      const rawToken = crypto.randomBytes(32).toString("hex");
+      const hashedToken = crypto.createHash("sha256").update(rawToken).digest("hex");
+
+      const expiryMinutes = Math.max(5, Number(process.env.PASSWORD_RESET_EXPIRY_MINUTES) || 30);
+      const expiresAt = new Date(Date.now() + expiryMinutes * 60 * 1000);
+
+      // Store SHA-256 hash and expiry, replacing any previous token
+      account.resetPasswordToken = hashedToken;
+      account.resetPasswordExpires = expiresAt;
+      account.forgotPasswordRequested = true;
+      await account.save();
+
+      // Build trusted reset link from APP_BASE_URL
+      const appBaseUrl = (
+        process.env.APP_BASE_URL ||
+        req.get("origin") ||
+        `${req.protocol}://${req.get("host")}`
+      ).trim().replace(/\/+$/, "");
+
+      const resetLink = `${appBaseUrl}/reset-password?token=${rawToken}`;
+
+      // Dispatch email through configured service (Resend or SMTP)
+      await sendPasswordResetEmail({
+        toEmail: account.email,
+        resetLink,
+        fullName: account.fullName,
+        expiryMinutes,
+      });
+
+      await logAudit({
+        action: "PASSWORD_RESET_REQUESTED",
+        actorEmail: account.email,
+        actorRole: account.role,
+        targetEmail: account.email,
+        targetName: account.fullName,
+        details: `Password reset link dispatched via email (valid for ${expiryMinutes} minutes).`,
+        status: "Success",
+        req,
+      });
+    } else {
+      // Audit log attempt for non-existent / ineligible email without leaking to client
+      await logAudit({
+        action: "PASSWORD_RESET_REQUESTED",
+        actorEmail: email,
+        actorRole: "guest",
+        targetEmail: email,
+        details: "Password reset requested for unknown or ineligible account (generic response returned).",
+        status: "Success",
+        req,
+      });
+    }
+
+    // Constant-time artificial delay to prevent latency-based enumeration
+    const elapsed = Date.now() - startTime;
+    if (elapsed < MIN_DELAY_MS) {
+      await new Promise((resolve) => setTimeout(resolve, MIN_DELAY_MS - elapsed));
+    }
+
+    // Always return generic success message
+    return res.json({
+      ok: true,
+      message: FORGOT_GENERIC_MESSAGE,
+    });
+  } catch (error) {
+    console.error("Forgot password error:", error);
+    const elapsed = Date.now() - startTime;
+    if (elapsed < MIN_DELAY_MS) {
+      await new Promise((resolve) => setTimeout(resolve, MIN_DELAY_MS - elapsed));
+    }
+    return fail(res, 500, "Could not process password reset request at this time.");
+  }
+});
+
+/**
+ * GET /api/auth/verify-reset-token & /api/verify-reset-token
+ * Validates reset token status before showing input form.
+ */
+router.get(["/auth/verify-reset-token", "/verify-reset-token"], async (req, res) => {
+  const rawToken = String(req.query.token || "").trim();
+  if (!rawToken) {
+    return fail(res, 400, "Password reset token is missing.");
+  }
+
+  const hashedToken = crypto.createHash("sha256").update(rawToken).digest("hex");
+  const account = await Account.findOne({
+    resetPasswordToken: hashedToken,
+    resetPasswordExpires: { $gt: new Date() },
+    isArchived: { $ne: true },
+    isSuspended: { $ne: true },
+  }).select("_id email fullName role");
+
+  if (!account) {
+    return fail(res, 400, "This password reset link is invalid, expired, or has already been used.");
+  }
+
+  return res.json({
+    ok: true,
+    valid: true,
+    email: account.email,
+    fullName: account.fullName,
+  });
+});
+
+/**
+ * POST /api/auth/reset-password & /api/reset-password
+ * Verifies token, validates password policy, updates password atomically, invalidates sessions, and sends notification.
+ */
+router.post(["/auth/reset-password", "/reset-password"], async (req, res) => {
+  try {
+    const rawToken = String(req.body.token || "").trim();
+    const newPassword = String(req.body.newPassword || "").trim();
+    const confirmPassword = String(req.body.confirmPassword || "").trim();
+
+    if (!rawToken) {
+      return fail(res, 400, "Password reset token is required.");
+    }
+
+    if (!newPassword || !confirmPassword) {
+      return fail(res, 400, "New password and password confirmation are required.");
+    }
+
+    if (newPassword !== confirmPassword) {
+      return fail(res, 400, "Confirmation password does not match.");
+    }
+
+    // Enforce existing password policy: at least 6 characters
+    if (newPassword.length < 6) {
+      return fail(res, 400, "Password must be at least 6 characters.");
+    }
+
+    const hashedToken = crypto.createHash("sha256").update(rawToken).digest("hex");
+    const newPasswordHash = await bcrypt.hash(newPassword, 10);
+
+    // Atomically find account with valid token, update password, unset token & expiry, and bump tokenVersion.
+    // Using atomic findOneAndUpdate prevents race conditions and simultaneous reuse of the same token.
+    const updatedAccount = await Account.findOneAndUpdate(
+      {
+        resetPasswordToken: hashedToken,
+        resetPasswordExpires: { $gt: new Date() },
+        isArchived: { $ne: true },
+        isSuspended: { $ne: true },
+      },
+      {
+        $set: {
+          passwordHash: newPasswordHash,
+          mustChangePassword: false,
+          forgotPasswordRequested: false,
+          oneTimePasswordSetAt: null,
+        },
+        $unset: {
+          resetPasswordToken: 1,
+          resetPasswordExpires: 1,
+        },
+        $inc: {
+          tokenVersion: 1, // Invalidates all existing active JWTs and sessions across devices
+        },
+      },
+      { new: true }
+    );
+
+    if (!updatedAccount) {
+      // Check if token exists in DB but expired or already consumed
+      const existingTokenAcc = await Account.findOne({ resetPasswordToken: hashedToken });
+      if (existingTokenAcc) {
+        return fail(res, 400, "This password reset link has expired or has already been used. Please request a new one.");
+      }
+      return fail(res, 400, "This password reset link is invalid or has expired. Please request a new link.");
+    }
+
+    // Dispatch confirmation email
+    sendPasswordChangedNotificationEmail({
+      toEmail: updatedAccount.email,
+      fullName: updatedAccount.fullName,
+    }).catch((err) => console.error("Could not send password change confirmation email:", err));
+
+    // Audit log without passwords or tokens
+    await logAudit({
+      action: "PASSWORD_RESET_SUCCESS",
+      actorEmail: updatedAccount.email,
+      actorRole: updatedAccount.role,
+      targetEmail: updatedAccount.email,
+      targetName: updatedAccount.fullName,
+      details: "Password was reset successfully via email verification token. Active sessions invalidated.",
+      status: "Success",
+      req,
+    });
+
+    return res.json({
+      ok: true,
+      message: "Your password has been successfully reset! You can now log in with your new password.",
+    });
+  } catch (error) {
+    console.error("Reset password error:", error);
+    return fail(res, 500, "Could not reset password. Please try again later.");
+  }
 });
 
 router.post("/auth/forgot-password-request", async (req, res) => {

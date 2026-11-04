@@ -7,6 +7,8 @@ import MemberLayout from "./components/MemberLayout";
 
 // Auth
 import Login from "./pages/Auth/Login";
+import ForgotPassword from "./pages/Auth/ForgotPassword";
+import ResetPassword from "./pages/Auth/ResetPassword";
 
 // Member
 import MemberDashboard from "./pages/Member/MemberDashboard";
@@ -49,6 +51,8 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Login />} />
       <Route path="/registration" element={<Login />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
 
       {/* Member Routes */}
       <Route

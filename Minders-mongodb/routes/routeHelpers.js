@@ -38,6 +38,7 @@ function generateUserToken(account, extra = {}) {
       email: accObj.email,
       role: accObj.role,
       fullName: accObj.fullName,
+      tokenVersion: typeof accObj.tokenVersion === "number" ? accObj.tokenVersion : 0,
       ...extra,
     },
     JWT_SECRET,

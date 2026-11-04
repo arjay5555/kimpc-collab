@@ -24,17 +24,25 @@ async function authenticate(req, res, next) {
     let account = null;
     if (payload.id && mongoose.Types.ObjectId.isValid(payload.id)) {
       account = await Account.findById(payload.id).select(
-        "_id email fullName role isSuspended isArchived cooperativeId suspensionReason memberSettings"
+        "_id email fullName role isSuspended isArchived cooperativeId suspensionReason memberSettings tokenVersion"
       );
     }
     if (!account && payload.email) {
       account = await Account.findOne({ email: String(payload.email).trim().toLowerCase() }).select(
-        "_id email fullName role isSuspended isArchived cooperativeId suspensionReason memberSettings"
+        "_id email fullName role isSuspended isArchived cooperativeId suspensionReason memberSettings tokenVersion"
       );
     }
 
     if (!account || account.isSuspended || account.isArchived) {
       return res.status(401).json({ error: "This account is unavailable. Please sign in again." });
+    }
+
+    if (
+      typeof payload.tokenVersion === "number" &&
+      typeof account.tokenVersion === "number" &&
+      payload.tokenVersion !== account.tokenVersion
+    ) {
+      return res.status(401).json({ error: "Your session has expired due to a password change. Please sign in again." });
     }
 
     req.user = account;

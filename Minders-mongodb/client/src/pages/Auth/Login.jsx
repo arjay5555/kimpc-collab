@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { api, getDashboardForRole } from "../../services/api";
 
@@ -487,34 +487,40 @@ export default function Login() {
 
   const handleForgotSubmit = async (e) => {
     e.preventDefault();
-    if (!forgotIdentifier.trim()) {
-      setForgotFeedback({ message: "Please enter your Member ID or registered email.", isError: true });
+    const cleanId = forgotIdentifier.trim();
+    if (!cleanId) {
+      setForgotFeedback({ message: "Please enter your registered email address.", isError: true });
       return;
     }
 
     setIsSubmittingForgot(true);
-    setForgotFeedback({ message: "Submitting request...", isError: false });
+    setForgotFeedback({ message: "Sending password reset link...", isError: false });
 
-    const { ok, data } = await forgotPassword(forgotIdentifier.trim());
-    setIsSubmittingForgot(false);
-
-    if (!ok) {
-      setForgotFeedback({ message: data.error || "Could not submit recovery request.", isError: true });
-      return;
-    }
-
-    setForgotFeedback({
-      message: data.message || "Request submitted! An administrator can now issue your temporary One-Time Password.",
-      isError: false,
-    });
-
-    setTimeout(() => {
-      setShowForgotModal(false);
-      setLoginFeedback({
-        message: "Password recovery requested! Please contact your administrator to receive your temporary OTP.",
-        isError: false,
+    try {
+      const res = await api("/auth/forgot-password", {
+        method: "POST",
+        body: { email: cleanId },
       });
-    }, 2500);
+      setIsSubmittingForgot(false);
+
+      if (res.ok) {
+        setForgotFeedback({
+          message: res.data?.message || "If an eligible account exists for this email, we’ll send a password reset link.",
+          isError: false,
+        });
+        setTimeout(() => {
+          setShowForgotModal(false);
+        }, 3000);
+      } else {
+        setForgotFeedback({
+          message: res.data?.error || "Could not process request. Please try again.",
+          isError: true,
+        });
+      }
+    } catch {
+      setIsSubmittingForgot(false);
+      setForgotFeedback({ message: "Network error. Please try again.", isError: true });
+    }
   };
 
   const handleSaveTempPassword = async (e) => {
@@ -655,18 +661,12 @@ export default function Login() {
                       />
                       <span>Remember me</span>
                     </label>
-                    <a
-                      href="#forgot"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setForgotIdentifier(loginIdentifier);
-                        setForgotFeedback({ message: "", isError: false });
-                        setShowForgotModal(true);
-                      }}
+                    <Link
+                      to="/forgot-password"
                       className="coop-forgot-link"
                     >
                       Forgot Password?
-                    </a>
+                    </Link>
                   </div>
 
                   {recaptchaEnabled && (
