@@ -28,7 +28,7 @@ function createSmtpTransporter() {
 /**
  * Generic email delivery dispatcher.
  * Priority:
- * 1. Resend API (if RESEND_API_KEY is configured)
+ * 1. Resend API (if RESEND_API_KEY is configured and EMAIL_PROVIDER !== 'smtp')
  * 2. SMTP / Nodemailer (if SMTP_USER and SMTP_PASS are configured)
  * 3. Safe Console Simulation (if no live email credentials are set)
  */
@@ -38,36 +38,12 @@ async function dispatchEmail({ to, subject, html, text, replyTo }) {
     process.env.EMAIL_FROM ||
     process.env.SMTP_FROM ||
     `"KIMPC Security" <onboarding@resend.dev>`;
+  const preferredProvider = (process.env.EMAIL_PROVIDER || "").toLowerCase().trim();
 
-  // 1. Try Resend if API key is present
-  if (resendApiKey) {
-    try {
-      const resend = new Resend(resendApiKey);
-      const resendPayload = {
-        from: defaultFrom,
-        to: [to],
-        subject,
-        html,
-        text,
-      };
-      if (replyTo) resendPayload.reply_to = replyTo;
-
-      const { data, error } = await resend.emails.send(resendPayload);
-      if (error) {
-        console.error("[EMAIL DISPATCH ERROR (Resend)]:", error.message || error);
-        return { sent: false, error: error.message || String(error), provider: "resend" };
-      }
-      console.log(`[EMAIL DISPATCH SUCCESS (Resend)] Real email sent to ${to}. ID: ${data?.id}`);
-      return { sent: true, id: data?.id, provider: "resend" };
-    } catch (err) {
-      console.error("[EMAIL DISPATCH EXCEPTION (Resend)]:", err.message);
-      return { sent: false, error: err.message, provider: "resend" };
-    }
-  }
-
-  // 2. Try SMTP Transporter
-  const smtpTransporter = createSmtpTransporter();
-  if (smtpTransporter) {
+  // Helper for SMTP send
+  const trySmtp = async () => {
+    const smtpTransporter = createSmtpTransporter();
+    if (!smtpTransporter) return null;
     try {
       const fromAddress = process.env.SMTP_FROM || `"KIMPC Security" <${process.env.SMTP_USER}>`;
       const mailOptions = {
@@ -86,22 +62,64 @@ async function dispatchEmail({ to, subject, html, text, replyTo }) {
       console.error(`[EMAIL DISPATCH ERROR (SMTP)] Failed to send email to ${to}:`, err.message);
       return { sent: false, error: err.message, provider: "smtp" };
     }
+  };
+
+  // Helper for Resend send
+  const tryResend = async () => {
+    if (!resendApiKey) return null;
+    try {
+      const resend = new Resend(resendApiKey);
+      const resendPayload = {
+        from: defaultFrom,
+        to: [to],
+        subject,
+        html,
+        text,
+      };
+      if (replyTo) resendPayload.reply_to = replyTo;
+
+      const { data, error } = await resend.emails.send(resendPayload);
+      if (error) {
+        console.warn(`[EMAIL DISPATCH WARNING (Resend)]:`, error.message || error);
+        return { sent: false, error: error.message || String(error), provider: "resend" };
+      }
+      console.log(`[EMAIL DISPATCH SUCCESS (Resend)] Real email sent to ${to}. ID: ${data?.id}`);
+      return { sent: true, id: data?.id, provider: "resend" };
+    } catch (err) {
+      console.warn(`[EMAIL DISPATCH WARNING (Resend)]:`, err.message);
+      return { sent: false, error: err.message, provider: "resend" };
+    }
+  };
+
+  // If user explicitly prefers SMTP, try SMTP first
+  if (preferredProvider === "smtp") {
+    const smtpResult = await trySmtp();
+    if (smtpResult?.sent) return smtpResult;
+    const resendResult = await tryResend();
+    if (resendResult?.sent) return resendResult;
+  } else {
+    // Default: Try Resend first, fall back to SMTP if Resend fails or errors
+    if (resendApiKey) {
+      const resendResult = await tryResend();
+      if (resendResult?.sent) return resendResult;
+    }
+    const smtpResult = await trySmtp();
+    if (smtpResult?.sent) return smtpResult;
   }
 
-  // 3. Simulation mode (no credentials provided)
+  // 3. Simulation mode (no credentials provided or providers rejected)
   console.log(`\n================================================================`);
-  console.log(`[EMAIL DISPATCH - SIMULATION MODE (No RESEND_API_KEY or SMTP credentials)]`);
+  console.log(`[EMAIL DISPATCH - LOCAL / SIMULATION NOTICE]`);
   console.log(`To: ${to}`);
   console.log(`Subject: ${subject}`);
-  if (text) {
-    console.log(`Content:\n${text}`);
-  }
+  console.log(`Note: If using Resend free tier (onboarding@resend.dev), Resend restricts recipients to the account owner email.`);
+  console.log(`To send to all members, configure Gmail SMTP (SMTP_USER/PASS) or verify a domain in Resend.`);
   console.log(`================================================================\n`);
 
   return {
     sent: false,
     simulated: true,
-    reason: "Neither RESEND_API_KEY nor (SMTP_USER & SMTP_PASS) are configured in backend environment variables.",
+    reason: "Email dispatch fell back to local notification.",
   };
 }
 

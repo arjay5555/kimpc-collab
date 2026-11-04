@@ -431,14 +431,22 @@ router.post(
       account.forgotPasswordRequested = true;
       await account.save();
 
-      // Build trusted reset link from APP_BASE_URL
+      // Build trusted reset link (prioritizing current browser origin if available, then APP_BASE_URL)
       const appBaseUrl = (
-        process.env.APP_BASE_URL ||
         req.get("origin") ||
+        process.env.APP_BASE_URL ||
         `${req.protocol}://${req.get("host")}`
       ).trim().replace(/\/+$/, "");
 
       const resetLink = `${appBaseUrl}/reset-password?token=${rawToken}`;
+
+      console.log(`\n============================================================`);
+      console.log(`🔑 [PASSWORD RESET LINK GENERATED]`);
+      console.log(`   Account: ${account.fullName}`);
+      console.log(`   Cooperative ID: ${account.cooperativeId || 'N/A'}`);
+      console.log(`   Registered Email: ${account.email}`);
+      console.log(`   Reset URL: ${resetLink}`);
+      console.log(`============================================================\n`);
 
       // Dispatch email through configured service (Resend or SMTP)
       await sendPasswordResetEmail({
