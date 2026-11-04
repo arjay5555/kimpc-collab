@@ -167,6 +167,22 @@ function TractorIcon({ size = 18, color = "currentColor" }) {
   );
 }
 
+function ChevronLeftIcon({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="15 18 9 12 15 6" />
+    </svg>
+  );
+}
+
+function ChevronRightIcon({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="9 18 15 12 9 6" />
+    </svg>
+  );
+}
+
 export default function EquipmentCatalog() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -243,6 +259,96 @@ export default function EquipmentCatalog() {
 
   const today = new Date();
   const minDate = dateKey(today);
+
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+
+  const monthNameYear = useMemo(() => {
+    return calendarMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  }, [calendarMonth]);
+
+  const isPrevDisabled = useMemo(() => {
+    return (
+      calendarMonth.getFullYear() === today.getFullYear() &&
+      calendarMonth.getMonth() === today.getMonth()
+    );
+  }, [calendarMonth, today]);
+
+  const handlePrevMonth = () => {
+    setCalendarMonth((prev) => {
+      const target = new Date(prev.getFullYear(), prev.getMonth() - 1, 1);
+      const minMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      return target < minMonth ? minMonth : target;
+    });
+  };
+
+  const handleNextMonth = () => {
+    setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+  };
+
+  const calendarGrid = useMemo(() => {
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth();
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    const items = [];
+    for (let i = 0; i < firstDay; i++) {
+      items.push({ isBlank: true, key: `blank-${i}` });
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateObj = new Date(year, month, d);
+      const key = dateKey(dateObj);
+      const isPast = key < minDate;
+      const isBooked = isDateKeyBooked(key, blockedRanges);
+      items.push({
+        isBlank: false,
+        dayNum: d,
+        key,
+        isPast,
+        isBooked,
+      });
+    }
+    return items;
+  }, [calendarMonth, minDate, blockedRanges]);
+
+  const handleCalendarDayClick = (dayKey) => {
+    if (isDateKeyBooked(dayKey, blockedRanges)) {
+      return; // Reserved dates cannot be selected
+    }
+    setDateError("");
+    setFeedback("");
+
+    // If no start date or both start & end dates are set (or start !== end), start new selection
+    if (!booking.start || (booking.start && booking.end && booking.start !== booking.end)) {
+      setBooking((prev) => ({ ...prev, start: dayKey, end: dayKey }));
+      return;
+    }
+
+    // If start is set and end equals start (or no end)
+    if (booking.start && (!booking.end || booking.start === booking.end)) {
+      if (dayKey < booking.start) {
+        setBooking((prev) => ({ ...prev, start: dayKey, end: dayKey }));
+      } else if (dayKey === booking.start) {
+        setBooking((prev) => ({ ...prev, end: dayKey }));
+      } else {
+        if (hasBookedDatesInRange(booking.start, dayKey, blockedRanges)) {
+          setDateError("The period between selected dates contains reserved days. Please select an available continuous range.");
+          setBooking((prev) => ({ ...prev, start: dayKey, end: dayKey }));
+          return;
+        }
+        setBooking((prev) => ({ ...prev, end: dayKey }));
+      }
+    }
+  };
+
+  const handleClearDates = () => {
+    setBooking((prev) => ({ ...prev, start: "", end: "" }));
+    setDateError("");
+    setFeedback("");
+  };
 
   const loadCatalog = useCallback(async () => {
     setLoading(true);
@@ -394,6 +500,10 @@ export default function EquipmentCatalog() {
     if (!val) {
       setBooking((prev) => ({ ...prev, start: "" }));
       return;
+    }
+    const d = new Date(`${val}T00:00:00`);
+    if (!Number.isNaN(d.getTime())) {
+      setCalendarMonth(new Date(d.getFullYear(), d.getMonth(), 1));
     }
     if (isDateKeyBooked(val, blockedRanges)) {
       setDateError(`Selected start date (${val}) is already booked for this machinery. Please choose an available date.`);
@@ -594,6 +704,7 @@ export default function EquipmentCatalog() {
                   hectares: 1,
                   location: "",
                 });
+                setCalendarMonth(new Date(today.getFullYear(), today.getMonth(), 1));
                 setPaymentMethod("Cash");
                 setCashTiming("Upon Pickup");
                 setGcashProof("");
@@ -967,47 +1078,298 @@ export default function EquipmentCatalog() {
 
                   {/* Step 02: Scheduled Work Dates */}
                   <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: "16px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                      <span
-                        style={{
-                          width: "22px",
-                          height: "22px",
-                          borderRadius: "50%",
-                          background: "#dcfce7",
-                          color: "#15803d",
-                          fontSize: "0.72rem",
-                          fontWeight: 800,
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexShrink: 0,
-                        }}
-                      >
-                        2
-                      </span>
-                      <label style={{ fontSize: "0.86rem", fontWeight: 700, color: "#0f172a", margin: 0 }}>
-                        Scheduled Work Dates
-                      </label>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span
+                          style={{
+                            width: "22px",
+                            height: "22px",
+                            borderRadius: "50%",
+                            background: "#dcfce7",
+                            color: "#15803d",
+                            fontSize: "0.72rem",
+                            fontWeight: 800,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flexShrink: 0,
+                          }}
+                        >
+                          2
+                        </span>
+                        <label style={{ fontSize: "0.86rem", fontWeight: 700, color: "#0f172a", margin: 0 }}>
+                          Select Scheduled Work Dates
+                        </label>
+                      </div>
+                      {booking.start && (
+                        <button
+                          type="button"
+                          onClick={handleClearDates}
+                          style={{
+                            border: "none",
+                            background: "transparent",
+                            color: "#64748b",
+                            fontSize: "0.74rem",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            textDecoration: "underline",
+                          }}
+                        >
+                          Clear Selection
+                        </button>
+                      )}
                     </div>
-                    <p style={{ fontSize: "0.76rem", color: "#64748b", margin: "0 0 10px 30px" }}>
-                      Choose dispatch start date and anticipated completion date. Reserved dates are blocked.
+                    <p style={{ fontSize: "0.76rem", color: "#64748b", margin: "0 0 12px 30px" }}>
+                      Click an open date to set dispatch start, then click your completion date. Reserved dates change color and cannot be selected.
                     </p>
 
                     <div style={{ marginLeft: "30px" }}>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
+                      {/* Interactive Calendar Container */}
+                      <div
+                        style={{
+                          background: "#ffffff",
+                          border: "1px solid #e2e8f0",
+                          borderRadius: "12px",
+                          padding: "14px 16px",
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                        }}
+                      >
+                        {/* Calendar Header with Month Navigation */}
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            marginBottom: "12px",
+                            paddingBottom: "8px",
+                            borderBottom: "1px solid #f1f5f9",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <CalendarIcon size={16} color="#15803d" />
+                            <span style={{ fontSize: "0.95rem", fontWeight: 800, color: "#0f172a" }}>
+                              {monthNameYear}
+                            </span>
+                          </div>
+
+                          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                            <button
+                              type="button"
+                              onClick={handlePrevMonth}
+                              disabled={isPrevDisabled}
+                              aria-label="Previous month"
+                              style={{
+                                width: "28px",
+                                height: "28px",
+                                borderRadius: "6px",
+                                border: "1px solid #e2e8f0",
+                                background: isPrevDisabled ? "#f8fafc" : "#ffffff",
+                                color: isPrevDisabled ? "#cbd5e1" : "#0f172a",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                cursor: isPrevDisabled ? "not-allowed" : "pointer",
+                                transition: "all 0.12s ease",
+                              }}
+                            >
+                              <ChevronLeftIcon size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleNextMonth}
+                              aria-label="Next month"
+                              style={{
+                                width: "28px",
+                                height: "28px",
+                                borderRadius: "6px",
+                                border: "1px solid #e2e8f0",
+                                background: "#ffffff",
+                                color: "#0f172a",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                cursor: "pointer",
+                                transition: "all 0.12s ease",
+                              }}
+                            >
+                              <ChevronRightIcon size={14} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Weekday Row */}
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "repeat(7, 1fr)",
+                            gap: "4px",
+                            textAlign: "center",
+                            marginBottom: "6px",
+                          }}
+                        >
+                          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((dayName) => (
+                            <div
+                              key={dayName}
+                              style={{
+                                fontSize: "0.7rem",
+                                fontWeight: 700,
+                                color: "#64748b",
+                                padding: "2px 0",
+                                userSelect: "none",
+                              }}
+                            >
+                              {dayName}
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Calendar Days Grid */}
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "repeat(7, 1fr)",
+                            gap: "4px",
+                          }}
+                        >
+                          {calendarGrid.map((d) => {
+                            if (d.isBlank) {
+                              return <div key={d.key} style={{ minHeight: "36px" }} />;
+                            }
+
+                            if (d.isPast) {
+                              return (
+                                <div
+                                  key={d.key}
+                                  style={{
+                                    minHeight: "36px",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    borderRadius: "6px",
+                                    color: "#cbd5e1",
+                                    fontSize: "0.8rem",
+                                    userSelect: "none",
+                                    background: "#fafafa",
+                                  }}
+                                >
+                                  {d.dayNum}
+                                </div>
+                              );
+                            }
+
+                            if (d.isBooked) {
+                              return (
+                                <div
+                                  key={d.key}
+                                  title="Reserved — cannot be selected"
+                                  style={{
+                                    minHeight: "36px",
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    borderRadius: "6px",
+                                    background: "#fee2e2",
+                                    border: "1px solid #fca5a5",
+                                    color: "#b91c1c",
+                                    cursor: "not-allowed",
+                                    userSelect: "none",
+                                    padding: "2px 0",
+                                  }}
+                                >
+                                  <span style={{ fontSize: "0.78rem", fontWeight: 700, textDecoration: "line-through" }}>
+                                    {d.dayNum}
+                                  </span>
+                                  <span style={{ fontSize: "0.55rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.02em" }}>
+                                    Reserved
+                                  </span>
+                                </div>
+                              );
+                            }
+
+                            const isStart = booking.start === d.key;
+                            const isEnd = booking.end === d.key;
+                            const isSelectedPoint = isStart || isEnd;
+                            const inRange = Boolean(
+                              booking.start &&
+                              booking.end &&
+                              d.key >= booking.start &&
+                              d.key <= booking.end
+                            );
+
+                            return (
+                              <button
+                                key={d.key}
+                                type="button"
+                                onClick={() => handleCalendarDayClick(d.key)}
+                                style={{
+                                  minHeight: "36px",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  borderRadius: isSelectedPoint ? "6px" : inRange ? "4px" : "6px",
+                                  background: isSelectedPoint ? "#15803d" : inRange ? "#dcfce7" : "#ffffff",
+                                  border: isSelectedPoint
+                                    ? "1.5px solid #14532d"
+                                    : inRange
+                                    ? "1px solid #86efac"
+                                    : "1px solid #e2e8f0",
+                                  color: isSelectedPoint ? "#ffffff" : inRange ? "#15803d" : "#0f172a",
+                                  fontSize: "0.82rem",
+                                  fontWeight: isSelectedPoint || inRange ? 800 : 600,
+                                  cursor: "pointer",
+                                  padding: "2px 0",
+                                  transition: "all 0.12s ease",
+                                }}
+                              >
+                                <span>{d.dayNum}</span>
+                                {isSelectedPoint && (
+                                  <span style={{ fontSize: "0.52rem", fontWeight: 800, textTransform: "uppercase" }}>
+                                    {isStart && isEnd ? "Day" : isStart ? "Start" : "End"}
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Calendar Legend Bar */}
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            flexWrap: "wrap",
+                            gap: "8px",
+                            marginTop: "12px",
+                            paddingTop: "8px",
+                            borderTop: "1px solid #f1f5f9",
+                            fontSize: "0.7rem",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", color: "#475569" }}>
+                              <span style={{ width: "10px", height: "10px", borderRadius: "3px", background: "#ffffff", border: "1px solid #cbd5e1", display: "inline-block" }} />
+                              Available
+                            </span>
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", color: "#15803d", fontWeight: 600 }}>
+                              <span style={{ width: "10px", height: "10px", borderRadius: "3px", background: "#15803d", display: "inline-block" }} />
+                              Selected
+                            </span>
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", color: "#b91c1c", fontWeight: 700 }}>
+                              <span style={{ width: "10px", height: "10px", borderRadius: "3px", background: "#fee2e2", border: "1px solid #fca5a5", display: "inline-block" }} />
+                              Reserved (Cannot Select)
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Schedule Summary & Synchronized Inputs */}
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginTop: "10px" }}>
                         <div>
-                          <label
-                            style={{
-                              fontSize: "0.76rem",
-                              fontWeight: 700,
-                              color: "#475569",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "5px",
-                              marginBottom: "5px",
-                            }}
-                          >
-                            <CalendarIcon size={14} /> Start Date
+                          <label style={{ fontSize: "0.74rem", fontWeight: 700, color: "#475569", marginBottom: "4px", display: "block" }}>
+                            Start Date
                           </label>
                           <input
                             required
@@ -1017,10 +1379,10 @@ export default function EquipmentCatalog() {
                             onChange={(e) => handleStartDateChange(e.target.value)}
                             style={{
                               width: "100%",
-                              padding: "9px 12px",
+                              padding: "8px 10px",
                               borderRadius: "8px",
                               border: isStartBooked ? "2px solid #ef4444" : "1px solid #cbd5e1",
-                              fontSize: "0.88rem",
+                              fontSize: "0.85rem",
                               fontWeight: 600,
                               color: "#0f172a",
                               background: "#ffffff",
@@ -1030,18 +1392,8 @@ export default function EquipmentCatalog() {
                         </div>
 
                         <div>
-                          <label
-                            style={{
-                              fontSize: "0.76rem",
-                              fontWeight: 700,
-                              color: "#475569",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "5px",
-                              marginBottom: "5px",
-                            }}
-                          >
-                            <CalendarIcon size={14} /> End Date
+                          <label style={{ fontSize: "0.74rem", fontWeight: 700, color: "#475569", marginBottom: "4px", display: "block" }}>
+                            End Date
                           </label>
                           <input
                             required
@@ -1051,10 +1403,10 @@ export default function EquipmentCatalog() {
                             onChange={(e) => handleEndDateChange(e.target.value)}
                             style={{
                               width: "100%",
-                              padding: "9px 12px",
+                              padding: "8px 10px",
                               borderRadius: "8px",
                               border: isEndBooked || isRangeBlocked ? "2px solid #ef4444" : "1px solid #cbd5e1",
-                              fontSize: "0.88rem",
+                              fontSize: "0.85rem",
                               fontWeight: 600,
                               color: "#0f172a",
                               background: "#ffffff",
@@ -1064,29 +1416,47 @@ export default function EquipmentCatalog() {
                         </div>
                       </div>
 
-                      {/* Duration Badge */}
-                      {booking.start && booking.end && !isDatesInvalid && (
+                      {/* Selected Schedule Status & Duration */}
+                      {booking.start && booking.end && !isDatesInvalid ? (
                         <div
                           style={{
                             marginTop: "8px",
                             display: "inline-flex",
                             alignItems: "center",
                             gap: "6px",
-                            padding: "4px 10px",
+                            padding: "6px 12px",
                             borderRadius: "6px",
                             background: "#dcfce7",
                             color: "#15803d",
-                            fontSize: "0.75rem",
+                            fontSize: "0.78rem",
                             fontWeight: 700,
                           }}
                         >
                           <CheckIcon size={13} />
                           <span>
-                            {scheduledDaysCount} Calendar Day{scheduledDaysCount > 1 ? "s" : ""} Scheduled (
-                            {formatDisplayDate(booking.start)} – {formatDisplayDate(booking.end)})
+                            {scheduledDaysCount} Calendar Day{scheduledDaysCount > 1 ? "s" : ""} Scheduled:{" "}
+                            {formatDisplayDate(booking.start)} – {formatDisplayDate(booking.end)}
                           </span>
                         </div>
-                      )}
+                      ) : booking.start && (!booking.end || booking.start === booking.end) ? (
+                        <div
+                          style={{
+                            marginTop: "8px",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            padding: "6px 12px",
+                            borderRadius: "6px",
+                            background: "#f0fdf4",
+                            border: "1px solid #bbf7d0",
+                            color: "#166534",
+                            fontSize: "0.76rem",
+                            fontWeight: 600,
+                          }}
+                        >
+                          <span>Start Date: <strong>{formatDisplayDate(booking.start)}</strong>. Click completion date on the calendar.</span>
+                        </div>
+                      ) : null}
 
                       {/* Date Conflict Alert */}
                       {dateError && (
@@ -1107,43 +1477,6 @@ export default function EquipmentCatalog() {
                         >
                           <AlertCircleIcon size={16} />
                           <span>{dateError}</span>
-                        </div>
-                      )}
-
-                      {/* Current Reservations Reference (Clean Pill List) */}
-                      {blockedRanges.length > 0 && (
-                        <div
-                          style={{
-                            marginTop: "10px",
-                            padding: "8px 12px",
-                            borderRadius: "8px",
-                            background: "#f8fafc",
-                            border: "1px solid #e2e8f0",
-                            fontSize: "0.74rem",
-                            color: "#64748b",
-                          }}
-                        >
-                          <div style={{ fontWeight: 700, color: "#334155", marginBottom: "4px" }}>
-                            Current reserved periods for this machinery:
-                          </div>
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                            {blockedRanges.map((range, index) => (
-                              <span
-                                key={`${range.startDate}-${index}`}
-                                style={{
-                                  background: "#fee2e2",
-                                  color: "#991b1b",
-                                  border: "1px solid #fecdd3",
-                                  borderRadius: "4px",
-                                  padding: "2px 6px",
-                                  fontSize: "0.7rem",
-                                  fontWeight: 600,
-                                }}
-                              >
-                                {formatDisplayDate(range.startDate)} – {formatDisplayDate(range.endDate)} ({range.label})
-                              </span>
-                            ))}
-                          </div>
                         </div>
                       )}
                     </div>
