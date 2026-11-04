@@ -134,7 +134,12 @@ const machineryUnitSchema = new mongoose.Schema(
       default: "per trip"
     },
 
-    // Legacy sync / backward-compatibility fields:
+    // Rental pricing fields:
+    ratePerHectare: {
+      type: Number,
+      min: 0,
+      default: 2500
+    },
     ratePerDay: {
       type: Number,
       min: 0,

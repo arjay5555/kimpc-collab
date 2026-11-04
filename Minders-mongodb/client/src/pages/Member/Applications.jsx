@@ -30,7 +30,8 @@ export default function Applications() {
     farmLocation: "",
     startDate: "",
     endDate: "",
-    bookingType: "daily",
+    hectares: 1,
+    bookingType: "hectare",
   });
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
@@ -101,7 +102,8 @@ export default function Applications() {
       farmLocation: application.farmLocation || "",
       startDate: application.startDate || "",
       endDate: application.endDate || "",
-      bookingType: application.bookingType || "daily",
+      hectares: application.hectares || 1,
+      bookingType: "hectare",
     });
     setActionError("");
     setActionSuccess("");
@@ -132,7 +134,8 @@ export default function Applications() {
         farmLocation: editForm.farmLocation.trim(),
         startDate: editForm.startDate,
         endDate: editForm.endDate,
-        bookingType: editForm.bookingType,
+        hectares: Number(editForm.hectares) || 1,
+        bookingType: "hectare",
       },
     });
 
@@ -317,7 +320,9 @@ export default function Applications() {
               <div><dt>Rental period</dt><dd>{formatRentalPeriod(selected)}</dd></div>
               <div><dt>Submitted</dt><dd>{selected.createdAt ? new Date(selected.createdAt).toLocaleString() : "Recently"}</dd></div>
               <div><dt>Farm location</dt><dd>{selected.farmLocation || "Not specified"}</dd></div>
-              <div><dt>Booking Type</dt><dd style={{ textTransform: "capitalize" }}>{selected.bookingType || "Daily"}</dd></div>
+              <div><dt>Rental Plan</dt><dd>Per Hectare</dd></div>
+              <div><dt>Farm Area</dt><dd>{selected.hectares ? `${selected.hectares} hectare${selected.hectares > 1 ? "s" : ""}` : "1 hectare"}</dd></div>
+              <div><dt>Estimated Cost</dt><dd style={{ fontWeight: 700, color: "#166534" }}>₱{((selected.totalAmount || (selected.ratePerHectare || selected.financials?.dailyRate || 2500) * (selected.hectares || 1))).toLocaleString()}</dd></div>
               {selected.cancellationReason && (
                 <div><dt>Cancellation Reason</dt><dd style={{ color: "#b45309" }}>{selected.cancellationReason}</dd></div>
               )}
@@ -401,16 +406,20 @@ export default function Applications() {
 
               <div style={{ marginBottom: "18px" }}>
                 <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", marginBottom: "6px" }}>
-                  Booking Type
+                  Farm Area (in Hectares)
                 </label>
-                <select
-                  value={editForm.bookingType}
-                  onChange={(e) => setEditForm({ ...editForm, bookingType: e.target.value })}
-                  style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
-                >
-                  <option value="daily">Daily Rental</option>
-                  <option value="hourly">Hourly Rental</option>
-                </select>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <input
+                    type="number"
+                    min="0.1"
+                    step="0.1"
+                    required
+                    value={editForm.hectares}
+                    onChange={(e) => setEditForm({ ...editForm, hectares: parseFloat(e.target.value) || 0.1 })}
+                    style={{ width: "160px", padding: "9px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem", fontWeight: 700 }}
+                  />
+                  <span style={{ fontSize: "0.85rem", color: "#64748b" }}>hectares (ha)</span>
+                </div>
               </div>
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>

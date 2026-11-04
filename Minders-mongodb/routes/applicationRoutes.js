@@ -59,19 +59,17 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
     const machineryUnitId = clean(req.body.machineryUnitId);
     const startDate = clean(req.body.startDate);
     const endDate = clean(req.body.endDate);
-    const bookingType = clean(req.body.bookingType).toLowerCase() === "hourly" ? "hourly" : "daily";
+    const hectares = Math.max(0.1, Number(req.body.hectares) || 1);
+    const bookingType = clean(req.body.bookingType).toLowerCase() || "hectare";
     const farmLocation = clean(req.body.farmLocation);
     if (!equipment || !startDate || !endDate || (req.user?.role === "member" && !farmLocation)) {
       return fail(res, 400, "Equipment, dates, and farm location are required.");
     }
     if (farmLocation.length > 240) return fail(res, 400, "Farm location must be 240 characters or fewer.");
     const startTimestamp = bookingTimestamp(startDate);
-    const endTimestamp = bookingTimestamp(endDate, bookingType === "daily");
-    if (startTimestamp === null || endTimestamp === null) return fail(res, 400, "Enter valid booking dates and times.");
-    if (endTimestamp <= startTimestamp) return fail(res, 400, "The end time must be after the start time.");
-    if (bookingType === "daily" && (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate))) {
-      return fail(res, 400, "Daily bookings require valid start and end dates.");
-    }
+    const endTimestamp = bookingTimestamp(endDate, true);
+    if (startTimestamp === null || endTimestamp === null) return fail(res, 400, "Enter valid booking dates.");
+    if (endTimestamp <= startTimestamp) return fail(res, 400, "The end date must be on or after the start date.");
 
     // Block new assignments to units under maintenance or retired
     let targetUnit = null;
@@ -134,6 +132,9 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
       memberName = acct?.fullName || memberEmail;
     }
 
+    const ratePerHectare = Number(req.body.ratePerHectare) || Number(targetUnit?.memberRate) || Number(targetUnit?.ratePerHectare) || 2500;
+    const totalAmount = Math.round(ratePerHectare * hectares);
+
     const application = await Application.create({
       memberEmail: memberEmail || "walkin@kimpc.test",
       memberName: memberName || "Cooperative Member",
@@ -141,13 +142,19 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
       machineryUnitId: machineryUnitId || targetUnit?.unitId || "",
       startDate,
       endDate,
-      bookingType,
+      bookingType: "hectare",
+      hectares,
+      ratePerHectare,
+      totalAmount,
       farmLocation,
       status: "Pending",
       isWalkIn: Boolean(req.body.isWalkIn),
       farmerPhone: clean(req.body.farmerPhone),
       financials: {
-        dailyRate: Number(req.body.dailyRate) || Number(targetUnit?.memberRate) || 0,
+        dailyRate: ratePerHectare,
+        ratePerHectare,
+        hectares,
+        totalPaid: totalAmount,
         paymentMethod: clean(req.body.paymentMethod) || "Cash",
       },
     });
@@ -280,6 +287,15 @@ const handleApplicationUpdate = async (req, res) => {
       }
       if (req.body.bookingType) {
         existing.bookingType = clean(req.body.bookingType);
+      }
+      if (req.body.hectares !== undefined) {
+        existing.hectares = Math.max(0.1, Number(req.body.hectares) || 1);
+        const rate = existing.ratePerHectare || existing.financials?.ratePerHectare || existing.financials?.dailyRate || 2500;
+        existing.totalAmount = Math.round(rate * existing.hectares);
+        if (!existing.financials) existing.financials = {};
+        existing.financials.hectares = existing.hectares;
+        existing.financials.ratePerHectare = rate;
+        existing.financials.totalPaid = existing.totalAmount;
       }
       await existing.save();
 

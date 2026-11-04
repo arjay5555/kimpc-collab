@@ -9,7 +9,10 @@ const applicationSchema = new mongoose.Schema(
     machineryUnitId: { type: String, default: "", trim: true, index: true },
     startDate: { type: String, required: true }, // "YYYY-MM-DD", straight from <input type="date">
     endDate: { type: String, required: true },
-    bookingType: { type: String, enum: ["hourly", "daily"], default: "daily" },
+    bookingType: { type: String, enum: ["hectare", "daily", "hourly"], default: "hectare" },
+    hectares: { type: Number, default: 1, min: 0.1 },
+    ratePerHectare: { type: Number, default: 0 },
+    totalAmount: { type: Number, default: 0 },
     farmLocation: { type: String, default: "", trim: true, maxlength: 240 },
     status: { 
       type: String, 
@@ -39,6 +42,8 @@ const applicationSchema = new mongoose.Schema(
     },
     financials: {
       dailyRate: { type: Number, default: 0 },
+      ratePerHectare: { type: Number, default: 0 },
+      hectares: { type: Number, default: 1 },
       deposit: { type: Number, default: 0 },
       lateFee: { type: Number, default: 0 },
       repairDeduction: { type: Number, default: 0 },
@@ -57,7 +62,7 @@ const applicationSchema = new mongoose.Schema(
       transform(doc, ret) {
         ret.id = String(ret._id);
         ret.displayId = `APP-${ret.id.slice(-6).toUpperCase()}`;
-        ret.submittedAt = ret.createdAt.toISOString();
+        ret.submittedAt = ret.createdAt ? ret.createdAt.toISOString() : new Date().toISOString();
         delete ret._id;
         delete ret.__v;
         return ret;

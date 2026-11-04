@@ -430,8 +430,8 @@ export default function MemberDashboard() {
                             </div>
                             <div>
                               <div style={{ fontWeight: 700, fontSize: "0.84rem", color: "#0f172a" }}>{app.equipment}</div>
-                              <div style={{ fontSize: "0.7rem", color: "#64748b", textTransform: "capitalize" }}>
-                                {app.bookingType || "daily"} rental
+                              <div style={{ fontSize: "0.7rem", color: "#64748b" }}>
+                                {app.hectares ? `${app.hectares} ha · Per Hectare` : "Per Hectare"}
                               </div>
                             </div>
                           </div>
