@@ -13,7 +13,12 @@ const applicationSchema = new mongoose.Schema(
     hectares: { type: Number, default: 1, min: 0.1 },
     ratePerHectare: { type: Number, default: 0 },
     totalAmount: { type: Number, default: 0 },
-    farmLocation: { type: String, default: "", trim: true, maxlength: 240 },
+    farmLocation: { type: String, default: "", trim: true, maxlength: 500 },
+    farmCoordinates: {
+      lat: { type: Number, default: null },
+      lng: { type: Number, default: null },
+    },
+    farmFormattedAddress: { type: String, default: "", trim: true },
     machineryModel: { type: String, default: "", trim: true },
     assignedDriver: { type: String, default: "Self-Operated", trim: true },
     driverPhone: { type: String, default: "", trim: true },

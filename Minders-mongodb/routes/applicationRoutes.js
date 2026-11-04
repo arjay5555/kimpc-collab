@@ -78,11 +78,16 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
     const endDate = clean(req.body.endDate);
     const hectares = Math.max(0.1, Number(req.body.hectares) || 1);
     const bookingType = clean(req.body.bookingType).toLowerCase() || "hectare";
-    const farmLocation = clean(req.body.farmLocation);
+    const farmLocation = clean(req.body.farmLocation || req.body.location);
+    const farmFormattedAddress = clean(req.body.farmFormattedAddress || farmLocation);
+    const farmCoordinates = {
+      lat: req.body.farmCoordinates?.lat != null ? Number(req.body.farmCoordinates.lat) : (req.body.lat != null ? Number(req.body.lat) : null),
+      lng: req.body.farmCoordinates?.lng != null ? Number(req.body.farmCoordinates.lng) : (req.body.lng != null ? Number(req.body.lng) : null),
+    };
     if (!equipment || !startDate || !endDate) {
       return fail(res, 400, "Equipment and booking dates are required.");
     }
-    if (farmLocation.length > 240) return fail(res, 400, "Farm location must be 240 characters or fewer.");
+    if (farmLocation.length > 500) return fail(res, 400, "Farm location must be 500 characters or fewer.");
     const startTimestamp = bookingTimestamp(startDate);
     const endTimestamp = bookingTimestamp(endDate, true);
     if (startTimestamp === null || endTimestamp === null) return fail(res, 400, "Enter valid booking dates.");
@@ -201,6 +206,8 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
       ratePerHectare,
       totalAmount,
       farmLocation,
+      farmCoordinates,
+      farmFormattedAddress,
       status: "Pending",
       paymentStatus,
       paymentAmount: totalAmount,
@@ -237,6 +244,8 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
         dateRange: `${startDate} – ${endDate}`,
         bookingType,
         farmLocation,
+      farmCoordinates,
+      farmFormattedAddress,
         paymentMethod,
         totalAmount,
       },
