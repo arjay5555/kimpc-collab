@@ -9,7 +9,7 @@ const filters = [
   { key: "all", label: "All" },
   { key: "pending", label: "Pending" },
   { key: "approved", label: "Approved" },
-  { key: "cancellation", label: "Cancellation Pending" },
+  { key: "completed", label: "Completed" },
   { key: "rejected", label: "Rejected / Cancelled" },
 ];
 
@@ -67,7 +67,7 @@ function getStatusInfo(status, isCancellationRequested) {
   }
   if (s === "approved") return { slug: "approved", label: "Approved" };
   if (s === "checked-out" || s === "ongoing") return { slug: "ongoing", label: "Ongoing" };
-  if (s === "returned") return { slug: "returned", label: "Returned" };
+  if (s === "returned" || s === "completed") return { slug: "completed", label: "Completed" };
   if (s === "rejected") return { slug: "rejected", label: "Declined" };
   if (s === "cancelled") return { slug: "cancelled", label: "Cancelled" };
   if (s === "voided" || s === "void") return { slug: "voided", label: "Voided" };
@@ -309,9 +309,9 @@ export default function Applications() {
       const status = (application.status || "Pending").toLowerCase();
       const isCancelPending = status === "cancellation requested" || application.cancellationRequested;
       if (filter === "pending") return status === "pending" && !isCancelPending;
-      if (filter === "approved") return ["approved", "checked-out", "ongoing", "returned"].includes(status) && !isCancelPending;
-      if (filter === "cancellation") return isCancelPending;
-      if (filter === "rejected") return ["rejected", "cancelled", "voided"].includes(status);
+      if (filter === "approved") return ["approved", "checked-out", "ongoing"].includes(status) && !isCancelPending;
+      if (filter === "completed") return status === "returned" || status === "completed";
+      if (filter === "rejected") return ["rejected", "cancelled", "voided"].includes(status) || isCancelPending;
       return true;
     });
   }, [applications, filter]);
@@ -478,9 +478,9 @@ export default function Applications() {
               const status = (app.status || "Pending").toLowerCase();
               const isCancelPending = status === "cancellation requested" || app.cancellationRequested;
               if (item.key === "pending") return status === "pending" && !isCancelPending;
-              if (item.key === "approved") return ["approved", "checked-out", "ongoing", "returned"].includes(status) && !isCancelPending;
-              if (item.key === "cancellation") return isCancelPending;
-              return ["rejected", "cancelled", "voided"].includes(status);
+              if (item.key === "approved") return ["approved", "checked-out", "ongoing"].includes(status) && !isCancelPending;
+              if (item.key === "completed") return status === "returned" || status === "completed";
+              return ["rejected", "cancelled", "voided"].includes(status) || isCancelPending;
             }).length;
 
             return (
