@@ -350,6 +350,44 @@ export default function ManagerCalendar() {
 
   // Month title state
   const [currentMonth, setCurrentMonth] = useState("August 2028");
+  const [googleCalendarStatus, setGoogleCalendarStatus] = useState({ connected: false });
+  const [syncingCalendar, setSyncingCalendar] = useState(false);
+  const [calendarNotice, setCalendarNotice] = useState("");
+
+  useEffect(() => {
+    // Check URL parameters for return from Google OAuth
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("google") === "connected") {
+      setCalendarNotice("Google Calendar connected successfully! Approved rentals and maintenance will sync automatically.");
+    } else if (params.get("google") === "denied") {
+      setCalendarNotice("Google Calendar authorization was cancelled or denied.");
+    } else if (params.get("google") === "error") {
+      setCalendarNotice(`Google Calendar connection error: ${params.get("msg") || "Unknown error"}`);
+    }
+
+    // Fetch live synchronization status
+    api("/calendar/status").then((res) => {
+      if (res.ok && res.data) {
+        setGoogleCalendarStatus(res.data);
+      }
+    });
+  }, []);
+
+  const handleConnectCalendar = () => {
+    window.location.href = "/api/calendar/connect";
+  };
+
+  const handleSyncNow = async () => {
+    setSyncingCalendar(true);
+    setCalendarNotice("");
+    const res = await api("/calendar/sync-now", { method: "POST" });
+    setSyncingCalendar(false);
+    if (res.ok) {
+      setCalendarNotice(`Sync complete: ${res.data?.syncedBookings || 0} bookings and ${res.data?.syncedMaintenance || 0} maintenance records synced.`);
+    } else {
+      setCalendarNotice(res.data?.error || "Could not sync with Google Calendar.");
+    }
+  };
 
   // Filter events based on selected filter
   const filteredEvents = useMemo(() => {
@@ -371,6 +409,34 @@ export default function ManagerCalendar() {
       <main className="wz-content-wrapper wz-cal-content-wrapper">
         {/* Top bar with Title & User Profile - spans full width across the top */}
         <ManagerTopbar title="Calendar" />
+
+        {/* Google Calendar Status / Feedback Banner */}
+        {calendarNotice && (
+          <div
+            style={{
+              margin: "10px 24px 0",
+              padding: "10px 14px",
+              borderRadius: "8px",
+              background: calendarNotice.includes("cancelled") || calendarNotice.includes("error") || calendarNotice.includes("Could not") ? "#fef2f2" : "#f0fdf4",
+              border: `1px solid ${calendarNotice.includes("cancelled") || calendarNotice.includes("error") || calendarNotice.includes("Could not") ? "#fecdd3" : "#bbf7d0"}`,
+              color: calendarNotice.includes("cancelled") || calendarNotice.includes("error") || calendarNotice.includes("Could not") ? "#b91c1c" : "#15803d",
+              fontSize: "0.82rem",
+              fontWeight: 600,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <span>{calendarNotice}</span>
+            <button
+              type="button"
+              onClick={() => setCalendarNotice("")}
+              style={{ border: "none", background: "transparent", color: "inherit", cursor: "pointer", fontWeight: 700, fontSize: "1rem" }}
+            >
+              ×
+            </button>
+          </div>
+        )}
 
         {/* Subbar: Date Navigation & Event Type Filters */}
         <div className="wz-cal-subbar">
@@ -403,8 +469,77 @@ export default function ManagerCalendar() {
               <span className="wz-cal-month-title">{currentMonth}</span>
             </div>
 
-            {/* Right: All / Pickup / Return Segmented Toggle + Week Dropdown */}
-            <div className="wz-cal-controls-right">
+            {/* Right: Google Calendar + All/Pickup/Return Toggle + Week Dropdown */}
+            <div className="wz-cal-controls-right" style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+              {/* Google Calendar Connection Status / Connect Button */}
+              {googleCalendarStatus.connected ? (
+                <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "6px 10px",
+                      borderRadius: "6px",
+                      background: "#dcfce7",
+                      color: "#15803d",
+                      fontSize: "0.76rem",
+                      fontWeight: 700,
+                      border: "1px solid #bbf7d0",
+                    }}
+                    title={`Google Calendar connected (${googleCalendarStatus.email || "Active"})`}
+                  >
+                    <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#16a34a", display: "inline-block" }} />
+                    Google Calendar Synced
+                  </span>
+                  <button
+                    type="button"
+                    disabled={syncingCalendar}
+                    onClick={handleSyncNow}
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: "6px",
+                      border: "1px solid #cbd5e1",
+                      background: "#ffffff",
+                      color: "#334155",
+                      fontSize: "0.74rem",
+                      fontWeight: 600,
+                      cursor: syncingCalendar ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {syncingCalendar ? "Syncing..." : "Sync Now"}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleConnectCalendar}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "6px 11px",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1",
+                    background: "#ffffff",
+                    color: "#1e293b",
+                    fontSize: "0.76rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+                  }}
+                  title="Connect cooperative Google Calendar for 2-way sync"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                    <line x1="16" y1="2" x2="16" y2="6" />
+                    <line x1="8" y1="2" x2="8" y2="6" />
+                    <line x1="3" y1="10" x2="21" y2="10" />
+                  </svg>
+                  <span>Connect Google Calendar</span>
+                </button>
+              )}
+
               <div className="wz-cal-filter-group">
                 <button
                   className={`wz-cal-filter-btn ${filterType === "all" ? "active" : ""}`}

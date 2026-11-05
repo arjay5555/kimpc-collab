@@ -134,7 +134,7 @@ router.get("/callback", async (req, res) => {
 
   if (oauthError) {
     console.warn("[GoogleCalendar /callback] OAuth error:", oauthError);
-    return res.redirect(`/manager.html#calendar?google=denied&error=${encodeURIComponent(oauthError)}`);
+    return res.redirect(`/manager/calendar?google=denied&error=${encodeURIComponent(oauthError)}`);
   }
 
   if (!code) {
@@ -183,10 +183,10 @@ router.get("/callback", async (req, res) => {
       }
     });
 
-    return res.redirect("/manager.html#calendar?google=connected");
+    return res.redirect("/manager/calendar?google=connected");
   } catch (err) {
     console.error("[GoogleCalendar /callback] Failed to exchange tokens:", err.message);
-    return res.redirect(`/manager.html#calendar?google=error&msg=${encodeURIComponent(err.message)}`);
+    return res.redirect(`/manager/calendar?google=error&msg=${encodeURIComponent(err.message)}`);
   }
 });
 
