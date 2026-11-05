@@ -253,8 +253,7 @@ export default function Applications() {
   const [cancellationReason, setCancellationReason] = useState("");
   const [isSubmittingCancellation, setIsSubmittingCancellation] = useState(false);
 
-  // Official Receipt & GCash Screenshot Modal States
-  const [receiptApp, setReceiptApp] = useState(null);
+  // GCash Screenshot Lightbox Modal State
   const [previewGcashImage, setPreviewGcashImage] = useState(null);
 
   const fetchApplications = useCallback(async () => {
@@ -689,15 +688,14 @@ export default function Applications() {
                       </div>
                     </td>
 
-                    {/* 8. Action */}
+                    {/* 8. Action (Single Icon: View Details, Edit & Cancel) */}
                     <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
-                      <div className="wz-actions-cell" style={{ justifyContent: "center", gap: "6px" }}>
-                        {/* View Details & History Timeline */}
+                      <div className="wz-actions-cell" style={{ justifyContent: "center" }}>
                         <button
                           type="button"
                           className="wz-action-icon-btn view"
                           onClick={() => setSelected(app)}
-                          title="View all details & lifecycle history timeline"
+                          title="View booking details, edit or cancel"
                           aria-label="View Details"
                         >
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -705,79 +703,6 @@ export default function Applications() {
                             <circle cx="12" cy="12" r="3" />
                           </svg>
                         </button>
-
-                        {/* View & Download Official Receipt */}
-                        {(app.paymentStatus === "Paid" || isApproved) && (
-                          <button
-                            type="button"
-                            className="wz-action-icon-btn"
-                            style={{ color: "#059669", background: "#ecfdf5" }}
-                            onClick={() => setReceiptApp(app)}
-                            title="View & Download Official KIMPC Receipt"
-                            aria-label="View Receipt"
-                          >
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                              <polyline points="14 2 14 8 20 8" />
-                              <line x1="16" y1="13" x2="8" y2="13" />
-                              <line x1="16" y1="17" x2="8" y2="17" />
-                              <polyline points="10 9 9 9 8 9" />
-                            </svg>
-                          </button>
-                        )}
-
-                        {/* Edit / Reschedule Pending Booking */}
-                        {isPending && !isCancelPending && (
-                          <button
-                            type="button"
-                            className="wz-action-icon-btn"
-                            style={{ color: "#2563eb", background: "#eff6ff" }}
-                            onClick={() => handleOpenEdit(app)}
-                            title="Edit farm location, area, or dates"
-                            aria-label="Edit Booking"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M12 20h9" />
-                              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-                            </svg>
-                          </button>
-                        )}
-
-                        {/* Direct Cancel for Pending */}
-                        {isPending && !isCancelPending && (
-                          <button
-                            type="button"
-                            className="wz-action-icon-btn"
-                            style={{ color: "#dc2626", background: "#fef2f2" }}
-                            disabled={cancellingId === (app._id || app.id)}
-                            onClick={() => cancelPendingApplication(app)}
-                            title="Cancel pending booking request"
-                            aria-label="Cancel Booking"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <line x1="18" y1="6" x2="6" y2="18" />
-                              <line x1="6" y1="6" x2="18" y2="18" />
-                            </svg>
-                          </button>
-                        )}
-
-                        {/* Request Cancellation for Approved */}
-                        {isApproved && !isCancelPending && (
-                          <button
-                            type="button"
-                            className="wz-action-icon-btn"
-                            style={{ color: "#d97706", background: "#fffbeb" }}
-                            onClick={() => handleOpenCancellationRequest(app)}
-                            title="Request manager approval to cancel"
-                            aria-label="Request Cancel"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <circle cx="12" cy="12" r="10" />
-                              <line x1="12" y1="8" x2="12" y2="12" />
-                              <line x1="12" y1="16" x2="12.01" y2="16" />
-                            </svg>
-                          </button>
-                        )}
                       </div>
                     </td>
                   </tr>
@@ -1008,75 +933,69 @@ export default function Applications() {
               </ul>
             </div>
 
-            {/* Modal Actions */}
-            <div style={{ marginTop: "20px", display: "flex", gap: "10px", flexWrap: "wrap", justifyContent: "flex-end" }}>
+            {/* Modal Actions: Edit, Cancel, Close */}
+            <div style={{ marginTop: "20px", paddingTop: "14px", borderTop: "1px solid #e2e8f0", display: "flex", gap: "10px", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center" }}>
+              <button className="member-button member-button-outline" type="button" onClick={() => setSelected(null)}>
+                Close
+              </button>
+
               {(selected.status || "Pending").toLowerCase() === "pending" && !selected.cancellationRequested && (
                 <>
                   <button
                     className="member-button member-button-outline"
                     type="button"
-                    style={{ color: "#dc2626", borderColor: "#fecdd3" }}
+                    style={{ color: "#dc2626", borderColor: "#fecdd3", background: "#fef2f2", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                    disabled={cancellingId === (selected._id || selected.id)}
                     onClick={() => {
                       const app = selected;
                       setSelected(null);
                       cancelPendingApplication(app);
                     }}
                   >
-                    Cancel Booking
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                    <span>{cancellingId === (selected._id || selected.id) ? "Cancelling..." : "Cancel Booking"}</span>
                   </button>
                   <button
                     className="member-button member-button-primary"
                     type="button"
+                    style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
                     onClick={() => {
                       const app = selected;
                       setSelected(null);
                       handleOpenEdit(app);
                     }}
                   >
-                    Edit / Reschedule
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                    </svg>
+                    <span>Edit / Reschedule</span>
                   </button>
                 </>
-              )}
-
-              {(selected.paymentStatus === "Paid" || (selected.status || "").toLowerCase() === "approved") && (
-                <button
-                  className="member-button"
-                  style={{ background: "#059669", color: "#ffffff", border: "none", display: "inline-flex", alignItems: "center", gap: "6px" }}
-                  type="button"
-                  onClick={() => {
-                    const app = selected;
-                    setReceiptApp(app);
-                  }}
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <polyline points="14 2 14 8 20 8" />
-                    <line x1="16" y1="13" x2="8" y2="13" />
-                    <line x1="16" y1="17" x2="8" y2="17" />
-                    <polyline points="10 9 9 9 8 9" />
-                  </svg>
-                  View &amp; Download Receipt
-                </button>
               )}
 
               {(selected.status || "").toLowerCase() === "approved" && !selected.cancellationRequested && (
                 <button
                   className="member-button member-button-outline"
                   type="button"
-                  style={{ color: "#d97706", borderColor: "#fde68a" }}
+                  style={{ color: "#d97706", borderColor: "#fde68a", background: "#fffbeb", display: "inline-flex", alignItems: "center", gap: "6px" }}
                   onClick={() => {
                     const app = selected;
                     setSelected(null);
                     handleOpenCancellationRequest(app);
                   }}
                 >
-                  Request Cancellation
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                  <span>Request Cancellation</span>
                 </button>
               )}
-
-              <button className="member-button member-button-outline" type="button" onClick={() => setSelected(null)}>
-                Close
-              </button>
             </div>
           </section>
         </div>
@@ -1283,223 +1202,6 @@ export default function Applications() {
               </div>
             </form>
           </section>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* ================= Official Cooperative Receipt Modal ==================== */}
-      {/* ========================================================================= */}
-      {receiptApp && (
-        <div
-          className="member-modal-backdrop wz-receipt-print-backdrop"
-          role="presentation"
-          onClick={() => setReceiptApp(null)}
-          style={{ background: "rgba(15, 23, 42, 0.75)", zIndex: 9999 }}
-        >
-          <div
-            className="wz-receipt-voucher-modal"
-            role="dialog"
-            aria-modal="true"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: "#ffffff",
-              borderRadius: "16px",
-              padding: "28px",
-              maxWidth: "680px",
-              width: "95%",
-              maxHeight: "92vh",
-              overflowY: "auto",
-              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
-              border: "1px solid #e2e8f0",
-              position: "relative",
-            }}
-          >
-            {/* Modal Close Icon */}
-            <button
-              type="button"
-              onClick={() => setReceiptApp(null)}
-              className="no-print"
-              style={{
-                position: "absolute",
-                top: "16px",
-                right: "16px",
-                background: "#f1f5f9",
-                border: "none",
-                borderRadius: "50%",
-                width: "32px",
-                height: "32px",
-                cursor: "pointer",
-                fontSize: "1rem",
-                color: "#64748b",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              ✕
-            </button>
-
-            {/* Official KIMPC Header */}
-            <div style={{ textAlign: "center", borderBottom: "2px solid #0f172a", paddingBottom: "16px", marginBottom: "18px" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", marginBottom: "4px" }}>
-                <span style={{ fontSize: "1.6rem" }}>🚜</span>
-                <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: "900", color: "#0f172a", letterSpacing: "0.5px" }}>
-                  KALILANGAN IRRIGATORS MULTI-PURPOSE COOPERATIVE
-                </h3>
-              </div>
-              <p style={{ margin: "2px 0", fontSize: "0.78rem", color: "#475569" }}>
-                CDA Registration No. 9520-10012480 • Kalilangan, Bukidnon, Philippines
-              </p>
-              <p style={{ margin: "4px 0 0", fontSize: "0.85rem", fontWeight: "700", color: "#059669", textTransform: "uppercase", letterSpacing: "1px" }}>
-                Official Machinery Rental Billing Voucher &amp; Receipt
-              </p>
-            </div>
-
-            {/* Receipt Top Meta Grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", background: "#f8fafc", padding: "14px 16px", borderRadius: "10px", marginBottom: "18px", border: "1px solid #e2e8f0" }}>
-              <div>
-                <span style={{ fontSize: "0.72rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Billed To Member</span>
-                <div style={{ fontWeight: 800, color: "#0f172a", fontSize: "0.95rem" }}>
-                  {receiptApp.memberName || user?.fullName || "Cooperative Member"}
-                </div>
-                <div style={{ fontSize: "0.78rem", color: "#475569", marginTop: "2px" }}>
-                  📞 {receiptApp.farmerPhone || receiptApp.memberPhone || user?.phone || "—"}
-                </div>
-                <div style={{ fontSize: "0.76rem", color: "#64748b" }}>
-                  ✉️ {receiptApp.memberEmail || user?.email}
-                </div>
-              </div>
-
-              <div style={{ textAlign: "right" }}>
-                <span style={{ fontSize: "0.72rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Receipt Voucher No.</span>
-                <div style={{ fontFamily: "monospace", fontWeight: 900, color: "#0f172a", fontSize: "1.1rem" }}>
-                  {receiptApp.receiptNo || `REC-2026-${String(receiptApp._id || "1001").slice(-4).toUpperCase()}`}
-                </div>
-                <div style={{ fontSize: "0.78rem", color: "#475569", marginTop: "2px" }}>
-                  Booking ID: <strong>{receiptApp.displayId || `APP-${String(receiptApp._id || "").slice(-6).toUpperCase()}`}</strong>
-                </div>
-                <div style={{ fontSize: "0.76rem", color: "#64748b" }}>
-                  Date: {receiptApp.createdAt ? new Date(receiptApp.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : new Date().toLocaleDateString()}
-                </div>
-              </div>
-            </div>
-
-            {/* Rental Breakdown Table */}
-            <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "18px", fontSize: "0.85rem" }}>
-              <thead>
-                <tr style={{ background: "#0f172a", color: "#ffffff", textAlign: "left" }}>
-                  <th style={{ padding: "10px 12px", borderRadius: "6px 0 0 0" }}>Equipment &amp; Specifications</th>
-                  <th style={{ padding: "10px 12px" }}>Area / Terms</th>
-                  <th style={{ padding: "10px 12px", textAlign: "right", borderRadius: "0 6px 0 0" }}>Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
-                  <td style={{ padding: "12px" }}>
-                    <strong style={{ color: "#0f172a", display: "block" }}>{receiptApp.machineryModel || receiptApp.equipment}</strong>
-                    <span style={{ fontSize: "0.74rem", color: "#64748b" }}>
-                      Rental Duration: {formatBookingDateRange(receiptApp.startDate, receiptApp.endDate)} ({getDaysCount(receiptApp.startDate, receiptApp.endDate)} days)
-                    </span>
-                  </td>
-                  <td style={{ padding: "12px", color: "#334155" }}>
-                    {receiptApp.hectares ? `${receiptApp.hectares} ha` : "1 ha"} @ ₱{Number(receiptApp.ratePerHectare || 2500).toLocaleString()}/ha
-                  </td>
-                  <td style={{ padding: "12px", textAlign: "right", fontWeight: 700, color: "#0f172a" }}>
-                    ₱{Number(receiptApp.totalAmount || (receiptApp.ratePerHectare || 2500) * (receiptApp.hectares || 1)).toLocaleString()}
-                  </td>
-                </tr>
-                <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
-                  <td style={{ padding: "10px 12px", color: "#475569" }}>
-                    Assigned Field Operator / Driver
-                    <span style={{ display: "block", fontSize: "0.72rem", color: "#64748b" }}>
-                      {receiptApp.assignedDriver && receiptApp.assignedDriver !== "Self-Operated" ? receiptApp.assignedDriver : "Self-Operated by Member"}
-                    </span>
-                  </td>
-                  <td style={{ padding: "10px 12px", color: "#64748b" }}>Coop Service</td>
-                  <td style={{ padding: "10px 12px", textAlign: "right", color: "#059669" }}>₱0.00</td>
-                </tr>
-                <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
-                  <td style={{ padding: "10px 12px", color: "#475569" }}>Maintenance &amp; Fuel Inspection Guarantee</td>
-                  <td style={{ padding: "10px 12px", color: "#64748b" }}>Coop Benefit</td>
-                  <td style={{ padding: "10px 12px", textAlign: "right", color: "#059669" }}>₱0.00</td>
-                </tr>
-                <tr style={{ borderBottom: "2px solid #0f172a" }}>
-                  <td style={{ padding: "10px 12px", color: "#475569" }}>CDA RA 9520 Member Tax Exemption</td>
-                  <td style={{ padding: "10px 12px", color: "#64748b" }}>Tax Exempt</td>
-                  <td style={{ padding: "10px 12px", textAlign: "right", color: "#059669" }}>₱0.00</td>
-                </tr>
-              </tbody>
-              <tfoot>
-                <tr>
-                  <td colSpan="2" style={{ padding: "14px 12px", fontWeight: 800, fontSize: "0.98rem", color: "#0f172a" }}>
-                    Total Rental Payable:
-                  </td>
-                  <td style={{ padding: "14px 12px", textAlign: "right", fontWeight: 900, fontSize: "1.15rem", color: "#059669" }}>
-                    ₱{Number(receiptApp.totalAmount || (receiptApp.ratePerHectare || 2500) * (receiptApp.hectares || 1)).toLocaleString()}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-
-            {/* Payment Method & Verified Stamp Strip */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", padding: "12px 16px", background: receiptApp.paymentStatus === "Paid" ? "#f0fdf4" : "#fffbeb", border: `1px solid ${receiptApp.paymentStatus === "Paid" ? "#bbf7d0" : "#fef3c7"}`, borderRadius: "10px", marginBottom: "18px" }}>
-              <div>
-                <span style={{ fontSize: "0.74rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Payment Method:</span>
-                <div style={{ fontWeight: 800, color: "#0f172a", fontSize: "0.9rem", marginTop: "2px" }}>
-                  {receiptApp.paymentMethod === "GCash" ? "GCash (Account: 0926 463 8983 - Kalilangan Irrigators MPC)" : `Cash (${receiptApp.cashPaymentOption === "Upon Return" ? "Upon Return" : "Upon Pickup"})`}
-                </div>
-              </div>
-
-              <div>
-                {receiptApp.paymentStatus === "Paid" ? (
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "#059669", color: "#ffffff", padding: "6px 14px", borderRadius: "8px", fontWeight: 800, fontSize: "0.85rem", letterSpacing: "0.5px" }}>
-                    <span>✓</span> PAID &amp; SETTLED
-                  </div>
-                ) : (
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "#d97706", color: "#ffffff", padding: "6px 14px", borderRadius: "8px", fontWeight: 800, fontSize: "0.85rem", letterSpacing: "0.5px" }}>
-                    <span>⏳</span> AWAITING SETTLEMENT
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Official Cooperative Signoff */}
-            <div style={{ borderTop: "1px dashed #cbd5e1", paddingTop: "14px", display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: "14px", fontSize: "0.75rem", color: "#64748b" }}>
-              <div>
-                <p style={{ margin: "0 0 2px", fontWeight: 600, color: "#334155" }}>✓ Digitally Authorized by KIMPC Fleet Dispatch</p>
-                <p style={{ margin: 0 }}>Official electronic copy pursuant to CDA &amp; RA 9520 regulations.</p>
-              </div>
-
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontFamily: "cursive", fontSize: "1.1rem", color: "#0f172a", fontWeight: 700 }}>KIMPC Administration</div>
-                <div style={{ borderTop: "1px solid #94a3b8", width: "160px", marginTop: "4px", paddingTop: "2px" }}>Authorized Officer</div>
-              </div>
-            </div>
-
-            {/* Print / Download & Close Buttons */}
-            <div className="no-print" style={{ marginTop: "22px", display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-              <button
-                type="button"
-                className="member-button member-button-outline"
-                onClick={() => setReceiptApp(null)}
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                className="member-button"
-                style={{ background: "#0f172a", color: "#ffffff", border: "none", display: "inline-flex", alignItems: "center", gap: "8px" }}
-                onClick={() => window.print()}
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="6 9 6 2 18 2 18 9" />
-                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                  <rect x="6" y="14" width="12" height="8" />
-                </svg>
-                Print / Download PDF Receipt
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
