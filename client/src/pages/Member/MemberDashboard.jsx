@@ -361,7 +361,7 @@ export default function MemberDashboard() {
               <span style={{ fontSize: "0.74rem", color: "#64748b" }}>Live cooperative booking status</span>
             </div>
             <Link to="/applications" style={{ fontSize: "0.8rem", fontWeight: 700, color: "#166534", textDecoration: "none" }}>
-              View all applications →
+              My Bookings →
             </Link>
           </div>
 

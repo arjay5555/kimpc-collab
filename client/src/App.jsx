@@ -17,6 +17,7 @@ import BookingHistory from "./pages/Member/BookingHistory";
 import EquipmentCatalog from "./pages/Member/EquipmentCatalog";
 import Notifications from "./pages/Member/Notifications";
 import Settings from "./pages/Member/Settings";
+import MemberPayments from "./pages/Member/Payments";
 
 // Manager
 import ManagerDashboard from "./pages/Manager/ManagerDashboard";
@@ -71,6 +72,26 @@ export default function App() {
           <ProtectedRoute allowedRoles={["member", "manager", "admin"]}>
             <MemberLayout>
               <Applications />
+            </MemberLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/my-bookings"
+        element={
+          <ProtectedRoute allowedRoles={["member", "manager", "admin"]}>
+            <MemberLayout>
+              <Applications />
+            </MemberLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/member/payments"
+        element={
+          <ProtectedRoute allowedRoles={["member", "manager", "admin"]}>
+            <MemberLayout>
+              <MemberPayments />
             </MemberLayout>
           </ProtectedRoute>
         }

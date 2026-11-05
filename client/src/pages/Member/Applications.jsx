@@ -445,13 +445,13 @@ export default function Applications() {
   return (
     <div className="member-page" style={{ width: "100%", maxWidth: "1400px", margin: "0 auto", paddingBottom: "40px" }}>
       <MemberTopbar
-        title="Your Applications"
+        title="My Bookings"
         subtitle="Track machinery bookings, inspect lifecycle history timeline, edit pending details, or request cancellations."
       />
 
       {/* Top Filter and Action Bar */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
-        <div className="member-filter-tabs" role="tablist" aria-label="Filter applications" style={{ margin: 0 }}>
+        <div className="member-filter-tabs" role="tablist" aria-label="Filter bookings" style={{ margin: 0 }}>
           {filters.map((item) => {
             const count = item.key === "all" ? applications.length : applications.filter((app) => {
               const status = (app.status || "Pending").toLowerCase();
@@ -536,7 +536,7 @@ export default function Applications() {
         </div>
       ) : error ? (
         <div className="member-empty-state" role="alert" style={{ background: "#ffffff", borderRadius: "12px", padding: "40px 20px" }}>
-          <strong>Couldn’t load your applications</strong>
+          <strong>Couldn’t load your bookings</strong>
           <p>{error}</p>
           <button className="member-button member-button-outline" type="button" onClick={fetchApplications}>
             Try again
@@ -545,10 +545,10 @@ export default function Applications() {
       ) : visibleApplications.length === 0 ? (
         <div className="member-empty-state" style={{ background: "#ffffff", borderRadius: "12px", padding: "40px 20px", textAlign: "center" }}>
           <span className="member-empty-icon" aria-hidden="true" style={{ fontSize: "2rem", display: "block", marginBottom: "10px" }}>▧</span>
-          <strong style={{ fontSize: "1.05rem", color: "#0f172a" }}>No applications found in this view</strong>
+          <strong style={{ fontSize: "1.05rem", color: "#0f172a" }}>No bookings found in this view</strong>
           <p style={{ color: "#64748b", margin: "6px 0 16px" }}>Submitted equipment booking requests will appear here with complete details and timeline.</p>
           <Link className="member-button member-button-primary" to="/member/book" style={{ display: "inline-block", textDecoration: "none" }}>
-            Browse Equipment
+            Browse Machinery
           </Link>
         </div>
       ) : (

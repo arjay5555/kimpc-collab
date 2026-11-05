@@ -68,10 +68,10 @@ export default function BookingHistory() {
           }}
         >
           <span aria-hidden="true">←</span>
-          <span>Back to Applications</span>
+          <span>Back to My Bookings</span>
         </Link>
         <Link className="wz-btn wz-btn-primary" to="/member/book" style={{ borderRadius: "8px", textDecoration: "none", padding: "8px 18px", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "6px" }}>
-          <span>Book equipment</span>
+          <span>Browse Machinery</span>
           <span aria-hidden="true">→</span>
         </Link>
       </div>
