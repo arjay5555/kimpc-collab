@@ -134,6 +134,50 @@ export default function MemberDashboard() {
     };
   }, [applications]);
 
+  // Top summary card metrics: Pending, Active Booking, Completed, Balance
+  const pendingCount = useMemo(() => {
+    return applications.filter((app) => {
+      const status = (app.status || "Pending").toLowerCase();
+      const isCancelPending = status === "cancellation requested" || app.cancellationRequested;
+      return status === "pending" && !isCancelPending;
+    }).length;
+  }, [applications]);
+
+  const activeCount = useMemo(() => {
+    return applications.filter((app) => {
+      const status = (app.status || "").toLowerCase();
+      const isCancelPending = status === "cancellation requested" || app.cancellationRequested;
+      return ["approved", "checked-out", "ongoing"].includes(status) && !isCancelPending;
+    }).length;
+  }, [applications]);
+
+  const completedCount = useMemo(() => {
+    return applications.filter((app) => {
+      const status = (app.status || "").toLowerCase();
+      return status === "returned" || status === "completed";
+    }).length;
+  }, [applications]);
+
+  const totalOutstandingBalance = useMemo(() => {
+    return applications
+      .filter((app) => {
+        const status = (app.status || "").toLowerCase();
+        const isInactive = ["cancelled", "rejected", "void"].includes(status);
+        if (isInactive) return false;
+        const isPaid =
+          (app.paymentStatus || "").toLowerCase() === "paid" ||
+          (app.paymentStatus || "").toLowerCase() === "settled";
+        return !isPaid;
+      })
+      .reduce((sum, app) => {
+        const total = Number(
+          app.totalAmount || (app.ratePerHectare || 2500) * (app.hectares || 1)
+        );
+        const paid = Number(app.paymentAmount || 0);
+        return sum + Math.max(0, total - paid);
+      }, 0);
+  }, [applications]);
+
   // Pending Requests list
   const pendingList = useMemo(() => {
     return applications.filter((app) => {
@@ -203,6 +247,190 @@ export default function MemberDashboard() {
           {loadError}
         </div>
       )}
+
+      {/* Top 4 Summary Cards: Pending, Active Booking, Completed, Balance */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: "16px",
+          marginBottom: "20px",
+        }}
+      >
+        {/* Card 1: Pending */}
+        <div
+          style={{
+            background: "#ffffff",
+            borderRadius: "14px",
+            border: "1px solid #e2e8f0",
+            padding: "16px 20px",
+            display: "flex",
+            alignItems: "center",
+            gap: "14px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+          }}
+        >
+          <div
+            style={{
+              width: "44px",
+              height: "44px",
+              borderRadius: "10px",
+              background: "#fffbeb",
+              color: "#b45309",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+          </div>
+          <div>
+            <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+              Pending
+            </div>
+            <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "#0f172a", lineHeight: 1.2 }}>
+              {loading ? "..." : pendingCount}
+            </div>
+          </div>
+        </div>
+
+        {/* Card 2: Active Booking */}
+        <div
+          style={{
+            background: "#ffffff",
+            borderRadius: "14px",
+            border: "1px solid #e2e8f0",
+            padding: "16px 20px",
+            display: "flex",
+            alignItems: "center",
+            gap: "14px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+          }}
+        >
+          <div
+            style={{
+              width: "44px",
+              height: "44px",
+              borderRadius: "10px",
+              background: "#ecfdf5",
+              color: "#166534",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 16h13l2-5h3l1 5v3h-2" />
+              <path d="M3 16V9h8l3 7" />
+              <circle cx="7" cy="19" r="2" />
+              <circle cx="18" cy="19" r="2" />
+              <path d="M7 9V6h5" />
+            </svg>
+          </div>
+          <div>
+            <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+              Active Booking
+            </div>
+            <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "#0f172a", lineHeight: 1.2 }}>
+              {loading ? "..." : activeCount}
+            </div>
+          </div>
+        </div>
+
+        {/* Card 3: Completed */}
+        <div
+          style={{
+            background: "#ffffff",
+            borderRadius: "14px",
+            border: "1px solid #e2e8f0",
+            padding: "16px 20px",
+            display: "flex",
+            alignItems: "center",
+            gap: "14px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+          }}
+        >
+          <div
+            style={{
+              width: "44px",
+              height: "44px",
+              borderRadius: "10px",
+              background: "#eff6ff",
+              color: "#1d4ed8",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+              <polyline points="22 4 12 14.01 9 11.01" />
+            </svg>
+          </div>
+          <div>
+            <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+              Completed
+            </div>
+            <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "#0f172a", lineHeight: 1.2 }}>
+              {loading ? "..." : completedCount}
+            </div>
+          </div>
+        </div>
+
+        {/* Card 4: Balance */}
+        <div
+          style={{
+            background: "#ffffff",
+            borderRadius: "14px",
+            border: "1px solid #e2e8f0",
+            padding: "16px 20px",
+            display: "flex",
+            alignItems: "center",
+            gap: "14px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+          }}
+        >
+          <div
+            style={{
+              width: "44px",
+              height: "44px",
+              borderRadius: "10px",
+              background: totalOutstandingBalance > 0 ? "#fef2f2" : "#ecfdf5",
+              color: totalOutstandingBalance > 0 ? "#dc2626" : "#166534",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="5" width="20" height="14" rx="2" />
+              <line x1="2" y1="10" x2="22" y2="10" />
+            </svg>
+          </div>
+          <div>
+            <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+              Balance
+            </div>
+            <div
+              style={{
+                fontSize: "1.35rem",
+                fontWeight: 800,
+                color: totalOutstandingBalance > 0 ? "#b91c1c" : "#15803d",
+                lineHeight: 1.2,
+              }}
+            >
+              {loading ? "..." : `₱${Number(totalOutstandingBalance).toLocaleString()}`}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* 2x2 Grid Matching User Reference Design */}
       <div
