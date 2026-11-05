@@ -236,7 +236,7 @@ export default function Applications() {
   const [actionError, setActionError] = useState("");
   const [actionSuccess, setActionSuccess] = useState("");
 
-  // Modal active view tab: 'details' | 'history' | 'edit' | 'cancel'
+  // Modal active view tab: 'details' | 'timeline' | 'edit' | 'cancel'
   const [viewModalTab, setViewModalTab] = useState("details");
 
   // Inline Editing state for selected booking
@@ -425,7 +425,7 @@ export default function Applications() {
     <div className="member-page" style={{ width: "100%", maxWidth: "1400px", margin: "0 auto", paddingBottom: "40px" }}>
       <MemberTopbar
         title="My Bookings"
-        subtitle="Track machinery bookings, inspect lifecycle history timeline, edit pending details, or request cancellations."
+        subtitle="Track machinery bookings, inspect lifecycle timeline, edit pending details, or request cancellations."
       />
 
       {/* Top Filter Bar (No outside history icon) */}
@@ -616,7 +616,7 @@ export default function Applications() {
                           type="button"
                           className="wz-action-icon-btn view"
                           onClick={() => handleOpenViewModal(app)}
-                          title="View booking details, history timeline, edit or cancel"
+                          title="View booking details, timeline, edit or cancel"
                           aria-label="View Details"
                         >
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -664,22 +664,22 @@ export default function Applications() {
                 ✕
               </button>
 
-              {/* Below X: Action Icons (History, Edit, Cancel) - No text labels */}
+              {/* Below X: Action Icons (Timeline, Edit, Cancel) - No text labels */}
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                {/* 1. History & Timeline Icon */}
+                {/* 1. Timeline Icon */}
                 <button
                   type="button"
                   className="wz-action-icon-btn"
-                  onClick={() => setViewModalTab(viewModalTab === "history" ? "details" : "history")}
-                  title="Booking History & Timeline"
-                  aria-label="History and Timeline"
+                  onClick={() => setViewModalTab(viewModalTab === "timeline" ? "details" : "timeline")}
+                  title="Timeline"
+                  aria-label="Timeline"
                   style={{
                     width: "32px",
                     height: "32px",
                     borderRadius: "6px",
-                    border: viewModalTab === "history" ? "2px solid #16a34a" : "1px solid #cbd5e1",
-                    background: viewModalTab === "history" ? "#dcfce7" : "#ffffff",
-                    color: viewModalTab === "history" ? "#166534" : "#475569",
+                    border: viewModalTab === "timeline" ? "2px solid #16a34a" : "1px solid #cbd5e1",
+                    background: viewModalTab === "timeline" ? "#dcfce7" : "#ffffff",
+                    color: viewModalTab === "timeline" ? "#166534" : "#475569",
                     cursor: "pointer",
                     display: "inline-flex",
                     alignItems: "center",
@@ -762,8 +762,8 @@ export default function Applications() {
                   ? "EDIT / RESCHEDULE BOOKING"
                   : viewModalTab === "cancel"
                   ? "CANCEL BOOKING REQUEST"
-                  : viewModalTab === "history"
-                  ? "BOOKING HISTORY & TIMELINE"
+                  : viewModalTab === "timeline"
+                  ? "TIMELINE"
                   : "BOOKING DETAILS"}
               </p>
               <h2 id="application-detail-title" style={{ margin: 0, fontSize: "1.3rem", color: "#0f172a" }}>
@@ -873,7 +873,7 @@ export default function Applications() {
               </dl>
             )}
 
-            {viewModalTab === "history" && (
+            {viewModalTab === "timeline" && (
               <div className="app-timeline-container" style={{ marginTop: "14px" }}>
                 <div className="app-timeline-header">
                   <h3 className="app-timeline-header-title">
