@@ -106,10 +106,10 @@ router.get("/connect", async (req, res) => {
       JSON.stringify({ managerId, ts: Date.now() })
     ).toString("base64url");
 
-    // Dynamic redirect URI fallback
+    // Dynamic redirect URI fallback (honors GOOGLE_REDIRECT_URI from .env if defined)
     const host = req.get("host") || "localhost:3000";
     const protocol = req.protocol || "http";
-    const redirectUri = `${protocol}://${host}/api/calendar/callback`;
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${protocol}://${host}/api/calendar/callback`;
 
     const authUrl = generateAuthUrl({ state: statePayload, redirectUri });
 
@@ -163,7 +163,7 @@ router.get("/callback", async (req, res) => {
 
     const host = req.get("host") || "localhost:3000";
     const protocol = req.protocol || "http";
-    const redirectUri = `${protocol}://${host}/api/calendar/callback`;
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${protocol}://${host}/api/calendar/callback`;
 
     const updatedManager = await exchangeCodeAndSave(String(code), managerId, redirectUri);
 

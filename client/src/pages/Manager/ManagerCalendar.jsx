@@ -374,7 +374,10 @@ export default function ManagerCalendar() {
   }, []);
 
   const handleConnectCalendar = () => {
-    window.location.href = "/api/calendar/connect";
+    const token = localStorage.getItem("token") || "";
+    window.location.href = token
+      ? `/api/calendar/connect?token=${encodeURIComponent(token)}`
+      : "/api/calendar/connect";
   };
 
   const handleSyncNow = async () => {
