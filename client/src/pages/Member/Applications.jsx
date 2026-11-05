@@ -256,6 +256,53 @@ export default function Applications() {
   // GCash Screenshot Lightbox Modal State
   const [previewGcashImage, setPreviewGcashImage] = useState(null);
 
+  // Machinery units image map & Timeline toggle states
+  const [machineryMap, setMachineryMap] = useState({});
+  const [showTimeline, setShowTimeline] = useState(false);
+
+  const fetchMachineryUnits = useCallback(async () => {
+    try {
+      const res = await api("/machinery-units");
+      if (res.ok && res.data) {
+        const list = res.data.units || (Array.isArray(res.data) ? res.data : []);
+        const map = {};
+        list.forEach((u) => {
+          const img = u.imageUrl || u.photos?.[0] || "";
+          if (img) {
+            if (u.unitId) map[u.unitId.toLowerCase()] = img;
+            if (u.name) map[u.name.toLowerCase()] = img;
+            if (u.model) map[u.model.toLowerCase()] = img;
+            const full = `${u.brand || ""} ${u.name || ""}`.trim().toLowerCase();
+            map[full] = img;
+          }
+        });
+        setMachineryMap(map);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchMachineryUnits();
+  }, [fetchMachineryUnits]);
+
+  const getMachineryImage = useCallback(
+    (app) => {
+      if (app?.imageUrl) return app.imageUrl;
+      const unitIdKey = (app?.machineryUnitId || "").toLowerCase();
+      const nameKey = (app?.equipment || "").toLowerCase();
+      const modelKey = (app?.machineryModel || "").toLowerCase();
+      return (
+        machineryMap[unitIdKey] ||
+        machineryMap[nameKey] ||
+        machineryMap[modelKey] ||
+        "/images/kimpc logo.png"
+      );
+    },
+    [machineryMap]
+  );
+
   const fetchApplications = useCallback(async () => {
     const response = await api(getApplicationsUrl(user?.email));
     if (response.ok) {
@@ -582,11 +629,37 @@ export default function Applications() {
 
                 return (
                   <tr key={app._id || app.id}>
-                    {/* 1. Status */}
+                    {/* 1. Status & Timeline Icon */}
                     <td>
-                      <span className={`wz-status-pill wz-status-${statusInfo.slug}`}>
-                        {statusInfo.label}
-                      </span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span className={`wz-status-pill wz-status-${statusInfo.slug}`}>
+                          {statusInfo.label}
+                        </span>
+                        <button
+                          type="button"
+                          className="wz-action-icon-btn"
+                          style={{
+                            width: "26px",
+                            height: "26px",
+                            minWidth: "26px",
+                            padding: 0,
+                            color: "#166534",
+                            background: "#f0fdf4",
+                            border: "1px solid #bbf7d0",
+                          }}
+                          title="View Booking History & Lifecycle Timeline"
+                          aria-label="View Booking History & Timeline"
+                          onClick={() => {
+                            setSelected(app);
+                            setShowTimeline(true);
+                          }}
+                        >
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10" />
+                            <polyline points="12 6 12 12 16 14" />
+                          </svg>
+                        </button>
+                      </div>
                     </td>
 
                     {/* 2. Booking ID */}
@@ -599,13 +672,31 @@ export default function Applications() {
                       {bookedDateStr}
                     </td>
 
-                    {/* 4. Machinery Model */}
+                    {/* 4. Machinery Model with Picture */}
                     <td>
-                      <div className="wz-machinery-cell">
-                        <span style={{ fontWeight: 600, color: "#0f172a" }}>{modelName}</span>
-                        {app.equipment && modelName !== app.equipment && (
-                          <span className="wz-machinery-badge">{app.equipment}</span>
-                        )}
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        <img
+                          src={getMachineryImage(app)}
+                          alt={modelName}
+                          style={{
+                            width: "44px",
+                            height: "44px",
+                            objectFit: "cover",
+                            borderRadius: "8px",
+                            border: "1px solid #e2e8f0",
+                            flexShrink: 0,
+                            background: "#f8fafc",
+                          }}
+                          onError={(e) => {
+                            e.currentTarget.src = "/images/kimpc logo.png";
+                          }}
+                        />
+                        <div className="wz-machinery-cell">
+                          <span style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.85rem" }}>{modelName}</span>
+                          {app.equipment && modelName !== app.equipment && (
+                            <span className="wz-machinery-badge">{app.equipment}</span>
+                          )}
+                        </div>
                       </div>
                     </td>
 
@@ -694,7 +785,10 @@ export default function Applications() {
                         <button
                           type="button"
                           className="wz-action-icon-btn view"
-                          onClick={() => setSelected(app)}
+                          onClick={() => {
+                            setSelected(app);
+                            setShowTimeline(false);
+                          }}
                           title="View booking details, edit or cancel"
                           aria-label="View Details"
                         >
@@ -738,19 +832,123 @@ export default function Applications() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px", flexWrap: "wrap", marginBottom: "8px" }}>
               <div>
                 <p className="member-eyebrow" style={{ margin: "0 0 4px", letterSpacing: "0.06em", color: "#64748b" }}>
-                  BOOKING DETAILS & HISTORY TIMELINE
+                  BOOKING DETAILS
                 </p>
                 <h2 id="application-detail-title" style={{ margin: 0, fontSize: "1.35rem", color: "#0f172a" }}>
                   {selected.machineryModel || selected.equipment}
                 </h2>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                 <span className={`wz-status-pill wz-status-${getStatusInfo(selected.status, selected.cancellationRequested).slug}`}>
                   {getStatusInfo(selected.status, selected.cancellationRequested).label}
                 </span>
-                <span style={{ fontFamily: "monospace", fontSize: "0.82rem", fontWeight: 700, background: "#f1f5f9", padding: "3px 8px", borderRadius: "6px", color: "#334155" }}>
+
+                {/* Booking History & Lifecycle Timeline icon beside Pending */}
+                <button
+                  type="button"
+                  className="wz-action-icon-btn"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "4px 10px",
+                    borderRadius: "8px",
+                    border: showTimeline ? "1px solid #16a34a" : "1px solid #cbd5e1",
+                    background: showTimeline ? "#f0fdf4" : "#ffffff",
+                    color: showTimeline ? "#15803d" : "#334155",
+                    fontSize: "0.78rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    height: "32px",
+                    width: "auto",
+                  }}
+                  onClick={() => setShowTimeline((prev) => !prev)}
+                  title={showTimeline ? "Hide Booking History & Timeline" : "View Booking History & Lifecycle Timeline"}
+                  aria-label="Booking History and Timeline"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  <span>{showTimeline ? "Hide Timeline" : "History & Timeline"}</span>
+                </button>
+
+                {/* Edit / Reschedule in Top Area (for Pending bookings) */}
+                {(selected.status || "Pending").toLowerCase() === "pending" && !selected.cancellationRequested && (
+                  <button
+                    type="button"
+                    className="member-button member-button-primary"
+                    style={{
+                      padding: "5px 12px",
+                      fontSize: "0.78rem",
+                      fontWeight: 700,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      borderRadius: "8px",
+                    }}
+                    onClick={() => {
+                      const app = selected;
+                      setSelected(null);
+                      handleOpenEdit(app);
+                    }}
+                    title="Edit dates, hectares, or farm location"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                    </svg>
+                    <span>Edit / Reschedule</span>
+                  </button>
+                )}
+
+                <span style={{ fontFamily: "monospace", fontSize: "0.82rem", fontWeight: 700, background: "#f1f5f9", padding: "4px 8px", borderRadius: "6px", color: "#334155" }}>
                   {selected.displayId || (selected._id ? `APP-${String(selected._id).slice(-6).toUpperCase()}` : "APP")}
                 </span>
+              </div>
+            </div>
+
+            {/* Machinery Picture & Details Banner Card */}
+            <div
+              style={{
+                display: "flex",
+                gap: "16px",
+                alignItems: "center",
+                background: "#f8fafc",
+                padding: "14px",
+                borderRadius: "10px",
+                border: "1px solid #e2e8f0",
+                marginTop: "12px",
+                marginBottom: "14px",
+              }}
+            >
+              <img
+                src={getMachineryImage(selected)}
+                alt={selected.machineryModel || selected.equipment}
+                style={{
+                  width: "120px",
+                  height: "85px",
+                  objectFit: "cover",
+                  borderRadius: "8px",
+                  border: "1px solid #cbd5e1",
+                  flexShrink: 0,
+                  background: "#e2e8f0",
+                }}
+                onError={(e) => {
+                  e.currentTarget.src = "/images/kimpc logo.png";
+                }}
+              />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: "0.72rem", color: "#166534", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Booked Agricultural Machinery
+                </span>
+                <h4 style={{ margin: "2px 0 3px", fontSize: "1.05rem", fontWeight: 800, color: "#0f172a" }}>
+                  {selected.machineryModel || selected.equipment}
+                </h4>
+                <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", fontSize: "0.76rem", color: "#64748b" }}>
+                  <span>Asset Code: <strong style={{ color: "#334155" }}>{selected.machineryUnitId || "Fleet Unit"}</strong></span>
+                  <span>Driver: <strong style={{ color: "#334155" }}>{selected.assignedDriver || "Self-Operated"}</strong></span>
+                </div>
               </div>
             </div>
 
@@ -842,9 +1040,10 @@ export default function Applications() {
               )}
             </dl>
 
-            {/* Visual History Timeline */}
-            <div className="app-timeline-container">
-              <div className="app-timeline-header">
+            {/* Visual History Timeline (Toggled via History & Timeline Icon beside Pending) */}
+            {showTimeline && (
+              <div className="app-timeline-container" style={{ marginTop: "16px", marginBottom: "16px" }}>
+                <div className="app-timeline-header">
                 <h3 className="app-timeline-header-title">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <circle cx="12" cy="12" r="10" />
@@ -932,6 +1131,7 @@ export default function Applications() {
                 ))}
               </ul>
             </div>
+            )}
 
             {/* Modal Actions: Edit, Cancel, Close */}
             <div style={{ marginTop: "20px", paddingTop: "14px", borderTop: "1px solid #e2e8f0", display: "flex", gap: "10px", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center" }}>
