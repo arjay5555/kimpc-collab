@@ -191,10 +191,6 @@ export default function MemberDashboard() {
               <div className="wz-kpi-value">{loading ? "..." : activeCount}</div>
             </div>
           </div>
-          <div className="wz-kpi-badge-wrap">
-            <span className="wz-trend-badge wz-trend-positive">In Operation</span>
-            <span className="wz-trend-subtitle">Active in field</span>
-          </div>
         </div>
 
         {/* Card 2: Pending Requests */}
@@ -211,14 +207,6 @@ export default function MemberDashboard() {
               <div className="wz-kpi-value">{loading ? "..." : pendingCount}</div>
             </div>
           </div>
-          <div className="wz-kpi-badge-wrap">
-            <span className={`wz-trend-badge ${pendingCount > 0 ? "wz-trend-negative" : "wz-trend-positive"}`}>
-              {pendingCount > 0 ? "Under Review" : "All Clear"}
-            </span>
-            <span className="wz-trend-subtitle">
-              {pendingCount > 0 ? "Awaiting manager" : "No pending queue"}
-            </span>
-          </div>
         </div>
 
         {/* Card 3: Completed Rentals */}
@@ -234,10 +222,6 @@ export default function MemberDashboard() {
               <div className="wz-kpi-label">Completed Rentals</div>
               <div className="wz-kpi-value">{loading ? "..." : completedCount}</div>
             </div>
-          </div>
-          <div className="wz-kpi-badge-wrap">
-            <span className="wz-trend-badge wz-trend-positive">Returned</span>
-            <span className="wz-trend-subtitle">Successfully completed</span>
           </div>
         </div>
 
@@ -261,14 +245,6 @@ export default function MemberDashboard() {
               <div className="wz-kpi-label">Outstanding Balance</div>
               <div className="wz-kpi-value">{loading ? "..." : formatPrice(outstandingBalance)}</div>
             </div>
-          </div>
-          <div className="wz-kpi-badge-wrap">
-            <span className={`wz-trend-badge ${outstandingBalance > 0 ? "wz-trend-negative" : "wz-trend-positive"}`}>
-              {outstandingBalance > 0 ? "To Settle" : "All Settled"}
-            </span>
-            <span className="wz-trend-subtitle">
-              {outstandingBalance > 0 ? "Pending payment" : "Zero pending dues"}
-            </span>
           </div>
         </div>
       </div>
