@@ -574,7 +574,8 @@ export default function Applications() {
           )}
         </div>
       ) : (
-        <div className="wz-table-responsive" style={{ background: "#ffffff", borderRadius: "12px", border: "1px solid #e2e8f0", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", overflowX: "auto" }}>
+        <>
+          <div className="wz-table-responsive member-desktop-only" style={{ background: "#ffffff", borderRadius: "12px", border: "1px solid #e2e8f0", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", overflowX: "auto" }}>
           <table className="wz-table wz-bookings-table">
             <thead>
               <tr>
@@ -723,7 +724,138 @@ export default function Applications() {
             </tbody>
           </table>
         </div>
-      )}
+
+        {/* Mobile Phone Card View (Visible only on phone screens <= 768px) */}
+        <div className="member-mobile-bookings-list member-mobile-only" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          {visibleApplications.map((app) => {
+            const statusInfo = getStatusInfo(app.status, app.cancellationRequested);
+            const displayId = app.displayId || (app._id ? `APP-${String(app._id).slice(-6).toUpperCase()}` : "APP");
+            const modelName = app.machineryModel || app.equipment;
+            const dateRangeStr = formatBookingDateRange(app.startDate, app.endDate);
+            const days = getDaysCount(app.startDate, app.endDate);
+            const totalAmount = app.totalAmount || (app.ratePerHectare || 2500) * (app.hectares || 1);
+            const isPaid = (app.paymentStatus || "").toLowerCase() === "paid" || (app.paymentStatus || "").toLowerCase() === "settled";
+
+            return (
+              <div
+                key={app._id || app.id}
+                style={{
+                  background: "#ffffff",
+                  borderRadius: "14px",
+                  border: "1px solid #e2e8f0",
+                  padding: "16px",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                }}
+              >
+                {/* Top Bar: Booking ID + Status Badge */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                  <span style={{ fontFamily: "monospace", fontWeight: 800, fontSize: "0.95rem", color: "#0f172a" }}>
+                    {displayId}
+                  </span>
+                  <span className={`wz-status-pill wz-status-${statusInfo.slug}`} style={{ fontSize: "0.72rem", padding: "3px 10px", borderRadius: "999px" }}>
+                    {statusInfo.label}
+                  </span>
+                </div>
+
+                {/* Machinery Image & Info */}
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
+                  <img
+                    src={
+                      app.imageUrl ||
+                      machineryUnitsMap.get(app.machineryUnitId) ||
+                      machineryUnitsMap.get(app.equipment) ||
+                      "/images/kimpc logo.png"
+                    }
+                    alt={modelName}
+                    style={{
+                      width: "54px",
+                      height: "54px",
+                      borderRadius: "10px",
+                      objectFit: "cover",
+                      border: "1px solid #cbd5e1",
+                      background: "#f8fafc",
+                      flexShrink: 0,
+                    }}
+                    onError={(e) => {
+                      e.currentTarget.src = "/images/kimpc logo.png";
+                      e.currentTarget.style.objectFit = "contain";
+                    }}
+                  />
+                  <div>
+                    <strong style={{ fontSize: "0.98rem", color: "#0f172a", display: "block" }}>
+                      {modelName}
+                    </strong>
+                    <span style={{ fontSize: "0.76rem", color: "#64748b" }}>
+                      {app.hectares ? `${app.hectares} hectare${app.hectares > 1 ? "s" : ""}` : "1 hectare"} • {app.farmLocation || "Kalilangan"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Details Card Strip */}
+                <div style={{ background: "#f8fafc", borderRadius: "10px", padding: "10px 12px", marginBottom: "12px", fontSize: "0.82rem", display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: "#64748b" }}>Schedule:</span>
+                    <span style={{ fontWeight: 600, color: "#0f172a" }}>{dateRangeStr} ({days}d)</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: "#64748b" }}>Driver:</span>
+                    <span style={{ fontWeight: 600, color: "#0f172a" }}>
+                      {app.driverName || (app.driverOption === "With Cooperative Driver" ? "Coop Driver Assigned" : "Self-Operated / Own Driver")}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: "#64748b" }}>Estimated Total:</span>
+                    <span style={{ fontWeight: 800, color: "#166534" }}>₱{Number(totalAmount).toLocaleString()}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ color: "#64748b" }}>Payment:</span>
+                    <span
+                      style={{
+                        fontSize: "0.74rem",
+                        fontWeight: 700,
+                        color: isPaid ? "#15803d" : "#b45309",
+                        background: isPaid ? "#dcfce7" : "#fef3c7",
+                        padding: "2px 8px",
+                        borderRadius: "6px",
+                      }}
+                    >
+                      {isPaid ? "Paid" : "Pending"} ({app.paymentMethod || "Cash"})
+                    </span>
+                  </div>
+                </div>
+
+                {/* Tap to View Details / Actions */}
+                <button
+                  type="button"
+                  onClick={() => handleOpenViewModal(app)}
+                  style={{
+                    width: "100%",
+                    padding: "10px 16px",
+                    background: "#f0fdf4",
+                    border: "1px solid #bbf7d0",
+                    borderRadius: "8px",
+                    color: "#166534",
+                    fontWeight: 700,
+                    fontSize: "0.84rem",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "8px",
+                    cursor: "pointer",
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                  <span>View Details, History &amp; Actions</span>
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </>
+    )}
 
       {/* ========================================================================= */}
       {/* ======================= View Details & Timeline Modal =================== */}

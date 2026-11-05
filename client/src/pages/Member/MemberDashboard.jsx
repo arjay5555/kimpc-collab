@@ -247,6 +247,7 @@ export default function MemberDashboard() {
 
       {/* Top 4 Summary Cards: Pending, Active Booking, Completed, Balance */}
       <div
+        className="member-dashboard-metrics"
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
@@ -256,6 +257,7 @@ export default function MemberDashboard() {
       >
         {/* Card 1: Pending */}
         <div
+          className="member-dashboard-metric-card"
           style={{
             background: "#ffffff",
             borderRadius: "14px",
@@ -268,6 +270,7 @@ export default function MemberDashboard() {
           }}
         >
           <div
+            className="member-dashboard-metric-icon"
             style={{
               width: "44px",
               height: "44px",
@@ -289,7 +292,7 @@ export default function MemberDashboard() {
             <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
               Pending
             </div>
-            <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "#0f172a", lineHeight: 1.2 }}>
+            <div className="member-dashboard-metric-val" style={{ fontSize: "1.35rem", fontWeight: 800, color: "#0f172a", lineHeight: 1.2 }}>
               {loading ? "..." : pendingCount}
             </div>
           </div>
@@ -297,6 +300,7 @@ export default function MemberDashboard() {
 
         {/* Card 2: Active Booking */}
         <div
+          className="member-dashboard-metric-card"
           style={{
             background: "#ffffff",
             borderRadius: "14px",
@@ -309,6 +313,7 @@ export default function MemberDashboard() {
           }}
         >
           <div
+            className="member-dashboard-metric-icon"
             style={{
               width: "44px",
               height: "44px",
@@ -333,7 +338,7 @@ export default function MemberDashboard() {
             <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
               Active Booking
             </div>
-            <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "#0f172a", lineHeight: 1.2 }}>
+            <div className="member-dashboard-metric-val" style={{ fontSize: "1.35rem", fontWeight: 800, color: "#0f172a", lineHeight: 1.2 }}>
               {loading ? "..." : activeCount}
             </div>
           </div>
@@ -341,6 +346,7 @@ export default function MemberDashboard() {
 
         {/* Card 3: Completed */}
         <div
+          className="member-dashboard-metric-card"
           style={{
             background: "#ffffff",
             borderRadius: "14px",
@@ -353,6 +359,7 @@ export default function MemberDashboard() {
           }}
         >
           <div
+            className="member-dashboard-metric-icon"
             style={{
               width: "44px",
               height: "44px",
@@ -374,7 +381,7 @@ export default function MemberDashboard() {
             <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
               Completed
             </div>
-            <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "#0f172a", lineHeight: 1.2 }}>
+            <div className="member-dashboard-metric-val" style={{ fontSize: "1.35rem", fontWeight: 800, color: "#0f172a", lineHeight: 1.2 }}>
               {loading ? "..." : completedCount}
             </div>
           </div>
@@ -382,6 +389,7 @@ export default function MemberDashboard() {
 
         {/* Card 4: Balance */}
         <div
+          className="member-dashboard-metric-card"
           style={{
             background: "#ffffff",
             borderRadius: "14px",
@@ -394,6 +402,7 @@ export default function MemberDashboard() {
           }}
         >
           <div
+            className="member-dashboard-metric-icon"
             style={{
               width: "44px",
               height: "44px",
@@ -416,6 +425,7 @@ export default function MemberDashboard() {
               Balance
             </div>
             <div
+              className="member-dashboard-metric-val"
               style={{
                 fontSize: "1.35rem",
                 fontWeight: 800,
@@ -431,9 +441,10 @@ export default function MemberDashboard() {
 
       {/* 2x2 Grid Matching User Reference Design */}
       <div
+        className="member-dashboard-grid"
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(460px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))",
           gap: "20px",
           alignItems: "stretch",
         }}
@@ -474,8 +485,9 @@ export default function MemberDashboard() {
                 <div className="member-table-skeleton" style={{ height: "100px", borderRadius: "8px" }} />
               </div>
             ) : nextRental ? (
-              <div style={{ display: "flex", gap: "18px", alignItems: "flex-start", flexWrap: "wrap", marginBottom: "20px" }}>
+              <div className="member-next-rental-wrap" style={{ display: "flex", gap: "18px", alignItems: "flex-start", flexWrap: "wrap", marginBottom: "20px" }}>
                 <img
+                  className="member-next-rental-img"
                   src={
                     nextRental.imageUrl ||
                     machineryUnitsMap.get(nextRental.machineryUnitId) ||

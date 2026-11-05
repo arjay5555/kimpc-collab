@@ -355,3 +355,215 @@
 @media (prefers-reduced-motion: reduce) {
   .member-portal *, .member-portal *::before, .member-portal *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
+
+/* ========================================================================= */
+/* ================= Mobile Phone Optimizations for Farmers ================ */
+/* ========================================================================= */
+
+/* Mobile Bottom Navigation (Hidden on desktop, active on phone <= 768px) */
+.member-mobile-bottom-nav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  /* Hide desktop sidebar on mobile */
+  .member-desktop-sidebar {
+    display: none !important;
+  }
+
+  /* Full width container with safe bottom spacing */
+  .wz-dashboard-container.member-portal {
+    flex-direction: column !important;
+    display: block !important;
+    width: 100% !important;
+    min-height: 100vh !important;
+    min-height: 100dvh !important;
+  }
+
+  .wz-content-wrapper.member-main {
+    padding: 12px 14px 84px !important;
+    height: auto !important;
+    overflow-y: visible !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Fixed Mobile Bottom Nav */
+  .member-mobile-bottom-nav {
+    display: flex !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    height: 60px !important;
+    background: #ffffff !important;
+    border-top: 1px solid #e2e8f0 !important;
+    z-index: 9999 !important;
+    justify-content: space-around !important;
+    align-items: center !important;
+    box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.06) !important;
+    padding-bottom: env(safe-area-inset-bottom, 0) !important;
+  }
+
+  .member-portal[data-theme="dark"] .member-mobile-bottom-nav {
+    background: #182538 !important;
+    border-top-color: #2a394d !important;
+    box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.3) !important;
+  }
+
+  .member-bottom-nav-item {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 3px !important;
+    color: #64748b !important;
+    text-decoration: none !important;
+    font-size: 0.68rem !important;
+    font-weight: 600 !important;
+    flex: 1 !important;
+    height: 100% !important;
+    transition: color 0.15s ease !important;
+    -webkit-tap-highlight-color: transparent !important;
+  }
+
+  .member-bottom-nav-item svg {
+    width: 20px !important;
+    height: 20px !important;
+    stroke-width: 2 !important;
+    transition: transform 0.15s ease !important;
+  }
+
+  .member-bottom-nav-item.active {
+    color: #166534 !important;
+    font-weight: 800 !important;
+  }
+
+  .member-bottom-nav-item.active svg {
+    color: #166534 !important;
+    stroke: #166534 !important;
+    transform: scale(1.1) !important;
+  }
+
+  .member-portal[data-theme="dark"] .member-bottom-nav-item.active {
+    color: #22c55e !important;
+  }
+  .member-portal[data-theme="dark"] .member-bottom-nav-item.active svg {
+    color: #22c55e !important;
+    stroke: #22c55e !important;
+  }
+
+  /* Topbar mobile styling */
+  .wz-topbar {
+    margin-bottom: 14px !important;
+    flex-wrap: nowrap !important;
+    gap: 8px !important;
+  }
+
+  .wz-topbar-title {
+    font-size: 1.25rem !important;
+    line-height: 1.2 !important;
+  }
+
+  /* Filter tabs horizontal touch-scroll */
+  .member-filter-tabs {
+    display: flex !important;
+    overflow-x: auto !important;
+    white-space: nowrap !important;
+    -webkit-overflow-scrolling: touch !important;
+    width: 100% !important;
+    padding-bottom: 4px !important;
+    scrollbar-width: none !important;
+    gap: 8px !important;
+  }
+  .member-filter-tabs::-webkit-scrollbar {
+    display: none !important;
+  }
+  .member-filter-tabs button {
+    flex-shrink: 0 !important;
+    padding: 7px 12px !important;
+    font-size: 0.78rem !important;
+  }
+
+  /* Dashboard mobile layout */
+  .member-dashboard-metrics {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+    margin-bottom: 16px !important;
+  }
+
+  .member-dashboard-metric-card {
+    padding: 12px 14px !important;
+    gap: 10px !important;
+    border-radius: 12px !important;
+  }
+
+  .member-dashboard-metric-icon {
+    width: 36px !important;
+    height: 36px !important;
+    border-radius: 8px !important;
+  }
+  .member-dashboard-metric-icon svg {
+    width: 18px !important;
+    height: 18px !important;
+  }
+
+  .member-dashboard-metric-val {
+    font-size: 1.15rem !important;
+  }
+
+  .member-dashboard-grid {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+
+  .member-next-rental-wrap {
+    flex-direction: column !important;
+  }
+  .member-next-rental-img {
+    width: 100% !important;
+    height: 180px !important;
+    max-height: 200px !important;
+  }
+
+  /* Catalog grid phone layout */
+  .member-product-grid {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+
+  /* Modal bottom-sheet style on mobile */
+  .member-modal-backdrop {
+    padding: 0 !important;
+    align-items: flex-end !important;
+  }
+
+  .member-modal,
+  .wz-booking-modal-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 94vh !important;
+    max-height: 94dvh !important;
+    border-radius: 18px 18px 0 0 !important;
+    margin: 0 !important;
+  }
+
+  .member-modal-step-content {
+    margin-left: 0 !important;
+    padding-left: 0 !important;
+  }
+
+  /* Responsive tables */
+  .wz-table-responsive {
+    border-radius: 10px !important;
+    margin: 0 -2px !important;
+  }
+
+  .wz-table th,
+  .wz-table td {
+    padding: 9px 8px !important;
+    font-size: 0.78rem !important;
+  }
+}

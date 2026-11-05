@@ -957,11 +957,11 @@ export default function EquipmentCatalog() {
                         Farmland Area to Cultivate
                       </label>
                     </div>
-                    <p style={{ fontSize: "0.76rem", color: "#64748b", margin: "0 0 10px 30px" }}>
+                    <p className="member-modal-step-content" style={{ fontSize: "0.76rem", color: "#64748b", margin: "0 0 10px 30px" }}>
                       Machinery services are billed strictly per hectare of cultivated land.
                     </p>
 
-                    <div style={{ marginLeft: "30px" }}>
+                    <div className="member-modal-step-content" style={{ marginLeft: "30px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
                         {/* Number Input with unit addon */}
                         <div
@@ -1131,11 +1131,11 @@ export default function EquipmentCatalog() {
                         </button>
                       )}
                     </div>
-                    <p style={{ fontSize: "0.76rem", color: "#64748b", margin: "0 0 12px 30px" }}>
+                    <p className="member-modal-step-content" style={{ fontSize: "0.76rem", color: "#64748b", margin: "0 0 12px 30px" }}>
                       Click an open date to set dispatch start, then click your completion date. Reserved dates change color and cannot be selected.
                     </p>
 
-                    <div style={{ marginLeft: "30px" }}>
+                    <div className="member-modal-step-content" style={{ marginLeft: "30px" }}>
                       {/* Interactive Calendar Container */}
                       <div
                         style={{
@@ -1518,11 +1518,11 @@ export default function EquipmentCatalog() {
                         Payment Method
                       </label>
                     </div>
-                    <p style={{ fontSize: "0.76rem", color: "#64748b", margin: "0 0 10px 30px" }}>
+                    <p className="member-modal-step-content" style={{ fontSize: "0.76rem", color: "#64748b", margin: "0 0 10px 30px" }}>
                       Choose between Cash settlement or instant cooperative GCash transfer.
                     </p>
 
-                    <div style={{ marginLeft: "30px" }}>
+                    <div className="member-modal-step-content" style={{ marginLeft: "30px" }}>
                       {/* Segmented Cards */}
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
                         {/* Cash Card */}

@@ -116,6 +116,7 @@ export default function MemberPayments() {
 
       {/* KPI Stats Grid */}
       <div
+        className="member-dashboard-metrics"
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
@@ -343,16 +344,17 @@ export default function MemberPayments() {
           </Link>
         </div>
       ) : (
-        <div
-          className="wz-table-responsive"
-          style={{
-            background: "#ffffff",
-            borderRadius: "12px",
-            border: "1px solid #e2e8f0",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
-            overflowX: "auto",
-          }}
-        >
+        <>
+          <div
+            className="wz-table-responsive member-desktop-only"
+            style={{
+              background: "#ffffff",
+              borderRadius: "12px",
+              border: "1px solid #e2e8f0",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+              overflowX: "auto",
+            }}
+          >
           <table className="wz-table wz-bookings-table">
             <thead>
               <tr>
@@ -505,7 +507,141 @@ export default function MemberPayments() {
             </tbody>
           </table>
         </div>
-      )}
+
+        {/* Mobile Phone Payment Cards View (Visible only on phone screens <= 768px) */}
+        <div className="member-mobile-payments-list member-mobile-only" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          {filteredApps.map((app) => {
+            const isPaid = (app.paymentStatus || "").toLowerCase() === "paid" || (app.paymentStatus || "").toLowerCase() === "settled";
+            const receiptNo = app.receiptNo || (app._id ? `INV-${String(app._id).slice(-6).toUpperCase()}` : "INV-001");
+            const total = Number(app.totalAmount || (app.ratePerHectare || 2500) * (app.hectares || 1));
+            const paid = isPaid ? total : Number(app.paymentAmount || 0);
+            const balance = Math.max(0, total - paid);
+
+            return (
+              <div
+                key={app._id || app.id}
+                style={{
+                  background: "#ffffff",
+                  borderRadius: "14px",
+                  border: "1px solid #e2e8f0",
+                  padding: "16px",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                }}
+              >
+                {/* Header: Receipt # + Status Badge */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                  <div>
+                    <span style={{ fontFamily: "monospace", fontWeight: 800, fontSize: "0.92rem", color: "#0f172a", display: "block" }}>
+                      {receiptNo}
+                    </span>
+                    <span style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                      Booking ID: {app.displayId || (app._id ? `BK-${String(app._id).slice(-4).toUpperCase()}` : "")}
+                    </span>
+                  </div>
+                  <span
+                    className={isPaid ? "wz-payment-badge-paid" : "wz-payment-badge-pending"}
+                    style={{
+                      padding: "3px 10px",
+                      borderRadius: "20px",
+                      fontSize: "0.74rem",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {isPaid ? "Paid" : "Pending"}
+                  </span>
+                </div>
+
+                {/* Machine Name */}
+                <div style={{ marginBottom: "10px" }}>
+                  <strong style={{ fontSize: "0.98rem", color: "#0f172a" }}>
+                    {app.machineryModel || app.equipment}
+                  </strong>
+                  <span style={{ display: "block", fontSize: "0.76rem", color: "#64748b" }}>
+                    {app.hectares ? `${app.hectares} ha` : "Standard Area"} • {app.farmLocation || "Kalilangan"}
+                  </span>
+                </div>
+
+                {/* Billing Summary Box */}
+                <div style={{ background: "#f8fafc", borderRadius: "10px", padding: "10px 12px", marginBottom: "12px", fontSize: "0.82rem", display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: "#64748b" }}>Total Amount:</span>
+                    <span style={{ fontWeight: 800, color: "#0f172a" }}>₱{total.toLocaleString()}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: "#64748b" }}>Amount Paid:</span>
+                    <span style={{ fontWeight: 600, color: "#166534" }}>₱{paid.toLocaleString()}</span>
+                  </div>
+                  {balance > 0 && (
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#b45309", fontWeight: 700 }}>Balance Due:</span>
+                      <span style={{ fontWeight: 800, color: "#b45309" }}>₱{balance.toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: "#64748b" }}>Payment Method:</span>
+                    <span style={{ fontWeight: 600, color: "#0f172a" }}>{app.paymentMethod || "Cash"}</span>
+                  </div>
+                </div>
+
+                {/* Actions Row */}
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button
+                    type="button"
+                    onClick={() => setReceiptApp(app)}
+                    style={{
+                      flex: 1,
+                      padding: "10px 14px",
+                      background: "#ffffff",
+                      border: "1.5px solid #166534",
+                      borderRadius: "8px",
+                      color: "#166534",
+                      fontWeight: 700,
+                      fontSize: "0.84rem",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "6px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <polyline points="14 2 14 8 20 8" />
+                    </svg>
+                    <span>View Official Receipt</span>
+                  </button>
+
+                  {app.paymentProofUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setPreviewGcash(app.paymentProofUrl)}
+                      title="View GCash payment confirmation screenshot"
+                      style={{
+                        padding: "10px 14px",
+                        background: "#f0f9ff",
+                        border: "1px solid #bae6fd",
+                        borderRadius: "8px",
+                        color: "#0284c7",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                        <circle cx="8.5" cy="8.5" r="1.5" />
+                        <polyline points="21 15 16 10 5 21" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </>
+    )}
 
       {/* ================= Official Cooperative Receipt Modal ==================== */}
       {receiptApp && (
