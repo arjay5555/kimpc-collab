@@ -197,7 +197,6 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
       equipment,
       machineryUnitId: machineryUnitId || targetUnit?.unitId || "",
       machineryModel,
-      imageUrl: targetUnit?.imageUrl || targetUnit?.photos?.[0] || "",
       assignedDriver,
       driverPhone,
       startDate,

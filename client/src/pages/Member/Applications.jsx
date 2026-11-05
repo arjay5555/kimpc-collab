@@ -236,8 +236,10 @@ export default function Applications() {
   const [actionError, setActionError] = useState("");
   const [actionSuccess, setActionSuccess] = useState("");
 
-  // Editing state for Pending bookings
-  const [editingApp, setEditingApp] = useState(null);
+  // Modal active view tab: 'details' | 'history' | 'edit' | 'cancel'
+  const [viewModalTab, setViewModalTab] = useState("details");
+
+  // Inline Editing state for selected booking
   const [editForm, setEditForm] = useState({
     farmLocation: "",
     startDate: "",
@@ -246,62 +248,13 @@ export default function Applications() {
     rescheduleReason: "",
   });
   const [isSavingEdit, setIsSavingEdit] = useState(false);
-  const [editDateConflict, setEditDateConflict] = useState("");
 
-  // Cancellation Request state for Approved bookings
-  const [cancellationRequestApp, setCancellationRequestApp] = useState(null);
+  // Cancellation reason state
   const [cancellationReason, setCancellationReason] = useState("");
   const [isSubmittingCancellation, setIsSubmittingCancellation] = useState(false);
 
   // GCash Screenshot Lightbox Modal State
   const [previewGcashImage, setPreviewGcashImage] = useState(null);
-
-  // Machinery units image map & Timeline toggle states
-  const [machineryMap, setMachineryMap] = useState({});
-  const [showTimeline, setShowTimeline] = useState(false);
-
-  const fetchMachineryUnits = useCallback(async () => {
-    try {
-      const res = await api("/machinery-units");
-      if (res.ok && res.data) {
-        const list = res.data.units || (Array.isArray(res.data) ? res.data : []);
-        const map = {};
-        list.forEach((u) => {
-          const img = u.imageUrl || u.photos?.[0] || "";
-          if (img) {
-            if (u.unitId) map[u.unitId.toLowerCase()] = img;
-            if (u.name) map[u.name.toLowerCase()] = img;
-            if (u.model) map[u.model.toLowerCase()] = img;
-            const full = `${u.brand || ""} ${u.name || ""}`.trim().toLowerCase();
-            map[full] = img;
-          }
-        });
-        setMachineryMap(map);
-      }
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchMachineryUnits();
-  }, [fetchMachineryUnits]);
-
-  const getMachineryImage = useCallback(
-    (app) => {
-      if (app?.imageUrl) return app.imageUrl;
-      const unitIdKey = (app?.machineryUnitId || "").toLowerCase();
-      const nameKey = (app?.equipment || "").toLowerCase();
-      const modelKey = (app?.machineryModel || "").toLowerCase();
-      return (
-        machineryMap[unitIdKey] ||
-        machineryMap[nameKey] ||
-        machineryMap[modelKey] ||
-        "/images/kimpc logo.png"
-      );
-    },
-    [machineryMap]
-  );
 
   const fetchApplications = useCallback(async () => {
     const response = await api(getApplicationsUrl(user?.email));
@@ -309,7 +262,7 @@ export default function Applications() {
       setApplications(unwrapListResponse(response));
       setError("");
     } else {
-      setError(response.data?.error || "Could not load your applications.");
+      setError(response.data?.error || "Could not load your bookings.");
     }
     setLoading(false);
   }, [user?.email]);
@@ -332,84 +285,54 @@ export default function Applications() {
     });
   }, [applications, filter]);
 
-  // Direct cancel for Pending bookings
-  const cancelPendingApplication = async (application) => {
-    const id = application._id || application.id;
-    if (!id || !window.confirm(`Are you sure you want to cancel your pending booking request for "${application.equipment}"?`)) return;
-
-    setCancellingId(id);
-    setActionError("");
-    setActionSuccess("");
-    const response = await api(`/applications/${encodeURIComponent(id)}`, { method: "DELETE" });
-    setCancellingId("");
-    if (!response.ok) {
-      setActionError(response.data?.error || "Could not cancel this booking request.");
-      return;
-    }
-    setActionSuccess("Booking request cancelled successfully.");
-    const updatedApplication = response.data?.application;
-    if (updatedApplication) {
-      setApplications((current) => current.map((item) => (item._id || item.id) === id ? updatedApplication : item));
-    } else {
-      fetchApplications();
-    }
-  };
-
-  // Open Edit Modal for Pending booking
-  const handleOpenEdit = (application) => {
-    const status = (application.status || "Pending").toLowerCase();
-    if (status !== "pending") {
-      setActionError("Only pending bookings can be edited. Approved bookings cannot be edited directly.");
-      return;
-    }
-    setEditingApp(application);
+  // Open Unified View Modal
+  const handleOpenViewModal = (app) => {
+    setSelected(app);
+    setViewModalTab("details");
     setEditForm({
-      farmLocation: application.farmLocation || "",
-      startDate: application.startDate || "",
-      endDate: application.endDate || "",
-      hectares: application.hectares || 1,
+      farmLocation: app.farmLocation || "",
+      startDate: app.startDate || "",
+      endDate: app.endDate || "",
+      hectares: app.hectares || 1,
       rescheduleReason: "",
     });
-    setEditDateConflict("");
+    setCancellationReason("");
     setActionError("");
     setActionSuccess("");
   };
 
-  // Live conflict checking whenever edit dates change
-  useEffect(() => {
-    if (!editingApp || !editForm.startDate || !editForm.endDate) {
-      setEditDateConflict("");
-      return;
+  // Live conflict checking for inline edit
+  const editDateConflict = useMemo(() => {
+    if (!selected || viewModalTab !== "edit" || !editForm.startDate || !editForm.endDate) {
+      return "";
     }
-
     if (editForm.endDate < editForm.startDate) {
-      setEditDateConflict("End date must be on or after start date.");
-      return;
+      return "End date must be on or after start date.";
     }
 
-    // Extract other active bookings for this equipment
-    const otherBookings = applications.filter((other) => {
-      const otherId = other._id || other.id;
-      const thisId = editingApp._id || editingApp.id;
-      if (otherId === thisId) return false;
-      const isSameEq = (other.machineryUnitId && other.machineryUnitId === editingApp.machineryUnitId) ||
-                       (other.equipment && other.equipment.toLowerCase() === editingApp.equipment.toLowerCase());
-      const isActive = ["approved", "checked-out", "ongoing", "pending"].includes((other.status || "").toLowerCase());
-      return isSameEq && isActive;
-    }).map((b) => ({ startDate: b.startDate, endDate: b.endDate, label: b.status }));
+    const otherBookings = applications
+      .filter((other) => {
+        const otherId = other._id || other.id;
+        const thisId = selected._id || selected.id;
+        if (otherId === thisId) return false;
+        const isSameEq =
+          (other.machineryUnitId && other.machineryUnitId === selected.machineryUnitId) ||
+          (other.equipment && other.equipment.toLowerCase() === (selected.equipment || "").toLowerCase());
+        const isActive = ["approved", "checked-out", "ongoing", "pending"].includes((other.status || "").toLowerCase());
+        return isSameEq && isActive;
+      })
+      .map((b) => ({ startDate: b.startDate, endDate: b.endDate, label: b.status }));
 
     if (hasBookedDatesInRange(editForm.startDate, editForm.endDate, otherBookings)) {
-      setEditDateConflict(`"${editingApp.equipment}" is already booked on dates in this range. Please choose different dates.`);
-    } else {
-      setEditDateConflict("");
+      return `"${selected.equipment}" is already booked on dates in this range. Please choose different dates.`;
     }
-  }, [editingApp, editForm.startDate, editForm.endDate, applications]);
+    return "";
+  }, [selected, viewModalTab, editForm.startDate, editForm.endDate, applications]);
 
-  // Submit Edit for Pending booking
-  const handleSaveEdit = async (e) => {
-    e.preventDefault();
-    if (!editingApp) return;
-    const id = editingApp._id || editingApp.id;
+  // Inline Save Edit for Pending booking
+  const handleInlineSaveEdit = async () => {
+    if (!selected) return;
+    const id = selected._id || selected.id;
 
     if (!editForm.startDate || !editForm.endDate) {
       setActionError("Start date and end date are required.");
@@ -445,46 +368,56 @@ export default function Applications() {
       setActionError(response.data?.error || "Failed to update booking.");
     } else {
       setActionSuccess("Booking updated and rescheduled successfully.");
-      setEditingApp(null);
+      const updated = response.data?.application;
+      if (updated) {
+        setSelected(updated);
+        setApplications((prev) => prev.map((item) => ((item._id || item.id) === id ? updated : item)));
+      } else {
+        fetchApplications();
+      }
+      setViewModalTab("details");
+    }
+  };
+
+  // Inline Cancel Booking / Submit Cancellation
+  const handleInlineConfirmCancel = async () => {
+    if (!selected) return;
+    const id = selected._id || selected.id;
+    const isPending = (selected.status || "Pending").toLowerCase() === "pending";
+
+    if (isPending) {
+      setCancellingId(id);
+      setActionError("");
+      setActionSuccess("");
+      const response = await api(`/applications/${encodeURIComponent(id)}`, { method: "DELETE" });
+      setCancellingId("");
+      if (!response.ok) {
+        setActionError(response.data?.error || "Could not cancel this booking request.");
+        return;
+      }
+      setActionSuccess("Booking request cancelled successfully.");
+      setSelected(null);
       fetchApplications();
-    }
-  };
-
-  // Open Cancellation Request Modal for Approved booking
-  const handleOpenCancellationRequest = (application) => {
-    setCancellationRequestApp(application);
-    setCancellationReason("");
-    setActionError("");
-    setActionSuccess("");
-  };
-
-  // Submit Cancellation Request for Approved booking
-  const handleSubmitCancellationRequest = async (e) => {
-    e.preventDefault();
-    if (!cancellationRequestApp) return;
-    const id = cancellationRequestApp._id || cancellationRequestApp.id;
-
-    if (!cancellationReason.trim()) {
-      setActionError("Please provide a reason for cancelling this approved booking.");
-      return;
-    }
-
-    setIsSubmittingCancellation(true);
-    setActionError("");
-    setActionSuccess("");
-
-    const response = await api(`/applications/${encodeURIComponent(id)}/request-cancellation`, {
-      method: "POST",
-      body: { reason: cancellationReason.trim() },
-    });
-
-    setIsSubmittingCancellation(false);
-    if (!response.ok) {
-      setActionError(response.data?.error || "Failed to submit cancellation request.");
     } else {
-      setActionSuccess("Cancellation request submitted to manager. Awaiting manager approval.");
-      setCancellationRequestApp(null);
-      fetchApplications();
+      if (!cancellationReason.trim()) {
+        setActionError("Please provide a reason for cancelling this approved booking.");
+        return;
+      }
+      setIsSubmittingCancellation(true);
+      setActionError("");
+      setActionSuccess("");
+      const response = await api(`/applications/${encodeURIComponent(id)}/request-cancellation`, {
+        method: "POST",
+        body: { reason: cancellationReason.trim() },
+      });
+      setIsSubmittingCancellation(false);
+      if (!response.ok) {
+        setActionError(response.data?.error || "Failed to submit cancellation request.");
+      } else {
+        setActionSuccess("Cancellation request submitted to manager. Awaiting manager approval.");
+        setSelected(null);
+        fetchApplications();
+      }
     }
   };
 
@@ -495,7 +428,7 @@ export default function Applications() {
         subtitle="Track machinery bookings, inspect lifecycle history timeline, edit pending details, or request cancellations."
       />
 
-      {/* Top Filter and Action Bar */}
+      {/* Top Filter Bar (No outside history icon) */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
         <div className="member-filter-tabs" role="tablist" aria-label="Filter bookings" style={{ margin: 0 }}>
           {filters.map((item) => {
@@ -523,43 +456,6 @@ export default function Applications() {
             );
           })}
         </div>
-        <Link
-          className="wz-btn wz-btn-secondary"
-          to="/member/history"
-          title="Booking History"
-          aria-label="View Booking History"
-          style={{
-            borderRadius: "8px",
-            textDecoration: "none",
-            padding: "8px 16px",
-            fontWeight: 600,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "8px",
-            fontSize: "0.85rem",
-            background: "#ffffff",
-            border: "1px solid #cbd5e1",
-            color: "#1e293b",
-            boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
-            transition: "all 0.15s ease",
-          }}
-        >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M3 12a9 9 0 1 0 2.64-6.36L3 8" />
-            <path d="M3 3v5h5" />
-            <path d="M12 7v5l3 2" />
-          </svg>
-          <span>Booking History</span>
-        </Link>
       </div>
 
       {actionError && (
@@ -606,7 +502,7 @@ export default function Applications() {
                 <th>Booking ID</th>
                 <th>Booked Date</th>
                 <th>Machinery Model</th>
-                <th>Date Start and End</th>
+                <th>Rental Schedule</th>
                 <th>Driver</th>
                 <th>Payment</th>
                 <th style={{ textAlign: "center" }}>Action</th>
@@ -614,52 +510,21 @@ export default function Applications() {
             </thead>
             <tbody>
               {visibleApplications.map((app) => {
-                const statusLower = (app.status || "Pending").toLowerCase();
-                const isPending = statusLower === "pending";
-                const isApproved = statusLower === "approved";
-                const isCancelPending = statusLower === "cancellation requested" || app.cancellationRequested;
-                const statusInfo = getStatusInfo(app.status, isCancelPending);
-                const displayId = app.displayId || (app._id ? `APP-${String(app._id).slice(-6).toUpperCase()}` : "APP-NEW");
-                const modelName = app.machineryModel || app.equipment || "Standard Unit";
-                const bookedDateStr = app.createdAt ? new Date(app.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Recently";
+                const statusInfo = getStatusInfo(app.status, app.cancellationRequested);
+                const displayId = app.displayId || (app._id ? `APP-${String(app._id).slice(-6).toUpperCase()}` : "APP");
+                const modelName = app.machineryModel || app.equipment;
+                const bookedDateStr = formatDateDisplay(app.createdAt);
                 const dateRangeStr = formatBookingDateRange(app.startDate, app.endDate);
                 const days = getDaysCount(app.startDate, app.endDate);
                 const totalAmount = app.totalAmount || (app.ratePerHectare || 2500) * (app.hectares || 1);
-                const hasDriver = app.assignedDriver && app.assignedDriver !== "Self-Operated";
 
                 return (
                   <tr key={app._id || app.id}>
-                    {/* 1. Status & Timeline Icon */}
+                    {/* 1. Status */}
                     <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        <span className={`wz-status-pill wz-status-${statusInfo.slug}`}>
-                          {statusInfo.label}
-                        </span>
-                        <button
-                          type="button"
-                          className="wz-action-icon-btn"
-                          style={{
-                            width: "26px",
-                            height: "26px",
-                            minWidth: "26px",
-                            padding: 0,
-                            color: "#166534",
-                            background: "#f0fdf4",
-                            border: "1px solid #bbf7d0",
-                          }}
-                          title="View Booking History & Lifecycle Timeline"
-                          aria-label="View Booking History & Timeline"
-                          onClick={() => {
-                            setSelected(app);
-                            setShowTimeline(true);
-                          }}
-                        >
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="12" cy="12" r="10" />
-                            <polyline points="12 6 12 12 16 14" />
-                          </svg>
-                        </button>
-                      </div>
+                      <span className={`wz-status-pill wz-status-${statusInfo.slug}`}>
+                        {statusInfo.label}
+                      </span>
                     </td>
 
                     {/* 2. Booking ID */}
@@ -672,31 +537,13 @@ export default function Applications() {
                       {bookedDateStr}
                     </td>
 
-                    {/* 4. Machinery Model with Picture */}
+                    {/* 4. Machinery Model */}
                     <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                        <img
-                          src={getMachineryImage(app)}
-                          alt={modelName}
-                          style={{
-                            width: "44px",
-                            height: "44px",
-                            objectFit: "cover",
-                            borderRadius: "8px",
-                            border: "1px solid #e2e8f0",
-                            flexShrink: 0,
-                            background: "#f8fafc",
-                          }}
-                          onError={(e) => {
-                            e.currentTarget.src = "/images/kimpc logo.png";
-                          }}
-                        />
-                        <div className="wz-machinery-cell">
-                          <span style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.85rem" }}>{modelName}</span>
-                          {app.equipment && modelName !== app.equipment && (
-                            <span className="wz-machinery-badge">{app.equipment}</span>
-                          )}
-                        </div>
+                      <div className="wz-machinery-cell">
+                        <span style={{ fontWeight: 600, color: "#0f172a" }}>{modelName}</span>
+                        {app.equipment && modelName !== app.equipment && (
+                          <span className="wz-machinery-badge">{app.equipment}</span>
+                        )}
                       </div>
                     </td>
 
@@ -710,26 +557,11 @@ export default function Applications() {
                       </div>
                     </td>
 
-                    {/* 6. Driver */}
+                    {/* 6. Driver (Clean text without X or check icon) */}
                     <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        {hasDriver ? (
-                          <div className="wz-driver-icon wz-driver-assigned" title="Driver Assigned">
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                              <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                          </div>
-                        ) : (
-                          <div className="wz-driver-icon wz-driver-unassigned" title="Self-Operated">
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                              <line x1="5" y1="12" x2="19" y2="12" />
-                            </svg>
-                          </div>
-                        )}
-                        <span style={{ fontSize: "0.76rem", color: "#334155", fontWeight: 500 }}>
-                          {app.assignedDriver || "Self-Operated"}
-                        </span>
-                      </div>
+                      <span style={{ fontSize: "0.76rem", color: "#334155", fontWeight: 500 }}>
+                        {app.assignedDriver || "Self-Operated"}
+                      </span>
                     </td>
 
                     {/* 7. Payment */}
@@ -742,20 +574,18 @@ export default function Applications() {
                           {app.paymentStatus || "Pending"}
                         </span>
                       </div>
-                      <div style={{ fontSize: "0.72rem", color: "#64748b", marginTop: "3px", display: "flex", alignItems: "center", gap: "4px", flexWrap: "wrap" }}>
+                      <div style={{ fontSize: "0.72rem", marginTop: "3px" }}>
                         <span style={{ fontWeight: 600, color: "#334155" }}>{app.paymentMethod || "Cash"}</span>
                         {app.paymentMethod === "Cash" && app.cashPaymentOption && (
-                          <span style={{ color: "#0284c7", fontWeight: 600 }}>• {app.cashPaymentOption}</span>
+                          <span style={{ color: "#0284c7", fontWeight: 600 }}> • {app.cashPaymentOption}</span>
                         )}
                         {app.paymentMethod === "GCash" && (
                           app.gcashProof ? (
                             <button
                               type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPreviewGcashImage(app.gcashProof);
-                              }}
+                              onClick={() => setPreviewGcashImage(app.gcashProof)}
                               style={{
+                                marginLeft: "4px",
                                 background: "#ecfdf5",
                                 border: "1px solid #a7f3d0",
                                 borderRadius: "4px",
@@ -785,11 +615,8 @@ export default function Applications() {
                         <button
                           type="button"
                           className="wz-action-icon-btn view"
-                          onClick={() => {
-                            setSelected(app);
-                            setShowTimeline(false);
-                          }}
-                          title="View booking details, edit or cancel"
+                          onClick={() => handleOpenViewModal(app)}
+                          title="View booking details, history timeline, edit or cancel"
                           aria-label="View Details"
                         >
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -823,584 +650,475 @@ export default function Applications() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="application-detail-title"
-            style={{ maxWidth: "720px", width: "95%", maxHeight: "90vh", overflowY: "auto" }}
+            style={{ maxWidth: "720px", width: "95%", maxHeight: "90vh", overflowY: "auto", position: "relative" }}
           >
-            <button className="member-modal-close" type="button" aria-label="Close details" onClick={() => setSelected(null)}>
-              ×
-            </button>
+            {/* Top Right: Close X, and directly below it the History, Edit, Cancel icons */}
+            <div style={{ position: "absolute", top: "14px", right: "16px", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px", zIndex: 10 }}>
+              <button
+                className="member-modal-close"
+                type="button"
+                aria-label="Close details"
+                onClick={() => setSelected(null)}
+                style={{ position: "static", background: "#f1f5f9", border: "none", borderRadius: "50%", width: "30px", height: "30px", fontSize: "1.1rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#64748b" }}
+              >
+                ✕
+              </button>
 
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px", flexWrap: "wrap", marginBottom: "8px" }}>
-              <div>
-                <p className="member-eyebrow" style={{ margin: "0 0 4px", letterSpacing: "0.06em", color: "#64748b" }}>
-                  BOOKING DETAILS
-                </p>
-                <h2 id="application-detail-title" style={{ margin: 0, fontSize: "1.35rem", color: "#0f172a" }}>
-                  {selected.machineryModel || selected.equipment}
-                </h2>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                <span className={`wz-status-pill wz-status-${getStatusInfo(selected.status, selected.cancellationRequested).slug}`}>
-                  {getStatusInfo(selected.status, selected.cancellationRequested).label}
-                </span>
-
-                {/* Booking History & Lifecycle Timeline icon beside Pending */}
+              {/* Below X: Action Icons (History, Edit, Cancel) - No text labels */}
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                {/* 1. History & Timeline Icon */}
                 <button
                   type="button"
                   className="wz-action-icon-btn"
+                  onClick={() => setViewModalTab(viewModalTab === "history" ? "details" : "history")}
+                  title="Booking History & Timeline"
+                  aria-label="History and Timeline"
                   style={{
+                    width: "32px",
+                    height: "32px",
+                    borderRadius: "6px",
+                    border: viewModalTab === "history" ? "2px solid #16a34a" : "1px solid #cbd5e1",
+                    background: viewModalTab === "history" ? "#dcfce7" : "#ffffff",
+                    color: viewModalTab === "history" ? "#166534" : "#475569",
+                    cursor: "pointer",
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: "6px",
-                    padding: "4px 10px",
-                    borderRadius: "8px",
-                    border: showTimeline ? "1px solid #16a34a" : "1px solid #cbd5e1",
-                    background: showTimeline ? "#f0fdf4" : "#ffffff",
-                    color: showTimeline ? "#15803d" : "#334155",
-                    fontSize: "0.78rem",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    height: "32px",
-                    width: "auto",
+                    justifyContent: "center",
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
                   }}
-                  onClick={() => setShowTimeline((prev) => !prev)}
-                  title={showTimeline ? "Hide Booking History & Timeline" : "View Booking History & Lifecycle Timeline"}
-                  aria-label="Booking History and Timeline"
                 >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <polyline points="12 6 12 12 16 14" />
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 12a9 9 0 1 0 2.64-6.36L3 8" />
+                    <path d="M3 3v5h5" />
+                    <path d="M12 7v5l3 2" />
                   </svg>
-                  <span>{showTimeline ? "Hide Timeline" : "History & Timeline"}</span>
                 </button>
 
-                {/* Edit / Reschedule in Top Area (for Pending bookings) */}
+                {/* 2. Edit / Reschedule Icon (only for Pending bookings) */}
                 {(selected.status || "Pending").toLowerCase() === "pending" && !selected.cancellationRequested && (
                   <button
                     type="button"
-                    className="member-button member-button-primary"
+                    className="wz-action-icon-btn"
+                    onClick={() => setViewModalTab(viewModalTab === "edit" ? "details" : "edit")}
+                    title="Edit / Reschedule Booking"
+                    aria-label="Edit Booking"
                     style={{
-                      padding: "5px 12px",
-                      fontSize: "0.78rem",
-                      fontWeight: 700,
+                      width: "32px",
+                      height: "32px",
+                      borderRadius: "6px",
+                      border: viewModalTab === "edit" ? "2px solid #2563eb" : "1px solid #cbd5e1",
+                      background: viewModalTab === "edit" ? "#eff6ff" : "#ffffff",
+                      color: viewModalTab === "edit" ? "#1d4ed8" : "#475569",
+                      cursor: "pointer",
                       display: "inline-flex",
                       alignItems: "center",
-                      gap: "5px",
-                      borderRadius: "8px",
+                      justifyContent: "center",
+                      boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
                     }}
-                    onClick={() => {
-                      const app = selected;
-                      setSelected(null);
-                      handleOpenEdit(app);
-                    }}
-                    title="Edit dates, hectares, or farm location"
                   >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 20h9" />
                       <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
                     </svg>
-                    <span>Edit / Reschedule</span>
                   </button>
                 )}
 
-                <span style={{ fontFamily: "monospace", fontSize: "0.82rem", fontWeight: 700, background: "#f1f5f9", padding: "4px 8px", borderRadius: "6px", color: "#334155" }}>
-                  {selected.displayId || (selected._id ? `APP-${String(selected._id).slice(-6).toUpperCase()}` : "APP")}
-                </span>
+                {/* 3. Cancel Icon (for Pending or Approved bookings) */}
+                {!selected.cancellationRequested && !["cancelled", "rejected", "returned"].includes((selected.status || "").toLowerCase()) && (
+                  <button
+                    type="button"
+                    className="wz-action-icon-btn"
+                    onClick={() => setViewModalTab(viewModalTab === "cancel" ? "details" : "cancel")}
+                    title={(selected.status || "Pending").toLowerCase() === "pending" ? "Cancel Booking" : "Request Cancellation"}
+                    aria-label="Cancel Booking"
+                    style={{
+                      width: "32px",
+                      height: "32px",
+                      borderRadius: "6px",
+                      border: viewModalTab === "cancel" ? "2px solid #dc2626" : "1px solid #cbd5e1",
+                      background: viewModalTab === "cancel" ? "#fef2f2" : "#ffffff",
+                      color: viewModalTab === "cancel" ? "#b91c1c" : "#475569",
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                    }}
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="15" y1="9" x2="9" y2="15" />
+                      <line x1="9" y1="9" x2="15" y2="15" />
+                    </svg>
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* Machinery Picture & Details Banner Card */}
-            <div
-              style={{
-                display: "flex",
-                gap: "16px",
-                alignItems: "center",
-                background: "#f8fafc",
-                padding: "14px",
-                borderRadius: "10px",
-                border: "1px solid #e2e8f0",
-                marginTop: "12px",
-                marginBottom: "14px",
-              }}
-            >
-              <img
-                src={getMachineryImage(selected)}
-                alt={selected.machineryModel || selected.equipment}
-                style={{
-                  width: "120px",
-                  height: "85px",
-                  objectFit: "cover",
-                  borderRadius: "8px",
-                  border: "1px solid #cbd5e1",
-                  flexShrink: 0,
-                  background: "#e2e8f0",
-                }}
-                onError={(e) => {
-                  e.currentTarget.src = "/images/kimpc logo.png";
-                }}
-              />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ fontSize: "0.72rem", color: "#166534", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                  Booked Agricultural Machinery
-                </span>
-                <h4 style={{ margin: "2px 0 3px", fontSize: "1.05rem", fontWeight: 800, color: "#0f172a" }}>
-                  {selected.machineryModel || selected.equipment}
-                </h4>
-                <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", fontSize: "0.76rem", color: "#64748b" }}>
-                  <span>Asset Code: <strong style={{ color: "#334155" }}>{selected.machineryUnitId || "Fleet Unit"}</strong></span>
-                  <span>Driver: <strong style={{ color: "#334155" }}>{selected.assignedDriver || "Self-Operated"}</strong></span>
+            {/* Modal Heading (NO colored card or colored pill for Status/Booking ID) */}
+            <div style={{ marginBottom: "16px", paddingRight: "140px" }}>
+              <p className="member-eyebrow" style={{ margin: "0 0 4px", letterSpacing: "0.06em", color: "#64748b" }}>
+                {viewModalTab === "edit"
+                  ? "EDIT / RESCHEDULE BOOKING"
+                  : viewModalTab === "cancel"
+                  ? "CANCEL BOOKING REQUEST"
+                  : viewModalTab === "history"
+                  ? "BOOKING HISTORY & TIMELINE"
+                  : "BOOKING DETAILS"}
+              </p>
+              <h2 id="application-detail-title" style={{ margin: 0, fontSize: "1.3rem", color: "#0f172a" }}>
+                {selected.machineryModel || selected.equipment}
+              </h2>
+            </div>
+
+            {/* Dynamic Modal Body */}
+            {viewModalTab === "details" && (
+              <dl className="member-detail-list" style={{ marginTop: "14px" }}>
+                <div>
+                  <dt>Status</dt>
+                  <dd style={{ fontWeight: 600, color: "#0f172a" }}>
+                    {getStatusInfo(selected.status, selected.cancellationRequested).label}
+                  </dd>
                 </div>
-              </div>
-            </div>
-
-            {/* Core Details Grid */}
-            <dl className="member-detail-list" style={{ marginTop: "14px" }}>
-              <div>
-                <dt>Rental Period</dt>
-                <dd>{formatBookingDateRange(selected.startDate, selected.endDate)} ({getDaysCount(selected.startDate, selected.endDate)} days)</dd>
-              </div>
-              <div>
-                <dt>Submitted On</dt>
-                <dd>{selected.createdAt ? new Date(selected.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "Recently"}</dd>
-              </div>
-              <div>
-                <dt>Farm Location</dt>
-                <dd>{selected.farmLocation || "Not specified"}</dd>
-              </div>
-              <div>
-                <dt>Farm Area</dt>
-                <dd>{selected.hectares ? `${selected.hectares} hectare${selected.hectares > 1 ? "s" : ""}` : "1 hectare"}</dd>
-              </div>
-              <div>
-                <dt>Client Phone</dt>
-                <dd>{selected.farmerPhone || selected.memberPhone || selected.clientPhone || "—"}</dd>
-              </div>
-              <div>
-                <dt>Assigned Driver</dt>
-                <dd>{selected.assignedDriver || "Self-Operated"}{selected.driverPhone ? ` (${selected.driverPhone})` : ""}</dd>
-              </div>
-              <div>
-                <dt>Total Payment</dt>
-                <dd style={{ fontWeight: 700, color: "#166534" }}>
-                  ₱{Number(selected.totalAmount || (selected.ratePerHectare || 2500) * (selected.hectares || 1)).toLocaleString()}
-                  <span style={{ fontSize: "0.78rem", fontWeight: 500, color: "#64748b", marginLeft: "6px" }}>
-                    ({selected.paymentStatus || "Pending"} • {selected.paymentMethod || "Cash"})
-                  </span>
-                </dd>
-              </div>
-              <div>
-                <dt>Payment Mode &amp; Timing</dt>
-                <dd>
-                  {selected.paymentMethod === "GCash" ? (
-                    <span style={{ color: "#0284c7", fontWeight: 600 }}>GCash (0926 463 8983 - KIMPC)</span>
-                  ) : (
-                    <span>Cash • {selected.cashPaymentOption === "Upon Return" ? "Upon Return" : "Upon Pickup"}</span>
-                  )}
-                </dd>
-              </div>
-              {selected.paymentMethod === "GCash" && (
-                <div style={{ gridColumn: "1 / -1", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "10px 14px" }}>
-                  <dt style={{ color: "#334155", marginBottom: "6px" }}>GCash Payment Proof Screenshot</dt>
+                <div>
+                  <dt>Booking ID</dt>
+                  <dd style={{ fontWeight: 600, color: "#0f172a", fontFamily: "monospace" }}>
+                    {selected.displayId || (selected._id ? `APP-${String(selected._id).slice(-6).toUpperCase()}` : "—")}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Rental Period</dt>
+                  <dd>{formatBookingDateRange(selected.startDate, selected.endDate)} ({getDaysCount(selected.startDate, selected.endDate)} days)</dd>
+                </div>
+                <div>
+                  <dt>Submitted On</dt>
+                  <dd>{selected.createdAt ? new Date(selected.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "Recently"}</dd>
+                </div>
+                <div>
+                  <dt>Farm Location</dt>
+                  <dd>{selected.farmLocation || "Not specified"}</dd>
+                </div>
+                <div>
+                  <dt>Farm Area</dt>
+                  <dd>{selected.hectares ? `${selected.hectares} hectare${selected.hectares > 1 ? "s" : ""}` : "1 hectare"}</dd>
+                </div>
+                <div>
+                  <dt>Client Phone</dt>
+                  <dd>{selected.farmerPhone || selected.memberPhone || selected.clientPhone || "—"}</dd>
+                </div>
+                <div>
+                  <dt>Assigned Driver</dt>
+                  <dd>{selected.assignedDriver || "Self-Operated"}{selected.driverPhone ? ` (${selected.driverPhone})` : ""}</dd>
+                </div>
+                <div>
+                  <dt>Total Payment</dt>
+                  <dd style={{ fontWeight: 700, color: "#166534" }}>
+                    ₱{Number(selected.totalAmount || (selected.ratePerHectare || 2500) * (selected.hectares || 1)).toLocaleString()}
+                    <span style={{ fontSize: "0.78rem", fontWeight: 500, color: "#64748b", marginLeft: "6px" }}>
+                      ({selected.paymentStatus || "Pending"} • {selected.paymentMethod || "Cash"})
+                    </span>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Payment Mode &amp; Timing</dt>
                   <dd>
-                    {selected.gcashProof ? (
-                      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                        <img
-                          src={selected.gcashProof}
-                          alt="GCash Screenshot"
-                          onClick={() => setPreviewGcashImage(selected.gcashProof)}
-                          style={{ width: "65px", height: "65px", objectFit: "cover", borderRadius: "6px", border: "1px solid #cbd5e1", cursor: "pointer" }}
-                        />
-                        <div>
-                          <p style={{ margin: "0 0 4px", fontSize: "0.8rem", color: "#059669", fontWeight: 600 }}>✓ Screenshot Uploaded</p>
-                          <button
-                            type="button"
-                            onClick={() => setPreviewGcashImage(selected.gcashProof)}
-                            style={{ background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "4px", padding: "3px 8px", fontSize: "0.72rem", cursor: "pointer" }}
-                          >
-                            Click to View Screenshot
-                          </button>
-                        </div>
-                      </div>
+                    {selected.paymentMethod === "GCash" ? (
+                      <span style={{ color: "#0284c7", fontWeight: 600 }}>GCash (0926 463 8983 - KIMPC)</span>
                     ) : (
-                      <span style={{ fontSize: "0.8rem", color: "#f59e0b" }}>No GCash screenshot uploaded.</span>
+                      <span>Cash • {selected.cashPaymentOption === "Upon Return" ? "Upon Return" : "Upon Pickup"}</span>
                     )}
                   </dd>
                 </div>
-              )}
-              {selected.cancellationReason && (
-                <div style={{ gridColumn: "1 / -1", background: "#fffbeb", border: "1px solid #fef3c7", borderRadius: "8px", padding: "8px 12px" }}>
-                  <dt style={{ color: "#b45309" }}>Cancellation Reason</dt>
-                  <dd style={{ color: "#92400e", fontWeight: 500 }}>{selected.cancellationReason}</dd>
-                </div>
-              )}
-              {selected.managerRemarks && (
-                <div style={{ gridColumn: "1 / -1", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "8px 12px" }}>
-                  <dt style={{ color: "#475569" }}>Manager Remarks</dt>
-                  <dd style={{ color: "#0f172a" }}>{selected.managerRemarks}</dd>
-                </div>
-              )}
-            </dl>
-
-            {/* Visual History Timeline (Toggled via History & Timeline Icon beside Pending) */}
-            {showTimeline && (
-              <div className="app-timeline-container" style={{ marginTop: "16px", marginBottom: "16px" }}>
-                <div className="app-timeline-header">
-                <h3 className="app-timeline-header-title">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="10" />
-                    <polyline points="12 6 12 12 16 14" />
-                  </svg>
-                  <span>Booking History & Lifecycle Timeline</span>
-                </h3>
-                <span style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600 }}>
-                  {getTimelineEvents(selected).length} Event{getTimelineEvents(selected).length !== 1 ? "s" : ""}
-                </span>
-              </div>
-
-              <ul className="app-timeline-list">
-                {getTimelineEvents(selected).map((evt, idx) => (
-                  <li key={`${evt.event}-${idx}`} className="app-timeline-item">
-                    <div className={`app-timeline-node node-${evt.event}`}>
-                      {evt.event === "created" && (
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                          <polyline points="14 2 14 8 20 8" />
-                          <line x1="12" y1="18" x2="12" y2="12" />
-                          <line x1="9" y1="15" x2="15" y2="15" />
-                        </svg>
-                      )}
-                      {evt.event === "rescheduled" && (
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <polyline points="23 4 23 10 17 10" />
-                          <polyline points="1 20 1 14 7 14" />
-                          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                        </svg>
-                      )}
-                      {evt.event === "approved" && (
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                      )}
-                      {evt.event === "dispatched" && (
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <rect x="1" y="3" width="15" height="13" />
-                          <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
-                          <circle cx="5.5" cy="18.5" r="2.5" />
-                          <circle cx="18.5" cy="18.5" r="2.5" />
-                        </svg>
-                      )}
-                      {evt.event === "returned" && (
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                          <polyline points="22 4 12 14.01 9 11.01" />
-                        </svg>
-                      )}
-                      {evt.event === "cancellation_requested" && (
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <circle cx="12" cy="12" r="10" />
-                          <line x1="12" y1="8" x2="12" y2="12" />
-                          <line x1="12" y1="16" x2="12.01" y2="16" />
-                        </svg>
-                      )}
-                      {(evt.event === "cancelled" || evt.event === "voided" || evt.event === "cancellation_granted") && (
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <line x1="18" y1="6" x2="6" y2="18" />
-                          <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                      )}
-                      {(evt.event === "rejected" || evt.event === "cancellation_declined") && (
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <circle cx="12" cy="12" r="10" />
-                          <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
-                        </svg>
-                      )}
-                    </div>
-
-                    <div className="app-timeline-card">
-                      <div className="app-timeline-card-header">
-                        <div>
-                          <span className="app-timeline-item-title">{evt.title}</span>
-                          {evt.actor && <span className="app-timeline-actor">{evt.actor}</span>}
+                {selected.paymentMethod === "GCash" && (
+                  <div style={{ gridColumn: "1 / -1", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "10px 14px" }}>
+                    <dt style={{ color: "#334155", marginBottom: "6px" }}>GCash Payment Proof Screenshot</dt>
+                    <dd>
+                      {selected.gcashProof ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                          <img
+                            src={selected.gcashProof}
+                            alt="GCash Screenshot"
+                            onClick={() => setPreviewGcashImage(selected.gcashProof)}
+                            style={{ width: "65px", height: "65px", objectFit: "cover", borderRadius: "6px", border: "1px solid #cbd5e1", cursor: "pointer" }}
+                          />
+                          <div>
+                            <p style={{ margin: "0 0 4px", fontSize: "0.8rem", color: "#059669", fontWeight: 600 }}>✓ Screenshot Uploaded</p>
+                            <button
+                              type="button"
+                              onClick={() => setPreviewGcashImage(selected.gcashProof)}
+                              style={{ background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "4px", padding: "3px 8px", fontSize: "0.72rem", cursor: "pointer" }}
+                            >
+                              Click to View Screenshot
+                            </button>
+                          </div>
                         </div>
-                        <span className="app-timeline-item-time">
-                          {evt.timestamp ? new Date(evt.timestamp).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "—"}
-                        </span>
-                      </div>
-                      {evt.note && <p className="app-timeline-item-note">{evt.note}</p>}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
+                      ) : (
+                        <span style={{ fontSize: "0.8rem", color: "#f59e0b" }}>No GCash screenshot uploaded.</span>
+                      )}
+                    </dd>
+                  </div>
+                )}
+                {selected.cancellationReason && (
+                  <div style={{ gridColumn: "1 / -1", background: "#fffbeb", border: "1px solid #fef3c7", borderRadius: "8px", padding: "8px 12px" }}>
+                    <dt style={{ color: "#b45309" }}>Cancellation Reason</dt>
+                    <dd style={{ color: "#92400e", fontWeight: 500 }}>{selected.cancellationReason}</dd>
+                  </div>
+                )}
+                {selected.managerRemarks && (
+                  <div style={{ gridColumn: "1 / -1", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "8px 12px" }}>
+                    <dt style={{ color: "#475569" }}>Manager Remarks</dt>
+                    <dd style={{ color: "#0f172a" }}>{selected.managerRemarks}</dd>
+                  </div>
+                )}
+              </dl>
             )}
 
-            {/* Modal Actions: Edit, Cancel, Close */}
+            {viewModalTab === "history" && (
+              <div className="app-timeline-container" style={{ marginTop: "14px" }}>
+                <div className="app-timeline-header">
+                  <h3 className="app-timeline-header-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                    Booking Lifecycle Timeline
+                  </h3>
+                  <span className="app-timeline-count">
+                    {getTimelineEvents(selected).length} Recorded Event{getTimelineEvents(selected).length === 1 ? "" : "s"}
+                  </span>
+                </div>
+
+                <ul className="app-timeline-list">
+                  {getTimelineEvents(selected).length > 0 ? (
+                    getTimelineEvents(selected).map((evt, idx) => (
+                      <li key={idx} className="app-timeline-item">
+                        <div className="app-timeline-item-icon">
+                          <span className={`wz-status-dot wz-status-${getStatusInfo(evt.event).slug}`} />
+                        </div>
+                        <div className="app-timeline-item-content">
+                          <div className="app-timeline-item-meta">
+                            <span className="app-timeline-item-status">{evt.title}</span>
+                            <span className="app-timeline-item-actor">
+                              by {evt.actor}
+                            </span>
+                            <span className="app-timeline-item-time">
+                              {evt.timestamp ? new Date(evt.timestamp).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "—"}
+                            </span>
+                          </div>
+                          {evt.note && <p className="app-timeline-item-note">{evt.note}</p>}
+                        </div>
+                      </li>
+                    ))
+                  ) : (
+                    <li className="app-timeline-item">
+                      <div className="app-timeline-item-content">
+                        <p style={{ margin: 0, color: "#64748b", fontSize: "0.85rem" }}>
+                          No lifecycle events recorded for this booking yet.
+                        </p>
+                      </div>
+                    </li>
+                  )}
+                </ul>
+              </div>
+            )}
+
+            {viewModalTab === "edit" && (
+              <div style={{ marginTop: "14px" }}>
+                <div style={{ marginBottom: "14px" }}>
+                  <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", marginBottom: "6px", color: "#0f172a" }}>
+                    Farm Location / Landmark
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={240}
+                    required
+                    placeholder="e.g. Purok 3, Barangay 4, Malaybalay City"
+                    value={editForm.farmLocation}
+                    onChange={(e) => setEditForm({ ...editForm, farmLocation: e.target.value })}
+                    style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
+                  />
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", marginBottom: "6px", color: "#0f172a" }}>
+                      Start Date
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={editForm.startDate}
+                      onChange={(e) => setEditForm({ ...editForm, startDate: e.target.value })}
+                      style={{
+                        width: "100%",
+                        padding: "9px 12px",
+                        borderRadius: "8px",
+                        border: editDateConflict ? "2px solid #ef4444" : "1px solid #cbd5e1",
+                        fontSize: "0.88rem",
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", marginBottom: "6px", color: "#0f172a" }}>
+                      End Date
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      min={editForm.startDate}
+                      value={editForm.endDate}
+                      onChange={(e) => setEditForm({ ...editForm, endDate: e.target.value })}
+                      style={{
+                        width: "100%",
+                        padding: "9px 12px",
+                        borderRadius: "8px",
+                        border: editDateConflict ? "2px solid #ef4444" : "1px solid #cbd5e1",
+                        fontSize: "0.88rem",
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {editDateConflict && (
+                  <div style={{ background: "#fef2f2", border: "1px solid #fecdd3", color: "#dc2626", borderRadius: "8px", padding: "10px 12px", fontSize: "0.82rem", marginBottom: "14px", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span>⚠️</span>
+                    <span>{editDateConflict}</span>
+                  </div>
+                )}
+
+                <div style={{ marginBottom: "14px" }}>
+                  <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", marginBottom: "6px", color: "#0f172a" }}>
+                    Farm Area (Hectares)
+                  </label>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <input
+                      type="number"
+                      min="0.1"
+                      step="0.1"
+                      required
+                      value={editForm.hectares}
+                      onChange={(e) => setEditForm({ ...editForm, hectares: parseFloat(e.target.value) || 0.1 })}
+                      style={{ width: "160px", padding: "9px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem", fontWeight: 700 }}
+                    />
+                    <span style={{ fontSize: "0.82rem", color: "#64748b" }}>
+                      hectares (₱{Number(Math.round((selected.ratePerHectare || 2500) * (editForm.hectares || 1))).toLocaleString()} est.)
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: "14px" }}>
+                  <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", marginBottom: "6px", color: "#0f172a" }}>
+                    Reason for Rescheduling / Modification (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={200}
+                    placeholder="e.g. Weather delay, adjusting harvest prep..."
+                    value={editForm.rescheduleReason}
+                    onChange={(e) => setEditForm({ ...editForm, rescheduleReason: e.target.value })}
+                    style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {viewModalTab === "cancel" && (
+              <div style={{ marginTop: "14px" }}>
+                {(selected.status || "Pending").toLowerCase() === "pending" ? (
+                  <div style={{ background: "#fef2f2", border: "1px solid #fecdd3", borderRadius: "8px", padding: "16px", color: "#991b1b" }}>
+                    <strong style={{ fontSize: "0.95rem", display: "block", marginBottom: "6px" }}>
+                      Cancel this pending booking request?
+                    </strong>
+                    <p style={{ margin: 0, fontSize: "0.85rem", color: "#b91c1c" }}>
+                      Your reservation for <strong>{selected.machineryModel || selected.equipment}</strong> from {formatBookingDateRange(selected.startDate, selected.endDate)} will be cancelled immediately.
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ background: "#fffbeb", border: "1px solid #fef3c7", borderRadius: "8px", padding: "12px", marginBottom: "14px", fontSize: "0.84rem", color: "#92400e" }}>
+                      ⚠️ <strong>Manager Approval Required:</strong> Because this booking was already approved by cooperative management, your cancellation request will be submitted to the manager to review and grant.
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", marginBottom: "6px", color: "#0f172a" }}>
+                        Reason for Cancellation
+                      </label>
+                      <textarea
+                        required
+                        rows="3"
+                        maxLength={500}
+                        placeholder="Please describe why you need to cancel this approved booking (e.g. weather delay, field condition, change of harvest plan)..."
+                        value={cancellationReason}
+                        onChange={(e) => setCancellationReason(e.target.value)}
+                        style={{ width: "100%", padding: "10px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Modal Actions Footer: Close only by default; Close + Save for edit; Close + Cancel for cancel */}
             <div style={{ marginTop: "20px", paddingTop: "14px", borderTop: "1px solid #e2e8f0", display: "flex", gap: "10px", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center" }}>
-              <button className="member-button member-button-outline" type="button" onClick={() => setSelected(null)}>
+              <button
+                className="member-button member-button-outline"
+                type="button"
+                onClick={() => {
+                  if (viewModalTab !== "details") {
+                    setViewModalTab("details");
+                  } else {
+                    setSelected(null);
+                  }
+                }}
+              >
                 Close
               </button>
 
-              {(selected.status || "Pending").toLowerCase() === "pending" && !selected.cancellationRequested && (
-                <>
-                  <button
-                    className="member-button member-button-outline"
-                    type="button"
-                    style={{ color: "#dc2626", borderColor: "#fecdd3", background: "#fef2f2", display: "inline-flex", alignItems: "center", gap: "6px" }}
-                    disabled={cancellingId === (selected._id || selected.id)}
-                    onClick={() => {
-                      const app = selected;
-                      setSelected(null);
-                      cancelPendingApplication(app);
-                    }}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="18" y1="6" x2="6" y2="18" />
-                      <line x1="6" y1="6" x2="18" y2="18" />
-                    </svg>
-                    <span>{cancellingId === (selected._id || selected.id) ? "Cancelling..." : "Cancel Booking"}</span>
-                  </button>
-                  <button
-                    className="member-button member-button-primary"
-                    type="button"
-                    style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
-                    onClick={() => {
-                      const app = selected;
-                      setSelected(null);
-                      handleOpenEdit(app);
-                    }}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 20h9" />
-                      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-                    </svg>
-                    <span>Edit / Reschedule</span>
-                  </button>
-                </>
-              )}
-
-              {(selected.status || "").toLowerCase() === "approved" && !selected.cancellationRequested && (
+              {viewModalTab === "edit" && (
                 <button
-                  className="member-button member-button-outline"
-                  type="button"
-                  style={{ color: "#d97706", borderColor: "#fde68a", background: "#fffbeb", display: "inline-flex", alignItems: "center", gap: "6px" }}
-                  onClick={() => {
-                    const app = selected;
-                    setSelected(null);
-                    handleOpenCancellationRequest(app);
-                  }}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="8" x2="12" y2="12" />
-                    <line x1="12" y1="16" x2="12.01" y2="16" />
-                  </svg>
-                  <span>Request Cancellation</span>
-                </button>
-              )}
-            </div>
-          </section>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* ===================== Edit / Reschedule Pending Booking ================== */}
-      {/* ========================================================================= */}
-      {editingApp && (
-        <div
-          className="member-modal-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setEditingApp(null);
-          }}
-        >
-          <section className="member-modal" role="dialog" aria-modal="true" aria-labelledby="edit-booking-title" style={{ maxWidth: "560px", width: "95%" }}>
-            <button className="member-modal-close" type="button" aria-label="Close edit" onClick={() => setEditingApp(null)}>
-              ×
-            </button>
-            <p className="member-eyebrow" style={{ color: "#2563eb", margin: "0 0 4px" }}>EDIT / RESCHEDULE PENDING BOOKING</p>
-            <h2 id="edit-booking-title" style={{ margin: "0 0 8px", fontSize: "1.25rem", color: "#0f172a" }}>
-              {editingApp.machineryModel || editingApp.equipment}
-            </h2>
-            <p className="member-muted" style={{ fontSize: "0.82rem", marginBottom: "16px", color: "#64748b" }}>
-              Update your farm location, area, or rental dates while this booking is still Pending. Changes will be saved and recorded to the history timeline.
-            </p>
-
-            <form onSubmit={handleSaveEdit}>
-              <div style={{ marginBottom: "14px" }}>
-                <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", marginBottom: "6px", color: "#0f172a" }}>
-                  Farm Location / Landmark
-                </label>
-                <input
-                  type="text"
-                  maxLength={240}
-                  required
-                  placeholder="e.g. Purok 3, Barangay 4, Malaybalay City"
-                  value={editForm.farmLocation}
-                  onChange={(e) => setEditForm({ ...editForm, farmLocation: e.target.value })}
-                  style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
-                />
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" }}>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", marginBottom: "6px", color: "#0f172a" }}>
-                    Start Date
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={editForm.startDate}
-                    onChange={(e) => setEditForm({ ...editForm, startDate: e.target.value })}
-                    style={{
-                      width: "100%",
-                      padding: "9px 12px",
-                      borderRadius: "8px",
-                      border: editDateConflict ? "2px solid #ef4444" : "1px solid #cbd5e1",
-                      fontSize: "0.88rem",
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", marginBottom: "6px", color: "#0f172a" }}>
-                    End Date
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    min={editForm.startDate}
-                    value={editForm.endDate}
-                    onChange={(e) => setEditForm({ ...editForm, endDate: e.target.value })}
-                    style={{
-                      width: "100%",
-                      padding: "9px 12px",
-                      borderRadius: "8px",
-                      border: editDateConflict ? "2px solid #ef4444" : "1px solid #cbd5e1",
-                      fontSize: "0.88rem",
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Date Conflict Notice */}
-              {editDateConflict && (
-                <div style={{ background: "#fef2f2", border: "1px solid #fecdd3", color: "#dc2626", borderRadius: "8px", padding: "10px 12px", fontSize: "0.82rem", marginBottom: "14px", display: "flex", alignItems: "center", gap: "6px" }}>
-                  <span>⚠️</span>
-                  <span>{editDateConflict}</span>
-                </div>
-              )}
-
-              <div style={{ marginBottom: "14px" }}>
-                <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", marginBottom: "6px", color: "#0f172a" }}>
-                  Farm Area (Hectares)
-                </label>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <input
-                    type="number"
-                    min="0.1"
-                    step="0.1"
-                    required
-                    value={editForm.hectares}
-                    onChange={(e) => setEditForm({ ...editForm, hectares: parseFloat(e.target.value) || 0.1 })}
-                    style={{ width: "160px", padding: "9px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem", fontWeight: 700 }}
-                  />
-                  <span style={{ fontSize: "0.82rem", color: "#64748b" }}>
-                    hectares (₱{Number(Math.round((editingApp.ratePerHectare || 2500) * (editForm.hectares || 1))).toLocaleString()} est.)
-                  </span>
-                </div>
-              </div>
-
-              <div style={{ marginBottom: "18px" }}>
-                <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", marginBottom: "6px", color: "#0f172a" }}>
-                  Reason for Rescheduling / Modification (Optional)
-                </label>
-                <input
-                  type="text"
-                  maxLength={200}
-                  placeholder="e.g. Weather delay, adjusting harvest prep..."
-                  value={editForm.rescheduleReason}
-                  onChange={(e) => setEditForm({ ...editForm, rescheduleReason: e.target.value })}
-                  style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
-                />
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-                <button
-                  type="button"
-                  className="member-button member-button-outline"
-                  onClick={() => setEditingApp(null)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSavingEdit || Boolean(editDateConflict)}
                   className="member-button member-button-primary"
+                  type="button"
+                  disabled={isSavingEdit || Boolean(editDateConflict)}
+                  onClick={handleInlineSaveEdit}
+                  style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
                 >
-                  {isSavingEdit ? "Saving Changes…" : "Save Changes"}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  <span>{isSavingEdit ? "Saving Changes…" : "Save Changes"}</span>
                 </button>
-              </div>
-            </form>
-          </section>
-        </div>
-      )}
+              )}
 
-      {/* ========================================================================= */}
-      {/* ============ Request Cancellation Modal (for Approved bookings) ========= */}
-      {/* ========================================================================= */}
-      {cancellationRequestApp && (
-        <div
-          className="member-modal-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setCancellationRequestApp(null);
-          }}
-        >
-          <section className="member-modal" role="dialog" aria-modal="true" aria-labelledby="cancel-booking-title" style={{ maxWidth: "540px", width: "95%" }}>
-            <button className="member-modal-close" type="button" aria-label="Close request" onClick={() => setCancellationRequestApp(null)}>
-              ×
-            </button>
-            <p className="member-eyebrow" style={{ color: "#d97706", margin: "0 0 4px" }}>REQUEST CANCELLATION</p>
-            <h2 id="cancel-booking-title" style={{ margin: "0 0 8px", fontSize: "1.25rem", color: "#0f172a" }}>
-              {cancellationRequestApp.machineryModel || cancellationRequestApp.equipment}
-            </h2>
-
-            <div style={{ background: "#fffbeb", border: "1px solid #fef3c7", borderRadius: "8px", padding: "12px", marginBottom: "16px", fontSize: "0.84rem", color: "#92400e" }}>
-              ⚠️ <strong>Manager Approval Required:</strong> Because this booking was already approved by cooperative management, your cancellation request will be submitted to the manager to review and grant.
-            </div>
-
-            <form onSubmit={handleSubmitCancellationRequest}>
-              <div style={{ marginBottom: "16px" }}>
-                <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", marginBottom: "6px", color: "#0f172a" }}>
-                  Reason for Cancellation
-                </label>
-                <textarea
-                  required
-                  rows="3"
-                  maxLength={500}
-                  placeholder="Please describe why you need to cancel this approved booking (e.g. weather delay, field condition, change of harvest plan)..."
-                  value={cancellationReason}
-                  onChange={(e) => setCancellationReason(e.target.value)}
-                  style={{ width: "100%", padding: "10px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
-                />
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              {viewModalTab === "cancel" && (
                 <button
                   type="button"
-                  className="member-button member-button-outline"
-                  onClick={() => setCancellationRequestApp(null)}
-                >
-                  Keep Booking
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmittingCancellation}
                   className="member-button"
-                  style={{ background: "#dc2626", color: "#ffffff", border: "none" }}
+                  style={{
+                    background: (selected.status || "Pending").toLowerCase() === "pending" ? "#dc2626" : "#d97706",
+                    color: "#ffffff",
+                    border: "none",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                  disabled={isSubmittingCancellation || cancellingId === (selected._id || selected.id)}
+                  onClick={handleInlineConfirmCancel}
                 >
-                  {isSubmittingCancellation ? "Submitting Request…" : "Submit Cancellation Request"}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                  <span>
+                    {(selected.status || "Pending").toLowerCase() === "pending"
+                      ? cancellingId === (selected._id || selected.id)
+                        ? "Cancelling..."
+                        : "Cancel Booking"
+                      : isSubmittingCancellation
+                      ? "Submitting..."
+                      : "Submit Cancellation"}
+                  </span>
                 </button>
-              </div>
-            </form>
+              )}
+            </div>
           </section>
         </div>
       )}
@@ -1443,18 +1161,17 @@ export default function Applications() {
             </div>
             <img
               src={previewGcashImage}
-              alt="Uploaded GCash Screenshot"
-              style={{ width: "100%", maxHeight: "70vh", objectFit: "contain", borderRadius: "8px", border: "1px solid #cbd5e1" }}
+              alt="GCash Screenshot"
+              style={{ width: "100%", maxHeight: "65vh", objectFit: "contain", borderRadius: "8px", border: "1px solid #e2e8f0" }}
             />
-            <div style={{ marginTop: "14px", display: "flex", justifyContent: "flex-end" }}>
-              <button
-                type="button"
-                onClick={() => setPreviewGcashImage(null)}
-                className="member-button member-button-outline"
-              >
-                Close
-              </button>
-            </div>
+            <button
+              type="button"
+              className="member-button member-button-outline"
+              onClick={() => setPreviewGcashImage(null)}
+              style={{ marginTop: "14px", width: "100%" }}
+            >
+              Close Preview
+            </button>
           </div>
         </div>
       )}
