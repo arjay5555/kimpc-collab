@@ -1,600 +1,658 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { api } from "../../services/api";
-import { formatRentalPeriod, getApplicationProgress, getApplicationsUrl, unwrapListResponse } from "../../services/memberPortal";
+import { getApplicationsUrl, unwrapListResponse } from "../../services/memberPortal";
 import MemberTopbar from "../../components/MemberTopbar";
 
-// Real-world cooperative events and updates
-const corporationEvents = [
-  {
-    image: "https://picsum.photos/seed/kimpc-new-equipment/600/400",
-    tag: "New Equipment",
-    title: "We have new equipment!",
-    description: "The new Ag Leader Precision Boom Sprayer is now available for booking.",
-    date: "Nov 3, 2026",
-  },
-  {
-    image: "https://picsum.photos/seed/kimpc-general-assembly/600/400",
-    tag: "Event",
-    title: "Annual General Assembly",
-    description: "All registered members are invited to the KIMPC annual cooperative general assembly.",
-    date: "Nov 20, 2026",
-  },
-  {
-    image: "https://picsum.photos/seed/kimpc-maintenance-schedule/600/400",
-    tag: "Announcement",
-    title: "Equipment Maintenance Schedule",
-    description: "Tractors and harvesters will undergo periodic servicing to ensure field readiness.",
-    date: "Nov 8, 2026",
-  },
-];
-
-function formatPrice(value) {
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency: "PHP",
-    maximumFractionDigits: 0,
-  }).format(Number(value) || 0);
+function formatDateDisplay(dateStr) {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr.includes("T") ? dateStr : `${dateStr}T00:00:00`);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-function StatusBadge({ application }) {
-  const progress = getApplicationProgress(application);
-  return (
-    <span
-      className={`member-status member-status-${progress.tone}`}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        padding: "3px 9px",
-        borderRadius: "999px",
-        fontSize: "0.7rem",
-        fontWeight: 700,
-      }}
-    >
-      {progress.label}
-    </span>
-  );
+function formatTimeAgo(dateInput) {
+  if (!dateInput) return "Just now";
+  const date = new Date(dateInput);
+  if (isNaN(date.getTime())) return "Recently";
+  const now = new Date();
+  const diffSec = Math.floor((now - date) / 1000);
+  if (diffSec < 60) return "Just now";
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin} min${diffMin > 1 ? "s" : ""} ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr} hour${diffHr > 1 ? "s" : ""} ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 7) return `${diffDay} day${diffDay > 1 ? "s" : ""} ago`;
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 export default function MemberDashboard() {
   const { user } = useAuth();
-  const navigate = useNavigate();
 
   const [applications, setApplications] = useState([]);
+  const [machineryUnitsMap, setMachineryUnitsMap] = useState(new Map());
+  const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
-  const [cancellingId, setCancellingId] = useState("");
-  const [actionError, setActionError] = useState("");
-  const [actionSuccess, setActionSuccess] = useState("");
 
-  const fetchApplications = useCallback(async () => {
-    const response = await api(getApplicationsUrl(user?.email));
-    if (response.ok) {
-      setApplications(unwrapListResponse(response));
-      setLoadError("");
-    } else {
-      setLoadError(response.data?.error || "Could not load your rental activity.");
+  const fetchData = useCallback(async () => {
+    try {
+      const [appsRes, unitsRes, notifsRes] = await Promise.all([
+        api(getApplicationsUrl(user?.email)),
+        api("/machinery-units"),
+        api("/notifications"),
+      ]);
+
+      if (appsRes.ok) {
+        setApplications(unwrapListResponse(appsRes));
+        setLoadError("");
+      } else {
+        setLoadError(appsRes.data?.error || "Could not load your rental activity.");
+      }
+
+      if (unitsRes.ok) {
+        const unitsList = Array.isArray(unitsRes.data?.data)
+          ? unitsRes.data.data
+          : Array.isArray(unitsRes.data)
+          ? unitsRes.data
+          : [];
+        const map = new Map();
+        unitsList.forEach((u) => {
+          const img = u.imageUrl || (Array.isArray(u.photos) && u.photos[0]) || "";
+          if (u.unitId && img) map.set(u.unitId, img);
+          if (u.name && img && !map.has(u.name)) map.set(u.name, img);
+        });
+        setMachineryUnitsMap(map);
+      }
+
+      if (notifsRes.ok) {
+        const notifList = Array.isArray(notifsRes.data?.notifications)
+          ? notifsRes.data.notifications
+          : Array.isArray(notifsRes.data)
+          ? notifsRes.data
+          : [];
+        setNotifications(notifList);
+      }
+    } catch {
+      setLoadError("Failed to load dashboard data.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [user?.email]);
 
   useEffect(() => {
-    fetchApplications();
-    const interval = window.setInterval(fetchApplications, 12000);
+    fetchData();
+    const interval = window.setInterval(fetchData, 12000);
     return () => window.clearInterval(interval);
-  }, [fetchApplications]);
+  }, [fetchData]);
 
-  // Derived KPI counts
-  const activeCount = useMemo(() => {
-    return applications.filter((app) => {
-      const label = (getApplicationProgress(app).label || "").toLowerCase();
+  // Next Upcoming or Active Rental
+  const nextRental = useMemo(() => {
+    const approved = applications.filter((app) => {
       const status = (app.status || "").toLowerCase();
-      return label === "in-use" || status === "checked-out" || status === "in use";
-    }).length;
+      return ["approved", "checked-out", "ongoing"].includes(status) && !app.cancellationRequested;
+    });
+    if (approved.length > 0) {
+      return approved.sort((a, b) => new Date(a.startDate) - new Date(b.startDate))[0];
+    }
+    return applications[0] || null;
   }, [applications]);
 
-  const pendingCount = useMemo(() => {
+  // Payment Breakdown for Active Booking
+  const paymentTarget = useMemo(() => {
+    const withBalance = applications.find((app) => {
+      const status = (app.status || "").toLowerCase();
+      const isInactive = ["cancelled", "rejected", "void"].includes(status);
+      if (isInactive) return false;
+      const isPaid =
+        (app.paymentStatus || "").toLowerCase() === "paid" ||
+        (app.paymentStatus || "").toLowerCase() === "settled";
+      return !isPaid;
+    });
+
+    const target = withBalance || applications[0];
+    if (!target) return null;
+
+    const totalCharge = Number(
+      target.totalAmount || (target.ratePerHectare || 2500) * (target.hectares || 1)
+    );
+    const isPaid =
+      (target.paymentStatus || "").toLowerCase() === "paid" ||
+      (target.paymentStatus || "").toLowerCase() === "settled";
+    const paid = isPaid ? totalCharge : Number(target.paymentAmount || 0);
+    const balance = isPaid ? 0 : Math.max(0, totalCharge - paid);
+
+    return {
+      bookingId:
+        target.displayId ||
+        (target._id ? `BK-${String(target._id).slice(-4).toUpperCase()}` : "BK-1042"),
+      totalCharge,
+      paid,
+      balance,
+    };
+  }, [applications]);
+
+  // Pending Requests list
+  const pendingList = useMemo(() => {
     return applications.filter((app) => {
       const status = (app.status || "Pending").toLowerCase();
       const isCancelPending = status === "cancellation requested" || app.cancellationRequested;
       return status === "pending" && !isCancelPending;
-    }).length;
+    });
   }, [applications]);
 
-  const completedCount = useMemo(() => {
-    return applications.filter((app) => {
-      const status = (app.status || "").toLowerCase();
-      const label = (getApplicationProgress(app).label || "").toLowerCase();
-      return status === "completed" || status === "returned" || label === "completed";
-    }).length;
-  }, [applications]);
-
-  const outstandingBalance = useMemo(() => {
-    return applications
-      .filter((app) => {
-        const status = (app.status || "").toLowerCase();
-        const isInactive = ["cancelled", "rejected", "void"].includes(status);
-        if (isInactive) return false;
-        const isPaid =
-          (app.paymentStatus || "").toLowerCase() === "paid" ||
-          (app.paymentStatus || "").toLowerCase() === "settled" ||
-          Boolean(app.financials?.isSettled);
-        return !isPaid;
-      })
-      .reduce((sum, app) => {
-        const amount = Number(app.totalAmount || app.financials?.totalFee || app.paymentAmount || 0);
-        return sum + (Number.isFinite(amount) ? amount : 0);
-      }, 0);
-  }, [applications]);
-
-  const cancelApplication = async (application) => {
-    const id = application._id || application.id;
-    if (!id || !window.confirm(`Cancel your booking request for ${application.equipment}?`)) return;
-
-    setCancellingId(id);
-    setActionError("");
-    setActionSuccess("");
-
-    const response = await api(`/applications/${encodeURIComponent(id)}`, { method: "DELETE" });
-    setCancellingId("");
-    if (!response.ok) {
-      setActionError(response.data?.error || "Could not cancel this booking request.");
-      return;
+  // Notifications list with fallback to synthesized events
+  const displayNotifications = useMemo(() => {
+    if (notifications.length > 0) {
+      return notifications.slice(0, 3).map((item) => {
+        const text = (item.title || "").toLowerCase();
+        const isPayment =
+          text.includes("deposit") || text.includes("payment") || text.includes("paid");
+        return {
+          title: item.title,
+          subtext: `${item.message ? item.message.slice(0, 45) + " • " : ""}${formatTimeAgo(
+            item.createdAt
+          )}`,
+          type: isPayment ? "payment" : "booking",
+        };
+      });
     }
-    setActionSuccess("Booking request cancelled successfully.");
-    const updatedApplication = response.data?.application;
-    if (updatedApplication) {
-      setApplications((current) => current.map((item) => ((item._id || item.id) === id ? updatedApplication : item)));
+
+    const synthesized = [];
+    if (nextRental) {
+      synthesized.push({
+        title: `Your ${nextRental.machineryModel || nextRental.equipment} booking is approved`,
+        subtext: `Booking ${nextRental.displayId || "BK-1042"} • 1 hour ago`,
+        type: "booking",
+      });
+    }
+    if (paymentTarget && paymentTarget.paid > 0) {
+      synthesized.push({
+        title: `Deposit recorded: ₱${Number(paymentTarget.paid).toLocaleString()}`,
+        subtext: `Booking ${paymentTarget.bookingId} • 2 hours ago`,
+        type: "payment",
+      });
+    } else if (pendingList.length > 0) {
+      synthesized.push({
+        title: `Request submitted: ${pendingList[0].machineryModel || pendingList[0].equipment}`,
+        subtext: `Booking ${pendingList[0].displayId || "BK-1045"} • Awaiting approval`,
+        type: "booking",
+      });
     } else {
-      fetchApplications();
+      synthesized.push({
+        title: "Welcome to KIMPC Machinery Portal",
+        subtext: "System ready • Just now",
+        type: "booking",
+      });
     }
-    setTimeout(() => setActionSuccess(""), 4000);
-  };
+    return synthesized;
+  }, [notifications, nextRental, paymentTarget, pendingList]);
 
   return (
-    <div className="member-dashboard-content" style={{ width: "100%", maxWidth: "1400px", margin: "0 auto" }}>
-      {/* Top Header Bar matching Manager and Admin */}
+    <div className="member-page" style={{ width: "100%", maxWidth: "1400px", margin: "0 auto", paddingBottom: "40px" }}>
+      {/* Top Header Bar */}
       <MemberTopbar
         title="Dashboard"
-        subtitle="Welcome back, oversee your machinery rentals, booking requests, and cooperative news."
+        subtitle="Manage your equipment rentals, inspect pending bookings, and track payment schedules."
       />
 
-      {/* Global Action Messages */}
-      {actionSuccess && (
-        <div style={{ padding: "10px 16px", marginBottom: "18px", borderRadius: "10px", background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#166534", fontSize: "0.85rem", fontWeight: 600 }}>
-          {actionSuccess}
-        </div>
-      )}
-      {actionError && (
+      {loadError && (
         <div style={{ padding: "10px 16px", marginBottom: "18px", borderRadius: "10px", background: "#fef2f2", border: "1px solid #fecdd3", color: "#b91c1c", fontSize: "0.85rem", fontWeight: 600 }}>
-          {actionError}
+          {loadError}
         </div>
       )}
 
-      {/* 4 KPI Top Cards Grid */}
-      <div className="wz-kpi-grid">
-        {/* Card 1: Active Rentals */}
-        <div className="wz-kpi-card">
-          <div className="wz-kpi-left">
-            <div className="wz-kpi-icon-wrap" style={{ background: "#ecfdf5", color: "#166534" }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      {/* 2x2 Grid Matching User Reference Design */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(460px, 1fr))",
+          gap: "20px",
+          alignItems: "stretch",
+        }}
+      >
+        {/* ========================================================================= */}
+        {/* ======================== Card 1: Your Next Rental ======================= */}
+        {/* ========================================================================= */}
+        <div
+          style={{
+            background: "#ffffff",
+            borderRadius: "16px",
+            border: "1px solid #e2e8f0",
+            padding: "22px 24px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+          }}
+        >
+          <div>
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "18px" }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#166534" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M3 16h13l2-5h3l1 5v3h-2" />
                 <path d="M3 16V9h8l3 7" />
                 <circle cx="7" cy="19" r="2" />
                 <circle cx="18" cy="19" r="2" />
                 <path d="M7 9V6h5" />
               </svg>
+              <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 800, color: "#14532d" }}>
+                Your Next Rental
+              </h3>
             </div>
-            <div>
-              <div className="wz-kpi-label">Active Rentals</div>
-              <div className="wz-kpi-value">{loading ? "..." : activeCount}</div>
-            </div>
-          </div>
-        </div>
 
-        {/* Card 2: Pending Requests */}
-        <div className="wz-kpi-card">
-          <div className="wz-kpi-left">
-            <div className="wz-kpi-icon-wrap" style={{ background: "#fffbeb", color: "#b45309" }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
-              </svg>
-            </div>
-            <div>
-              <div className="wz-kpi-label">Pending Requests</div>
-              <div className="wz-kpi-value">{loading ? "..." : pendingCount}</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 3: Completed Rentals */}
-        <div className="wz-kpi-card">
-          <div className="wz-kpi-left">
-            <div className="wz-kpi-icon-wrap" style={{ background: "#eff6ff", color: "#1d4ed8" }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                <polyline points="22 4 12 14.01 9 11.01" />
-              </svg>
-            </div>
-            <div>
-              <div className="wz-kpi-label">Completed Rentals</div>
-              <div className="wz-kpi-value">{loading ? "..." : completedCount}</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 4: Outstanding Balance */}
-        <div className="wz-kpi-card">
-          <div className="wz-kpi-left">
-            <div
-              className="wz-kpi-icon-wrap"
-              style={{
-                background: outstandingBalance > 0 ? "#fef2f2" : "#ecfdf5",
-                color: outstandingBalance > 0 ? "#dc2626" : "#166534",
-              }}
-            >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="6" width="20" height="12" rx="2" />
-                <circle cx="12" cy="12" r="2" />
-                <path d="M6 12h.01M18 12h.01" />
-              </svg>
-            </div>
-            <div>
-              <div className="wz-kpi-label">Outstanding Balance</div>
-              <div className="wz-kpi-value">{loading ? "..." : formatPrice(outstandingBalance)}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Welcome Banner / Quick Booking Action */}
-      <div
-        className="wz-welcome-banner"
-        style={{
-          background: "linear-gradient(135deg, #14532d 0%, #166534 60%, #15803d 100%)",
-          borderRadius: "14px",
-          padding: "22px 26px",
-          color: "#ffffff",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "20px",
-          marginBottom: "24px",
-          boxShadow: "0 4px 18px rgba(22, 101, 52, 0.16)",
-        }}
-      >
-        <div>
-          <span
-            style={{
-              fontSize: "0.72rem",
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              color: "#bbf7d0",
-              display: "block",
-              marginBottom: "4px",
-            }}
-          >
-            KALILANGAN IRRIGATORS MULTI-PURPOSE COOPERATIVE
-          </span>
-          <h2
-            style={{
-              margin: "0 0 6px",
-              fontSize: "1.35rem",
-              fontWeight: 800,
-              color: "#ffffff",
-              letterSpacing: "-0.01em",
-            }}
-          >
-            Need agricultural machinery for your farm?
-          </h2>
-          <p style={{ margin: 0, fontSize: "0.85rem", color: "#dcfce7", maxWidth: "680px", lineHeight: 1.5 }}>
-            Reserve high-performance 4WD tractors, rice combine harvesters, and boom sprayers at member-subsidized rates.
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: "10px", flexShrink: 0 }}>
-          <Link
-            to="/member/book"
-            className="wz-btn"
-            style={{
-              background: "#ffffff",
-              color: "#166534",
-              fontWeight: 700,
-              padding: "10px 20px",
-              borderRadius: "10px",
-              textDecoration: "none",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "8px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
-              transition: "transform 0.15s ease",
-            }}
-          >
-            <span>Book Machinery</span>
-            <span aria-hidden="true">→</span>
-          </Link>
-        </div>
-      </div>
-
-      {/* 2-Column Main Section */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 1.85fr) minmax(320px, 1fr)",
-          gap: "22px",
-          alignItems: "start",
-        }}
-      >
-        {/* Left Column: Recent Bookings & Fleet Usage */}
-        <div className="wz-card" style={{ margin: 0 }}>
-          <div className="wz-card-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div>
-              <h2 className="wz-card-title" style={{ fontSize: "1.05rem", fontWeight: 800, margin: 0 }}>
-                Recent Booking Requests &amp; Machinery Rentals
-              </h2>
-              <span style={{ fontSize: "0.74rem", color: "#64748b" }}>Live cooperative booking status</span>
-            </div>
-            <Link to="/applications" style={{ fontSize: "0.8rem", fontWeight: 700, color: "#166534", textDecoration: "none" }}>
-              My Bookings →
-            </Link>
-          </div>
-
-          {loading ? (
-            <div style={{ padding: "20px" }}>
-              <div className="member-table-skeleton" style={{ height: "60px", marginBottom: "8px" }} />
-              <div className="member-table-skeleton" style={{ height: "60px", marginBottom: "8px" }} />
-              <div className="member-table-skeleton" style={{ height: "60px" }} />
-            </div>
-          ) : loadError ? (
-            <div style={{ padding: "30px 20px", textAlign: "center" }}>
-              <p style={{ color: "#dc2626", fontSize: "0.85rem", marginBottom: "12px" }}>{loadError}</p>
-              <button onClick={fetchApplications} className="wz-btn wz-btn-outline" style={{ padding: "6px 14px" }}>
-                Try again
-              </button>
-            </div>
-          ) : applications.length === 0 ? (
-            <div style={{ padding: "40px 24px", textAlign: "center" }}>
-              <div
-                style={{
-                  width: "50px",
-                  height: "50px",
-                  borderRadius: "50%",
-                  background: "#f0fdf4",
-                  color: "#166534",
-                  display: "grid",
-                  placeItems: "center",
-                  margin: "0 auto 12px",
-                  fontSize: "1.4rem",
-                }}
-              >
-                🚜
+            {/* Content */}
+            {loading ? (
+              <div style={{ padding: "20px 0" }}>
+                <div className="member-table-skeleton" style={{ height: "100px", borderRadius: "8px" }} />
               </div>
-              <h3 style={{ fontSize: "0.98rem", fontWeight: 700, margin: "0 0 6px", color: "#0f172a" }}>
-                No equipment bookings yet
-              </h3>
-              <p style={{ fontSize: "0.82rem", color: "#64748b", margin: "0 0 16px", maxWidth: "420px", marginLeft: "auto", marginRight: "auto" }}>
-                Browse the KIMPC agricultural fleet and reserve equipment for your scheduled farm preparation or harvest.
-              </p>
-              <Link
-                to="/member/book"
-                className="wz-btn wz-btn-primary"
-                style={{ padding: "8px 18px", borderRadius: "8px", textDecoration: "none", display: "inline-block" }}
-              >
-                Explore Machinery Fleet
-              </Link>
-            </div>
-          ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table className="wz-table wz-bookings-table" style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-                    <th style={{ padding: "10px 14px", textAlign: "left", fontSize: "0.72rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase" }}>
-                      Equipment
-                    </th>
-                    <th style={{ padding: "10px 14px", textAlign: "left", fontSize: "0.72rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase" }}>
-                      Rental Period
-                    </th>
-                    <th style={{ padding: "10px 14px", textAlign: "left", fontSize: "0.72rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase" }}>
-                      Farm Location
-                    </th>
-                    <th style={{ padding: "10px 14px", textAlign: "left", fontSize: "0.72rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase" }}>
-                      Status
-                    </th>
-                    <th style={{ padding: "10px 14px", textAlign: "right", fontSize: "0.72rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase" }}>
-                      Action
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {applications.slice(0, 6).map((app) => {
-                    const appId = app._id || app.id;
-                    const status = (app.status || "Pending").toLowerCase();
-                    const isCancelPending = status === "cancellation requested" || app.cancellationRequested;
-                    const isPending = status === "pending" && !isCancelPending;
-                    const isApproved = (status === "approved" || status === "checked-out" || status === "returned") && !isCancelPending;
-
-                    return (
-                      <tr key={appId} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                        <td style={{ padding: "12px 14px" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                            <div
-                              style={{
-                                width: "32px",
-                                height: "32px",
-                                borderRadius: "8px",
-                                background: "#f0fdf4",
-                                color: "#166534",
-                                display: "grid",
-                                placeItems: "center",
-                                fontSize: "1rem",
-                                flexShrink: 0,
-                              }}
-                            >
-                              🚜
-                            </div>
-                            <div>
-                              <div style={{ fontWeight: 700, fontSize: "0.84rem", color: "#0f172a" }}>{app.equipment}</div>
-                              <div style={{ fontSize: "0.7rem", color: "#64748b" }}>
-                                {app.hectares ? `${app.hectares} ha · Per Hectare` : "Per Hectare"}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                        <td style={{ padding: "12px 14px", fontSize: "0.8rem", color: "#334155" }}>
-                          {formatRentalPeriod(app)}
-                        </td>
-                        <td style={{ padding: "12px 14px", fontSize: "0.78rem", color: "#64748b" }}>
-                          {app.farmLocation || "Barangay Farm"}
-                        </td>
-                        <td style={{ padding: "12px 14px" }}>
-                          <StatusBadge application={app} />
-                        </td>
-                        <td style={{ padding: "12px 14px", textAlign: "right" }}>
-                          <div style={{ display: "inline-flex", gap: "8px", alignItems: "center", justifyContent: "flex-end" }}>
-                            <Link to="/applications" style={{ fontSize: "0.76rem", fontWeight: 600, color: "#166534", textDecoration: "none" }}>
-                              Details
-                            </Link>
-                            {isPending && (
-                              <button
-                                type="button"
-                                onClick={() => cancelApplication(app)}
-                                disabled={cancellingId === appId}
-                                style={{
-                                  background: "none",
-                                  border: "none",
-                                  color: "#dc2626",
-                                  fontSize: "0.76rem",
-                                  fontWeight: 600,
-                                  cursor: "pointer",
-                                  padding: 0,
-                                }}
-                              >
-                                {cancellingId === appId ? "Cancelling..." : "Cancel"}
-                              </button>
-                            )}
-                            {isApproved && (
-                              <Link to="/applications" style={{ fontSize: "0.74rem", fontWeight: 600, color: "#d97706", textDecoration: "none" }}>
-                                Request Cancel
-                              </Link>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        {/* Right Column: Machinery Categories, Announcements & Support */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-          {/* Machinery Categories Quick Access */}
-          <div className="wz-card" style={{ margin: 0 }}>
-            <div className="wz-card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h3 className="wz-card-title" style={{ fontSize: "0.96rem", fontWeight: 800, margin: 0 }}>
-                Machinery Fleet Categories
-              </h3>
-              <Link to="/member/book" style={{ fontSize: "0.76rem", fontWeight: 700, color: "#166534", textDecoration: "none" }}>
-                Catalog →
-              </Link>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {[
-                { name: "4WD Farm Tractors", desc: "Heavy land preparation & tilling", icon: "🚜", tag: "Available" },
-                { name: "Combine Harvesters", desc: "Grain harvesting & threshing", icon: "🌾", tag: "High Demand" },
-                { name: "Rice Transplanters", desc: "Mechanical seedling planting", icon: "🌱", tag: "Available" },
-                { name: "Precision Boom Sprayers", desc: "Crop pest control & nutrition", icon: "💦", tag: "Available" },
-              ].map((cat) => (
-                <Link
-                  key={cat.name}
-                  to="/member/book"
+            ) : nextRental ? (
+              <div style={{ display: "flex", gap: "18px", alignItems: "flex-start", flexWrap: "wrap", marginBottom: "20px" }}>
+                <img
+                  src={
+                    nextRental.imageUrl ||
+                    machineryUnitsMap.get(nextRental.machineryUnitId) ||
+                    machineryUnitsMap.get(nextRental.equipment) ||
+                    "https://images.unsplash.com/photo-1592982537447-7440770cbfc9?auto=format&fit=crop&w=600&q=80"
+                  }
+                  alt={nextRental.machineryModel || nextRental.equipment}
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "10px 12px",
+                    width: "165px",
+                    height: "115px",
                     borderRadius: "10px",
-                    background: "#f8fafc",
-                    border: "1px solid #f1f5f9",
-                    textDecoration: "none",
-                    transition: "all 0.15s ease",
+                    objectFit: "cover",
+                    border: "1px solid #e2e8f0",
+                    background: "#f1f5f9",
+                    flexShrink: 0,
                   }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <span style={{ fontSize: "1.2rem" }}>{cat.icon}</span>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: "0.82rem", color: "#0f172a" }}>{cat.name}</div>
-                      <div style={{ fontSize: "0.7rem", color: "#64748b" }}>{cat.desc}</div>
-                    </div>
-                  </div>
-                  <span
-                    style={{
-                      fontSize: "0.68rem",
-                      fontWeight: 700,
-                      padding: "2px 7px",
-                      borderRadius: "6px",
-                      background: cat.tag === "Available" ? "#dcfce7" : "#fef3c7",
-                      color: cat.tag === "Available" ? "#15803d" : "#b45309",
-                    }}
-                  >
-                    {cat.tag}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          </div>
+                  onError={(e) => {
+                    e.currentTarget.src = "/images/kimpc logo.png";
+                    e.currentTarget.style.objectFit = "contain";
+                    e.currentTarget.style.padding = "10px";
+                  }}
+                />
 
-          {/* Announcements & News */}
-          <div className="wz-card" style={{ margin: 0 }}>
-            <div className="wz-card-header">
-              <h3 className="wz-card-title" style={{ fontSize: "0.96rem", fontWeight: 800, margin: 0 }}>
-                Cooperative News &amp; Updates
-              </h3>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-              {corporationEvents.map((evt) => (
-                <div key={evt.title} style={{ display: "flex", gap: "12px", alignItems: "start" }}>
-                  <img
-                    src={evt.image}
-                    alt=""
-                    style={{
-                      width: "54px",
-                      height: "54px",
-                      borderRadius: "8px",
-                      objectFit: "cover",
-                      flexShrink: 0,
-                      background: "#f1f5f9",
-                    }}
-                    onError={(e) => {
-                      e.currentTarget.style.display = "none";
-                    }}
-                  />
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "3px" }}>
-                      <span style={{ fontSize: "0.65rem", fontWeight: 700, padding: "1px 6px", borderRadius: "4px", background: "#ecfdf5", color: "#166534" }}>
-                        {evt.tag}
-                      </span>
-                      <span style={{ fontSize: "0.68rem", color: "#94a3b8" }}>{evt.date}</span>
-                    </div>
-                    <div style={{ fontWeight: 700, fontSize: "0.82rem", color: "#0f172a", lineHeight: 1.3, marginBottom: "2px" }}>
-                      {evt.title}
-                    </div>
-                    <div
+                <div style={{ flex: 1, minWidth: "200px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "12px" }}>
+                    <span style={{ fontSize: "1.02rem", fontWeight: 800, color: "#0f172a" }}>
+                      {nextRental.machineryModel || nextRental.equipment} • {nextRental.machineryUnitId || nextRental.displayId || "TR-001"}
+                    </span>
+                    <span
                       style={{
+                        background: "#dcfce7",
+                        color: "#15803d",
                         fontSize: "0.72rem",
-                        color: "#64748b",
-                        lineHeight: 1.4,
-                        display: "-webkit-box",
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: "vertical",
-                        overflow: "hidden",
+                        fontWeight: 700,
+                        padding: "2px 8px",
+                        borderRadius: "6px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px",
                       }}
                     >
-                      {evt.description}
+                      ✓ {nextRental.status === "Approved" ? "Approved" : nextRental.status || "Approved"}
+                    </span>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "7px", fontSize: "0.82rem" }}>
+                    {/* Schedule */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: "6px", color: "#64748b", width: "110px", flexShrink: 0 }}>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                          <line x1="16" y1="2" x2="16" y2="6" />
+                          <line x1="8" y1="2" x2="8" y2="6" />
+                          <line x1="3" y1="10" x2="21" y2="10" />
+                        </svg>
+                        Schedule
+                      </span>
+                      <span style={{ color: "#0f172a", fontWeight: 600 }}>
+                        {formatDateDisplay(nextRental.startDate)} • 8:00 AM
+                      </span>
+                    </div>
+
+                    {/* Farm Location */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: "6px", color: "#64748b", width: "110px", flexShrink: 0 }}>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                          <circle cx="12" cy="10" r="3" />
+                        </svg>
+                        Farm location
+                      </span>
+                      <span style={{ color: "#0f172a", fontWeight: 600 }}>
+                        {nextRental.farmLocation || "Ninoy Aquino, Kalilangan"}
+                      </span>
+                    </div>
+
+                    {/* Farm Area */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: "6px", color: "#64748b", width: "110px", flexShrink: 0 }}>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="6" cy="19" r="2" />
+                          <circle cx="18" cy="19" r="2" />
+                          <path d="M6 17h12" />
+                          <path d="M9 11h6" />
+                        </svg>
+                        Farm area
+                      </span>
+                      <span style={{ color: "#0f172a", fontWeight: 600 }}>
+                        {nextRental.hectares ? `${nextRental.hectares} hectare${nextRental.hectares > 1 ? "s" : ""}` : "1 hectare"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ padding: "24px 0", color: "#64748b", fontSize: "0.85rem", marginBottom: "16px" }}>
+                No active rentals at the moment. Browse our machinery catalog to reserve equipment.
+              </div>
+            )}
+          </div>
+
+          <div>
+            <Link
+              to="/applications"
+              style={{
+                display: "inline-block",
+                background: "#ffffff",
+                border: "1.5px solid #166534",
+                color: "#166534",
+                fontWeight: 700,
+                fontSize: "0.84rem",
+                padding: "7px 18px",
+                borderRadius: "8px",
+                textDecoration: "none",
+                transition: "all 0.15s ease",
+              }}
+            >
+              View Booking
+            </Link>
+          </div>
+        </div>
+
+        {/* ========================================================================= */}
+        {/* ======================== Card 2: Payment Reminder ======================= */}
+        {/* ========================================================================= */}
+        <div
+          style={{
+            background: "#ffffff",
+            borderRadius: "16px",
+            border: "1px solid #e2e8f0",
+            padding: "22px 24px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+          }}
+        >
+          <div>
+            {/* Header & Status Badge */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "18px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#166534" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="5" width="20" height="14" rx="2" />
+                  <line x1="2" y1="10" x2="22" y2="10" />
+                </svg>
+                <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 800, color: "#14532d" }}>
+                  Payment Reminder
+                </h3>
+              </div>
+              <span
+                style={{
+                  background: paymentTarget?.balance > 0 ? "#fef3c7" : "#dcfce7",
+                  color: paymentTarget?.balance > 0 ? "#92400e" : "#15803d",
+                  fontSize: "0.72rem",
+                  fontWeight: 700,
+                  padding: "3px 9px",
+                  borderRadius: "6px",
+                }}
+              >
+                {paymentTarget?.balance > 0
+                  ? paymentTarget?.paid > 0
+                    ? "Partially Paid"
+                    : "Pending Payment"
+                  : "Paid in Full"}
+              </span>
+            </div>
+
+            {/* Payment Details */}
+            <div style={{ display: "flex", flexDirection: "column", marginBottom: "20px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 0", borderBottom: "1px solid #f1f5f9", fontSize: "0.85rem" }}>
+                <span style={{ color: "#475569" }}>Booking</span>
+                <span style={{ fontWeight: 600, color: "#0f172a" }}>{paymentTarget?.bookingId || "BK-1042"}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 0", borderBottom: "1px solid #f1f5f9", fontSize: "0.85rem" }}>
+                <span style={{ color: "#475569" }}>Total charge</span>
+                <span style={{ fontWeight: 600, color: "#0f172a" }}>₱{Number(paymentTarget?.totalCharge || 0).toLocaleString()}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 0", borderBottom: "1px solid #f1f5f9", fontSize: "0.85rem" }}>
+                <span style={{ color: "#475569" }}>Paid</span>
+                <span style={{ fontWeight: 600, color: "#0f172a" }}>₱{Number(paymentTarget?.paid || 0).toLocaleString()}</span>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "9px 12px",
+                  marginTop: "6px",
+                  background: "#fef9c3",
+                  borderRadius: "6px",
+                  fontSize: "0.92rem",
+                }}
+              >
+                <span style={{ fontWeight: 800, color: "#78350f" }}>Balance</span>
+                <span style={{ fontWeight: 900, color: "#78350f", fontSize: "1.05rem" }}>
+                  ₱{Number(paymentTarget?.balance || 0).toLocaleString()}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <Link
+              to="/member/payments"
+              style={{
+                display: "inline-block",
+                background: "#ffffff",
+                border: "1.5px solid #166534",
+                color: "#166534",
+                fontWeight: 700,
+                fontSize: "0.84rem",
+                padding: "7px 18px",
+                borderRadius: "8px",
+                textDecoration: "none",
+                transition: "all 0.15s ease",
+              }}
+            >
+              View Payments
+            </Link>
+          </div>
+        </div>
+
+        {/* ========================================================================= */}
+        {/* ======================== Card 3: Pending Requests ======================= */}
+        {/* ========================================================================= */}
+        <div
+          style={{
+            background: "#ffffff",
+            borderRadius: "16px",
+            border: "1px solid #e2e8f0",
+            padding: "22px 24px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+          }}
+        >
+          <div>
+            {/* Header & Link */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#166534" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                  <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+                  <path d="m9 14 2 2 4-4" />
+                </svg>
+                <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 800, color: "#14532d" }}>
+                  Pending Requests
+                </h3>
+              </div>
+              <Link
+                to="/applications"
+                style={{
+                  color: "#166534",
+                  fontWeight: 700,
+                  fontSize: "0.84rem",
+                  textDecoration: "none",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                View All →
+              </Link>
+            </div>
+
+            {/* Table */}
+            {pendingList.length > 0 ? (
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.84rem" }}>
+                  <thead>
+                    <tr style={{ background: "#f1f5f9" }}>
+                      <th style={{ padding: "8px 10px", textAlign: "left", color: "#475569", fontWeight: 700, borderRadius: "6px 0 0 6px" }}>
+                        Booking ID
+                      </th>
+                      <th style={{ padding: "8px 10px", textAlign: "left", color: "#475569", fontWeight: 700 }}>
+                        Machinery
+                      </th>
+                      <th style={{ padding: "8px 10px", textAlign: "left", color: "#475569", fontWeight: 700 }}>
+                        Requested Date
+                      </th>
+                      <th style={{ padding: "8px 10px", textAlign: "left", color: "#475569", fontWeight: 700, borderRadius: "0 6px 6px 0" }}>
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pendingList.slice(0, 4).map((item) => (
+                      <tr key={item._id || item.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                        <td style={{ padding: "10px 10px", fontWeight: 600, color: "#0f172a" }}>
+                          {item.displayId || (item._id ? `BK-${String(item._id).slice(-4).toUpperCase()}` : "BK-1045")}
+                        </td>
+                        <td style={{ padding: "10px 10px", color: "#0f172a" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#166534" strokeWidth="2">
+                              <path d="M3 16h13l2-5h3l1 5v3h-2" />
+                              <circle cx="7" cy="19" r="2" />
+                              <circle cx="18" cy="19" r="2" />
+                            </svg>
+                            <span>{item.machineryModel || item.equipment}</span>
+                          </div>
+                        </td>
+                        <td style={{ padding: "10px 10px", color: "#334155" }}>
+                          {formatDateDisplay(item.startDate)}
+                        </td>
+                        <td style={{ padding: "10px 10px" }}>
+                          <span
+                            style={{
+                              background: "#fef3c7",
+                              color: "#92400e",
+                              fontSize: "0.72rem",
+                              fontWeight: 700,
+                              padding: "3px 8px",
+                              borderRadius: "6px",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            Pending Review
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div style={{ padding: "24px 0", color: "#64748b", fontSize: "0.85rem" }}>
+                No pending requests at this time. All requests are cleared.
+              </div>
+            )}
+          </div>
+
+          <div style={{ marginTop: "14px" }}>
+            <span style={{ fontStyle: "italic", fontSize: "0.76rem", color: "#64748b" }}>
+              Requests require manager approval.
+            </span>
+          </div>
+        </div>
+
+        {/* ========================================================================= */}
+        {/* ===================== Card 4: Recent Notifications ====================== */}
+        {/* ========================================================================= */}
+        <div
+          style={{
+            background: "#ffffff",
+            borderRadius: "16px",
+            border: "1px solid #e2e8f0",
+            padding: "22px 24px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+          }}
+        >
+          <div>
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "18px" }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#166534" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+              <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 800, color: "#14532d" }}>
+                Recent Notifications
+              </h3>
+            </div>
+
+            {/* List */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginBottom: "16px" }}>
+              {displayNotifications.map((notif, idx) => (
+                <div key={idx} style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
+                  <div
+                    style={{
+                      width: "36px",
+                      height: "36px",
+                      borderRadius: "50%",
+                      background: notif.type === "payment" ? "#fef3c7" : "#dcfce7",
+                      color: notif.type === "payment" ? "#b45309" : "#15803d",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {notif.type === "payment" ? (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="8" cy="8" r="6" />
+                        <path d="M18 9v6a6 6 0 0 1-6 6" />
+                      </svg>
+                    ) : (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="m9 12 2 2 4-4" />
+                      </svg>
+                    )}
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: "0.86rem", color: "#0f172a", marginBottom: "2px", lineHeight: 1.3 }}>
+                      {notif.title}
+                    </div>
+                    <div style={{ fontSize: "0.76rem", color: "#64748b" }}>
+                      {notif.subtext}
                     </div>
                   </div>
                 </div>
@@ -602,36 +660,21 @@ export default function MemberDashboard() {
             </div>
           </div>
 
-          {/* Dispatcher Office Support */}
-          <div className="wz-card" style={{ margin: 0, background: "#f0fdf4", border: "1px solid #bbf7d0" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-              <div
-                style={{
-                  width: "32px",
-                  height: "32px",
-                  borderRadius: "50%",
-                  background: "#16a34a",
-                  color: "#ffffff",
-                  display: "grid",
-                  placeItems: "center",
-                  fontSize: "0.9rem",
-                }}
-              >
-                📞
-              </div>
-              <div>
-                <div style={{ fontWeight: 800, fontSize: "0.85rem", color: "#14532d" }}>KIMPC Dispatch Office</div>
-                <div style={{ fontSize: "0.72rem", color: "#15803d" }}>Machinery scheduling &amp; member assistance</div>
-              </div>
-            </div>
-            <p style={{ margin: "0 0 10px", fontSize: "0.75rem", color: "#166534", lineHeight: 1.4 }}>
-              Have questions about your rental slot, field operator assignment, or fuel terms? Contact the cooperative office.
-            </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "0.74rem", color: "#14532d" }}>
-              <div><strong>Office:</strong> (088) 555-KIMPC / 0917-000-0000</div>
-              <div><strong>Email:</strong> kimpc.system@gmail.com</div>
-              <div><strong>Hours:</strong> Mon – Fri: 7:00 AM – 5:00 PM</div>
-            </div>
+          <div>
+            <Link
+              to="/member/notifications"
+              style={{
+                color: "#166534",
+                fontWeight: 700,
+                fontSize: "0.84rem",
+                textDecoration: "none",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+              }}
+            >
+              View All Notifications →
+            </Link>
           </div>
         </div>
       </div>
