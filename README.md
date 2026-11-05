@@ -72,11 +72,8 @@ minders/
 │   ├── seed.js                        # Database seeder for demo Admin, Manager, and Member accounts
 │   └── server.js                      # Main Express application entry point
 │
-├── pic src/                           # Raw image source repository
-├── .env                               # Root environment configuration
 ├── .gitignore                         # Git exclusion rules
-├── package.json                       # Monorepo orchestrator scripts (npm run dev, build, client)
-└── package-lock.json                  # Root lockfile
+└── package.json                       # Monorepo orchestrator scripts (npm run dev, build, client)
 ```
 
 ---
