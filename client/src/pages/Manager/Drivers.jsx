@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { api } from "../../services/api";
 import ManagerSidebar from "../../components/ManagerSidebar";
 import ManagerSearchBar from "../../components/ManagerSearchBar";
 import ManagerTopbar from "../../components/ManagerTopbar";
@@ -240,6 +241,21 @@ export default function Drivers() {
   // Selected driver detail panel (Default: null until selected/clicked)
   const [selectedDriver, setSelectedDriver] = useState(null);
 
+  // Fetch drivers from MongoDB API
+  useEffect(() => {
+    const fetchDrivers = async () => {
+      try {
+        const res = await api("/drivers");
+        if (res && res.ok && Array.isArray(res.data) && res.data.length > 0) {
+          setDrivers(res.data);
+        }
+      } catch (err) {
+        console.error("Failed to load drivers from API:", err);
+      }
+    };
+    fetchDrivers();
+  }, []);
+
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
@@ -283,7 +299,7 @@ export default function Drivers() {
   }, [drivers, searchQuery, filterStatus, sortBy]);
 
   // Handle Save Driver (Create or Edit)
-  const handleSaveDriver = (e) => {
+  const handleSaveDriver = async (e) => {
     e.preventDefault();
     if (!driverForm.name.trim() || !driverForm.email.trim()) {
       alert("Name and email are required.");
@@ -291,24 +307,39 @@ export default function Drivers() {
     }
 
     if (editingDriver) {
-      const updated = drivers.map((d) =>
-        d.id === editingDriver.id
-          ? {
-              ...d,
-              name: driverForm.name.trim(),
-              email: driverForm.email.trim(),
-              phone: driverForm.phone.trim(),
-              status: driverForm.status,
-              address: driverForm.address.trim(),
-            }
-          : d
-      );
-      setDrivers(updated);
-      setSelectedDriver(updated.find((d) => d.id === editingDriver.id));
-      setEditingDriver(null);
+      const targetId = editingDriver._id || editingDriver.id;
+      try {
+        const res = await api(`/drivers/${targetId}`, {
+          method: "PUT",
+          body: {
+            name: driverForm.name.trim(),
+            email: driverForm.email.trim(),
+            phone: driverForm.phone.trim(),
+            status: driverForm.status,
+            address: driverForm.address.trim(),
+          },
+        });
+        const saved = res && res.ok && res.data ? res.data : null;
+        const updated = drivers.map((d) =>
+          d._id === targetId || d.id === targetId
+            ? saved || {
+                ...d,
+                name: driverForm.name.trim(),
+                email: driverForm.email.trim(),
+                phone: driverForm.phone.trim(),
+                status: driverForm.status,
+                address: driverForm.address.trim(),
+              }
+            : d
+        );
+        setDrivers(updated);
+        setSelectedDriver(updated.find((d) => d._id === targetId || d.id === targetId));
+        setEditingDriver(null);
+      } catch (err) {
+        console.error("Error updating driver:", err);
+      }
     } else {
       const newD = {
-        id: `d-${Date.now()}`,
         name: driverForm.name.trim(),
         email: driverForm.email.trim(),
         phone: driverForm.phone.trim() || "555-000-1234",
@@ -323,9 +354,18 @@ export default function Drivers() {
           { date: "Tue, 1 Aug", client: "Alice Johnson", time: "10:00 AM", vehicle: "Toyota Corolla" },
         ],
       };
-      setDrivers([newD, ...drivers]);
-      setSelectedDriver(newD);
-      setShowAddModal(false);
+      try {
+        const res = await api("/drivers", {
+          method: "POST",
+          body: newD,
+        });
+        const saved = res && res.ok && res.data ? res.data : { ...newD, id: `d-${Date.now()}` };
+        setDrivers([saved, ...drivers]);
+        setSelectedDriver(saved);
+        setShowAddModal(false);
+      } catch (err) {
+        console.error("Error creating driver:", err);
+      }
     }
   };
 

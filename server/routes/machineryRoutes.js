@@ -458,6 +458,8 @@ function normalizeUnit(unit) {
 
   obj.currentMeterReading = obj.currentMeterReading !== undefined ? obj.currentMeterReading : (obj.operatingHours || 0);
   obj.meterReadingUnit = obj.meterReadingUnit || "Hours";
+  obj.assignedDriver = obj.assignedDriver || "Unassigned";
+  obj.driverPhone = obj.driverPhone || "";
   return obj;
 }
 
@@ -1083,6 +1085,8 @@ router.put("/machinery-units/:id", authManager, async (req, res) => {
     // Update Other Information
     if (body.operatingRestrictions !== undefined) unit.operatingRestrictions = clean(body.operatingRestrictions);
     if (body.notes !== undefined) unit.notes = clean(body.notes);
+    if (body.assignedDriver !== undefined) unit.assignedDriver = clean(body.assignedDriver) || "Unassigned";
+    if (body.driverPhone !== undefined) unit.driverPhone = clean(body.driverPhone) || "";
 
     await unit.save();
 
@@ -1176,6 +1180,54 @@ router.patch("/machinery-units/:id/status", authManager, async (req, res) => {
   } catch (err) {
     console.error("Error updating unit condition:", err);
     res.status(500).json({ ok: false, error: "Failed to update machinery condition." });
+  }
+});
+
+/**
+ * PATCH /api/machinery-units/:id/driver
+ * Quick endpoint to update assigned driver and driver phone number.
+ */
+router.patch("/machinery-units/:id/driver", authManager, async (req, res) => {
+  try {
+    const id = req.params.id;
+    let unit = null;
+
+    if (mongoose.isValidObjectId(id)) {
+      unit = await MachineryUnit.findById(id);
+    }
+    if (!unit) {
+      unit = await MachineryUnit.findOne({ unitId: clean(id) });
+    }
+    if (!unit) return res.status(404).json({ ok: false, error: "Machinery unit not found." });
+
+    const body = req.body || {};
+    const oldDriver = unit.assignedDriver || "Unassigned";
+    const newDriver = clean(body.assignedDriver) || "Unassigned";
+    const newPhone = clean(body.driverPhone) || "";
+
+    unit.assignedDriver = newDriver;
+    unit.driverPhone = newPhone;
+
+    await unit.save();
+
+    const managerEmail = req.user?.email || "manager";
+    await logAudit({
+      action: "MACHINERY_UNIT_DRIVER_UPDATED",
+      actorEmail: managerEmail,
+      actorRole: req.user?.role || "manager",
+      actorId: req.user?._id,
+      details: `Updated driver for ${unit.unitId} (${unit.name}): ${oldDriver} -> ${newDriver}.`,
+      req,
+    });
+
+    res.json({
+      ok: true,
+      data: normalizeUnit(unit),
+      message: `Assigned driver for ${unit.unitId} updated to "${newDriver}".`,
+    });
+  } catch (err) {
+    console.error("Error updating unit driver:", err);
+    res.status(500).json({ ok: false, error: err.message || "Failed to update assigned driver." });
   }
 });
 

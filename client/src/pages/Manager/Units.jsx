@@ -99,6 +99,8 @@ const EMPTY_UNIT_FORM = {
   // 6. Other Information
   operatingRestrictions: "",
   notes: "",
+  assignedDriver: "Unassigned",
+  driverPhone: "",
 };
 
 export default function Units() {
@@ -110,6 +112,14 @@ export default function Units() {
   const [counts, setCounts] = useState({ total: 0, operational: 0, underMaintenance: 0, retired: 0 });
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState({ message: "", isError: false });
+
+  // Registered Drivers state & Assign Driver Modal
+  const [drivers, setDrivers] = useState([]);
+  const [driversLoading, setDriversLoading] = useState(false);
+  const [driverModalUnit, setDriverModalUnit] = useState(null);
+  const [driverSearchQuery, setDriverSearchQuery] = useState("");
+  const [driverSubmitting, setDriverSubmitting] = useState(false);
+  const [driverError, setDriverError] = useState("");
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState("");
@@ -152,6 +162,21 @@ export default function Units() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const fileInputRef = useRef(null);
 
+  // Fetch registered drivers from API
+  const fetchDrivers = async () => {
+    try {
+      setDriversLoading(true);
+      const res = await api("/drivers");
+      if (res && res.ok && Array.isArray(res.data)) {
+        setDrivers(res.data);
+      }
+    } catch (err) {
+      console.error("Error loading drivers:", err);
+    } finally {
+      setDriversLoading(false);
+    }
+  };
+
   // Fetch machinery units
   const fetchUnits = async () => {
     try {
@@ -181,7 +206,57 @@ export default function Units() {
 
   useEffect(() => {
     fetchUnits();
+    fetchDrivers();
   }, []);
+
+  // Quick Change Driver modal handlers
+  const openChangeDriverModal = (unit) => {
+    setDriverModalUnit(unit);
+    setDriverSearchQuery("");
+    setDriverError("");
+  };
+
+  const handleAssignDriver = async (driverName, driverPhone = "") => {
+    if (!driverModalUnit) return;
+    setDriverSubmitting(true);
+    setDriverError("");
+    try {
+      const res = await api(`/machinery-units/${driverModalUnit._id || driverModalUnit.id || driverModalUnit.unitId}/driver`, {
+        method: "PATCH",
+        body: {
+          assignedDriver: driverName,
+          driverPhone: driverPhone,
+        },
+      });
+
+      if (res.ok) {
+        setUnits((prev) =>
+          prev.map((u) =>
+            u._id === driverModalUnit._id || u.unitId === driverModalUnit.unitId
+              ? { ...u, assignedDriver: driverName, driverPhone: driverPhone }
+              : u
+          )
+        );
+        if (viewingUnit && (viewingUnit._id === driverModalUnit._id || viewingUnit.unitId === driverModalUnit.unitId)) {
+          setViewingUnit((prev) => ({ ...prev, assignedDriver: driverName, driverPhone: driverPhone }));
+        }
+        setFeedback({
+          message:
+            driverName === "Unassigned"
+              ? `Driver assignment removed for ${driverModalUnit.unitId}.`
+              : `Assigned driver "${driverName}" to machinery unit ${driverModalUnit.unitId}.`,
+          isError: false,
+        });
+        setDriverModalUnit(null);
+      } else {
+        setDriverError(res.data?.error || res.error || "Failed to assign driver.");
+      }
+    } catch (err) {
+      setDriverError(err.message || "Network error updating driver assignment.");
+    } finally {
+      setDriverSubmitting(false);
+    }
+  };
 
   // Filtered and searched units
   const filteredUnits = useMemo(() => {
@@ -305,6 +380,8 @@ export default function Units() {
 
       operatingRestrictions: u.operatingRestrictions || "",
       notes: u.notes || "",
+      assignedDriver: u.assignedDriver || "Unassigned",
+      driverPhone: u.driverPhone || "",
     });
     setFormErrors({});
     setActiveFormTab("basic");
@@ -828,6 +905,7 @@ export default function Units() {
                     <th>Type</th>
                     <th>Brand / Model</th>
                     <th>Rental Rate</th>
+                    <th>Assigned Driver</th>
                     <th>Operating Condition</th>
                     <th style={{ textAlign: "center" }}>Actions</th>
                   </tr>
@@ -896,7 +974,87 @@ export default function Units() {
                           )}
                         </td>
 
-                        {/* 6. Operating Condition */}
+                        {/* 6. Assigned Driver (Interactive Click-to-Change) */}
+                        <td>
+                          {u.assignedDriver && u.assignedDriver !== "Unassigned" ? (
+                            <button
+                              type="button"
+                              onClick={() => openChangeDriverModal(u)}
+                              title="Click to change or reassign driver"
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "8px",
+                                padding: "5px 11px",
+                                background: "#f0fdf4",
+                                border: "1px solid #bbf7d0",
+                                borderRadius: "20px",
+                                color: "#166534",
+                                fontWeight: "600",
+                                fontSize: "0.8rem",
+                                cursor: "pointer",
+                                textAlign: "left",
+                                transition: "all 0.15s ease",
+                                boxShadow: "0 1px 2px rgba(0,0,0,0.04)"
+                              }}
+                            >
+                              <span style={{
+                                width: "22px",
+                                height: "22px",
+                                borderRadius: "50%",
+                                background: "#22c55e",
+                                color: "#ffffff",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: "0.7rem",
+                                fontWeight: "700"
+                              }}>
+                                {u.assignedDriver.charAt(0).toUpperCase()}
+                              </span>
+                              <div>
+                                <div style={{ lineHeight: "1.2", fontWeight: "700" }}>{u.assignedDriver}</div>
+                                {u.driverPhone && (
+                                  <div style={{ fontSize: "0.68rem", color: "#15803d", fontWeight: "400" }}>{u.driverPhone}</div>
+                                )}
+                              </div>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.65, marginLeft: "2px" }}>
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                              </svg>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => openChangeDriverModal(u)}
+                              title="Click to assign a registered driver"
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "6px",
+                                padding: "5px 11px",
+                                background: "#f8fafc",
+                                border: "1px dashed #cbd5e1",
+                                borderRadius: "20px",
+                                color: "#64748b",
+                                fontWeight: "500",
+                                fontSize: "0.78rem",
+                                cursor: "pointer",
+                                transition: "all 0.15s ease",
+                              }}
+                            >
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                                <circle cx="9" cy="7" r="4" />
+                                <line x1="19" y1="8" x2="19" y2="14" />
+                                <line x1="22" y1="11" x2="16" y2="11" />
+                              </svg>
+                              <span>+ Assign Driver</span>
+                            </button>
+                          )}
+                        </td>
+
+                        {/* 7. Operating Condition */}
                         <td>
                           {cond === "Operational" ? (
                             <span className="wz-cond-badge wz-cond-operational">
@@ -1019,6 +1177,74 @@ export default function Units() {
                       <span className="wz-unit-price-val">₱{Number(u.memberRate || u.ratePerDay).toLocaleString()}</span>
                       <span className="wz-unit-price-unit"> {u.pricingUnit === "Per Hectare" ? "/hec" : u.pricingUnit === "Per Hour" ? "/hr" : "/day"}</span>
                     </div>
+                  </div>
+
+                  {/* Assigned Driver */}
+                  <div className="wz-unit-col-spec" style={{ minWidth: "150px" }}>
+                    <span className="wz-unit-spec-label">Assigned Driver</span>
+                    {u.assignedDriver && u.assignedDriver !== "Unassigned" ? (
+                      <button
+                        type="button"
+                        onClick={() => openChangeDriverModal(u)}
+                        title="Click to change driver"
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          padding: "4px 10px",
+                          background: "#f0fdf4",
+                          border: "1px solid #bbf7d0",
+                          borderRadius: "16px",
+                          color: "#166534",
+                          fontWeight: "700",
+                          fontSize: "0.78rem",
+                          cursor: "pointer",
+                          marginTop: "3px"
+                        }}
+                      >
+                        <span style={{
+                          width: "18px",
+                          height: "18px",
+                          borderRadius: "50%",
+                          background: "#22c55e",
+                          color: "#ffffff",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: "0.68rem",
+                          fontWeight: "700"
+                        }}>
+                          {u.assignedDriver.charAt(0).toUpperCase()}
+                        </span>
+                        <span>{u.assignedDriver}</span>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" style={{ opacity: 0.65 }}>
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                        </svg>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => openChangeDriverModal(u)}
+                        title="Click to assign driver"
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          padding: "4px 10px",
+                          background: "#f8fafc",
+                          border: "1px dashed #cbd5e1",
+                          borderRadius: "16px",
+                          color: "#64748b",
+                          fontWeight: "500",
+                          fontSize: "0.75rem",
+                          cursor: "pointer",
+                          marginTop: "3px"
+                        }}
+                      >
+                        + Assign Driver
+                      </button>
+                    )}
                   </div>
 
                   {/* Actions: ONLY Icon Buttons */}
@@ -1296,6 +1522,35 @@ export default function Units() {
                         style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
                       />
                     </div>
+                  </div>
+
+                  <div style={{ marginBottom: "16px" }}>
+                    <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "4px" }}>
+                      Assigned Driver / Operator
+                    </label>
+                    <select
+                      value={unitForm.assignedDriver || "Unassigned"}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const match = drivers.find((d) => d.name === val);
+                        setUnitForm({
+                          ...unitForm,
+                          assignedDriver: val,
+                          driverPhone: match ? (match.phone || "") : "",
+                        });
+                      }}
+                      style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem", background: "#fff" }}
+                    >
+                      <option value="Unassigned">Unassigned (No Operator Assigned)</option>
+                      {drivers.map((d) => (
+                        <option key={d._id || d.id || d.name} value={d.name}>
+                          {d.name} {d.phone ? `(${d.phone})` : ""} — {d.status || "Active"}
+                        </option>
+                      ))}
+                    </select>
+                    <span style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                      Choose from registered KIMPC Drivers. Can also be reassigned on the fly in the Units list.
+                    </span>
                   </div>
 
                   {/* Photo Upload & URL */}
@@ -1972,6 +2227,61 @@ export default function Units() {
                   </div>
                 </div>
 
+                {/* Section 3: Assigned Operator / Driver */}
+                <div className="wz-detail-section">
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                    <div className="wz-detail-sec-title" style={{ margin: 0 }}>Assigned Operator / Driver</div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const target = viewingUnit;
+                        setViewingUnit(null);
+                        openChangeDriverModal(target);
+                      }}
+                      style={{
+                        padding: "5px 12px",
+                        background: "#f0fdf4",
+                        border: "1px solid #bbf7d0",
+                        borderRadius: "6px",
+                        color: "#166534",
+                        fontWeight: "700",
+                        fontSize: "0.78rem",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "5px"
+                      }}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                      </svg>
+                      Change Driver
+                    </button>
+                  </div>
+                  <div className="wz-detail-grid-2">
+                    <div className="wz-detail-item">
+                      <span className="wz-detail-label">Designated Driver</span>
+                      <span className="wz-detail-value" style={{ fontWeight: "700", color: "#0f172a" }}>
+                        {viewingUnit.assignedDriver && viewingUnit.assignedDriver !== "Unassigned" ? (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                            <span style={{ width: "20px", height: "20px", borderRadius: "50%", background: "#22c55e", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "0.7rem", fontWeight: "700" }}>
+                              {viewingUnit.assignedDriver.charAt(0).toUpperCase()}
+                            </span>
+                            {viewingUnit.assignedDriver}
+                          </span>
+                        ) : (
+                          <span style={{ color: "#64748b" }}>Unassigned (No Operator Assigned)</span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="wz-detail-item">
+                      <span className="wz-detail-label">Driver Contact Phone</span>
+                      <span className="wz-detail-value">{viewingUnit.driverPhone || "—"}</span>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Section 4 & 5: Maintenance & Location */}
                 <div className="wz-detail-section">
                   <div className="wz-detail-sec-title">Condition &amp; Service Tracking</div>
@@ -2245,6 +2555,292 @@ export default function Units() {
                 }}
               >
                 {statusSubmitting ? "Updating..." : "Update Status"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= 5. Change Driver Assignment Modal ================= */}
+      {driverModalUnit && (
+        <div className="wz-modal-overlay" onClick={() => !driverSubmitting && setDriverModalUnit(null)}>
+          <div className="wz-modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "560px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
+              <div>
+                <h3 style={{ margin: "0 0 4px 0", fontSize: "1.25rem", fontWeight: "800", color: "#0f172a" }}>
+                  Assign Driver to Machinery
+                </h3>
+                <div style={{ fontSize: "0.82rem", color: "#64748b" }}>
+                  Unit: <span className="wz-unit-code-badge">{driverModalUnit.unitId}</span> &bull; <strong>{driverModalUnit.name}</strong>
+                </div>
+              </div>
+              <button
+                disabled={driverSubmitting}
+                onClick={() => setDriverModalUnit(null)}
+                style={{ background: "none", border: "none", fontSize: "1.4rem", cursor: "pointer", color: "#94a3b8" }}
+              >
+                &times;
+              </button>
+            </div>
+
+            {driverError && (
+              <div style={{ padding: "10px 14px", background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: "8px", color: "#991b1b", fontSize: "0.84rem", marginBottom: "14px", lineHeight: "1.4" }}>
+                <strong>Error:</strong> {driverError}
+              </div>
+            )}
+
+            {/* Current Assignment Callout */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "14px", fontSize: "0.84rem", color: "#475569" }}>
+              <div>
+                <span style={{ color: "#64748b", fontSize: "0.78rem", display: "block" }}>Currently Assigned Driver:</span>
+                <strong style={{ color: "#0f172a", fontSize: "0.95rem" }}>
+                  {driverModalUnit.assignedDriver && driverModalUnit.assignedDriver !== "Unassigned"
+                    ? driverModalUnit.assignedDriver
+                    : "No Driver Assigned (Unassigned)"}
+                </strong>
+                {driverModalUnit.driverPhone && (
+                  <span style={{ fontSize: "0.75rem", color: "#64748b", marginLeft: "6px" }}>
+                    &bull; {driverModalUnit.driverPhone}
+                  </span>
+                )}
+              </div>
+              {driverModalUnit.assignedDriver && driverModalUnit.assignedDriver !== "Unassigned" && (
+                <button
+                  type="button"
+                  disabled={driverSubmitting}
+                  onClick={() => handleAssignDriver("Unassigned", "")}
+                  style={{
+                    padding: "5px 10px",
+                    background: "#fff1f2",
+                    border: "1px solid #fecdd3",
+                    color: "#e11d48",
+                    borderRadius: "6px",
+                    fontSize: "0.75rem",
+                    fontWeight: "600",
+                    cursor: "pointer"
+                  }}
+                  title="Remove current driver assignment"
+                >
+                  Unassign
+                </button>
+              )}
+            </div>
+
+            {/* Search registered drivers */}
+            <div style={{ marginBottom: "12px" }}>
+              <input
+                type="text"
+                placeholder="Search registered drivers by name, phone..."
+                value={driverSearchQuery}
+                onChange={(e) => setDriverSearchQuery(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "9px 12px",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "8px",
+                  fontSize: "0.85rem",
+                  outline: "none"
+                }}
+              />
+            </div>
+
+            {/* Registered Drivers List from Drivers DB */}
+            <div style={{ maxHeight: "280px", overflowY: "auto", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "6px" }}>
+              {/* Option to Unassign */}
+              <div
+                onClick={() => !driverSubmitting && handleAssignDriver("Unassigned", "")}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "10px 12px",
+                  borderRadius: "8px",
+                  cursor: driverSubmitting ? "not-allowed" : "pointer",
+                  marginBottom: "4px",
+                  background: (!driverModalUnit.assignedDriver || driverModalUnit.assignedDriver === "Unassigned") ? "#f1f5f9" : "transparent",
+                  border: "1px solid",
+                  borderColor: (!driverModalUnit.assignedDriver || driverModalUnit.assignedDriver === "Unassigned") ? "#cbd5e1" : "transparent",
+                  transition: "background 0.15s ease"
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div style={{
+                    width: "36px",
+                    height: "36px",
+                    borderRadius: "50%",
+                    background: "#e2e8f0",
+                    color: "#64748b",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontWeight: "700",
+                    fontSize: "0.85rem"
+                  }}>
+                    —
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: "700", color: "#334155", fontSize: "0.88rem" }}>Unassigned</div>
+                    <div style={{ fontSize: "0.75rem", color: "#64748b" }}>Self-operated or no designated driver</div>
+                  </div>
+                </div>
+                {(!driverModalUnit.assignedDriver || driverModalUnit.assignedDriver === "Unassigned") && (
+                  <span style={{ fontSize: "0.75rem", fontWeight: "700", color: "#0284c7", background: "#e0f2fe", padding: "3px 8px", borderRadius: "12px" }}>
+                    Current
+                  </span>
+                )}
+              </div>
+
+              {/* Filtered Drivers from Drivers database */}
+              {drivers
+                .filter((d) => {
+                  const q = driverSearchQuery.trim().toLowerCase();
+                  if (!q) return true;
+                  return (
+                    (d.name && d.name.toLowerCase().includes(q)) ||
+                    (d.phone && d.phone.includes(q)) ||
+                    (d.status && d.status.toLowerCase().includes(q))
+                  );
+                })
+                .map((driver) => {
+                  const isCurrent = driverModalUnit.assignedDriver === driver.name;
+                  return (
+                    <div
+                      key={driver._id || driver.id || driver.name}
+                      onClick={() => !driverSubmitting && handleAssignDriver(driver.name, driver.phone || "")}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "10px 12px",
+                        borderRadius: "8px",
+                        cursor: driverSubmitting ? "not-allowed" : "pointer",
+                        marginBottom: "4px",
+                        background: isCurrent ? "#f0fdf4" : "#ffffff",
+                        border: "1px solid",
+                        borderColor: isCurrent ? "#86efac" : "#f1f5f9",
+                        transition: "all 0.15s ease"
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isCurrent) e.currentTarget.style.background = "#f8fafc";
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isCurrent) e.currentTarget.style.background = "#ffffff";
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        {driver.avatar ? (
+                          <img
+                            src={driver.avatar}
+                            alt={driver.name}
+                            style={{ width: "36px", height: "36px", borderRadius: "50%", objectFit: "cover" }}
+                          />
+                        ) : (
+                          <div style={{
+                            width: "36px",
+                            height: "36px",
+                            borderRadius: "50%",
+                            background: "#22c55e",
+                            color: "#fff",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontWeight: "700",
+                            fontSize: "0.85rem"
+                          }}>
+                            {driver.name.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <span style={{ fontWeight: "700", color: "#0f172a", fontSize: "0.88rem" }}>{driver.name}</span>
+                            <span style={{
+                              fontSize: "0.7rem",
+                              fontWeight: "600",
+                              padding: "2px 6px",
+                              borderRadius: "10px",
+                              background: driver.status === "On Duty" ? "#dcfce7" : driver.status === "Sick Leave" ? "#fee2e2" : "#fef9c3",
+                              color: driver.status === "On Duty" ? "#166534" : driver.status === "Sick Leave" ? "#991b1b" : "#854d0e"
+                            }}>
+                              {driver.status || "Active"}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                            {driver.phone || "No phone"} {driver.email ? `• ${driver.email}` : ""}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        {isCurrent ? (
+                          <span style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            fontSize: "0.75rem",
+                            fontWeight: "700",
+                            color: "#16a34a",
+                            background: "#dcfce7",
+                            padding: "4px 9px",
+                            borderRadius: "12px"
+                          }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                            Current
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={driverSubmitting}
+                            style={{
+                              padding: "5px 12px",
+                              background: "#f0fdf4",
+                              border: "1px solid #bbf7d0",
+                              color: "#166534",
+                              borderRadius: "6px",
+                              fontSize: "0.78rem",
+                              fontWeight: "700",
+                              cursor: "pointer"
+                            }}
+                          >
+                            Assign
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
+              {drivers.length === 0 && (
+                <div style={{ padding: "20px", textAlign: "center", color: "#94a3b8", fontSize: "0.85rem" }}>
+                  {driversLoading ? "Loading drivers from registry..." : "No drivers registered yet."}
+                </div>
+              )}
+            </div>
+
+            {/* Footer with link to Drivers registry */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "14px" }}>
+              <Link
+                to="/drivers"
+                style={{ fontSize: "0.8rem", color: "#0284c7", fontWeight: "600", textDecoration: "none" }}
+              >
+                Manage registered drivers &rarr;
+              </Link>
+              <button
+                type="button"
+                disabled={driverSubmitting}
+                onClick={() => setDriverModalUnit(null)}
+                style={{
+                  padding: "8px 16px",
+                  background: "#f8fafc",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "8px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                  fontSize: "0.84rem"
+                }}
+              >
+                Close
               </button>
             </div>
           </div>

@@ -19,6 +19,7 @@ const transactionRoutes = require("./transactionRoutes");
 const memberRoutes = require("./memberRoutes");
 const adminManagementRoutes = require("./adminManagementRoutes");
 const geocodeRoutes = require("./geocodeRoutes");
+const driverRoutes = require("./driverRoutes");
 
 router.use(authRoutes);
 router.use(accountRoutes);
@@ -28,5 +29,6 @@ router.use(machineryRoutes);
 router.use(transactionRoutes);
 router.use(memberRoutes);
 router.use(geocodeRoutes);
+router.use(driverRoutes);
 
 module.exports = router;
