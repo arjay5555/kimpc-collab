@@ -29,15 +29,19 @@ function createOAuth2Client(redirectUri) {
  * @param {string} [options.redirectUri]
  * @returns {string} The consent URL
  */
-function generateAuthUrl({ state = "", redirectUri } = {}) {
+function generateAuthUrl({ state = "", redirectUri, loginHint = "" } = {}) {
   const oauth2Client = createOAuth2Client(redirectUri);
-  return oauth2Client.generateAuthUrl({
+  const options = {
     access_type: "offline",
     prompt: "consent", // Force consent prompt to guarantee refresh token delivery
     scope: SCOPES,
     include_granted_scopes: true,
     state
-  });
+  };
+  if (loginHint) {
+    options.login_hint = loginHint;
+  }
+  return oauth2Client.generateAuthUrl(options);
 }
 
 /**

@@ -77,6 +77,7 @@ async function resolveManager(req, res, next) {
 router.get("/connect", async (req, res) => {
   try {
     let managerId = "";
+    let managerEmail = "";
 
     // Try resolving manager from token in header or query parameter
     let token = "";
@@ -90,7 +91,11 @@ router.get("/connect", async (req, res) => {
     if (token) {
       try {
         const payload = jwt.verify(token, JWT_SECRET);
-        if (payload?.id) managerId = String(payload.id);
+        if (payload?.id) {
+          managerId = String(payload.id);
+          const acct = await Account.findById(managerId);
+          if (acct?.email) managerEmail = acct.email;
+        }
       } catch {
         // Fall back to first available manager if token invalid
       }
@@ -98,7 +103,10 @@ router.get("/connect", async (req, res) => {
 
     if (!managerId) {
       const defaultManager = await Account.findOne({ role: "manager" });
-      if (defaultManager) managerId = String(defaultManager._id);
+      if (defaultManager) {
+        managerId = String(defaultManager._id);
+        managerEmail = defaultManager.email || "";
+      }
     }
 
     // Embed manager ID and anti-CSRF random token into state parameter
@@ -111,7 +119,8 @@ router.get("/connect", async (req, res) => {
     const protocol = req.protocol || "http";
     const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${protocol}://${host}/api/calendar/callback`;
 
-    const authUrl = generateAuthUrl({ state: statePayload, redirectUri });
+    // Passing loginHint tells Google to directly pick the manager's registered account
+    const authUrl = generateAuthUrl({ state: statePayload, redirectUri, loginHint: managerEmail });
 
     if (req.query.json === "true" || req.headers.accept?.includes("application/json")) {
       return res.json({ url: authUrl });
