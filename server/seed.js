@@ -7,7 +7,7 @@ if (!process.env.MONGODB_URI) {
 }
 
 const bcrypt = require("bcryptjs");
-const mongoose = require("mongoose");
+const { connectDB, disconnectDB } = require("./config/database");
 const Account = require("./models/Account");
 
 const demoAccounts = [
@@ -17,7 +17,7 @@ const demoAccounts = [
 ];
 
 (async () => {
-  await mongoose.connect(process.env.MONGODB_URI);
+  await connectDB();
   for (const person of demoAccounts) {
     const existing = await Account.findOne({ email: person.email });
     if (existing) {
@@ -41,5 +41,5 @@ const demoAccounts = [
     });
     console.log(`Created ${person.role}: ${person.email}  (password: ${person.password})`);
   }
-  await mongoose.disconnect();
+  await disconnectDB();
 })().catch((error) => { console.error(error); process.exit(1); });

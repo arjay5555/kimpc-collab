@@ -1,86 +1,45 @@
 const path = require("path");
-const fs = require("fs");
 
-// Load environment variables from server directory or parent directory
+// Load environment variables before anything else
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 if (!process.env.MONGODB_URI) {
   require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 }
 
-const express = require("express");
-const mongoose = require("mongoose");
+const app = require("./app");
+const { connectDB, disconnectDB } = require("./config/database");
 const { startAuditArchiveWorker } = require("./workers/archiveAuditLogs");
 const { startBookingReminderWorker } = require("./workers/bookingReminderNotifications");
-const authManager = require("./middleware/authManager");
-const errorHandler = require("./middleware/errorHandler");
 
-const app = express();
 const port = process.env.PORT || 3000;
 
-app.use(express.json({ limit: "15mb" }));
-app.use(express.urlencoded({ extended: true, limit: "15mb" }));
+async function startServer() {
+  // 1. Connect to MongoDB
+  await connectDB();
 
-// Static uploads directory for machinery photos
-const uploadsDir = path.join(__dirname, "uploads");
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-app.use("/uploads", express.static(uploadsDir));
+  // 2. Start scheduled background cron workers
+  startAuditArchiveWorker({ runImmediately: false });
+  startBookingReminderWorker();
 
-// Redirect legacy .html URLs to clean Node.js route paths
-app.use((req, res, next) => {
-  if (req.path.endsWith(".html")) {
-    const cleanPath = req.path.slice(0, -5);
-    const query = req.url.slice(req.path.length);
-    return res.redirect(301, cleanPath + query);
-  }
-  next();
-});
-
-// Serve Pure React Application (SPA)
-const clientDist = fs.existsSync(path.join(__dirname, "..", "client", "dist"))
-  ? path.join(__dirname, "..", "client", "dist")
-  : path.join(__dirname, "client", "dist");
-
-// API Routes
-app.use("/api/calendar", require("./routes/calendar"));
-app.use("/api/manager", authManager);
-app.use("/api/manager", require("./routes/manager"));
-app.use("/api", require("./routes/api"));
-
-if (fs.existsSync(clientDist)) {
-  app.use(express.static(clientDist));
-  app.use((req, res, next) => {
-    if (req.method === "GET" && !req.path.startsWith("/api")) {
-      return res.sendFile(path.join(clientDist, "index.html"));
-    }
-    next();
+  // 3. Start listening on configured port
+  const server = app.listen(port, () => {
+    console.log(`[Server] KIMPC Machinery Portal running at: http://localhost:${port}/login`);
   });
-} else {
-  // Fallback to legacy static files if client not built
-  app.use(express.static(path.join(__dirname, "public"), { extensions: ["html"] }));
+
+  // Graceful shutdown
+  const handleShutdown = async (signal) => {
+    console.log(`[Server] Received ${signal}. Shutting down gracefully...`);
+    server.close(async () => {
+      await disconnectDB();
+      process.exit(0);
+    });
+  };
+
+  process.on("SIGINT", () => handleShutdown("SIGINT"));
+  process.on("SIGTERM", () => handleShutdown("SIGTERM"));
 }
 
-// Centralized error handler
-app.use(errorHandler);
-
-if (!process.env.MONGODB_URI) {
-  console.error('Missing MONGODB_URI. Copy ".env.example" to ".env" and set it.');
+startServer().catch((error) => {
+  console.error("[Server] Fatal error on startup:", error.message);
   process.exit(1);
-}
-
-mongoose
-  .connect(process.env.MONGODB_URI)
-  .then(() => {
-    console.log("Connected to MongoDB");
-
-    // Start the monthly audit-log archive cron worker.
-    startAuditArchiveWorker({ runImmediately: false });
-    startBookingReminderWorker();
-
-    app.listen(port, () => console.log(`KIMPC (Kalilangan Irrigators Multi-Purpose Cooperative) is running at http://localhost:${port}/login`));
-  })
-  .catch((error) => {
-    console.error("Could not connect to MongoDB:", error.message);
-    process.exit(1);
-  });
+});

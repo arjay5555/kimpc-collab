@@ -57,6 +57,8 @@ minders/
 │   └── vite.config.js                 # Vite configuration with /api proxy to port 3000
 │
 ├── server/                            # Complete Backend Server (Node.js + Express + Mongoose)
+│   ├── config/                        # Infrastructure configurations
+│   │   └── database.js                # MongoDB connection management & event listeners
 │   ├── controllers/                   # Request controllers (manager analytics, fleet, operations)
 │   ├── middleware/                    # Express middleware (JWT authentication, role authorization)
 │   ├── models/                        # Mongoose data models (Account, Application, MachineryUnit, etc.)
@@ -69,8 +71,9 @@ minders/
 │   ├── .env                           # Backend environment variables (DB URI, OAuth keys)
 │   ├── .env.example                   # Template for required environment variables
 │   ├── package.json                   # Server dependencies & scripts (Express, Mongoose, etc.)
+│   ├── app.js                         # Express application setup, middleware, and route mounting
 │   ├── seed.js                        # Database seeder for demo Admin, Manager, and Member accounts
-│   └── server.js                      # Main Express application entry point
+│   └── server.js                      # Server bootstrapper (connects DB, workers, and starts listener)
 │
 ├── .gitignore                         # Git exclusion rules
 └── package.json                       # Monorepo orchestrator scripts (npm run dev, build, client)
