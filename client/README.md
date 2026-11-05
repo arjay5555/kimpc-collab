@@ -45,7 +45,7 @@ client/
 
 ## 🛠️ Development Scripts
 
-Run these from `Minders-mongodb/` or directly inside `client/`:
+Run these from the project root or directly inside `client/`:
 
 ```bash
 # Start Vite development server (port 5173 with hot-module reload)
