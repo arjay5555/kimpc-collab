@@ -16,6 +16,7 @@ const accountSchema = new mongoose.Schema(
     verificationStatus: { type: String, enum: ["pending", "verified", "declined"], default: "pending" },
     verifiedAt: Date,
     phone: { type: String, default: "" },
+    avatar: { type: String, default: "" },
     address: { type: String, default: "" },
     address2: { type: String, default: "" },
     city: { type: String, default: "" },

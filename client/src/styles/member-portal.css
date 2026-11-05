@@ -390,7 +390,7 @@
   }
 
   .wz-content-wrapper.member-main {
-    padding: 12px 14px 84px !important;
+    padding: 12px 14px 100px !important;
     height: auto !important;
     overflow-y: visible !important;
     width: 100% !important;
@@ -398,27 +398,32 @@
     box-sizing: border-box !important;
   }
 
-  /* Fixed Mobile Bottom Nav */
+  /* Liquid Glass Floating Dock Navigation (Reference Design) */
   .member-mobile-bottom-nav {
     display: flex !important;
     position: fixed !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    height: 60px !important;
-    background: #ffffff !important;
-    border-top: 1px solid #e2e8f0 !important;
+    bottom: 12px !important;
+    left: 12px !important;
+    right: 12px !important;
+    margin: 0 auto !important;
+    max-width: 460px !important;
+    height: 62px !important;
+    background: rgba(255, 255, 255, 0.74) !important;
+    backdrop-filter: blur(25px) saturate(200%) !important;
+    -webkit-backdrop-filter: blur(25px) saturate(200%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.7) !important;
+    border-radius: 36px !important;
     z-index: 9999 !important;
     justify-content: space-around !important;
     align-items: center !important;
-    box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.06) !important;
-    padding-bottom: env(safe-area-inset-bottom, 0) !important;
+    padding: 5px 6px !important;
+    box-shadow: 0 16px 36px -6px rgba(15, 23, 42, 0.16), 0 0 0 1px rgba(255, 255, 255, 0.7) inset, 0 1px 3px rgba(0, 0, 0, 0.05) !important;
   }
 
   .member-portal[data-theme="dark"] .member-mobile-bottom-nav {
-    background: #182538 !important;
-    border-top-color: #2a394d !important;
-    box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.3) !important;
+    background: rgba(15, 23, 42, 0.76) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    box-shadow: 0 16px 36px -6px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08) inset !important;
   }
 
   .member-bottom-nav-item {
@@ -432,32 +437,40 @@
     font-size: 0.65rem !important;
     font-weight: 600 !important;
     flex: 1 !important;
-    height: 100% !important;
-    padding: 2px 0 !important;
-    transition: color 0.15s ease !important;
+    height: 52px !important;
+    border-radius: 26px !important;
+    transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
     -webkit-tap-highlight-color: transparent !important;
+    position: relative !important;
   }
 
   .member-bottom-nav-item svg {
-    width: 19px !important;
-    height: 19px !important;
+    width: 20px !important;
+    height: 20px !important;
     stroke-width: 2 !important;
-    transition: transform 0.15s ease !important;
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), stroke 0.22s ease !important;
   }
 
+  /* Liquid Glass Active Bubble - Exact match to user reference picture */
   .member-bottom-nav-item.active {
-    color: #166534 !important;
+    background: rgba(255, 255, 255, 0.96) !important;
+    color: #15803d !important;
     font-weight: 800 !important;
+    border-radius: 26px !important;
+    box-shadow: 0 6px 18px -2px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.95) inset !important;
+    transform: translateY(-1px) scale(1.02) !important;
   }
 
   .member-bottom-nav-item.active svg {
-    color: #166534 !important;
-    stroke: #166534 !important;
+    color: #15803d !important;
+    stroke: #15803d !important;
     transform: scale(1.1) !important;
   }
 
   .member-portal[data-theme="dark"] .member-bottom-nav-item.active {
+    background: rgba(30, 41, 59, 0.92) !important;
     color: #22c55e !important;
+    box-shadow: 0 6px 18px -2px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.15) inset !important;
   }
   .member-portal[data-theme="dark"] .member-bottom-nav-item.active svg {
     color: #22c55e !important;
@@ -602,4 +615,21 @@
     padding: 9px 8px !important;
     font-size: 0.78rem !important;
   }
+}
+
+/* Desktop Sidebar liquid glass feel for members */
+.member-desktop-sidebar .wz-nav-item {
+  border-radius: 12px !important;
+  margin-bottom: 4px !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+.member-desktop-sidebar .wz-nav-item:hover {
+  background: rgba(241, 245, 249, 0.8) !important;
+}
+.member-desktop-sidebar .wz-nav-item.active {
+  background: linear-gradient(135deg, rgba(220, 252, 231, 0.85) 0%, rgba(187, 247, 208, 0.65) 100%) !important;
+  color: #14532d !important;
+  font-weight: 800 !important;
+  border: 1px solid rgba(134, 239, 172, 0.7) !important;
+  box-shadow: 0 4px 14px rgba(22, 101, 52, 0.08) !important;
 }

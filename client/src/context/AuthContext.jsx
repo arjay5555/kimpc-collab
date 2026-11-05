@@ -52,18 +52,26 @@ export function AuthProvider({ children }) {
       email: data.email || "",
       role,
       fullName: data.fullName || "",
+      avatar: data.avatar || localStorage.getItem(`kimpc-avatar-${data.email}`) || "",
       token: data.token || "",
     };
     setUser(newUser);
     return newUser;
   };
 
-  const updateProfile = ({ fullName }) => {
+  const updateProfile = ({ fullName, avatar }) => {
     if (fullName) {
       sessionStorage.setItem("kimpc-account-name", fullName);
       sessionStorage.setItem("minders-account-name", fullName);
-      setUser((current) => current ? { ...current, fullName } : current);
     }
+    if (avatar !== undefined) {
+      if (avatar) {
+        localStorage.setItem(`kimpc-avatar-${user?.email || "current"}`, avatar);
+      } else {
+        localStorage.removeItem(`kimpc-avatar-${user?.email || "current"}`);
+      }
+    }
+    setUser((current) => (current ? { ...current, ...(fullName ? { fullName } : {}), ...(avatar !== undefined ? { avatar } : {}) } : current));
   };
 
   const login = async (identifier, password, recaptchaToken = "") => {

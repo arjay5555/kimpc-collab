@@ -4,7 +4,7 @@ const SystemSetting = require("../models/SystemSetting");
 
 const JWT_SECRET = process.env.JWT_SECRET || "minders-secret-jwt-key-cooperative-2026";
 const ROLES = ["member", "manager", "admin"];
-const PROFILE_FIELDS = ["fullName", "email", "phone", "address", "address2", "city", "region", "postalCode", "country"];
+const PROFILE_FIELDS = ["fullName", "email", "phone", "avatar", "address", "address2", "city", "region", "postalCode", "country"];
 const STATUSES = ["Pending", "Approved", "Checked-Out", "Returned", "Rejected", "Cancelled", "Cancellation Requested"];
 
 const clean = (value) => String(value ?? "").trim();

@@ -84,13 +84,13 @@ router.patch("/member/preferences", async (req, res) => {
 });
 
 router.patch("/member/profile", async (req, res) => {
-  const fields = ["fullName", "phone", "address", "address2", "city", "region", "postalCode", "country"];
+  const fields = ["fullName", "phone", "address", "address2", "city", "region", "postalCode", "country", "avatar"];
   for (const field of fields) {
     if (req.body[field] !== undefined) req.user[field] = clean(req.body[field]);
   }
   if (!req.user.fullName) return fail(res, 400, "Full name is required.");
   await req.user.save();
-  return res.json({ fullName: req.user.fullName, email: req.user.email, phone: req.user.phone, address: req.user.address, address2: req.user.address2, city: req.user.city, region: req.user.region, postalCode: req.user.postalCode, country: req.user.country });
+  return res.json({ fullName: req.user.fullName, email: req.user.email, phone: req.user.phone, avatar: req.user.avatar, address: req.user.address, address2: req.user.address2, city: req.user.city, region: req.user.region, postalCode: req.user.postalCode, country: req.user.country });
 });
 
 router.post("/member/change-password", async (req, res) => {
