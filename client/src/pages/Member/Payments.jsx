@@ -109,7 +109,6 @@ export default function MemberPayments() {
     <div className="member-page" style={{ width: "100%", maxWidth: "1400px", margin: "0 auto", paddingBottom: "40px" }}>
       <MemberTopbar
         title="Payments"
-        subtitle="Review your machinery rental fee invoices, payment statuses, and official cooperative billing receipts."
         searchQuery={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search receipts, booking ID, machinery..."
@@ -214,14 +213,7 @@ export default function MemberPayments() {
             className={filter === "all" ? "active" : ""}
             onClick={() => setFilter("all")}
           >
-            All Invoices <span>{applications.length}</span>
-          </button>
-          <button
-            type="button"
-            className={filter === "paid" ? "active" : ""}
-            onClick={() => setFilter("paid")}
-          >
-            Paid / Settled <span>{stats.paidCount}</span>
+            ALL <span>{applications.length}</span>
           </button>
           <button
             type="button"
@@ -229,6 +221,13 @@ export default function MemberPayments() {
             onClick={() => setFilter("pending")}
           >
             Pending <span>{stats.pendingCount}</span>
+          </button>
+          <button
+            type="button"
+            className={filter === "paid" ? "active" : ""}
+            onClick={() => setFilter("paid")}
+          >
+            Paid <span>{stats.paidCount}</span>
           </button>
         </div>
 
@@ -336,7 +335,7 @@ export default function MemberPayments() {
                           display: "inline-block",
                         }}
                       >
-                        {isPaid ? "Paid / Settled" : "Pending Payment"}
+                        {isPaid ? "Paid" : "Pending"}
                       </span>
                     </td>
 
@@ -604,11 +603,11 @@ export default function MemberPayments() {
               <div style={{ textAlign: "right" }}>
                 {(receiptApp.paymentStatus || "").toLowerCase() === "paid" ? (
                   <span style={{ background: "#166534", color: "#ffffff", padding: "6px 14px", borderRadius: "20px", fontWeight: 800, fontSize: "0.78rem", letterSpacing: "1px", textTransform: "uppercase" }}>
-                    ✓ OFFICIAL PAYMENT SETTLED
+                    ✓ PAID
                   </span>
                 ) : (
                   <span style={{ background: "#d97706", color: "#ffffff", padding: "6px 14px", borderRadius: "20px", fontWeight: 800, fontSize: "0.78rem", letterSpacing: "1px", textTransform: "uppercase" }}>
-                    PAYMENT PENDING VERIFICATION
+                    PENDING
                   </span>
                 )}
               </div>

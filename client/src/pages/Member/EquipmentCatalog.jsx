@@ -2200,7 +2200,6 @@ export default function EquipmentCatalog() {
     <div className="member-page" style={{ width: "100%", maxWidth: "1400px", margin: "0 auto" }}>
       <MemberTopbar
         title="Browse Machinery"
-        subtitle="Find the right agricultural machinery for your farm and submit a rental request."
         searchQuery={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search equipment by name, brand, or model..."

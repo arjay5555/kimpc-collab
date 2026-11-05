@@ -120,10 +120,7 @@ export default function Settings() {
 
   return (
     <div className="member-page" style={{ width: "100%", maxWidth: "1400px", margin: "0 auto" }}>
-      <MemberTopbar
-        title="Settings"
-        subtitle="Manage your profile, farm location preferences, and portal appearance."
-      />
+      <MemberTopbar title="Settings" />
 
       {(feedback || error) && <p className={error ? "member-form-feedback" : "member-settings-feedback"} role={error ? "alert" : "status"}>{error || feedback}</p>}
 

@@ -44,12 +44,9 @@ export default function BookingHistory() {
 
   return (
     <div className="member-page" style={{ width: "100%", maxWidth: "1400px", margin: "0 auto" }}>
-      <MemberTopbar
-        title="Booking History"
-        subtitle="Review equipment bookings that were completed, rejected, or cancelled."
-      />
+      <MemberTopbar title="Booking History" />
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
+      <div style={{ display: "flex", justifyContent: "flex-start", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
         <Link
           className="wz-btn wz-btn-secondary"
           to="/applications"
@@ -69,10 +66,6 @@ export default function BookingHistory() {
         >
           <span aria-hidden="true">←</span>
           <span>Back to My Bookings</span>
-        </Link>
-        <Link className="wz-btn wz-btn-primary" to="/member/book" style={{ borderRadius: "8px", textDecoration: "none", padding: "8px 18px", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "6px" }}>
-          <span>Browse Machinery</span>
-          <span aria-hidden="true">→</span>
         </Link>
       </div>
 

@@ -237,10 +237,7 @@ export default function MemberDashboard() {
   return (
     <div className="member-page" style={{ width: "100%", maxWidth: "1400px", margin: "0 auto", paddingBottom: "40px" }}>
       {/* Top Header Bar */}
-      <MemberTopbar
-        title="Dashboard"
-        subtitle="Manage your equipment rentals, inspect pending bookings, and track payment schedules."
-      />
+      <MemberTopbar title="Dashboard" />
 
       {loadError && (
         <div style={{ padding: "10px 16px", marginBottom: "18px", borderRadius: "10px", background: "#fef2f2", border: "1px solid #fecdd3", color: "#b91c1c", fontSize: "0.85rem", fontWeight: 600 }}>

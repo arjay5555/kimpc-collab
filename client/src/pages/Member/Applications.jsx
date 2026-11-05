@@ -465,10 +465,7 @@ export default function Applications() {
 
   return (
     <div className="member-page" style={{ width: "100%", maxWidth: "1400px", margin: "0 auto", paddingBottom: "40px" }}>
-      <MemberTopbar
-        title="My Bookings"
-        subtitle="Track machinery bookings, inspect lifecycle timeline, edit pending details, or request cancellations."
-      />
+      <MemberTopbar title="My Bookings" />
 
       {/* Top Filter Bar (No outside history icon) */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>

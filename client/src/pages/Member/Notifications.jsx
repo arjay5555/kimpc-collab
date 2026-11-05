@@ -42,10 +42,7 @@ export default function Notifications() {
 
   return (
     <div className="member-page" style={{ width: "100%", maxWidth: "1400px", margin: "0 auto" }}>
-      <MemberTopbar
-        title="Notifications"
-        subtitle="Booking updates, reminders, and cooperative announcements."
-      />
+      <MemberTopbar title="Notifications" />
 
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "16px" }}>
         {notifications.some((item) => !item.readAt) && (

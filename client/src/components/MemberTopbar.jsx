@@ -7,7 +7,7 @@ import SettingsModal from "./SettingsModal";
 
 export default function MemberTopbar({
   title = "Member Dashboard",
-  subtitle = "Kalilangan Irrigators Multi-Purpose Cooperative member portal",
+  subtitle = "",
   searchQuery = "",
   onSearchChange = null,
   searchPlaceholder = "Search machinery, bookings...",
@@ -189,34 +189,7 @@ export default function MemberTopbar({
                 <line x1="21" y1="21" x2="16.65" y2="16.65" />
               </svg>
             </div>
-          ) : (
-            <Link
-              to="/member/book"
-              className="wz-btn wz-btn-outline"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                padding: "7px 14px",
-                borderRadius: "20px",
-                fontSize: "0.82rem",
-                fontWeight: 600,
-                textDecoration: "none",
-                color: "#166534",
-                borderColor: "#bbf7d0",
-                background: "#f0fdf4",
-              }}
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 16h13l2-5h3l1 5v3h-2" />
-                <path d="M3 16V9h8l3 7" />
-                <circle cx="7" cy="19" r="2" />
-                <circle cx="18" cy="19" r="2" />
-                <path d="M7 9V6h5" />
-              </svg>
-              <span>Browse Machinery</span>
-            </Link>
-          )}
+          ) : null}
 
           {/* ================= Notifications Icon (Bell) ================= */}
           <div className="wz-topbar-popover-wrapper" ref={notifRef}>
