@@ -13,6 +13,16 @@ const filters = [
   { key: "rejected", label: "Rejected / Cancelled" },
 ];
 
+const CANCELLATION_REASONS = [
+  "Weather conditions / Heavy rain or wet soil",
+  "Change of farming schedule or harvest timing",
+  "Found alternative machinery / equipment",
+  "Equipment no longer needed",
+  "Financial or budget constraints",
+  "Personal or family emergency",
+  "Other",
+];
+
 function formatDateDisplay(dateStr) {
   if (!dateStr) return "—";
   const d = new Date(dateStr.includes("T") ? dateStr : `${dateStr}T00:00:00`);
@@ -239,6 +249,9 @@ export default function Applications() {
   // Modal active view tab: 'details' | 'timeline' | 'edit' | 'cancel'
   const [viewModalTab, setViewModalTab] = useState("details");
 
+  // Machinery units image lookup map
+  const [machineryUnitsMap, setMachineryUnitsMap] = useState(new Map());
+
   // Inline Editing state for selected booking
   const [editForm, setEditForm] = useState({
     farmLocation: "",
@@ -249,20 +262,38 @@ export default function Applications() {
   });
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
-  // Cancellation reason state
-  const [cancellationReason, setCancellationReason] = useState("");
+  // Cancellation reason state (dropdown selection + optional custom text for 'Other')
+  const [selectedCancelReason, setSelectedCancelReason] = useState("");
+  const [customCancelReason, setCustomCancelReason] = useState("");
   const [isSubmittingCancellation, setIsSubmittingCancellation] = useState(false);
 
   // GCash Screenshot Lightbox Modal State
   const [previewGcashImage, setPreviewGcashImage] = useState(null);
 
   const fetchApplications = useCallback(async () => {
-    const response = await api(getApplicationsUrl(user?.email));
+    const [response, unitsRes] = await Promise.all([
+      api(getApplicationsUrl(user?.email)),
+      api("/machinery-units"),
+    ]);
     if (response.ok) {
       setApplications(unwrapListResponse(response));
       setError("");
     } else {
       setError(response.data?.error || "Could not load your bookings.");
+    }
+    if (unitsRes.ok) {
+      const unitsList = Array.isArray(unitsRes.data?.data)
+        ? unitsRes.data.data
+        : Array.isArray(unitsRes.data)
+        ? unitsRes.data
+        : [];
+      const map = new Map();
+      unitsList.forEach((u) => {
+        const img = u.imageUrl || (Array.isArray(u.photos) && u.photos[0]) || "";
+        if (u.unitId && img) map.set(u.unitId, img);
+        if (u.name && img && !map.has(u.name)) map.set(u.name, img);
+      });
+      setMachineryUnitsMap(map);
     }
     setLoading(false);
   }, [user?.email]);
@@ -296,7 +327,8 @@ export default function Applications() {
       hectares: app.hectares || 1,
       rescheduleReason: "",
     });
-    setCancellationReason("");
+    setSelectedCancelReason("");
+    setCustomCancelReason("");
     setActionError("");
     setActionSuccess("");
   };
@@ -385,11 +417,25 @@ export default function Applications() {
     const id = selected._id || selected.id;
     const isPending = (selected.status || "Pending").toLowerCase() === "pending";
 
+    if (!selectedCancelReason) {
+      setActionError("Please select a reason for cancelling this booking.");
+      return;
+    }
+    if (selectedCancelReason === "Other" && !customCancelReason.trim()) {
+      setActionError("Please state your specific reason for cancellation.");
+      return;
+    }
+
+    const finalReason = selectedCancelReason === "Other" ? customCancelReason.trim() : selectedCancelReason;
+
     if (isPending) {
       setCancellingId(id);
       setActionError("");
       setActionSuccess("");
-      const response = await api(`/applications/${encodeURIComponent(id)}`, { method: "DELETE" });
+      const response = await api(`/applications/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        body: { reason: finalReason },
+      });
       setCancellingId("");
       if (!response.ok) {
         setActionError(response.data?.error || "Could not cancel this booking request.");
@@ -399,16 +445,12 @@ export default function Applications() {
       setSelected(null);
       fetchApplications();
     } else {
-      if (!cancellationReason.trim()) {
-        setActionError("Please provide a reason for cancelling this approved booking.");
-        return;
-      }
       setIsSubmittingCancellation(true);
       setActionError("");
       setActionSuccess("");
       const response = await api(`/applications/${encodeURIComponent(id)}/request-cancellation`, {
         method: "POST",
-        body: { reason: cancellationReason.trim() },
+        body: { reason: finalReason },
       });
       setIsSubmittingCancellation(false);
       if (!response.ok) {
@@ -574,37 +616,48 @@ export default function Applications() {
                           {app.paymentStatus || "Pending"}
                         </span>
                       </div>
-                      <div style={{ fontSize: "0.72rem", marginTop: "3px" }}>
-                        <span style={{ fontWeight: 600, color: "#334155" }}>{app.paymentMethod || "Cash"}</span>
-                        {app.paymentMethod === "Cash" && app.cashPaymentOption && (
-                          <span style={{ color: "#0284c7", fontWeight: 600 }}> • {app.cashPaymentOption}</span>
-                        )}
-                        {app.paymentMethod === "GCash" && (
-                          app.gcashProof ? (
-                            <button
-                              type="button"
-                              onClick={() => setPreviewGcashImage(app.gcashProof)}
-                              style={{
-                                marginLeft: "4px",
-                                background: "#ecfdf5",
-                                border: "1px solid #a7f3d0",
-                                borderRadius: "4px",
-                                padding: "1px 6px",
-                                color: "#047857",
-                                fontSize: "0.7rem",
-                                fontWeight: 700,
-                                cursor: "pointer",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "3px",
-                              }}
-                              title="Click to view uploaded GCash screenshot"
-                            >
-                              📷 Proof
-                            </button>
-                          ) : (
-                            <span style={{ color: "#f59e0b", fontSize: "0.7rem" }}>• Pending Proof</span>
-                          )
+                      <div style={{ fontSize: "0.74rem", marginTop: "4px", display: "flex", alignItems: "center", flexWrap: "wrap", gap: "4px" }}>
+                        {app.paymentMethod === "GCash" ? (
+                          <>
+                            <span style={{ fontWeight: 700, color: "#0284c7" }}>GCash</span>
+                            {app.gcashProof ? (
+                              <button
+                                type="button"
+                                onClick={() => setPreviewGcashImage(app.gcashProof)}
+                                style={{
+                                  background: "#eff6ff",
+                                  border: "1px solid #bfdbfe",
+                                  borderRadius: "4px",
+                                  padding: "1px 6px",
+                                  color: "#1d4ed8",
+                                  fontSize: "0.7rem",
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                }}
+                                title="Click to view uploaded GCash screenshot"
+                              >
+                                Proof
+                              </button>
+                            ) : (
+                              <span style={{ color: "#d97706", fontSize: "0.7rem", fontWeight: 600 }}>• Pending Proof</span>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <span style={{ fontWeight: 700, color: "#166534" }}>Cash</span>
+                            {app.cashPaymentOption && (
+                              <span
+                                style={{
+                                  color: app.cashPaymentOption === "Upon Return" ? "#d97706" : "#0284c7",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                • {app.cashPaymentOption}
+                              </span>
+                            )}
+                          </>
                         )}
                       </div>
                     </td>
@@ -728,7 +781,16 @@ export default function Applications() {
                   <button
                     type="button"
                     className="wz-action-icon-btn"
-                    onClick={() => setViewModalTab(viewModalTab === "cancel" ? "details" : "cancel")}
+                    onClick={() => {
+                      if (viewModalTab === "cancel") {
+                        setViewModalTab("details");
+                      } else {
+                        setViewModalTab("cancel");
+                        setSelectedCancelReason("");
+                        setCustomCancelReason("");
+                        setActionError("");
+                      }
+                    }}
                     title={(selected.status || "Pending").toLowerCase() === "pending" ? "Cancel Booking" : "Request Cancellation"}
                     aria-label="Cancel Booking"
                     style={{
@@ -770,6 +832,65 @@ export default function Applications() {
                 {selected.machineryModel || selected.equipment}
               </h2>
             </div>
+
+            {/* Machinery Picture Preview (Visible in Details view) */}
+            {viewModalTab === "details" && (
+              <div
+                style={{
+                  marginTop: "6px",
+                  marginBottom: "16px",
+                  borderRadius: "10px",
+                  overflow: "hidden",
+                  border: "1px solid #e2e8f0",
+                  background: "#f8fafc",
+                  maxHeight: "220px",
+                  position: "relative",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+                }}
+              >
+                <img
+                  src={
+                    selected.imageUrl ||
+                    machineryUnitsMap.get(selected.machineryUnitId) ||
+                    machineryUnitsMap.get(selected.equipment) ||
+                    "https://images.unsplash.com/photo-1592982537447-7440770cbfc9?auto=format&fit=crop&w=800&q=80"
+                  }
+                  alt={selected.machineryModel || selected.equipment}
+                  style={{
+                    width: "100%",
+                    height: "210px",
+                    objectFit: "cover",
+                    display: "block",
+                  }}
+                  onError={(e) => {
+                    e.currentTarget.src = "/images/kimpc logo.png";
+                    e.currentTarget.style.objectFit = "contain";
+                    e.currentTarget.style.padding = "24px";
+                    e.currentTarget.style.height = "160px";
+                  }}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: "10px",
+                    left: "12px",
+                    background: "rgba(15, 23, 42, 0.78)",
+                    color: "#ffffff",
+                    padding: "4px 10px",
+                    borderRadius: "6px",
+                    fontSize: "0.78rem",
+                    fontWeight: 600,
+                    backdropFilter: "blur(4px)",
+                    boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
+                  }}
+                >
+                  {selected.machineryModel || selected.equipment}
+                </div>
+              </div>
+            )}
 
             {/* Dynamic Modal Body */}
             {viewModalTab === "details" && (
@@ -814,8 +935,18 @@ export default function Applications() {
                   <dt>Total Payment</dt>
                   <dd style={{ fontWeight: 700, color: "#166534" }}>
                     ₱{Number(selected.totalAmount || (selected.ratePerHectare || 2500) * (selected.hectares || 1)).toLocaleString()}
-                    <span style={{ fontSize: "0.78rem", fontWeight: 500, color: "#64748b", marginLeft: "6px" }}>
-                      ({selected.paymentStatus || "Pending"} • {selected.paymentMethod || "Cash"})
+                    <span style={{ fontSize: "0.78rem", fontWeight: 600, marginLeft: "6px" }}>
+                      ({selected.paymentStatus === "Paid" ? (
+                        <span style={{ color: "#059669" }}>Paid</span>
+                      ) : (
+                        <span style={{ color: "#d97706" }}>{selected.paymentStatus || "Pending"}</span>
+                      )}
+                      {" • "}
+                      {selected.paymentMethod === "GCash" ? (
+                        <span style={{ color: "#0284c7" }}>GCash</span>
+                      ) : (
+                        <span style={{ color: "#166534" }}>Cash</span>
+                      )})
                     </span>
                   </dd>
                 </div>
@@ -823,15 +954,29 @@ export default function Applications() {
                   <dt>Payment Mode &amp; Timing</dt>
                   <dd>
                     {selected.paymentMethod === "GCash" ? (
-                      <span style={{ color: "#0284c7", fontWeight: 600 }}>GCash (0926 463 8983 - KIMPC)</span>
+                      <div>
+                        <span style={{ color: "#0284c7", fontWeight: 700 }}>GCash</span>
+                        <span style={{ color: "#0369a1", fontWeight: 600, marginLeft: "6px" }}>(0926 463 8983 - KIMPC)</span>
+                      </div>
                     ) : (
-                      <span>Cash • {selected.cashPaymentOption === "Upon Return" ? "Upon Return" : "Upon Pickup"}</span>
+                      <div>
+                        <span style={{ color: "#166534", fontWeight: 700 }}>Cash</span>
+                        <span style={{ color: "#64748b", margin: "0 5px" }}>•</span>
+                        <span
+                          style={{
+                            color: selected.cashPaymentOption === "Upon Return" ? "#d97706" : "#0284c7",
+                            fontWeight: 700,
+                          }}
+                        >
+                          {selected.cashPaymentOption === "Upon Return" ? "Upon Return" : "Upon Pickup"}
+                        </span>
+                      </div>
                     )}
                   </dd>
                 </div>
                 {selected.paymentMethod === "GCash" && (
                   <div style={{ gridColumn: "1 / -1", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "10px 14px" }}>
-                    <dt style={{ color: "#334155", marginBottom: "6px" }}>GCash Payment Proof Screenshot</dt>
+                    <dt style={{ color: "#0284c7", marginBottom: "6px", fontWeight: 600 }}>GCash Payment Proof</dt>
                     <dd>
                       {selected.gcashProof ? (
                         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -842,18 +987,18 @@ export default function Applications() {
                             style={{ width: "65px", height: "65px", objectFit: "cover", borderRadius: "6px", border: "1px solid #cbd5e1", cursor: "pointer" }}
                           />
                           <div>
-                            <p style={{ margin: "0 0 4px", fontSize: "0.8rem", color: "#059669", fontWeight: 600 }}>✓ Screenshot Uploaded</p>
+                            <p style={{ margin: "0 0 4px", fontSize: "0.8rem", color: "#059669", fontWeight: 600 }}>Proof Uploaded</p>
                             <button
                               type="button"
                               onClick={() => setPreviewGcashImage(selected.gcashProof)}
-                              style={{ background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "4px", padding: "3px 8px", fontSize: "0.72rem", cursor: "pointer" }}
+                              style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "4px", padding: "3px 10px", fontSize: "0.74rem", color: "#1d4ed8", fontWeight: 700, cursor: "pointer" }}
                             >
-                              Click to View Screenshot
+                              View Proof Screenshot
                             </button>
                           </div>
                         </div>
                       ) : (
-                        <span style={{ fontSize: "0.8rem", color: "#f59e0b" }}>No GCash screenshot uploaded.</span>
+                        <span style={{ fontSize: "0.8rem", color: "#d97706", fontWeight: 600 }}>No GCash proof uploaded yet.</span>
                       )}
                     </dd>
                   </div>
@@ -1025,33 +1170,76 @@ export default function Applications() {
             {viewModalTab === "cancel" && (
               <div style={{ marginTop: "14px" }}>
                 {(selected.status || "Pending").toLowerCase() === "pending" ? (
-                  <div style={{ background: "#fef2f2", border: "1px solid #fecdd3", borderRadius: "8px", padding: "16px", color: "#991b1b" }}>
-                    <strong style={{ fontSize: "0.95rem", display: "block", marginBottom: "6px" }}>
+                  <div style={{ background: "#fef2f2", border: "1px solid #fecdd3", borderRadius: "8px", padding: "14px 16px", color: "#991b1b", marginBottom: "16px" }}>
+                    <strong style={{ fontSize: "0.95rem", display: "block", marginBottom: "4px" }}>
                       Cancel this pending booking request?
                     </strong>
                     <p style={{ margin: 0, fontSize: "0.85rem", color: "#b91c1c" }}>
-                      Your reservation for <strong>{selected.machineryModel || selected.equipment}</strong> from {formatBookingDateRange(selected.startDate, selected.endDate)} will be cancelled immediately.
+                      Your reservation for <strong>{selected.machineryModel || selected.equipment}</strong> ({formatBookingDateRange(selected.startDate, selected.endDate)}) will be cancelled immediately.
                     </p>
                   </div>
                 ) : (
-                  <div>
-                    <div style={{ background: "#fffbeb", border: "1px solid #fef3c7", borderRadius: "8px", padding: "12px", marginBottom: "14px", fontSize: "0.84rem", color: "#92400e" }}>
-                      ⚠️ <strong>Manager Approval Required:</strong> Because this booking was already approved by cooperative management, your cancellation request will be submitted to the manager to review and grant.
-                    </div>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", marginBottom: "6px", color: "#0f172a" }}>
-                        Reason for Cancellation
-                      </label>
-                      <textarea
-                        required
-                        rows="3"
-                        maxLength={500}
-                        placeholder="Please describe why you need to cancel this approved booking (e.g. weather delay, field condition, change of harvest plan)..."
-                        value={cancellationReason}
-                        onChange={(e) => setCancellationReason(e.target.value)}
-                        style={{ width: "100%", padding: "10px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
-                      />
-                    </div>
+                  <div style={{ background: "#fffbeb", border: "1px solid #fef3c7", borderRadius: "8px", padding: "12px 14px", marginBottom: "16px", fontSize: "0.84rem", color: "#92400e" }}>
+                    ⚠️ <strong>Manager Approval Required:</strong> Because this booking was already approved by cooperative management, your cancellation request will be submitted to the manager to review and approve.
+                  </div>
+                )}
+
+                {/* Reason Selection */}
+                <div style={{ marginBottom: "14px" }}>
+                  <label style={{ display: "block", fontSize: "0.84rem", fontWeight: "600", marginBottom: "6px", color: "#0f172a" }}>
+                    Select Reason for Cancellation <span style={{ color: "#dc2626" }}>*</span>
+                  </label>
+                  <select
+                    required
+                    value={selectedCancelReason}
+                    onChange={(e) => {
+                      setSelectedCancelReason(e.target.value);
+                      if (e.target.value !== "Other") {
+                        setCustomCancelReason("");
+                      }
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "9px 12px",
+                      borderRadius: "8px",
+                      border: "1px solid #cbd5e1",
+                      fontSize: "0.88rem",
+                      background: "#ffffff",
+                      color: "#0f172a",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <option value="">-- Choose a reason --</option>
+                    {CANCELLATION_REASONS.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Other: Custom Reason Input */}
+                {selectedCancelReason === "Other" && (
+                  <div style={{ marginBottom: "14px" }}>
+                    <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", marginBottom: "6px", color: "#0f172a" }}>
+                      Please State Your Reason <span style={{ color: "#dc2626" }}>*</span>
+                    </label>
+                    <textarea
+                      required
+                      rows="3"
+                      maxLength={500}
+                      placeholder="Please describe why you need to cancel this booking..."
+                      value={customCancelReason}
+                      onChange={(e) => setCustomCancelReason(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "10px 12px",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.88rem",
+                        boxSizing: "border-box",
+                      }}
+                    />
                   </div>
                 )}
               </div>

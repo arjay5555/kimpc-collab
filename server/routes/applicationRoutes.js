@@ -62,6 +62,31 @@ router.get("/applications", optionalAuthentication, async (req, res) => {
       });
     }
 
+    // Ensure machinery imageUrl is populated from MachineryUnit if missing
+    const unitIds = [...new Set(applications.filter((a) => !a.imageUrl && a.machineryUnitId).map((a) => a.machineryUnitId))];
+    const equipNames = [...new Set(applications.filter((a) => !a.imageUrl && a.equipment).map((a) => a.equipment))];
+    if (unitIds.length > 0 || equipNames.length > 0) {
+      const units = await MachineryUnit.find({
+        $or: [
+          ...(unitIds.length > 0 ? [{ unitId: { $in: unitIds } }] : []),
+          ...(equipNames.length > 0 ? [{ name: { $in: equipNames } }] : []),
+        ],
+      }).select("unitId name imageUrl photos").lean();
+
+      const unitMap = new Map();
+      units.forEach((u) => {
+        const img = u.imageUrl || (Array.isArray(u.photos) && u.photos[0]) || "";
+        if (u.unitId && img) unitMap.set(u.unitId, img);
+        if (u.name && img && !unitMap.has(u.name)) unitMap.set(u.name, img);
+      });
+
+      applications.forEach((a) => {
+        if (!a.imageUrl) {
+          a.imageUrl = unitMap.get(a.machineryUnitId) || unitMap.get(a.equipment) || "";
+        }
+      });
+    }
+
     res.json(applications);
   } catch (error) {
     console.error("Error fetching applications:", error);
@@ -197,6 +222,7 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
       equipment,
       machineryUnitId: machineryUnitId || targetUnit?.unitId || "",
       machineryModel,
+      imageUrl: targetUnit?.imageUrl || (Array.isArray(targetUnit?.photos) && targetUnit?.photos[0]) || "",
       assignedDriver,
       driverPhone,
       startDate,
@@ -292,7 +318,19 @@ router.get("/applications/:id", optionalAuthentication, async (req, res) => {
       });
     }
     if (!app) return fail(res, 404, "Application not found.");
-    res.json(app);
+    const appObj = app.toObject ? app.toObject() : app;
+    if (!appObj.imageUrl && (appObj.machineryUnitId || appObj.equipment)) {
+      const u = await MachineryUnit.findOne({
+        $or: [
+          ...(appObj.machineryUnitId ? [{ unitId: appObj.machineryUnitId }] : []),
+          ...(appObj.equipment ? [{ name: appObj.equipment }] : []),
+        ],
+      }).select("imageUrl photos").lean();
+      if (u) {
+        appObj.imageUrl = u.imageUrl || (Array.isArray(u.photos) && u.photos[0]) || "";
+      }
+    }
+    res.json(appObj);
   } catch (error) {
     console.error("Error fetching application:", error);
     res.status(500).json({ error: "Failed to fetch application." });
