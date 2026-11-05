@@ -2205,21 +2205,23 @@ export default function EquipmentCatalog() {
         searchPlaceholder="Search equipment by name, brand, or model..."
       />
 
-      {/* Catalog Search & Category Filter */}
-      <div className="member-catalog-tools">
-        <label className="member-search-field">
-          <span aria-hidden="true">⌕</span>
-          <input
-            aria-label="Search equipment"
-            placeholder="Search machinery, brand, or model"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </label>
+      {/* Category Filter */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
         <select
           aria-label="Filter by category"
           value={category}
           onChange={(event) => setCategory(event.target.value)}
+          style={{
+            minWidth: "180px",
+            minHeight: "40px",
+            padding: "0 12px",
+            borderRadius: "8px",
+            border: "1px solid #cbd5e1",
+            background: "#ffffff",
+            color: "#0f172a",
+            fontSize: "0.85rem",
+            fontWeight: 600,
+          }}
         >
           {categories.map((option) => (
             <option key={option}>{option}</option>

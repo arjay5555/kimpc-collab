@@ -241,6 +241,7 @@ export default function Applications() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("all");
+  const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
   const [cancellingId, setCancellingId] = useState("");
   const [actionError, setActionError] = useState("");
@@ -308,13 +309,32 @@ export default function Applications() {
     return applications.filter((application) => {
       const status = (application.status || "Pending").toLowerCase();
       const isCancelPending = status === "cancellation requested" || application.cancellationRequested;
-      if (filter === "pending") return status === "pending" && !isCancelPending;
-      if (filter === "approved") return ["approved", "checked-out", "ongoing"].includes(status) && !isCancelPending;
-      if (filter === "completed") return status === "returned" || status === "completed";
-      if (filter === "rejected") return ["rejected", "cancelled", "voided"].includes(status) || isCancelPending;
+      if (filter === "pending" && (status !== "pending" || isCancelPending)) return false;
+      if (filter === "approved" && (!["approved", "checked-out", "ongoing"].includes(status) || isCancelPending)) return false;
+      if (filter === "completed" && !(status === "returned" || status === "completed")) return false;
+      if (filter === "rejected" && (!["rejected", "cancelled", "voided"].includes(status) && !isCancelPending)) return false;
+
+      if (search && search.trim()) {
+        const q = search.trim().toLowerCase();
+        const displayId = (application.displayId || (application._id ? `APP-${String(application._id).slice(-6)}` : "")).toLowerCase();
+        const machinery = (application.machineryModel || application.equipment || "").toLowerCase();
+        const driver = (application.driverName || application.driverOption || "").toLowerCase();
+        const location = (application.farmLocation || "").toLowerCase();
+        const payment = (application.paymentMethod || "").toLowerCase();
+        const statusText = status;
+        const matches =
+          displayId.includes(q) ||
+          machinery.includes(q) ||
+          driver.includes(q) ||
+          location.includes(q) ||
+          payment.includes(q) ||
+          statusText.includes(q);
+        if (!matches) return false;
+      }
+
       return true;
     });
-  }, [applications, filter]);
+  }, [applications, filter, search]);
 
   // Open Unified View Modal
   const handleOpenViewModal = (app) => {
@@ -465,7 +485,12 @@ export default function Applications() {
 
   return (
     <div className="member-page" style={{ width: "100%", maxWidth: "1400px", margin: "0 auto", paddingBottom: "40px" }}>
-      <MemberTopbar title="My Bookings" />
+      <MemberTopbar
+        title="My Bookings"
+        searchQuery={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search bookings, machinery, driver..."
+      />
 
       {/* Top Filter Bar (No outside history icon) */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
@@ -526,11 +551,27 @@ export default function Applications() {
       ) : visibleApplications.length === 0 ? (
         <div className="member-empty-state" style={{ background: "#ffffff", borderRadius: "12px", padding: "40px 20px", textAlign: "center" }}>
           <span className="member-empty-icon" aria-hidden="true" style={{ fontSize: "2rem", display: "block", marginBottom: "10px" }}>▧</span>
-          <strong style={{ fontSize: "1.05rem", color: "#0f172a" }}>No bookings found in this view</strong>
-          <p style={{ color: "#64748b", margin: "6px 0 16px" }}>Submitted equipment booking requests will appear here with complete details and timeline.</p>
-          <Link className="member-button member-button-primary" to="/member/book" style={{ display: "inline-block", textDecoration: "none" }}>
-            Browse Machinery
-          </Link>
+          <strong style={{ fontSize: "1.05rem", color: "#0f172a" }}>
+            {search.trim() ? "No bookings match your search" : "No bookings found in this view"}
+          </strong>
+          <p style={{ color: "#64748b", margin: "6px 0 16px" }}>
+            {search.trim()
+              ? `No bookings found for "${search}". Try searching for a different keyword or clear the search.`
+              : "Submitted equipment booking requests will appear here with complete details and timeline."}
+          </p>
+          {search.trim() ? (
+            <button
+              type="button"
+              className="member-button member-button-outline"
+              onClick={() => setSearch("")}
+            >
+              Clear Search
+            </button>
+          ) : (
+            <Link className="member-button member-button-primary" to="/member/book" style={{ display: "inline-block", textDecoration: "none" }}>
+              Browse Machinery
+            </Link>
+          )}
         </div>
       ) : (
         <div className="wz-table-responsive" style={{ background: "#ffffff", borderRadius: "12px", border: "1px solid #e2e8f0", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", overflowX: "auto" }}>

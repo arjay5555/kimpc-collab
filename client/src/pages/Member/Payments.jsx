@@ -119,80 +119,140 @@ export default function MemberPayments() {
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: "14px",
+          gap: "16px",
           marginBottom: "20px",
         }}
       >
-        {/* Total Paid */}
+        {/* Card 1: Total Paid */}
         <div
           style={{
             background: "#ffffff",
-            padding: "16px 20px",
-            borderRadius: "12px",
+            borderRadius: "14px",
             border: "1px solid #e2e8f0",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+            padding: "16px 20px",
+            display: "flex",
+            alignItems: "center",
+            gap: "14px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+          <div
+            style={{
+              width: "44px",
+              height: "44px",
+              borderRadius: "10px",
+              background: "#ecfdf5",
+              color: "#166534",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+              <polyline points="22 4 12 14.01 9 11.01" />
+            </svg>
+          </div>
+          <div>
+            <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
               Total Paid
-            </span>
-            <span style={{ fontSize: "1.2rem" }}>✅</span>
+            </div>
+            <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "#166534", lineHeight: 1.2 }}>
+              ₱{stats.totalPaid.toLocaleString()}
+            </div>
           </div>
-          <div style={{ fontSize: "1.5rem", fontWeight: 900, color: "#166534", marginTop: "4px" }}>
-            ₱{stats.totalPaid.toLocaleString()}
-          </div>
-          <span style={{ fontSize: "0.74rem", color: "#64748b" }}>
-            {stats.paidCount} settled invoice{stats.paidCount === 1 ? "" : "s"}
-          </span>
         </div>
 
-        {/* Pending Due */}
+        {/* Card 2: Pending Balance */}
         <div
           style={{
             background: "#ffffff",
-            padding: "16px 20px",
-            borderRadius: "12px",
+            borderRadius: "14px",
             border: "1px solid #e2e8f0",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+            padding: "16px 20px",
+            display: "flex",
+            alignItems: "center",
+            gap: "14px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+          <div
+            style={{
+              width: "44px",
+              height: "44px",
+              borderRadius: "10px",
+              background: stats.pendingDue > 0 ? "#fef3c7" : "#ecfdf5",
+              color: stats.pendingDue > 0 ? "#b45309" : "#166534",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+          </div>
+          <div>
+            <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
               Pending Balance
-            </span>
-            <span style={{ fontSize: "1.2rem" }}>⏳</span>
+            </div>
+            <div
+              style={{
+                fontSize: "1.35rem",
+                fontWeight: 800,
+                color: stats.pendingDue > 0 ? "#b45309" : "#15803d",
+                lineHeight: 1.2,
+              }}
+            >
+              ₱{stats.pendingDue.toLocaleString()}
+            </div>
           </div>
-          <div style={{ fontSize: "1.5rem", fontWeight: 900, color: "#d97706", marginTop: "4px" }}>
-            ₱{stats.pendingDue.toLocaleString()}
-          </div>
-          <span style={{ fontSize: "0.74rem", color: "#64748b" }}>
-            {stats.pendingCount} awaiting settlement
-          </span>
         </div>
 
-        {/* Total Bookings / Invoices */}
+        {/* Card 3: Total Invoices */}
         <div
           style={{
             background: "#ffffff",
-            padding: "16px 20px",
-            borderRadius: "12px",
+            borderRadius: "14px",
             border: "1px solid #e2e8f0",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+            padding: "16px 20px",
+            display: "flex",
+            alignItems: "center",
+            gap: "14px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+          <div
+            style={{
+              width: "44px",
+              height: "44px",
+              borderRadius: "10px",
+              background: "#eff6ff",
+              color: "#1d4ed8",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+            </svg>
+          </div>
+          <div>
+            <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
               Total Invoices
-            </span>
-            <span style={{ fontSize: "1.2rem" }}>📄</span>
+            </div>
+            <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "#0f172a", lineHeight: 1.2 }}>
+              {applications.length}
+            </div>
           </div>
-          <div style={{ fontSize: "1.5rem", fontWeight: 900, color: "#0f172a", marginTop: "4px" }}>
-            {applications.length}
-          </div>
-          <span style={{ fontSize: "0.74rem", color: "#64748b" }}>
-            Rental transactions on record
-          </span>
         </div>
       </div>
 

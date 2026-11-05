@@ -22,6 +22,11 @@ export default function MemberTopbar({
   const [notifOpen, setNotifOpen] = useState(false);
   const [hasUnreadNotifs, setHasUnreadNotifs] = useState(false);
 
+  // Search expansion state
+  const [isSearchExpanded, setIsSearchExpanded] = useState(Boolean(searchQuery));
+  const searchInputRef = useRef(null);
+  const searchContainerRef = useRef(null);
+
   const notifRef = useRef(null);
 
   // Member notifications state
@@ -127,10 +132,32 @@ export default function MemberTopbar({
       if (notifRef.current && !notifRef.current.contains(event.target)) {
         setNotifOpen(false);
       }
+      if (
+        isSearchExpanded &&
+        !searchQuery &&
+        searchContainerRef.current &&
+        !searchContainerRef.current.contains(event.target)
+      ) {
+        setIsSearchExpanded(false);
+      }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  }, [isSearchExpanded, searchQuery]);
+
+  // Expand if searchQuery is updated externally
+  useEffect(() => {
+    if (searchQuery) {
+      setIsSearchExpanded(true);
+    }
+  }, [searchQuery]);
+
+  // Focus input when expanded
+  useEffect(() => {
+    if (isSearchExpanded && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [isSearchExpanded]);
 
   const handleOpenSettings = (tab = "account") => {
     setSettingsInitialTab(tab);
@@ -159,36 +186,99 @@ export default function MemberTopbar({
         <div className="wz-topbar-actions">
           {/* Optional Search */}
           {onSearchChange ? (
-            <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-              <input
-                type="text"
-                placeholder={searchPlaceholder}
-                value={searchQuery}
-                onChange={(e) => onSearchChange(e.target.value)}
+            isSearchExpanded ? (
+              <div
+                ref={searchContainerRef}
                 style={{
-                  padding: "8px 14px 8px 34px",
-                  fontSize: "0.84rem",
-                  borderRadius: "20px",
-                  border: "1px solid var(--wz-border, #cbd5e1)",
-                  background: "var(--wz-card-bg, #ffffff)",
-                  color: "var(--wz-text, #0f172a)",
-                  outline: "none",
-                  width: "220px",
+                  position: "relative",
+                  display: "flex",
+                  alignItems: "center",
+                  animation: "fadeIn 0.15s ease-out",
                 }}
-              />
-              <svg
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#64748b"
-                strokeWidth="2.5"
-                style={{ position: "absolute", left: "11px", pointerEvents: "none" }}
               >
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-            </div>
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  placeholder={searchPlaceholder}
+                  value={searchQuery}
+                  onChange={(e) => onSearchChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
+                      if (!searchQuery) {
+                        setIsSearchExpanded(false);
+                      } else {
+                        onSearchChange("");
+                      }
+                    }
+                  }}
+                  style={{
+                    padding: "8px 30px 8px 34px",
+                    fontSize: "0.84rem",
+                    borderRadius: "20px",
+                    border: "1px solid var(--wz-border, #cbd5e1)",
+                    background: "var(--wz-card-bg, #ffffff)",
+                    color: "var(--wz-text, #0f172a)",
+                    outline: "none",
+                    width: "230px",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                  }}
+                />
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#64748b"
+                  strokeWidth="2.5"
+                  style={{ position: "absolute", left: "11px", pointerEvents: "none" }}
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <button
+                  type="button"
+                  title="Close search"
+                  aria-label="Close search"
+                  onClick={() => {
+                    onSearchChange("");
+                    setIsSearchExpanded(false);
+                  }}
+                  style={{
+                    position: "absolute",
+                    right: "8px",
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    color: "#94a3b8",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "3px",
+                    borderRadius: "50%",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "#334155")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "#94a3b8")}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="wz-icon-btn"
+                title="Search"
+                aria-label="Search"
+                onClick={() => setIsSearchExpanded(true)}
+              >
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+              </button>
+            )
           ) : null}
 
           {/* ================= Notifications Icon (Bell) ================= */}
