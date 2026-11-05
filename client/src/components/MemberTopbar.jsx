@@ -362,60 +362,6 @@ export default function MemberTopbar({
               </div>
             )}
           </div>
-
-          {/* ================= Settings Icon (Gear) ================= */}
-          <button
-            type="button"
-            className="wz-icon-btn"
-            title="Account, Security & Appearance Settings"
-            aria-label="Settings"
-            onClick={() => handleOpenSettings("account")}
-          >
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-          </button>
-
-          {/* ================= Profile Pill with Dropdown ================= */}
-          <div className="wz-profile-wrapper">
-            <div
-              className="wz-user-pill"
-              onClick={() => setProfileOpen((p) => !p)}
-              title="Click to view personal profile, change password, and log out"
-              style={{ cursor: "pointer" }}
-            >
-              <div
-                className="wz-avatar"
-                style={{
-                  background: "#15803d",
-                  color: "#ffffff",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontWeight: 800,
-                  fontSize: "0.92rem",
-                }}
-              >
-                {user?.fullName ? user.fullName[0].toUpperCase() : "M"}
-              </div>
-              <div className="wz-user-info">
-                <span className="wz-user-name">{user?.fullName || "Member"}</span>
-                <span className="wz-user-role" style={{ color: "#15803d", fontWeight: 600 }}>Member</span>
-              </div>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginLeft: "4px", color: "#64748b" }}>
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-            </div>
-
-            {/* Profile Dropdown Component */}
-            <ProfileDropdown
-              isOpen={profileOpen}
-              onClose={() => setProfileOpen(false)}
-              onOpenSettings={() => handleOpenSettings("account")}
-              onOpenChangePassword={() => handleOpenSettings("account")}
-            />
-          </div>
         </div>
       </header>
 

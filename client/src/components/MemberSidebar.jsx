@@ -10,6 +10,7 @@ export default function MemberSidebar() {
   const isApplicationsActive =
     currentPath === "/applications" || currentPath === "/my-bookings" || currentPath === "/member/history";
   const isPaymentsActive = currentPath === "/member/payments" || currentPath === "/payments";
+  const isProfileActive = currentPath === "/member/settings" || currentPath === "/member/profile";
 
   return (
     <>
@@ -79,6 +80,15 @@ export default function MemberSidebar() {
             </svg>
             <span>Payments</span>
           </Link>
+
+          {/* Profile */}
+          <Link to="/member/settings" className={`wz-nav-item ${isProfileActive ? "active" : ""}`}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+            <span>Profile</span>
+          </Link>
         </nav>
       </aside>
 
@@ -120,6 +130,14 @@ export default function MemberSidebar() {
             <line x1="2" y1="10" x2="22" y2="10" />
           </svg>
           <span>Payments</span>
+        </Link>
+
+        <Link to="/member/settings" className={`member-bottom-nav-item ${isProfileActive ? "active" : ""}`}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+          <span>Profile</span>
         </Link>
       </nav>
     </>

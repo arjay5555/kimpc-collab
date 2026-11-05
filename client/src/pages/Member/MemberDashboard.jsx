@@ -511,7 +511,7 @@ export default function MemberDashboard() {
                   }}
                 />
 
-                <div style={{ flex: 1, minWidth: "200px" }}>
+                <div style={{ flex: 1, minWidth: 0, width: "100%" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "12px" }}>
                     <span style={{ fontSize: "1.02rem", fontWeight: 800, color: "#0f172a" }}>
                       {nextRental.machineryModel || nextRental.equipment} • {nextRental.machineryUnitId || nextRental.displayId || "TR-001"}
@@ -756,8 +756,8 @@ export default function MemberDashboard() {
 
             {/* Table */}
             {pendingList.length > 0 ? (
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.84rem" }}>
+              <div style={{ overflowX: "auto", width: "100%", WebkitOverflowScrolling: "touch" }}>
+                <table style={{ width: "100%", minWidth: "340px", borderCollapse: "collapse", fontSize: "0.84rem" }}>
                   <thead>
                     <tr style={{ background: "#f1f5f9" }}>
                       <th style={{ padding: "8px 10px", textAlign: "left", color: "#475569", fontWeight: 700, borderRadius: "6px 0 0 6px" }}>

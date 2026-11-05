@@ -867,6 +867,7 @@ export default function Applications() {
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) setSelected(null);
           }}
+          style={{ zIndex: 10001 }}
         >
           <section
             className="member-modal"
@@ -875,132 +876,219 @@ export default function Applications() {
             aria-labelledby="application-detail-title"
             style={{ maxWidth: "720px", width: "95%", maxHeight: "90vh", overflowY: "auto", position: "relative" }}
           >
-            {/* Top Right: Close X, and directly below it the History, Edit, Cancel icons */}
-            <div style={{ position: "absolute", top: "14px", right: "16px", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px", zIndex: 10 }}>
+            {/* Header: Title & Sleek Circular Close Button */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                gap: "12px",
+                marginBottom: "14px",
+              }}
+            >
+              <div>
+                <p
+                  className="member-eyebrow"
+                  style={{
+                    margin: "0 0 4px",
+                    letterSpacing: "0.06em",
+                    color: "#64748b",
+                    fontSize: "0.74rem",
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {selected.displayId || (selected._id ? `BK-${String(selected._id).slice(-4).toUpperCase()}` : "BOOKING DETAILS")}
+                </p>
+                <h2
+                  id="application-detail-title"
+                  style={{ margin: 0, fontSize: "1.25rem", fontWeight: 800, color: "#0f172a" }}
+                >
+                  {selected.machineryModel || selected.equipment}
+                </h2>
+              </div>
+
               <button
-                className="member-modal-close"
                 type="button"
                 aria-label="Close details"
                 onClick={() => setSelected(null)}
-                style={{ position: "static", background: "#f1f5f9", border: "none", borderRadius: "50%", width: "30px", height: "30px", fontSize: "1.1rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#64748b" }}
+                style={{
+                  width: "34px",
+                  height: "34px",
+                  borderRadius: "50%",
+                  border: "1px solid #e2e8f0",
+                  background: "#f8fafc",
+                  color: "#64748b",
+                  fontSize: "1.1rem",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  transition: "all 0.15s ease",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "#fee2e2";
+                  e.currentTarget.style.color = "#dc2626";
+                  e.currentTarget.style.borderColor = "#fecdd3";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "#f8fafc";
+                  e.currentTarget.style.color = "#64748b";
+                  e.currentTarget.style.borderColor = "#e2e8f0";
+                }}
               >
                 ✕
               </button>
+            </div>
 
-              {/* Below X: Action Icons (Timeline, Edit, Cancel) - No text labels */}
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                {/* 1. Timeline Icon */}
+            {/* Clean Segmented Tab Strip */}
+            <div
+              style={{
+                display: "flex",
+                gap: "8px",
+                padding: "4px",
+                background: "#f1f5f9",
+                borderRadius: "10px",
+                marginBottom: "18px",
+                overflowX: "auto",
+                WebkitOverflowScrolling: "touch",
+                scrollbarWidth: "none",
+              }}
+            >
+              {/* Tab 1: Details */}
+              <button
+                type="button"
+                onClick={() => setViewModalTab("details")}
+                style={{
+                  flex: "1 0 auto",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                  padding: "8px 14px",
+                  borderRadius: "7px",
+                  border: "none",
+                  fontSize: "0.82rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  background: viewModalTab === "details" ? "#ffffff" : "transparent",
+                  color: viewModalTab === "details" ? "#0f172a" : "#64748b",
+                  boxShadow: viewModalTab === "details" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                  transition: "all 0.15s ease",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                  <polyline points="10 9 9 9 8 9" />
+                </svg>
+                <span>Details</span>
+              </button>
+
+              {/* Tab 2: Timeline */}
+              <button
+                type="button"
+                onClick={() => setViewModalTab("timeline")}
+                style={{
+                  flex: "1 0 auto",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                  padding: "8px 14px",
+                  borderRadius: "7px",
+                  border: "none",
+                  fontSize: "0.82rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  background: viewModalTab === "timeline" ? "#ffffff" : "transparent",
+                  color: viewModalTab === "timeline" ? "#15803d" : "#64748b",
+                  boxShadow: viewModalTab === "timeline" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                  transition: "all 0.15s ease",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 12a9 9 0 1 0 2.64-6.36L3 8" />
+                  <path d="M3 3v5h5" />
+                  <path d="M12 7v5l3 2" />
+                </svg>
+                <span>Timeline</span>
+              </button>
+
+              {/* Tab 3: Edit (only if Pending & not cancellationRequested) */}
+              {(selected.status || "Pending").toLowerCase() === "pending" && !selected.cancellationRequested && (
                 <button
                   type="button"
-                  className="wz-action-icon-btn"
-                  onClick={() => setViewModalTab(viewModalTab === "timeline" ? "details" : "timeline")}
-                  title="Timeline"
-                  aria-label="Timeline"
+                  onClick={() => setViewModalTab("edit")}
                   style={{
-                    width: "32px",
-                    height: "32px",
-                    borderRadius: "6px",
-                    border: viewModalTab === "timeline" ? "2px solid #16a34a" : "1px solid #cbd5e1",
-                    background: viewModalTab === "timeline" ? "#dcfce7" : "#ffffff",
-                    color: viewModalTab === "timeline" ? "#166534" : "#475569",
-                    cursor: "pointer",
+                    flex: "1 0 auto",
                     display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                    gap: "6px",
+                    padding: "8px 14px",
+                    borderRadius: "7px",
+                    border: "none",
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    background: viewModalTab === "edit" ? "#ffffff" : "transparent",
+                    color: viewModalTab === "edit" ? "#1d4ed8" : "#64748b",
+                    boxShadow: viewModalTab === "edit" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                    transition: "all 0.15s ease",
+                    whiteSpace: "nowrap",
                   }}
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M3 12a9 9 0 1 0 2.64-6.36L3 8" />
-                    <path d="M3 3v5h5" />
-                    <path d="M12 7v5l3 2" />
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
                   </svg>
+                  <span>Edit Booking</span>
                 </button>
+              )}
 
-                {/* 2. Edit / Reschedule Icon (only for Pending bookings) */}
-                {(selected.status || "Pending").toLowerCase() === "pending" && !selected.cancellationRequested && (
-                  <button
-                    type="button"
-                    className="wz-action-icon-btn"
-                    onClick={() => setViewModalTab(viewModalTab === "edit" ? "details" : "edit")}
-                    title="Edit / Reschedule Booking"
-                    aria-label="Edit Booking"
-                    style={{
-                      width: "32px",
-                      height: "32px",
-                      borderRadius: "6px",
-                      border: viewModalTab === "edit" ? "2px solid #2563eb" : "1px solid #cbd5e1",
-                      background: viewModalTab === "edit" ? "#eff6ff" : "#ffffff",
-                      color: viewModalTab === "edit" ? "#1d4ed8" : "#475569",
-                      cursor: "pointer",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
-                    }}
-                  >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 20h9" />
-                      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-                    </svg>
-                  </button>
-                )}
-
-                {/* 3. Cancel Icon (for Pending or Approved bookings) */}
-                {!selected.cancellationRequested && !["cancelled", "rejected", "returned"].includes((selected.status || "").toLowerCase()) && (
-                  <button
-                    type="button"
-                    className="wz-action-icon-btn"
-                    onClick={() => {
-                      if (viewModalTab === "cancel") {
-                        setViewModalTab("details");
-                      } else {
-                        setViewModalTab("cancel");
-                        setSelectedCancelReason("");
-                        setCustomCancelReason("");
-                        setActionError("");
-                      }
-                    }}
-                    title={(selected.status || "Pending").toLowerCase() === "pending" ? "Cancel Booking" : "Request Cancellation"}
-                    aria-label="Cancel Booking"
-                    style={{
-                      width: "32px",
-                      height: "32px",
-                      borderRadius: "6px",
-                      border: viewModalTab === "cancel" ? "2px solid #dc2626" : "1px solid #cbd5e1",
-                      background: viewModalTab === "cancel" ? "#fef2f2" : "#ffffff",
-                      color: viewModalTab === "cancel" ? "#b91c1c" : "#475569",
-                      cursor: "pointer",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
-                    }}
-                  >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="12" r="10" />
-                      <line x1="15" y1="9" x2="9" y2="15" />
-                      <line x1="9" y1="9" x2="15" y2="15" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Modal Heading (NO colored card or colored pill for Status/Booking ID) */}
-            <div style={{ marginBottom: "16px", paddingRight: "140px" }}>
-              <p className="member-eyebrow" style={{ margin: "0 0 4px", letterSpacing: "0.06em", color: "#64748b" }}>
-                {viewModalTab === "edit"
-                  ? "EDIT / RESCHEDULE BOOKING"
-                  : viewModalTab === "cancel"
-                  ? "CANCEL BOOKING REQUEST"
-                  : viewModalTab === "timeline"
-                  ? "TIMELINE"
-                  : "BOOKING DETAILS"}
-              </p>
-              <h2 id="application-detail-title" style={{ margin: 0, fontSize: "1.3rem", color: "#0f172a" }}>
-                {selected.machineryModel || selected.equipment}
-              </h2>
+              {/* Tab 4: Cancel (only if not already cancelled/rejected/returned/cancellationRequested) */}
+              {!selected.cancellationRequested && !["cancelled", "rejected", "returned"].includes((selected.status || "").toLowerCase()) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setViewModalTab("cancel");
+                    setSelectedCancelReason("");
+                    setCustomCancelReason("");
+                    setActionError("");
+                  }}
+                  style={{
+                    flex: "1 0 auto",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                    padding: "8px 14px",
+                    borderRadius: "7px",
+                    border: "none",
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    background: viewModalTab === "cancel" ? "#ffffff" : "transparent",
+                    color: viewModalTab === "cancel" ? "#dc2626" : "#64748b",
+                    boxShadow: viewModalTab === "cancel" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                    transition: "all 0.15s ease",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="15" y1="9" x2="9" y2="15" />
+                    <line x1="9" y1="9" x2="15" y2="15" />
+                  </svg>
+                  <span>Cancel Booking</span>
+                </button>
+              )}
             </div>
 
             {/* Machinery Picture Preview (Visible in Details view) */}

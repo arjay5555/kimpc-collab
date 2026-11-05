@@ -773,7 +773,7 @@ export default function EquipmentCatalog() {
               padding: "20px 14px",
               background: "rgba(15, 23, 42, 0.65)",
               backdropFilter: "blur(4px)",
-              zIndex: 1000,
+              zIndex: 10001,
             }}
           >
             <section
@@ -1939,13 +1939,18 @@ export default function EquipmentCatalog() {
                 {/* Modal Footer Actions */}
                 <div
                   style={{
+                    position: "sticky",
+                    bottom: 0,
+                    background: "#ffffff",
+                    zIndex: 20,
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
                     gap: "12px",
                     marginTop: "20px",
-                    paddingTop: "16px",
-                    borderTop: "1px solid #f1f5f9",
+                    padding: "14px 24px",
+                    borderTop: "1px solid #e2e8f0",
+                    boxShadow: "0 -4px 12px rgba(0, 0, 0, 0.06)",
                   }}
                 >
                   <button
@@ -2008,7 +2013,7 @@ export default function EquipmentCatalog() {
               padding: "20px 14px",
               background: "rgba(15, 23, 42, 0.65)",
               backdropFilter: "blur(4px)",
-              zIndex: 1000,
+              zIndex: 10001,
             }}
           >
             <section
