@@ -6,320 +6,108 @@ import ManagerSidebar from "../../components/ManagerSidebar";
 import ManagerTopbar from "../../components/ManagerTopbar";
 import "../../styles/admin-kimpc.css";
 
-// Seed calendar schedule items modeled for KIMPC
-const CALENDAR_SCHEDULE_ITEMS = [
-  // 14 Mon
-  {
-    id: "evt-1",
-    dayIndex: 0, // Mon 14
-    timeSlot: "8:00 AM",
-    timeExact: "8:00 AM",
-    type: "pickup",
-    vehicleName: "Ford Focus",
-    category: "Hatchback",
-    vehicleNumber: "FF-4402",
-    transmission: "Automatic",
-    vehicleImage: "https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&w=600&q=80",
-    clientName: "Michael Brown",
-    clientAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80",
-    driver: "None",
-    startDate: "Mon, 14 Aug 2028",
-    endDate: "Tue, 15 Aug 2028",
-    notes: "Requires early pickup confirmation at depot.",
-  },
-  {
-    id: "evt-2",
-    dayIndex: 0, // Mon 14
-    timeSlot: "1:00 PM",
-    timeExact: "1:30 PM",
-    type: "return",
-    vehicleName: "Hyundai Elantra",
-    category: "Sedan",
-    vehicleNumber: "HE-1190",
-    transmission: "Manual",
-    vehicleImage: "https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?auto=format&fit=crop&w=600&q=80",
-    clientName: "Jane Wilson",
-    clientAvatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80",
-    driver: "Assigned",
-    startDate: "Sun, 13 Aug 2028",
-    endDate: "Mon, 14 Aug 2028",
-    notes: "Vehicle returned with full tank and clean inspection.",
-  },
+// Formats a Date object to "YYYY-MM-DD" local date key
+function toDateKey(d) {
+  if (!d || isNaN(d.getTime())) return "";
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
-  // 15 Tue
-  {
-    id: "evt-3",
-    dayIndex: 1, // Tue 15
-    timeSlot: "9:00 AM",
-    timeExact: "9:00 AM",
-    type: "return",
-    vehicleName: "Toyota Corolla",
-    category: "Sedan",
-    vehicleNumber: "TC-9021",
-    transmission: "Automatic",
-    vehicleImage: "https://images.unsplash.com/photo-1621007947382-bb3c3994e3fb?auto=format&fit=crop&w=600&q=80",
-    clientName: "Alice Johnson",
-    clientAvatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=150&q=80",
-    driver: "None",
-    startDate: "Mon, 14 Aug 2028",
-    endDate: "Tue, 15 Aug 2028",
-    notes: "Scheduled field return handover.",
-  },
-  {
-    id: "evt-4",
-    dayIndex: 1, // Tue 15
-    timeSlot: "1:00 PM",
-    timeExact: "1:00 PM",
-    type: "pickup",
-    vehicleName: "Chevrolet Malibu",
-    category: "Sedan",
-    vehicleNumber: "CM-3381",
-    transmission: "Automatic",
-    vehicleImage: "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=600&q=80",
-    clientName: "Helen Martinez",
-    clientAvatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=150&q=80",
-    driver: "Assigned",
-    startDate: "Tue, 15 Aug 2028",
-    endDate: "Wed, 16 Aug 2028",
-    notes: "Client requested vehicle inspection checklist copy.",
-  },
-  {
-    id: "evt-5",
-    dayIndex: 1, // Tue 15
-    timeSlot: "3:00 PM",
-    timeExact: "3:30 PM",
-    type: "pickup",
-    vehicleName: "Ford Focus",
-    category: "Hatchback",
-    vehicleNumber: "FF-4402",
-    transmission: "Automatic",
-    vehicleImage: "https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&w=600&q=80",
-    clientName: "Kyle Thompson",
-    clientAvatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&q=80",
-    driver: "None",
-    startDate: "Tue, 15 Aug 2028",
-    endDate: "Thu, 17 Aug 2028",
-    notes: "Standard 2-day rental dispatch.",
-  },
+// Safely parses "YYYY-MM-DD" into a local Date object without UTC timezone drift
+function parseDateKey(str) {
+  if (!str) return new Date();
+  const parts = String(str).split("-").map(Number);
+  if (parts.length < 3 || isNaN(parts[0])) return new Date();
+  return new Date(parts[0], parts[1] - 1, parts[2]);
+}
 
-  // 16 Wed
-  {
-    id: "evt-6",
-    dayIndex: 2, // Wed 16
-    timeSlot: "8:00 AM",
-    timeExact: "8:00 AM",
-    type: "pickup",
-    vehicleName: "Kia Soul",
-    category: "SUV",
-    vehicleNumber: "KS-7810",
-    transmission: "Manual",
-    vehicleImage: "https://images.unsplash.com/photo-1590362891991-f776e747a588?auto=format&fit=crop&w=600&q=80",
-    clientName: "Oliver Scott",
-    clientAvatar: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=150&q=80",
-    driver: "None",
-    startDate: "Wed, 16 Aug 2028",
-    endDate: "Thu, 17 Aug 2028",
-    notes: "Requires auxiliary equipment trailer hitch.",
-  },
-  {
-    id: "evt-7",
-    dayIndex: 2, // Wed 16
-    timeSlot: "1:00 PM",
-    timeExact: "1:30 PM",
-    type: "return",
-    vehicleName: "Mercedes C-Class",
-    category: "Sedan",
-    vehicleNumber: "MB-2210",
-    transmission: "Automatic",
-    vehicleImage: "https://images.unsplash.com/photo-1618843479313-40f8afb4b4d8?auto=format&fit=crop&w=600&q=80",
-    clientName: "Fiona Brown",
-    clientAvatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80",
-    driver: "None",
-    startDate: "Tue, 15 Aug 2028",
-    endDate: "Wed, 16 Aug 2028",
-    notes: "Depot check-in completed.",
-  },
-  {
-    id: "evt-8",
-    dayIndex: 2, // Wed 16
-    timeSlot: "2:00 PM",
-    timeExact: "2:00 PM",
-    type: "return",
-    vehicleName: "Hyundai Elantra",
-    category: "Sedan",
-    vehicleNumber: "HE-1190",
-    transmission: "Manual",
-    vehicleImage: "https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?auto=format&fit=crop&w=600&q=80",
-    clientName: "George Clark",
-    clientAvatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=150&q=80",
-    driver: "None",
-    startDate: "Tue, 15 Aug 2028",
-    endDate: "Wed, 16 Aug 2028",
-    notes: "Standard routine return.",
-  },
+// Generates 7 days (Monday to Sunday) for the week of refDate
+function getWeekDays(refDate) {
+  const cur = new Date(refDate);
+  const dayOfWeek = cur.getDay(); // 0 is Sun, 1 is Mon...
+  const diffToMon = (dayOfWeek + 6) % 7; // Mon=0, Sun=6
+  const mon = new Date(cur);
+  mon.setDate(cur.getDate() - diffToMon);
+  mon.setHours(0, 0, 0, 0);
 
-  // 17 Thu (Contains default selected event)
-  {
-    id: "evt-9",
-    dayIndex: 3, // Thu 17
-    timeSlot: "10:00 AM",
-    timeExact: "10:00 AM",
-    type: "pickup",
-    vehicleName: "Toyota Corolla",
-    category: "Sedan",
-    vehicleNumber: "TC-9021",
-    transmission: "Automatic",
-    vehicleImage: "https://images.unsplash.com/photo-1621007947382-bb3c3994e3fb?auto=format&fit=crop&w=600&q=80",
-    clientName: "Alice Johnson",
-    clientAvatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=150&q=80",
-    driver: "None",
-    startDate: "Thu, 17 Aug 2028",
-    endDate: "Fri, 18 Aug 2028",
-    notes: "Member requested early morning inspection.",
-  },
-  {
-    id: "evt-10",
-    dayIndex: 3, // Thu 17
-    timeSlot: "11:00 AM",
-    timeExact: "11:00 AM",
-    type: "pickup",
-    vehicleName: "Nissan Altima",
-    category: "Sedan",
-    vehicleNumber: "NA-5510",
-    transmission: "Automatic",
-    vehicleImage: "https://images.unsplash.com/photo-1580273916550-e323be2ae537?auto=format&fit=crop&w=600&q=80",
-    clientName: "Oliver Scott",
-    clientAvatar: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=150&q=80",
-    driver: "None",
-    startDate: "Thu, 17 Aug 2028",
-    endDate: "Sat, 19 Aug 2028",
-    notes: "Contract verified with deposit waiver.",
-  },
-  {
-    id: "evt-11",
-    dayIndex: 3, // Thu 17
-    timeSlot: "12:00 PM",
-    timeExact: "12:30 PM",
-    type: "pickup",
-    vehicleName: "Audi Q7",
-    category: "SUV",
-    vehicleNumber: "CX2345",
-    transmission: "Automatic",
-    vehicleImage: "https://images.unsplash.com/photo-1606664515524-ed2f786a0bd6?auto=format&fit=crop&w=600&q=80",
-    clientName: "Kyle Thompson",
-    clientAvatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&q=80",
-    driver: "None",
-    startDate: "Thu, 17 Aug 2028",
-    endDate: "Fri, 18 Aug 2028",
-    notes: "Client requested a child safety seat.",
-  },
+  const days = [];
+  const names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const todayKey = toDateKey(new Date());
 
-  // 18 Fri
-  {
-    id: "evt-12",
-    dayIndex: 4, // Fri 18
-    timeSlot: "9:00 AM",
-    timeExact: "9:00 AM",
-    type: "pickup",
-    vehicleName: "Chevrolet Malibu",
-    category: "Sedan",
-    vehicleNumber: "CM-3381",
-    transmission: "Automatic",
-    vehicleImage: "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=600&q=80",
-    clientName: "Nancy Davis",
-    clientAvatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=150&q=80",
-    driver: "None",
-    startDate: "Fri, 18 Aug 2028",
-    endDate: "Sat, 19 Aug 2028",
-    notes: "Farm transport dispatch.",
-  },
-  {
-    id: "evt-13",
-    dayIndex: 4, // Fri 18
-    timeSlot: "11:00 AM",
-    timeExact: "11:30 AM",
-    type: "return",
-    vehicleName: "Honda Civic",
-    category: "Sedan",
-    vehicleNumber: "HC-7740",
-    transmission: "Manual",
-    vehicleImage: "https://images.unsplash.com/photo-1606016159991-dfe4f2746ad5?auto=format&fit=crop&w=600&q=80",
-    clientName: "Bob Smith",
-    clientAvatar: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=150&q=80",
-    driver: "None",
-    startDate: "Wed, 16 Aug 2028",
-    endDate: "Fri, 18 Aug 2028",
-    notes: "Rental return settlement confirmed.",
-  },
-  {
-    id: "evt-14",
-    dayIndex: 4, // Fri 18
-    timeSlot: "4:00 PM",
-    timeExact: "4:30 PM",
-    type: "pickup",
-    vehicleName: "Kia Soul",
-    category: "SUV",
-    vehicleNumber: "KS-7810",
-    transmission: "Manual",
-    vehicleImage: "https://images.unsplash.com/photo-1590362891991-f776e747a588?auto=format&fit=crop&w=600&q=80",
-    clientName: "Diana White",
-    clientAvatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80",
-    driver: "None",
-    startDate: "Fri, 18 Aug 2028",
-    endDate: "Sun, 20 Aug 2028",
-    notes: "Weekend field rental reservation.",
-  },
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(mon);
+    d.setDate(mon.getDate() + i);
+    const key = toDateKey(d);
+    days.push({
+      date: d,
+      dateKey: key,
+      dayNum: d.getDate(),
+      dayName: names[i],
+      isToday: key === todayKey,
+    });
+  }
+  return days;
+}
 
-  // 19 Sat
-  {
-    id: "evt-15",
-    dayIndex: 5, // Sat 19
-    timeSlot: "9:00 AM",
-    timeExact: "9:30 AM",
-    type: "pickup",
-    vehicleName: "BMW X5",
-    category: "SUV",
-    vehicleNumber: "BX-9930",
-    transmission: "Automatic",
-    vehicleImage: "https://images.unsplash.com/photo-1555215695-3004980ad54e?auto=format&fit=crop&w=600&q=80",
-    clientName: "Charlie Davis",
-    clientAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80",
-    driver: "Assigned",
-    startDate: "Sat, 19 Aug 2028",
-    endDate: "Mon, 21 Aug 2028",
-    notes: "GPS tracker verified active.",
-  },
-  {
-    id: "evt-16",
-    dayIndex: 5, // Sat 19
-    timeSlot: "1:00 PM",
-    timeExact: "1:00 PM",
-    type: "return",
-    vehicleName: "Toyota Corolla",
-    category: "Sedan",
-    vehicleNumber: "TC-9021",
-    transmission: "Automatic",
-    vehicleImage: "https://images.unsplash.com/photo-1621007947382-bb3c3994e3fb?auto=format&fit=crop&w=600&q=80",
-    clientName: "Michael Brown",
-    clientAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80",
-    driver: "None",
-    startDate: "Fri, 18 Aug 2028",
-    endDate: "Sat, 19 Aug 2028",
-    notes: "Completed rental return inspection.",
-  },
-];
+// Generates calendar matrix (35 or 42 cells) for month of refDate
+function getMonthMatrix(refDate) {
+  const year = refDate.getFullYear();
+  const month = refDate.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const leadCount = (firstDay.getDay() + 6) % 7; // Monday-based start
 
-// Days of the active week shown in the calendar
-const WEEK_DAYS = [
-  { num: 14, name: "Mon" },
-  { num: 15, name: "Tue" },
-  { num: 16, name: "Wed" },
-  { num: 17, name: "Thu" },
-  { num: 18, name: "Fri" },
-  { num: 19, name: "Sat" },
-];
+  const cells = [];
+  const todayKey = toDateKey(new Date());
 
-// Time rows from 8:00 AM to 5:00 PM
+  // Leading days from previous month
+  const prevMonthLastDay = new Date(year, month, 0).getDate();
+  for (let i = leadCount - 1; i >= 0; i--) {
+    const d = new Date(year, month - 1, prevMonthLastDay - i);
+    const key = toDateKey(d);
+    cells.push({
+      date: d,
+      dateKey: key,
+      dayNum: d.getDate(),
+      isCurrentMonth: false,
+      isToday: key === todayKey,
+    });
+  }
+
+  // Days of current month
+  for (let dNum = 1; dNum <= daysInMonth; dNum++) {
+    const d = new Date(year, month, dNum);
+    const key = toDateKey(d);
+    cells.push({
+      date: d,
+      dateKey: key,
+      dayNum: dNum,
+      isCurrentMonth: true,
+      isToday: key === todayKey,
+    });
+  }
+
+  // Trailing days from next month to complete row
+  const totalCells = cells.length > 35 ? 42 : 35;
+  const remaining = totalCells - cells.length;
+  for (let i = 1; i <= remaining; i++) {
+    const d = new Date(year, month + 1, i);
+    const key = toDateKey(d);
+    cells.push({
+      date: d,
+      dateKey: key,
+      dayNum: d.getDate(),
+      isCurrentMonth: false,
+      isToday: key === todayKey,
+    });
+  }
+
+  return cells;
+}
+
+// Standard daily time rows
 const TIME_ROWS = [
   "8:00 AM",
   "9:00 AM",
@@ -337,35 +125,60 @@ export default function ManagerCalendar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  // Active filter: 'all', 'pickup', 'return'
-  const [filterType, setFilterType] = useState("all");
+  // Active view date state (Default: today)
+  const [currentDate, setCurrentDate] = useState(() => new Date());
+
+  // View mode: 'Week', 'Month', 'Day'
   const [viewMode, setViewMode] = useState("Week");
 
-  // Selected event for the right sidebar detail panel (Default: null until selected)
+  // Filters
+  const [filterType, setFilterType] = useState("all"); // 'all', 'pickup', 'return'
+  const [statusFilter, setStatusFilter] = useState("all"); // 'all', 'Approved', 'Pending', 'Checked-Out'
+  const [equipmentFilter, setEquipmentFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Live applications from API
+  const [applications, setApplications] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Selected event for the right sidebar detail panel
   const [selectedEvent, setSelectedEvent] = useState(null);
-
-  // Toggle detail panel visibility (Default: hidden until an event is clicked)
   const [showDetailPanel, setShowDetailPanel] = useState(false);
-  const [financialsOpen, setFinancialsOpen] = useState(false);
 
-  // Month title state
-  const [currentMonth, setCurrentMonth] = useState("August 2028");
+  // Google Calendar Integration State
   const [googleCalendarStatus, setGoogleCalendarStatus] = useState({ connected: false });
   const [syncingCalendar, setSyncingCalendar] = useState(false);
   const [calendarNotice, setCalendarNotice] = useState("");
 
+  // Fetch live applications
+  const fetchApplications = async () => {
+    setLoading(true);
+    try {
+      const res = await api("/applications");
+      if (res.ok && Array.isArray(res.data)) {
+        setApplications(res.data);
+      }
+    } catch (err) {
+      console.error("Error fetching bookings for calendar:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
+    fetchApplications();
+
     // Check URL parameters for return from Google OAuth
     const params = new URLSearchParams(window.location.search);
     if (params.get("google") === "connected") {
-      setCalendarNotice("Google Calendar connected successfully! Approved rentals and maintenance will sync automatically.");
+      setCalendarNotice("Google Calendar connected successfully! Approved rentals will sync automatically.");
     } else if (params.get("google") === "denied") {
       setCalendarNotice("Google Calendar authorization was cancelled or denied.");
     } else if (params.get("google") === "error") {
       setCalendarNotice(`Google Calendar connection error: ${params.get("msg") || "Unknown error"}`);
     }
 
-    // Fetch live synchronization status
+    // Fetch live Google sync status
     api("/calendar/status").then((res) => {
       if (res.ok && res.data) {
         setGoogleCalendarStatus(res.data);
@@ -386,21 +199,321 @@ export default function ManagerCalendar() {
     const res = await api("/calendar/sync-now", { method: "POST" });
     setSyncingCalendar(false);
     if (res.ok) {
-      setCalendarNotice(`Sync complete: ${res.data?.syncedBookings || 0} bookings and ${res.data?.syncedMaintenance || 0} maintenance records synced.`);
+      setCalendarNotice(`Sync complete: ${res.data?.syncedBookings || 0} bookings and ${res.data?.syncedMaintenance || 0} records synced.`);
     } else {
       setCalendarNotice(res.data?.error || "Could not sync with Google Calendar.");
     }
   };
 
-  // Filter events based on selected filter
-  const filteredEvents = useMemo(() => {
-    if (filterType === "all") return CALENDAR_SCHEDULE_ITEMS;
-    return CALENDAR_SCHEDULE_ITEMS.filter((item) => item.type === filterType);
-  }, [filterType]);
+  // Convert raw applications to calendar events with strict exclusion and reschedule date adjustment
+  const calendarEvents = useMemo(() => {
+    const events = [];
+    const EXCLUDED_STATUSES = ["cancelled", "canceled", "rejected", "void", "voided"];
 
-  const handleLogout = () => {
-    logout();
-    navigate("/login");
+    applications.forEach((app) => {
+      const rawStatus = (app.status || "Pending").trim();
+      const statusLower = rawStatus.toLowerCase();
+
+      // Rule: If booking is cancel, rejected, void, it will not be seen on screen
+      if (EXCLUDED_STATUSES.includes(statusLower)) {
+        return;
+      }
+
+      // Rule: If reschedule it will adjust the day
+      let effectiveStartDate = app.startDate;
+      let effectiveEndDate = app.endDate || app.startDate;
+      let isRescheduled = false;
+      let rescheduleReason = "";
+
+      if (app.rescheduleHistory && app.rescheduleHistory.length > 0) {
+        isRescheduled = true;
+        const latest = app.rescheduleHistory[app.rescheduleHistory.length - 1];
+        if (latest.newStartDate) effectiveStartDate = latest.newStartDate;
+        if (latest.newEndDate) effectiveEndDate = latest.newEndDate;
+        rescheduleReason = latest.reason || "Booking dates rescheduled";
+      } else if (app.rescheduledStartDate) {
+        isRescheduled = true;
+        effectiveStartDate = app.rescheduledStartDate;
+        if (app.rescheduledEndDate) effectiveEndDate = app.rescheduledEndDate;
+      } else if (app.rescheduledAt) {
+        isRescheduled = true;
+      }
+
+      if (!effectiveStartDate) return;
+
+      const clientAvatar =
+        app.clientAvatar ||
+        `https://ui-avatars.com/api/?name=${encodeURIComponent(app.memberName || "Member")}&background=f1f5f9&color=334155&size=64&bold=true`;
+
+      const vehicleImage =
+        app.imageUrl ||
+        app.machineryImage ||
+        "https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?auto=format&fit=crop&w=600&q=80";
+
+      // Common event base properties
+      const baseItem = {
+        appId: app.id || app._id,
+        displayId: app.displayId || `APP-${String(app.id || app._id).slice(-6).toUpperCase()}`,
+        equipment: app.equipment || "Machinery Unit",
+        vehicleName: app.equipment || "Machinery Unit",
+        category: app.bookingType === "hectare" ? `${app.hectares || 1} Hectares` : "Daily Rental",
+        vehicleNumber: app.machineryUnitId || app.displayId || "UNIT",
+        clientName: app.memberName || "Coop Member",
+        clientAvatar,
+        clientEmail: app.memberEmail || "",
+        clientPhone: app.farmerPhone || app.memberPhone || app.clientPhone || "N/A",
+        driver: app.assignedDriver || "Self-Operated",
+        driverPhone: app.driverPhone || "",
+        farmLocation: app.farmLocation || app.farmFormattedAddress || "Depot Pickup",
+        startDate: effectiveStartDate,
+        endDate: effectiveEndDate,
+        originalStartDate: app.startDate,
+        originalEndDate: app.endDate,
+        isRescheduled,
+        rescheduleReason,
+        status: rawStatus,
+        totalAmount: app.totalAmount || 0,
+        paymentStatus: app.paymentStatus || "Pending",
+        paymentMethod: app.paymentMethod || "Cash",
+        vehicleImage,
+        transmission: "Heavy Duty",
+        notes: app.managerRemarks || (isRescheduled ? `Rescheduled to ${effectiveStartDate}` : "Cooperative machinery reservation"),
+        appData: app,
+      };
+
+      // If single day booking
+      if (effectiveStartDate === effectiveEndDate) {
+        events.push({
+          ...baseItem,
+          id: `${app.id || app._id}-single`,
+          dateKey: effectiveStartDate,
+          type: "pickup",
+          timeSlot: "9:00 AM",
+          timeExact: app.preferredTime || "9:00 AM",
+          agenda: "Equipment Pickup & Return (Single Day)",
+        });
+      } else {
+        // Start date: Pickup
+        events.push({
+          ...baseItem,
+          id: `${app.id || app._id}-pickup`,
+          dateKey: effectiveStartDate,
+          type: "pickup",
+          timeSlot: "9:00 AM",
+          timeExact: app.preferredTime || "9:00 AM",
+          agenda: "Equipment Pickup / Dispatch",
+        });
+
+        // End date: Return
+        events.push({
+          ...baseItem,
+          id: `${app.id || app._id}-return`,
+          dateKey: effectiveEndDate,
+          type: "return",
+          timeSlot: "4:00 PM",
+          timeExact: "4:00 PM",
+          agenda: "Equipment Return / Check-in",
+        });
+
+        // Days in between: active in-use rental
+        const sDate = parseDateKey(effectiveStartDate);
+        const eDate = parseDateKey(effectiveEndDate);
+        const cur = new Date(sDate);
+        cur.setDate(cur.getDate() + 1);
+
+        while (cur < eDate) {
+          const midKey = toDateKey(cur);
+          events.push({
+            ...baseItem,
+            id: `${app.id || app._id}-mid-${midKey}`,
+            dateKey: midKey,
+            type: "ongoing",
+            timeSlot: "12:00 PM",
+            timeExact: "In Use",
+            agenda: "Rental In-Use On Field",
+          });
+          cur.setDate(cur.getDate() + 1);
+        }
+      }
+    });
+
+    return events;
+  }, [applications]);
+
+  // Distinct equipment list for dropdown
+  const equipmentOptions = useMemo(() => {
+    const set = new Set();
+    applications.forEach((a) => {
+      if (a.equipment) set.add(a.equipment.trim());
+    });
+    return Array.from(set).sort();
+  }, [applications]);
+
+  // Filter events based on active user filters
+  const filteredEvents = useMemo(() => {
+    return calendarEvents.filter((item) => {
+      // Filter by action type (all, pickup, return)
+      if (filterType !== "all") {
+        if (filterType === "pickup" && item.type !== "pickup") return false;
+        if (filterType === "return" && item.type !== "return") return false;
+      }
+
+      // Filter by status
+      if (statusFilter !== "all") {
+        const itemStatus = (item.status || "").toLowerCase();
+        if (statusFilter === "Approved" && itemStatus !== "approved") return false;
+        if (statusFilter === "Pending" && !itemStatus.includes("pending")) return false;
+        if (statusFilter === "Checked-Out" && itemStatus !== "checked-out" && itemStatus !== "dispatched") return false;
+      }
+
+      // Filter by equipment
+      if (equipmentFilter !== "all" && item.equipment !== equipmentFilter) {
+        return false;
+      }
+
+      // Filter by search query (equipment name, member name, displayId)
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchEquipment = (item.equipment || "").toLowerCase().includes(q);
+        const matchMember = (item.clientName || "").toLowerCase().includes(q);
+        const matchId = (item.displayId || "").toLowerCase().includes(q);
+        if (!matchEquipment && !matchMember && !matchId) return false;
+      }
+
+      return true;
+    });
+  }, [calendarEvents, filterType, statusFilter, equipmentFilter, searchQuery]);
+
+  // Date navigation handlers: Previous, Next, Today
+  const handleToday = () => {
+    setCurrentDate(new Date());
+  };
+
+  const handlePrev = () => {
+    setCurrentDate((prev) => {
+      const next = new Date(prev);
+      if (viewMode === "Month") {
+        next.setMonth(next.getMonth() - 1);
+      } else if (viewMode === "Week") {
+        next.setDate(next.getDate() - 7);
+      } else {
+        next.setDate(next.getDate() - 1);
+      }
+      return next;
+    });
+  };
+
+  const handleNext = () => {
+    setCurrentDate((prev) => {
+      const next = new Date(prev);
+      if (viewMode === "Month") {
+        next.setMonth(next.getMonth() + 1);
+      } else if (viewMode === "Week") {
+        next.setDate(next.getDate() + 7);
+      } else {
+        next.setDate(next.getDate() + 1);
+      }
+      return next;
+    });
+  };
+
+  // Subbar title display based on current view
+  const formattedTitle = useMemo(() => {
+    if (viewMode === "Month") {
+      return currentDate.toLocaleString("default", { month: "long", year: "numeric" });
+    }
+    if (viewMode === "Week") {
+      const weekDays = getWeekDays(currentDate);
+      const first = weekDays[0].date;
+      const last = weekDays[6].date;
+      const firstMonth = first.toLocaleString("default", { month: "short" });
+      const lastMonth = last.toLocaleString("default", { month: "short" });
+      if (firstMonth === lastMonth) {
+        return `${firstMonth} ${first.getDate()} – ${last.getDate()}, ${first.getFullYear()}`;
+      }
+      return `${firstMonth} ${first.getDate()} – ${lastMonth} ${last.getDate()}, ${last.getFullYear()}`;
+    }
+    // Day view
+    return currentDate.toLocaleString("default", {
+      weekday: "long",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  }, [currentDate, viewMode]);
+
+  // Current week days
+  const currentWeekDays = useMemo(() => getWeekDays(currentDate), [currentDate]);
+
+  // Current month matrix
+  const currentMonthCells = useMemo(() => getMonthMatrix(currentDate), [currentDate]);
+
+  // Day view events for currentDate
+  const dayViewEvents = useMemo(() => {
+    const key = toDateKey(currentDate);
+    return filteredEvents.filter((evt) => evt.dateKey === key);
+  }, [filteredEvents, currentDate]);
+
+  // Render a standard Event Card (Approved = pink image design, Pending = yellow dot)
+  const renderEventCard = (evt, isCompact = false) => {
+    const isSelected = selectedEvent?.id === evt.id;
+    const isApproved = (evt.status || "").toLowerCase() === "approved";
+    const isPending = (evt.status || "").toLowerCase().includes("pending");
+    const isCheckedOut = (evt.status || "").toLowerCase().includes("checked-out") || (evt.status || "").toLowerCase().includes("dispatched");
+
+    let cardClass = "wz-event-return"; // default
+    if (isApproved) {
+      cardClass = "wz-event-approved";
+    } else if (isPending) {
+      cardClass = "wz-event-pending";
+    } else if (isCheckedOut) {
+      cardClass = "wz-event-checkedout";
+    } else if (evt.type === "pickup") {
+      cardClass = "wz-event-pickup";
+    }
+
+    return (
+      <div
+        key={evt.id}
+        className={`wz-cal-event-card ${cardClass} ${isSelected ? "wz-event-selected" : ""}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          setSelectedEvent(evt);
+          setShowDetailPanel(true);
+        }}
+        title={`${evt.equipment} - ${evt.clientName} (${evt.status})`}
+      >
+        {/* Top Line: Time + Status Indicators */}
+        <div className="wz-cal-event-time">
+          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+            {isPending && <span className="wz-cal-yellow-dot" title="Pending Approval" />}
+            <span>{evt.timeExact || "9:00 AM"}</span>
+          </div>
+
+          {evt.isRescheduled && (
+            <span className="wz-cal-rescheduled-badge" title="Rescheduled Rental Day">
+              Rescheduled
+            </span>
+          )}
+        </div>
+
+        {/* Middle Line: Equipment Name */}
+        <div className="wz-cal-event-model">{evt.equipment}</div>
+
+        {/* Bottom Line: Avatar + Client Name */}
+        <div className="wz-cal-event-client">
+          <img
+            src={evt.clientAvatar}
+            alt={evt.clientName}
+            className="wz-cal-event-avatar"
+            onError={(e) => {
+              e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(evt.clientName || "M")}&background=fee2e2&color=991b1b&size=32`;
+            }}
+          />
+          <span className="wz-cal-event-client-name">{evt.clientName}</span>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -410,7 +523,7 @@ export default function ManagerCalendar() {
 
       {/* ================= Center Content Area ================= */}
       <main className="wz-content-wrapper wz-cal-content-wrapper">
-        {/* Top bar with Title & User Profile - spans full width across the top */}
+        {/* Top bar with Title & User Profile */}
         <ManagerTopbar title="Calendar" />
 
         {/* Google Calendar Status / Feedback Banner */}
@@ -442,222 +555,496 @@ export default function ManagerCalendar() {
         )}
 
         {/* Subbar: Date Navigation & Event Type Filters */}
-        <div className="wz-cal-subbar">
-            {/* Left: Today, < >, Month Title */}
-            <div className="wz-cal-nav-group">
+        <div className="wz-cal-subbar" style={{ padding: "0 24px", marginTop: "12px" }}>
+          {/* Left: Today, < >, Title */}
+          <div className="wz-cal-nav-group">
+            <button className="wz-cal-btn-today" onClick={handleToday}>
+              Today
+            </button>
+
+            <div className="wz-cal-arrow-btns">
               <button
-                className="wz-cal-btn-today"
-                onClick={() => setCurrentMonth("August 2028")}
+                className="wz-cal-arrow-btn"
+                title={`Previous ${viewMode}`}
+                onClick={handlePrev}
               >
-                Today
+                &lt;
               </button>
-
-              <div className="wz-cal-arrow-btns">
-                <button
-                  className="wz-cal-arrow-btn"
-                  title="Previous Week"
-                  onClick={() => setCurrentMonth("August 2028")}
-                >
-                  &lt;
-                </button>
-                <button
-                  className="wz-cal-arrow-btn"
-                  title="Next Week"
-                  onClick={() => setCurrentMonth("August 2028")}
-                >
-                  &gt;
-                </button>
-              </div>
-
-              <span className="wz-cal-month-title">{currentMonth}</span>
+              <button
+                className="wz-cal-arrow-btn"
+                title={`Next ${viewMode}`}
+                onClick={handleNext}
+              >
+                &gt;
+              </button>
             </div>
 
-            {/* Right: Google Calendar + All/Pickup/Return Toggle + Week Dropdown */}
-            <div className="wz-cal-controls-right" style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-              {/* Google Calendar Connection Status / Connect Button */}
-              {googleCalendarStatus.connected ? (
-                <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      padding: "6px 10px",
-                      borderRadius: "6px",
-                      background: "#dcfce7",
-                      color: "#15803d",
-                      fontSize: "0.76rem",
-                      fontWeight: 700,
-                      border: "1px solid #bbf7d0",
-                    }}
-                    title={`Google Calendar connected (${googleCalendarStatus.email || "Active"})`}
-                  >
-                    <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#16a34a", display: "inline-block" }} />
-                    Google Calendar Synced
-                  </span>
-                  <button
-                    type="button"
-                    disabled={syncingCalendar}
-                    onClick={handleSyncNow}
-                    style={{
-                      padding: "6px 10px",
-                      borderRadius: "6px",
-                      border: "1px solid #cbd5e1",
-                      background: "#ffffff",
-                      color: "#334155",
-                      fontSize: "0.74rem",
-                      fontWeight: 600,
-                      cursor: syncingCalendar ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {syncingCalendar ? "Syncing..." : "Sync Now"}
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleConnectCalendar}
+            <span className="wz-cal-month-title">{formattedTitle}</span>
+          </div>
+
+          {/* Right: Google Calendar + Pickup/Return Toggle + View Mode Dropdown */}
+          <div className="wz-cal-controls-right" style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            {/* Google Calendar Connection Status */}
+            {googleCalendarStatus.connected ? (
+              <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                <span
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
                     gap: "6px",
-                    padding: "6px 11px",
+                    padding: "6px 10px",
+                    borderRadius: "6px",
+                    background: "#dcfce7",
+                    color: "#15803d",
+                    fontSize: "0.76rem",
+                    fontWeight: 700,
+                    border: "1px solid #bbf7d0",
+                  }}
+                  title={`Google Calendar synced (${googleCalendarStatus.email || "Active"})`}
+                >
+                  <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#16a34a", display: "inline-block" }} />
+                  Google Synced
+                </span>
+                <button
+                  type="button"
+                  disabled={syncingCalendar}
+                  onClick={handleSyncNow}
+                  style={{
+                    padding: "6px 10px",
                     borderRadius: "6px",
                     border: "1px solid #cbd5e1",
                     background: "#ffffff",
-                    color: "#1e293b",
-                    fontSize: "0.76rem",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+                    color: "#334155",
+                    fontSize: "0.74rem",
+                    fontWeight: 600,
+                    cursor: syncingCalendar ? "not-allowed" : "pointer",
                   }}
-                  title="Connect cooperative Google Calendar for 2-way sync"
                 >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                    <line x1="16" y1="2" x2="16" y2="6" />
-                    <line x1="8" y1="2" x2="8" y2="6" />
-                    <line x1="3" y1="10" x2="21" y2="10" />
-                  </svg>
-                  <span>Connect Google Calendar</span>
-                </button>
-              )}
-
-              <div className="wz-cal-filter-group">
-                <button
-                  className={`wz-cal-filter-btn ${filterType === "all" ? "active" : ""}`}
-                  onClick={() => setFilterType("all")}
-                >
-                  All
-                </button>
-                <button
-                  className={`wz-cal-filter-btn ${filterType === "pickup" ? "active" : ""}`}
-                  onClick={() => setFilterType("pickup")}
-                >
-                  Pickup
-                </button>
-                <button
-                  className={`wz-cal-filter-btn ${filterType === "return" ? "active" : ""}`}
-                  onClick={() => setFilterType("return")}
-                >
-                  Return
+                  {syncingCalendar ? "Syncing..." : "Sync Now"}
                 </button>
               </div>
-
-              <select
-                className="wz-cal-view-select"
-                value={viewMode}
-                onChange={(e) => setViewMode(e.target.value)}
+            ) : (
+              <button
+                type="button"
+                onClick={handleConnectCalendar}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "6px 11px",
+                  borderRadius: "6px",
+                  border: "1px solid #cbd5e1",
+                  background: "#ffffff",
+                  color: "#1e293b",
+                  fontSize: "0.76rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+                }}
+                title="Connect cooperative Google Calendar for 2-way sync"
               >
-                <option value="Week">Week</option>
-                <option value="Month">Month</option>
-                <option value="Day">Day</option>
-              </select>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                  <line x1="16" y1="2" x2="16" y2="6" />
+                  <line x1="8" y1="2" x2="8" y2="6" />
+                  <line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+                <span>Connect Google Calendar</span>
+              </button>
+            )}
+
+            {/* All / Pickup / Return Type Buttons */}
+            <div className="wz-cal-filter-group">
+              <button
+                className={`wz-cal-filter-btn ${filterType === "all" ? "active" : ""}`}
+                onClick={() => setFilterType("all")}
+              >
+                All
+              </button>
+              <button
+                className={`wz-cal-filter-btn ${filterType === "pickup" ? "active" : ""}`}
+                onClick={() => setFilterType("pickup")}
+              >
+                Pickup
+              </button>
+              <button
+                className={`wz-cal-filter-btn ${filterType === "return" ? "active" : ""}`}
+                onClick={() => setFilterType("return")}
+              >
+                Return
+              </button>
             </div>
+
+            {/* View Mode Selector: Week, Month, Day */}
+            <select
+              className="wz-cal-view-select"
+              value={viewMode}
+              onChange={(e) => setViewMode(e.target.value)}
+            >
+              <option value="Week">Week</option>
+              <option value="Month">Month</option>
+              <option value="Day">Day</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Filter Toolbar: Search, Status, Machinery */}
+        <div className="wz-cal-filter-bar">
+          <div className="wz-cal-search-box">
+            <span className="wz-cal-search-icon">🔍</span>
+            <input
+              type="text"
+              placeholder="Search machinery, member, or ID..."
+              className="wz-cal-search-input"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                style={{
+                  position: "absolute",
+                  right: "8px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  border: "none",
+                  background: "transparent",
+                  color: "#94a3b8",
+                  cursor: "pointer",
+                  fontWeight: 700,
+                }}
+              >
+                ×
+              </button>
+            )}
           </div>
 
-          {/* Legend Row */}
-          <div className="wz-cal-legend-row">
-            <span className="wz-cal-legend-item">
-              <span className="wz-cal-legend-dot-pickup" /> Pickup
-            </span>
-            <span className="wz-cal-legend-item">
-              <span className="wz-cal-legend-dot-return" /> Return
-            </span>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+            <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#64748b" }}>Status:</span>
+            <select
+              className="wz-cal-select"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <option value="all">All Active</option>
+              <option value="Approved">Approved Only</option>
+              <option value="Pending">Pending Only</option>
+              <option value="Checked-Out">Checked-Out</option>
+            </select>
+
+            {equipmentOptions.length > 0 && (
+              <>
+                <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#64748b", marginLeft: "6px" }}>Unit:</span>
+                <select
+                  className="wz-cal-select"
+                  value={equipmentFilter}
+                  onChange={(e) => setEquipmentFilter(e.target.value)}
+                >
+                  <option value="all">All Equipment</option>
+                  {equipmentOptions.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
           </div>
 
-        {/* ================= Calendar Body Layout: Grid + Schedule Detail Panel ================= */}
-        <div className="wz-cal-body-layout">
-          {/* Weekly Calendar Grid Card */}
+          {/* Quick Legend Indicators */}
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "12px", fontSize: "0.76rem" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+              <span style={{ width: "9px", height: "9px", borderRadius: "3px", background: "#fef2f2", border: "1px solid #fecdd3" }} />
+              <strong style={{ color: "#e11d48" }}>Approved</strong>
+            </span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+              <span className="wz-cal-yellow-dot" />
+              <strong style={{ color: "#b45309" }}>Pending</strong>
+            </span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+              <span className="wz-cal-legend-dot-pickup" />
+              <span style={{ color: "#0369a1" }}>Pickup</span>
+            </span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+              <span className="wz-cal-legend-dot-return" />
+              <span style={{ color: "#e11d48" }}>Return</span>
+            </span>
+          </div>
+        </div>
+
+        {/* ================= Calendar Body Layout ================= */}
+        <div className="wz-cal-body-layout" style={{ padding: "0 24px 20px" }}>
+          {/* Main Grid Card based on current viewMode */}
           <div className="wz-cal-grid-card">
-            {/* Header Row: UTC+1 timezone + Days (14 Mon to 19 Sat) */}
-            <div className="wz-cal-header-row">
-              <div className="wz-cal-tz-cell">UTC +1</div>
-              {WEEK_DAYS.map((day) => (
-                <div key={day.num} className="wz-cal-day-header">
-                  <div className="wz-cal-day-num">{day.num}</div>
-                  <div className="wz-cal-day-name">{day.name}</div>
+            {/* VIEW 1: WEEK VIEW */}
+            {viewMode === "Week" && (
+              <>
+                {/* Header Row: 7 Days (Mon to Sun) */}
+                <div className="wz-cal-header-row">
+                  <div className="wz-cal-tz-cell">Time</div>
+                  {currentWeekDays.map((day) => (
+                    <div
+                      key={day.dateKey}
+                      className={`wz-cal-day-header ${day.isToday ? "is-today" : ""}`}
+                      onClick={() => {
+                        setCurrentDate(day.date);
+                        setViewMode("Day");
+                      }}
+                      title="Click to view single day"
+                    >
+                      <div className="wz-cal-day-num">{day.dayNum}</div>
+                      <div className="wz-cal-day-name">{day.dayName}</div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
 
-            {/* Body Scrollable Grid Rows */}
-            <div className="wz-cal-body-scroll">
-              {TIME_ROWS.map((time) => (
-                <div key={time} className="wz-cal-time-row">
-                  {/* Left Column: Time label */}
-                  <div className="wz-cal-time-cell">{time}</div>
+                {/* Body Scrollable Grid Rows */}
+                <div className="wz-cal-body-scroll">
+                  {TIME_ROWS.map((time) => (
+                    <div key={time} className="wz-cal-time-row">
+                      {/* Left Column: Time label */}
+                      <div className="wz-cal-time-cell">{time}</div>
 
-                  {/* 6 Day Columns (Mon to Sat) */}
-                  {WEEK_DAYS.map((_, dayIdx) => {
-                    // Match events in this day and this time slot
-                    const slotEvents = filteredEvents.filter(
-                      (evt) => evt.dayIndex === dayIdx && evt.timeSlot === time
-                    );
+                      {/* 7 Day Columns (Mon to Sun) */}
+                      {currentWeekDays.map((day) => {
+                        // Match events for this day and time slot
+                        const slotEvents = filteredEvents.filter(
+                          (evt) => evt.dateKey === day.dateKey && evt.timeSlot === time
+                        );
+
+                        return (
+                          <div key={day.dateKey} className="wz-cal-day-slot">
+                            {slotEvents.map((evt) => renderEventCard(evt))}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* VIEW 2: MONTH VIEW */}
+            {viewMode === "Month" && (
+              <div className="wz-cal-month-container">
+                {/* Weekday Labels Mon - Sun */}
+                <div className="wz-cal-month-weekdays">
+                  {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((name) => (
+                    <div key={name} className="wz-cal-month-weekday-cell">
+                      {name}
+                    </div>
+                  ))}
+                </div>
+
+                {/* 35 or 42 Month Grid Cells */}
+                <div className="wz-cal-month-grid">
+                  {currentMonthCells.map((cell) => {
+                    const cellEvents = filteredEvents.filter((evt) => evt.dateKey === cell.dateKey);
+                    const maxVisible = 2;
+                    const visibleEvents = cellEvents.slice(0, maxVisible);
+                    const overflowCount = cellEvents.length - maxVisible;
 
                     return (
-                      <div key={dayIdx} className="wz-cal-day-slot">
-                        {slotEvents.map((evt) => {
-                          const isSelected = selectedEvent?.id === evt.id;
+                      <div
+                        key={cell.dateKey}
+                        className={`wz-cal-month-cell ${!cell.isCurrentMonth ? "is-other-month" : ""} ${
+                          cell.isToday ? "is-today" : ""
+                        }`}
+                        onClick={() => {
+                          setCurrentDate(cell.date);
+                          setViewMode("Day");
+                        }}
+                      >
+                        <div className="wz-cal-month-cell-header">
+                          <span className="wz-cal-month-day-num">{cell.dayNum}</span>
+                          {cellEvents.length > 0 && (
+                            <span className="wz-cal-month-cell-count">
+                              {cellEvents.length} {cellEvents.length === 1 ? "event" : "events"}
+                            </span>
+                          )}
+                        </div>
 
-                          return (
-                            <div
-                              key={evt.id}
-                              className={`wz-cal-event-card ${
-                                evt.type === "pickup" ? "wz-event-pickup" : "wz-event-return"
-                              } ${isSelected ? "wz-event-selected" : ""}`}
-                              onClick={() => {
-                                setSelectedEvent(evt);
-                                setShowDetailPanel(true);
+                        <div className="wz-cal-month-events-list">
+                          {visibleEvents.map((evt) => renderEventCard(evt, true))}
+                          {overflowCount > 0 && (
+                            <button
+                              type="button"
+                              className="wz-cal-more-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setCurrentDate(cell.date);
+                                setViewMode("Day");
                               }}
                             >
-                              <span className="wz-cal-event-time">{evt.timeExact}</span>
-                              <div className="wz-cal-event-model">{evt.vehicleName}</div>
-                              <div className="wz-cal-event-client">
-                                <img
-                                  src={evt.clientAvatar}
-                                  alt={evt.clientName}
-                                  className="wz-cal-event-avatar"
-                                />
-                                <span>{evt.clientName}</span>
-                              </div>
-                            </div>
-                          );
-                        })}
+                              +{overflowCount} more
+                            </button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
+
+            {/* VIEW 3: DAY VIEW */}
+            {viewMode === "Day" && (
+              <div className="wz-cal-day-container">
+                {/* Day Summary Banner */}
+                <div className="wz-cal-day-banner">
+                  <div>
+                    <h3 className="wz-cal-day-banner-title">
+                      {currentDate.toLocaleString("default", {
+                        weekday: "long",
+                        month: "long",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </h3>
+                    <p style={{ margin: "4px 0 0", fontSize: "0.82rem", color: "#64748b" }}>
+                      Showing all scheduled dispatches, returns, and field operations for this date.
+                    </p>
+                  </div>
+
+                  <div className="wz-cal-day-banner-stats">
+                    <span className="wz-cal-day-stat-pill" style={{ background: "#f1f5f9", color: "#334155" }}>
+                      <strong>{dayViewEvents.length}</strong> Total Bookings
+                    </span>
+                    <span className="wz-cal-day-stat-pill" style={{ background: "#e0f2fe", color: "#0369a1" }}>
+                      <strong>{dayViewEvents.filter((e) => e.type === "pickup").length}</strong> Pickups
+                    </span>
+                    <span className="wz-cal-day-stat-pill" style={{ background: "#fef2f2", color: "#e11d48" }}>
+                      <strong>{dayViewEvents.filter((e) => e.type === "return").length}</strong> Returns
+                    </span>
+                  </div>
+                </div>
+
+                {/* Day Hourly Breakdown */}
+                <div className="wz-cal-day-timeline">
+                  {TIME_ROWS.map((time) => {
+                    const hourEvents = dayViewEvents.filter((evt) => evt.timeSlot === time);
+
+                    return (
+                      <div key={time} className="wz-cal-day-hour-row">
+                        <div className="wz-cal-day-hour-label">{time}</div>
+                        <div className="wz-cal-day-hour-content">
+                          {hourEvents.length === 0 ? (
+                            <span style={{ fontSize: "0.76rem", color: "#cbd5e1", fontStyle: "italic", alignSelf: "center" }}>
+                              No scheduled dispatch or return
+                            </span>
+                          ) : (
+                            hourEvents.map((evt) => {
+                              const isApproved = (evt.status || "").toLowerCase() === "approved";
+                              const isPending = (evt.status || "").toLowerCase().includes("pending");
+
+                              return (
+                                <div
+                                  key={evt.id}
+                                  className="wz-cal-day-card"
+                                  style={{
+                                    background: isApproved ? "#fef2f2" : isPending ? "#fefce8" : "#f8fafc",
+                                    border: `1px solid ${isApproved ? "#fecdd3" : isPending ? "#fde047" : "#e2e8f0"}`,
+                                  }}
+                                  onClick={() => {
+                                    setSelectedEvent(evt);
+                                    setShowDetailPanel(true);
+                                  }}
+                                >
+                                  <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                                    <img
+                                      src={evt.vehicleImage}
+                                      alt={evt.equipment}
+                                      style={{
+                                        width: "60px",
+                                        height: "45px",
+                                        borderRadius: "8px",
+                                        objectFit: "cover",
+                                        border: "1px solid rgba(0,0,0,0.08)",
+                                      }}
+                                    />
+                                    <div>
+                                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                        <span
+                                          style={{
+                                            color: isApproved ? "#e11d48" : isPending ? "#b45309" : "#0369a1",
+                                            fontWeight: 800,
+                                            fontSize: "0.85rem",
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            gap: "5px",
+                                          }}
+                                        >
+                                          {isPending && <span className="wz-cal-yellow-dot" />}
+                                          {evt.timeExact}
+                                        </span>
+                                        <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "#64748b" }}>
+                                          • {evt.agenda}
+                                        </span>
+                                        {evt.isRescheduled && (
+                                          <span className="wz-cal-rescheduled-badge">Rescheduled</span>
+                                        )}
+                                      </div>
+                                      <div style={{ fontSize: "0.98rem", fontWeight: 800, color: "#0f172a", marginTop: "2px" }}>
+                                        {evt.equipment}
+                                      </div>
+                                      <div style={{ fontSize: "0.78rem", color: "#475569", marginTop: "2px" }}>
+                                        Member: <strong>{evt.clientName}</strong> ({evt.clientPhone}) • Driver: <strong>{evt.driver}</strong>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div style={{ textAlign: "right", display: "flex", flexDirection: "column", gap: "6px", alignItems: "flex-end" }}>
+                                    <span
+                                      style={{
+                                        padding: "3px 8px",
+                                        borderRadius: "6px",
+                                        fontSize: "0.74rem",
+                                        fontWeight: 800,
+                                        background: isApproved ? "#ffe4e6" : isPending ? "#fef3c7" : "#e0f2fe",
+                                        color: isApproved ? "#be123c" : isPending ? "#92400e" : "#0369a1",
+                                      }}
+                                    >
+                                      {evt.status}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      style={{
+                                        border: "none",
+                                        background: "transparent",
+                                        color: "#2563eb",
+                                        fontSize: "0.78rem",
+                                        fontWeight: 700,
+                                        cursor: "pointer",
+                                      }}
+                                    >
+                                      View Details →
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Schedule Detail Panel (Aligned beside Grid Card, below Topbar & Days Row) */}
+          {/* Schedule Detail Panel (Right Sidebar) */}
           {showDetailPanel && selectedEvent && (
             <aside className="wz-cal-detail-panel">
               {/* Header: Title + Close Button */}
               <div className="wz-cal-detail-header">
-                <h3 className="wz-cal-detail-title">Schedule Detail</h3>
+                <div>
+                  <h3 className="wz-cal-detail-title">Schedule Detail</h3>
+                  <span style={{ fontSize: "0.76rem", color: "#64748b", fontWeight: 600 }}>
+                    Ref: {selectedEvent.displayId}
+                  </span>
+                </div>
                 <button
                   className="wz-cal-btn-close"
                   title="Close Detail"
@@ -670,18 +1057,51 @@ export default function ManagerCalendar() {
                 </button>
               </div>
 
+              {/* Status Banner */}
+              <div
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "8px",
+                  marginBottom: "16px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  background: (selectedEvent.status || "").toLowerCase() === "approved" ? "#fef2f2" : "#fefce8",
+                  border: `1px solid ${(selectedEvent.status || "").toLowerCase() === "approved" ? "#fecdd3" : "#fde047"}`,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  {(selectedEvent.status || "").toLowerCase().includes("pending") ? (
+                    <span className="wz-cal-yellow-dot" />
+                  ) : (
+                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#e11d48" }} />
+                  )}
+                  <span
+                    style={{
+                      fontWeight: 800,
+                      fontSize: "0.8rem",
+                      color: (selectedEvent.status || "").toLowerCase() === "approved" ? "#be123c" : "#92400e",
+                    }}
+                  >
+                    {selectedEvent.status}
+                  </span>
+                </div>
+                {selectedEvent.isRescheduled && (
+                  <span className="wz-cal-rescheduled-badge">Adjusted Date</span>
+                )}
+              </div>
+
               {/* 1. Agenda */}
               <div className="wz-cal-detail-section">
                 <span className="wz-cal-section-label">Agenda</span>
                 <div className="wz-cal-agenda-text">
-                  {selectedEvent.type === "pickup" ? "Car Pickup" : "Car Return"} at{" "}
-                  {selectedEvent.timeExact}
+                  {selectedEvent.agenda || `${selectedEvent.type === "pickup" ? "Equipment Pickup" : "Equipment Return"} at ${selectedEvent.timeExact}`}
                 </div>
               </div>
 
               {/* 2. Client Info */}
               <div className="wz-cal-detail-section">
-                <span className="wz-cal-section-label">Client Info</span>
+                <span className="wz-cal-section-label">Member Info</span>
 
                 <div className="wz-cal-client-card">
                   <img
@@ -690,13 +1110,26 @@ export default function ManagerCalendar() {
                     className="wz-cal-client-avatar"
                   />
                   <div className="wz-cal-client-name">{selectedEvent.clientName}</div>
+                  <div style={{ fontSize: "0.78rem", color: "#64748b" }}>{selectedEvent.clientEmail}</div>
                 </div>
 
                 <div className="wz-cal-meta-list">
                   <div className="wz-cal-meta-row">
-                    <span className="wz-cal-meta-key">Driver</span>
+                    <span className="wz-cal-meta-key">Phone</span>
+                    <span className="wz-cal-meta-val">{selectedEvent.clientPhone}</span>
+                  </div>
+
+                  <div className="wz-cal-meta-row">
+                    <span className="wz-cal-meta-key">Assigned Driver</span>
                     <span className="wz-cal-meta-val">{selectedEvent.driver}</span>
                   </div>
+
+                  {selectedEvent.driverPhone && (
+                    <div className="wz-cal-meta-row">
+                      <span className="wz-cal-meta-key">Driver Phone</span>
+                      <span className="wz-cal-meta-val">{selectedEvent.driverPhone}</span>
+                    </div>
+                  )}
 
                   <div className="wz-cal-meta-row">
                     <span className="wz-cal-meta-key">Start Date</span>
@@ -708,18 +1141,26 @@ export default function ManagerCalendar() {
                     <span className="wz-cal-meta-val">{selectedEvent.endDate}</span>
                   </div>
 
+                  {selectedEvent.isRescheduled && selectedEvent.originalStartDate && (
+                    <div className="wz-cal-meta-row">
+                      <span className="wz-cal-meta-key">Original Date</span>
+                      <span className="wz-cal-meta-val" style={{ textDecoration: "line-through", color: "#94a3b8" }}>
+                        {selectedEvent.originalStartDate} to {selectedEvent.originalEndDate}
+                      </span>
+                    </div>
+                  )}
+
                   <div className="wz-cal-meta-row">
-                    <span className="wz-cal-meta-key">Notes</span>
-                    <span className="wz-cal-meta-notes">{selectedEvent.notes}</span>
+                    <span className="wz-cal-meta-key">Farm Location</span>
+                    <span className="wz-cal-meta-notes">{selectedEvent.farmLocation}</span>
                   </div>
                 </div>
               </div>
 
-              {/* 3. Car Info */}
+              {/* 3. Machinery Info */}
               <div className="wz-cal-detail-section">
-                <span className="wz-cal-section-label">Car Info</span>
+                <span className="wz-cal-section-label">Machinery Info</span>
 
-                {/* Photo Card Preview */}
                 <div className="wz-cal-car-preview-card">
                   <img
                     src={selectedEvent.vehicleImage}
@@ -732,20 +1173,58 @@ export default function ManagerCalendar() {
 
                 <div className="wz-cal-meta-list">
                   <div className="wz-cal-meta-row">
-                    <span className="wz-cal-meta-key">Car Type</span>
+                    <span className="wz-cal-meta-key">Rental Plan</span>
                     <span className="wz-cal-meta-val">{selectedEvent.category}</span>
                   </div>
 
                   <div className="wz-cal-meta-row">
-                    <span className="wz-cal-meta-key">Car Number</span>
-                    <span className="wz-cal-meta-val">{selectedEvent.vehicleNumber}</span>
+                    <span className="wz-cal-meta-key">Total Fee</span>
+                    <span className="wz-cal-meta-val" style={{ color: "#16a34a", fontWeight: 800 }}>
+                      ₱{Number(selectedEvent.totalAmount || 0).toLocaleString()} ({selectedEvent.paymentStatus})
+                    </span>
                   </div>
 
                   <div className="wz-cal-meta-row">
-                    <span className="wz-cal-meta-key">Transmission</span>
-                    <span className="wz-cal-meta-val">{selectedEvent.transmission}</span>
+                    <span className="wz-cal-meta-key">Payment Mode</span>
+                    <span className="wz-cal-meta-val">{selectedEvent.paymentMethod}</span>
                   </div>
                 </div>
+              </div>
+
+              {/* Quick Actions Footer */}
+              <div style={{ marginTop: "auto", paddingTop: "14px", borderTop: "1px solid #f1f5f9", display: "flex", flexDirection: "column", gap: "8px" }}>
+                <Link
+                  to="/manager/reservations"
+                  style={{
+                    display: "block",
+                    textAlign: "center",
+                    padding: "9px 14px",
+                    background: "#0f172a",
+                    color: "#ffffff",
+                    borderRadius: "8px",
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    textDecoration: "none",
+                  }}
+                >
+                  Manage in Reservations
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setShowDetailPanel(false)}
+                  style={{
+                    padding: "7px 14px",
+                    background: "transparent",
+                    border: "1px solid #cbd5e1",
+                    color: "#64748b",
+                    borderRadius: "8px",
+                    fontSize: "0.8rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Close Panel
+                </button>
               </div>
             </aside>
           )}
@@ -754,4 +1233,3 @@ export default function ManagerCalendar() {
     </div>
   );
 }
-
