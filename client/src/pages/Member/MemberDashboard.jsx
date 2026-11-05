@@ -444,7 +444,7 @@ export default function MemberDashboard() {
         className="member-dashboard-grid"
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(460px, 1fr))",
           gap: "20px",
           alignItems: "stretch",
         }}
@@ -511,7 +511,7 @@ export default function MemberDashboard() {
                   }}
                 />
 
-                <div style={{ flex: 1, minWidth: 0, width: "100%" }}>
+                <div style={{ flex: 1, minWidth: "200px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "12px" }}>
                     <span style={{ fontSize: "1.02rem", fontWeight: 800, color: "#0f172a" }}>
                       {nextRental.machineryModel || nextRental.equipment} • {nextRental.machineryUnitId || nextRental.displayId || "TR-001"}

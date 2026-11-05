@@ -484,6 +484,11 @@
     gap: 8px !important;
   }
 
+  /* Hide desktop topbar Settings & Profile on mobile screens <= 768px */
+  .member-topbar-desktop-only {
+    display: none !important;
+  }
+
   .wz-topbar-title {
     font-size: 1.25rem !important;
     line-height: 1.2 !important;
@@ -574,6 +579,10 @@
     width: 100% !important;
     height: 180px !important;
     max-height: 200px !important;
+  }
+  .member-next-rental-wrap > div {
+    min-width: 0 !important;
+    width: 100% !important;
   }
 
   /* Catalog grid phone layout */
