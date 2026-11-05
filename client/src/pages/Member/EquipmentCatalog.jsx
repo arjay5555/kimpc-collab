@@ -669,47 +669,24 @@ export default function EquipmentCatalog() {
               {availability}
             </div>
 
-            {/* Per-Hectare Pricing Banner */}
-            <div
-              className="member-product-price"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                background: "#f0fdf4",
-                border: "1px solid #bbf7d0",
-                padding: "16px 20px",
-                borderRadius: "12px",
-                margin: "18px 0",
-              }}
-            >
-              <div>
-                <span style={{ fontSize: "0.72rem", color: "#166534", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: "2px" }}>
-                  Member Subsidized Rate
-                </span>
-                <strong style={{ fontSize: "1.6rem", color: "#14532d", fontWeight: 800 }}>
+            {/* Member Rate */}
+            <div style={{ margin: "16px 0 20px" }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
+                <span style={{ fontSize: "1.85rem", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.02em" }}>
                   {formatPrice(unitRatePerHectare)}
-                  <small style={{ fontSize: "0.85rem", color: "#64748b", fontWeight: 600, marginLeft: "4px" }}>
-                    / hectare
-                  </small>
-                </strong>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <span style={{ fontSize: "0.7rem", color: "#64748b", display: "block" }}>Rental Pricing Unit</span>
-                <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#15803d", background: "#dcfce7", padding: "3px 10px", borderRadius: "999px" }}>
-                  Per Hectare (Farm Area)
+                </span>
+                <span style={{ fontSize: "0.95rem", color: "#64748b", fontWeight: 500 }}>
+                  / hectare
                 </span>
               </div>
+              <span style={{ fontSize: "0.82rem", color: "#64748b", fontWeight: 500, display: "block", marginTop: "2px" }}>
+                Member Subsidized Rate
+              </span>
             </div>
 
-            <p style={{ fontSize: "0.88rem", color: "#475569", lineHeight: 1.5, margin: "0 0 20px" }}>
-              {unit.description || unit.capacity || "Cooperative-maintained machinery, available to eligible members for farm cultivation, planting, harvesting, and field operations."}
-            </p>
-
-            {/* Booking Button */}
+            {/* BOOK NOW Button */}
             <button
               type="button"
-              className="wz-btn wz-btn-primary"
               disabled={availability !== "Available"}
               onClick={() => {
                 if (!memberPhone) {
@@ -732,25 +709,36 @@ export default function EquipmentCatalog() {
                 setBookingOpen(true);
               }}
               style={{
-                padding: "12px 28px",
-                fontSize: "0.95rem",
-                fontWeight: 800,
+                width: "100%",
+                padding: "14px 24px",
+                background: availability === "Available" ? "#1e1e1e" : "#94a3b8",
+                color: "#ffffff",
+                border: "none",
                 borderRadius: "10px",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "10px",
+                fontSize: "0.95rem",
+                fontWeight: 600,
+                letterSpacing: "0.03em",
                 cursor: availability === "Available" ? "pointer" : "not-allowed",
-                boxShadow: "0 4px 14px rgba(22, 101, 52, 0.2)",
+                transition: "background-color 0.15s ease",
+                display: "block",
+                textAlign: "center",
+                marginBottom: "28px",
+              }}
+              onMouseEnter={(e) => {
+                if (availability === "Available") e.currentTarget.style.background = "#2d2d2d";
+              }}
+              onMouseLeave={(e) => {
+                if (availability === "Available") e.currentTarget.style.background = "#1e1e1e";
               }}
             >
-              <TractorIcon size={18} />
-              <span>Book Machinery (Per Hectare)</span>
-              <span aria-hidden="true">→</span>
+              BOOK NOW
             </button>
 
             {/* Specifications */}
-            <div className="member-product-specs" style={{ marginTop: "24px" }}>
-              <h2 style={{ fontSize: "1rem", fontWeight: 700, color: "#0f172a", marginBottom: "10px" }}>Specifications</h2>
+            <div className="member-product-specs">
+              <h2 style={{ fontSize: "1rem", fontWeight: 700, color: "#0f172a", marginBottom: "10px" }}>
+                Specifications
+              </h2>
               <dl className="member-detail-list">
                 <div><dt>Pricing Unit</dt><dd><strong>Per Hectare</strong></dd></div>
                 <div><dt>Category</dt><dd>{unit.category || "—"}</dd></div>
@@ -761,41 +749,14 @@ export default function EquipmentCatalog() {
               </dl>
             </div>
 
-            {/* Upcoming Reserved / Blocked Dates list */}
-            <div className="member-availability-list" style={{ marginTop: "22px" }}>
-              <h2 style={{ fontSize: "0.95rem", fontWeight: 700, color: "#0f172a", marginBottom: "8px" }}>
-                Current Reservations &amp; Blocked Dates
+            {/* Description below Specifications */}
+            <div style={{ marginTop: "24px" }}>
+              <h2 style={{ fontSize: "1rem", fontWeight: 700, color: "#0f172a", marginBottom: "8px" }}>
+                Description
               </h2>
-              {blockedRanges.length === 0 ? (
-                <p className="member-muted" style={{ fontSize: "0.82rem" }}>
-                  No upcoming reservations currently scheduled. All future dates are open to request.
-                </p>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  {blockedRanges.slice(0, 6).map((range, index) => (
-                    <div
-                      key={`${range.startDate}-${index}`}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        padding: "8px 12px",
-                        background: "#fff1f2",
-                        border: "1px solid #fecdd3",
-                        borderRadius: "8px",
-                        fontSize: "0.78rem",
-                      }}
-                    >
-                      <span style={{ fontWeight: 700, color: "#be123c", display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                        <LockIcon size={12} /> {range.label}
-                      </span>
-                      <span style={{ color: "#475569", fontWeight: 500 }}>
-                        {formatDisplayDate(range.startDate)} – {formatDisplayDate(range.endDate)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <p style={{ fontSize: "0.88rem", color: "#475569", lineHeight: 1.6, margin: 0 }}>
+                {unit.description || unit.capacity || "Cooperative-maintained machinery, available to eligible members for farm cultivation, planting, harvesting, and field operations."}
+              </p>
             </div>
           </section>
         </div>
