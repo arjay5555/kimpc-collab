@@ -1,6 +1,12 @@
-require("dotenv").config();
 const path = require("path");
 const fs = require("fs");
+
+// Load environment variables from server directory or parent directory
+require("dotenv").config({ path: path.join(__dirname, ".env") });
+if (!process.env.MONGODB_URI) {
+  require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
+}
+
 const express = require("express");
 const mongoose = require("mongoose");
 const { startAuditArchiveWorker } = require("./workers/archiveAuditLogs");
@@ -31,7 +37,10 @@ app.use((req, res, next) => {
   next();
 });
 
-const clientDist = path.join(__dirname, "client", "dist");
+// Serve Pure React Application (SPA)
+const clientDist = fs.existsSync(path.join(__dirname, "..", "client", "dist"))
+  ? path.join(__dirname, "..", "client", "dist")
+  : path.join(__dirname, "client", "dist");
 
 // API Routes
 app.use("/api/calendar", require("./routes/calendar"));
@@ -39,7 +48,6 @@ app.use("/api/manager", authManager);
 app.use("/api/manager", require("./routes/manager"));
 app.use("/api", require("./routes/api"));
 
-// Serve Pure React Application (SPA)
 if (fs.existsSync(clientDist)) {
   app.use(express.static(clientDist));
   app.use((req, res, next) => {

@@ -1,6 +1,11 @@
 // Creates demo accounts (run with: npm run seed).
 // Change these passwords after your first login.
-require("dotenv").config();
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, ".env") });
+if (!process.env.MONGODB_URI) {
+  require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
+}
+
 const bcrypt = require("bcryptjs");
 const mongoose = require("mongoose");
 const Account = require("./models/Account");

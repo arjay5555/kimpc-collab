@@ -5,8 +5,8 @@
       "name": "Debug Backend Server (Minders Express)",
       "type": "node",
       "request": "launch",
-      "cwd": "${workspaceFolder}/Minders-mongodb",
-      "program": "${workspaceFolder}/Minders-mongodb/server.js",
+      "cwd": "${workspaceFolder}/Minders-mongodb/server",
+      "program": "${workspaceFolder}/Minders-mongodb/server/server.js",
       "restart": true,
       "console": "integratedTerminal",
       "internalConsoleOptions": "neverOpen"
@@ -26,4 +26,3 @@
     }
   ]
 }
-
