@@ -478,21 +478,41 @@ export default function Applications() {
           })}
         </div>
         <Link
-          className="wz-btn wz-btn-primary"
-          to="/member/book"
+          className="wz-btn wz-btn-secondary"
+          to="/member/history"
+          title="Booking History"
+          aria-label="View Booking History"
           style={{
             borderRadius: "8px",
             textDecoration: "none",
-            padding: "8px 18px",
-            fontWeight: 700,
+            padding: "8px 16px",
+            fontWeight: 600,
             display: "inline-flex",
             alignItems: "center",
-            gap: "6px",
+            gap: "8px",
             fontSize: "0.85rem",
+            background: "#ffffff",
+            border: "1px solid #cbd5e1",
+            color: "#1e293b",
+            boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+            transition: "all 0.15s ease",
           }}
         >
-          <span>Book Equipment</span>
-          <span aria-hidden="true">→</span>
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M3 12a9 9 0 1 0 2.64-6.36L3 8" />
+            <path d="M3 3v5h5" />
+            <path d="M12 7v5l3 2" />
+          </svg>
+          <span>Booking History</span>
         </Link>
       </div>
 

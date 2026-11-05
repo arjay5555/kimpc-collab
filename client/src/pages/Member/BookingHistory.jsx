@@ -49,7 +49,27 @@ export default function BookingHistory() {
         subtitle="Review equipment bookings that were completed, rejected, or cancelled."
       />
 
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "16px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
+        <Link
+          className="wz-btn wz-btn-secondary"
+          to="/applications"
+          style={{
+            borderRadius: "8px",
+            textDecoration: "none",
+            padding: "8px 16px",
+            fontWeight: 600,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "8px",
+            fontSize: "0.85rem",
+            background: "#ffffff",
+            border: "1px solid #cbd5e1",
+            color: "#1e293b",
+          }}
+        >
+          <span aria-hidden="true">←</span>
+          <span>Back to Applications</span>
+        </Link>
         <Link className="wz-btn wz-btn-primary" to="/member/book" style={{ borderRadius: "8px", textDecoration: "none", padding: "8px 18px", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "6px" }}>
           <span>Book equipment</span>
           <span aria-hidden="true">→</span>

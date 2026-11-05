@@ -39,8 +39,7 @@ export default function MemberSidebar() {
 
   const isDashboardActive = currentPath === "/member";
   const isBookActive = currentPath === "/member/book" || currentPath.startsWith("/member/book/");
-  const isApplicationsActive = currentPath === "/applications";
-  const isHistoryActive = currentPath === "/member/history";
+  const isApplicationsActive = currentPath === "/applications" || currentPath === "/member/history";
   const isNotificationsActive = currentPath === "/member/notifications";
   const isSettingsActive = currentPath === "/member/settings";
 
@@ -92,7 +91,7 @@ export default function MemberSidebar() {
           <span>Book Equipment</span>
         </Link>
 
-        {/* Your Applications */}
+        {/* Your Applications (Includes History) */}
         <Link to="/applications" className={`wz-nav-item ${isApplicationsActive ? "active" : ""}`}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="5" y="4" width="14" height="17" rx="2" />
@@ -100,16 +99,6 @@ export default function MemberSidebar() {
             <path d="m9 13 2 2 4-4" />
           </svg>
           <span>Your Applications</span>
-        </Link>
-
-        {/* Booking History */}
-        <Link to="/member/history" className={`wz-nav-item ${isHistoryActive ? "active" : ""}`}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 12a9 9 0 1 0 2.64-6.36L3 8" />
-            <path d="M3 3v5h5" />
-            <path d="M12 7v5l3 2" />
-          </svg>
-          <span>Booking History</span>
         </Link>
 
         {/* Notifications */}
