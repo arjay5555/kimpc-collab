@@ -903,7 +903,6 @@ export default function Units() {
                     <th>Asset Code</th>
                     <th>Machinery Name</th>
                     <th>Type</th>
-                    <th>Brand / Model</th>
                     <th>Rental Rate</th>
                     <th>Assigned Driver</th>
                     <th>Operating Condition</th>
@@ -948,17 +947,7 @@ export default function Units() {
                           </span>
                         </td>
 
-                        {/* 4. Brand / Model */}
-                        <td>
-                          <div style={{ fontWeight: "600", color: "#0f172a" }}>
-                            {u.brand || "—"} <span style={{ color: "#64748b" }}>{u.model || ""}</span>
-                          </div>
-                          {u.modelYear && (
-                            <span style={{ fontSize: "0.72rem", color: "#94a3b8" }}>Year {u.modelYear}</span>
-                          )}
-                        </td>
-
-                        {/* 5. Rental Rate */}
+                        {/* 4. Rental Rate */}
                         <td>
                           <div style={{ fontWeight: "700", color: "#0f172a" }}>
                             ₱{Number(u.memberRate !== undefined ? u.memberRate : u.ratePerDay).toLocaleString()}
@@ -974,7 +963,7 @@ export default function Units() {
                           )}
                         </td>
 
-                        {/* 6. Assigned Driver (Interactive Click-to-Change) */}
+                        {/* 5. Assigned Driver (Interactive Click-to-Change, Normal Black Styling) */}
                         <td>
                           {u.assignedDriver && u.assignedDriver !== "Unassigned" ? (
                             <button
@@ -985,11 +974,11 @@ export default function Units() {
                                 display: "inline-flex",
                                 alignItems: "center",
                                 gap: "8px",
-                                padding: "5px 11px",
-                                background: "#f0fdf4",
-                                border: "1px solid #bbf7d0",
+                                padding: "5px 12px",
+                                background: "#ffffff",
+                                border: "1px solid #cbd5e1",
                                 borderRadius: "20px",
-                                color: "#166534",
+                                color: "#0f172a",
                                 fontWeight: "600",
                                 fontSize: "0.8rem",
                                 cursor: "pointer",
@@ -1002,7 +991,7 @@ export default function Units() {
                                 width: "22px",
                                 height: "22px",
                                 borderRadius: "50%",
-                                background: "#22c55e",
+                                background: "#0f172a",
                                 color: "#ffffff",
                                 display: "flex",
                                 alignItems: "center",
@@ -1013,12 +1002,12 @@ export default function Units() {
                                 {u.assignedDriver.charAt(0).toUpperCase()}
                               </span>
                               <div>
-                                <div style={{ lineHeight: "1.2", fontWeight: "700" }}>{u.assignedDriver}</div>
+                                <div style={{ lineHeight: "1.2", fontWeight: "700", color: "#0f172a" }}>{u.assignedDriver}</div>
                                 {u.driverPhone && (
-                                  <div style={{ fontSize: "0.68rem", color: "#15803d", fontWeight: "400" }}>{u.driverPhone}</div>
+                                  <div style={{ fontSize: "0.68rem", color: "#64748b", fontWeight: "400" }}>{u.driverPhone}</div>
                                 )}
                               </div>
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.65, marginLeft: "2px" }}>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: "2px" }}>
                                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                               </svg>
@@ -1032,18 +1021,18 @@ export default function Units() {
                                 display: "inline-flex",
                                 alignItems: "center",
                                 gap: "6px",
-                                padding: "5px 11px",
-                                background: "#f8fafc",
+                                padding: "5px 12px",
+                                background: "#ffffff",
                                 border: "1px dashed #cbd5e1",
                                 borderRadius: "20px",
-                                color: "#64748b",
+                                color: "#0f172a",
                                 fontWeight: "500",
                                 fontSize: "0.78rem",
                                 cursor: "pointer",
                                 transition: "all 0.15s ease",
                               }}
                             >
-                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0f172a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
                                 <circle cx="9" cy="7" r="4" />
                                 <line x1="19" y1="8" x2="19" y2="14" />
@@ -1054,19 +1043,19 @@ export default function Units() {
                           )}
                         </td>
 
-                        {/* 7. Operating Condition */}
+                        {/* 6. Operating Condition (No Dot) */}
                         <td>
                           {cond === "Operational" ? (
                             <span className="wz-cond-badge wz-cond-operational">
-                              ● Operational
+                              Operational
                             </span>
                           ) : cond === "Under Maintenance" ? (
                             <span className="wz-cond-badge wz-cond-maintenance">
-                              ▲ Under Maintenance
+                              Under Maintenance
                             </span>
                           ) : (
                             <span className="wz-cond-badge wz-cond-retired">
-                              ✕ Retired
+                              Retired
                             </span>
                           )}
                         </td>
@@ -1192,10 +1181,10 @@ export default function Units() {
                           alignItems: "center",
                           gap: "6px",
                           padding: "4px 10px",
-                          background: "#f0fdf4",
-                          border: "1px solid #bbf7d0",
+                          background: "#ffffff",
+                          border: "1px solid #cbd5e1",
                           borderRadius: "16px",
-                          color: "#166534",
+                          color: "#0f172a",
                           fontWeight: "700",
                           fontSize: "0.78rem",
                           cursor: "pointer",
@@ -1206,7 +1195,7 @@ export default function Units() {
                           width: "18px",
                           height: "18px",
                           borderRadius: "50%",
-                          background: "#22c55e",
+                          background: "#0f172a",
                           color: "#ffffff",
                           display: "flex",
                           alignItems: "center",
@@ -1216,8 +1205,8 @@ export default function Units() {
                         }}>
                           {u.assignedDriver.charAt(0).toUpperCase()}
                         </span>
-                        <span>{u.assignedDriver}</span>
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" style={{ opacity: 0.65 }}>
+                        <span style={{ color: "#0f172a" }}>{u.assignedDriver}</span>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.4" style={{ opacity: 0.75 }}>
                           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                         </svg>
@@ -1232,10 +1221,10 @@ export default function Units() {
                           alignItems: "center",
                           gap: "4px",
                           padding: "4px 10px",
-                          background: "#f8fafc",
+                          background: "#ffffff",
                           border: "1px dashed #cbd5e1",
                           borderRadius: "16px",
-                          color: "#64748b",
+                          color: "#0f172a",
                           fontWeight: "500",
                           fontSize: "0.75rem",
                           cursor: "pointer",
@@ -2200,6 +2189,29 @@ export default function Units() {
                   </div>
                 </div>
 
+                {/* Section 1: Brand & Model Details (Transferred to View Action) */}
+                <div className="wz-detail-section">
+                  <div className="wz-detail-sec-title">Brand &amp; Model Specifications</div>
+                  <div className="wz-detail-grid-2">
+                    <div className="wz-detail-item">
+                      <span className="wz-detail-label">Brand</span>
+                      <span className="wz-detail-value" style={{ fontWeight: "700", color: "#0f172a" }}>{viewingUnit.brand || "—"}</span>
+                    </div>
+                    <div className="wz-detail-item">
+                      <span className="wz-detail-label">Model</span>
+                      <span className="wz-detail-value" style={{ fontWeight: "700", color: "#0f172a" }}>{viewingUnit.model || "—"}</span>
+                    </div>
+                    <div className="wz-detail-item">
+                      <span className="wz-detail-label">Model Year</span>
+                      <span className="wz-detail-value">{viewingUnit.modelYear || "—"}</span>
+                    </div>
+                    <div className="wz-detail-item">
+                      <span className="wz-detail-label">Serial Number (S/N)</span>
+                      <span className="wz-detail-value">{viewingUnit.serialNumber || "—"}</span>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Section 2: Specifications & Pricing */}
                 <div className="wz-detail-section">
                   <div className="wz-detail-sec-title">Rental &amp; Pricing Policies</div>
@@ -2227,7 +2239,7 @@ export default function Units() {
                   </div>
                 </div>
 
-                {/* Section 3: Assigned Operator / Driver */}
+                {/* Section 3: Assigned Operator / Driver (Normal Black Styling) */}
                 <div className="wz-detail-section">
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                     <div className="wz-detail-sec-title" style={{ margin: 0 }}>Assigned Operator / Driver</div>
@@ -2240,10 +2252,10 @@ export default function Units() {
                       }}
                       style={{
                         padding: "5px 12px",
-                        background: "#f0fdf4",
-                        border: "1px solid #bbf7d0",
+                        background: "#0f172a",
+                        border: "1px solid #0f172a",
                         borderRadius: "6px",
-                        color: "#166534",
+                        color: "#ffffff",
                         fontWeight: "700",
                         fontSize: "0.78rem",
                         cursor: "pointer",
@@ -2265,7 +2277,7 @@ export default function Units() {
                       <span className="wz-detail-value" style={{ fontWeight: "700", color: "#0f172a" }}>
                         {viewingUnit.assignedDriver && viewingUnit.assignedDriver !== "Unassigned" ? (
                           <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                            <span style={{ width: "20px", height: "20px", borderRadius: "50%", background: "#22c55e", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "0.7rem", fontWeight: "700" }}>
+                            <span style={{ width: "20px", height: "20px", borderRadius: "50%", background: "#0f172a", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "0.7rem", fontWeight: "700" }}>
                               {viewingUnit.assignedDriver.charAt(0).toUpperCase()}
                             </span>
                             {viewingUnit.assignedDriver}
@@ -2715,9 +2727,9 @@ export default function Units() {
                         borderRadius: "8px",
                         cursor: driverSubmitting ? "not-allowed" : "pointer",
                         marginBottom: "4px",
-                        background: isCurrent ? "#f0fdf4" : "#ffffff",
+                        background: isCurrent ? "#f1f5f9" : "#ffffff",
                         border: "1px solid",
-                        borderColor: isCurrent ? "#86efac" : "#f1f5f9",
+                        borderColor: isCurrent ? "#cbd5e1" : "#f1f5f9",
                         transition: "all 0.15s ease"
                       }}
                       onMouseEnter={(e) => {
@@ -2739,8 +2751,8 @@ export default function Units() {
                             width: "36px",
                             height: "36px",
                             borderRadius: "50%",
-                            background: "#22c55e",
-                            color: "#fff",
+                            background: "#0f172a",
+                            color: "#ffffff",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
@@ -2758,8 +2770,8 @@ export default function Units() {
                               fontWeight: "600",
                               padding: "2px 6px",
                               borderRadius: "10px",
-                              background: driver.status === "On Duty" ? "#dcfce7" : driver.status === "Sick Leave" ? "#fee2e2" : "#fef9c3",
-                              color: driver.status === "On Duty" ? "#166534" : driver.status === "Sick Leave" ? "#991b1b" : "#854d0e"
+                              background: driver.status === "On Duty" ? "#f1f5f9" : driver.status === "Sick Leave" ? "#fee2e2" : "#fef9c3",
+                              color: driver.status === "On Duty" ? "#0f172a" : driver.status === "Sick Leave" ? "#991b1b" : "#854d0e"
                             }}>
                               {driver.status || "Active"}
                             </span>
@@ -2778,8 +2790,8 @@ export default function Units() {
                             gap: "4px",
                             fontSize: "0.75rem",
                             fontWeight: "700",
-                            color: "#16a34a",
-                            background: "#dcfce7",
+                            color: "#0f172a",
+                            background: "#e2e8f0",
                             padding: "4px 9px",
                             borderRadius: "12px"
                           }}>
@@ -2794,9 +2806,9 @@ export default function Units() {
                             disabled={driverSubmitting}
                             style={{
                               padding: "5px 12px",
-                              background: "#f0fdf4",
-                              border: "1px solid #bbf7d0",
-                              color: "#166534",
+                              background: "#0f172a",
+                              border: "1px solid #0f172a",
+                              color: "#ffffff",
                               borderRadius: "6px",
                               fontSize: "0.78rem",
                               fontWeight: "700",
