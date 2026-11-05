@@ -62,3 +62,4 @@ if (fs.existsSync(clientDist)) {
 app.use(errorHandler);
 
 module.exports = app;
+

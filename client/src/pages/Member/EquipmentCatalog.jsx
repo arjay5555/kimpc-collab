@@ -9,8 +9,6 @@ const EMPTY_BOOKING = {
   end: "",
   hectares: 1,
   location: "",
-  coordinates: null,
-  formattedAddress: "",
 };
 
 function getAvailability(unit) {
@@ -199,17 +197,6 @@ function MapPinIcon({ size = 16, color = "currentColor" }) {
   );
 }
 
-function GpsIcon({ size = 15, color = "currentColor" }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="12" cy="12" r="10" />
-      <line x1="22" y1="12" x2="18" y2="12" />
-      <line x1="6" y1="12" x2="2" y2="12" />
-      <line x1="12" y1="6" x2="12" y2="2" />
-      <line x1="12" y1="22" x2="12" y2="18" />
-    </svg>
-  );
-}
 
 export default function EquipmentCatalog() {
   const { id } = useParams();
@@ -240,83 +227,6 @@ export default function EquipmentCatalog() {
   const [gcashProof, setGcashProof] = useState("");
   const [gcashPreview, setGcashPreview] = useState("");
   const [copiedGcash, setCopiedGcash] = useState(false);
-  const [geocoding, setGeocoding] = useState(false);
-  const [geocodeSuggestions, setGeocodeSuggestions] = useState([]);
-  const [geocodeNotice, setGeocodeNotice] = useState("");
-  const [detectingGps, setDetectingGps] = useState(false);
-
-  const handleGeocodeAddress = async (queryText) => {
-    const text = (queryText !== undefined ? queryText : booking.location).trim();
-    if (!text || text.length < 2) {
-      setGeocodeNotice("Please type your farm barangay or landmark first.");
-      return;
-    }
-    setGeocoding(true);
-    setGeocodeNotice("");
-    const res = await api(`/geocode?query=${encodeURIComponent(text)}`);
-    setGeocoding(false);
-    if (res.ok && Array.isArray(res.data) && res.data.length > 0) {
-      setGeocodeSuggestions(res.data);
-      const first = res.data[0];
-      setBooking((prev) => ({
-        ...prev,
-        coordinates: { lat: first.lat, lng: first.lng },
-        formattedAddress: first.formattedAddress,
-      }));
-      setGeocodeNotice(`Coordinates verified (${first.lat.toFixed(4)}° N, ${first.lng.toFixed(4)}° E).`);
-    } else {
-      setGeocodeSuggestions([]);
-      setGeocodeNotice("Could not resolve precise coordinates. Your entered address will still be submitted.");
-    }
-  };
-
-  const handleSelectGeocodeSuggestion = (suggestion) => {
-    setBooking((prev) => ({
-      ...prev,
-      location: suggestion.formattedAddress,
-      coordinates: { lat: suggestion.lat, lng: suggestion.lng },
-      formattedAddress: suggestion.formattedAddress,
-    }));
-    setGeocodeSuggestions([]);
-    setGeocodeNotice(`Pinpoint verified (${suggestion.lat.toFixed(4)}° N, ${suggestion.lng.toFixed(4)}° E).`);
-  };
-
-  const handleDetectGPS = () => {
-    if (!navigator?.geolocation) {
-      setGeocodeNotice("GPS geolocation is not supported on this device/browser.");
-      return;
-    }
-    setDetectingGps(true);
-    setGeocodeNotice("");
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        setDetectingGps(false);
-        const res = await api(`/geocode/reverse?lat=${lat}&lng=${lng}`);
-        if (res.ok && res.data) {
-          setBooking((prev) => ({
-            ...prev,
-            location: res.data.formattedAddress || `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
-            coordinates: { lat, lng },
-            formattedAddress: res.data.formattedAddress,
-          }));
-          setGeocodeNotice(`GPS location detected (${lat.toFixed(4)}° N, ${lng.toFixed(4)}° E).`);
-        } else {
-          setBooking((prev) => ({
-            ...prev,
-            coordinates: { lat, lng },
-          }));
-          setGeocodeNotice(`GPS coordinates detected (${lat.toFixed(4)}° N, ${lng.toFixed(4)}° E).`);
-        }
-      },
-      (err) => {
-        setDetectingGps(false);
-        setGeocodeNotice(`GPS detection error: ${err.message}`);
-      },
-      { timeout: 10000, enableHighAccuracy: true }
-    );
-  };
 
   const handleCopyGcash = () => {
     if (navigator?.clipboard?.writeText) {
@@ -689,9 +599,7 @@ export default function EquipmentCatalog() {
         paymentStatus: paymentMethod === "GCash" ? "Paid" : "Pending",
         farmerPhone: memberPhone,
         memberPhone,
-        farmLocation: booking.location.trim(),
-        farmCoordinates: booking.coordinates || null,
-        farmFormattedAddress: booking.formattedAddress || booking.location.trim(),
+        farmLocation: (booking.location || "").trim(),
       },
     });
 
@@ -815,11 +723,7 @@ export default function EquipmentCatalog() {
                   end: "",
                   hectares: 1,
                   location: "",
-                  coordinates: null,
-                  formattedAddress: "",
                 });
-                setGeocodeSuggestions([]);
-                setGeocodeNotice("");
                 setCalendarMonth(new Date(today.getFullYear(), today.getMonth(), 1));
                 setPaymentMethod("Cash");
                 setCashTiming("Upon Pickup");
@@ -1190,230 +1094,35 @@ export default function EquipmentCatalog() {
                         <span style={{ fontWeight: 800 }}>{formatPrice(estimatedCost)}</span>
                       </div>
 
-                      {/* Farm Dispatch Location & Address with Google Geocoding */}
+                      {/* Farm Location / Dispatch Address */}
                       <div style={{ marginTop: "16px", paddingTop: "14px", borderTop: "1px dashed #e2e8f0" }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
-                          <label style={{ fontSize: "0.8rem", fontWeight: 700, color: "#0f172a", display: "flex", alignItems: "center", gap: "6px" }}>
-                            <MapPinIcon size={14} color="#15803d" />
-                            <span>Farm Location &amp; Dispatch Address *</span>
-                          </label>
-                          {booking.coordinates && (
-                            <a
-                              href={`https://www.google.com/maps?q=${booking.coordinates.lat},${booking.coordinates.lng}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{
-                                fontSize: "0.72rem",
-                                color: "#15803d",
-                                fontWeight: 700,
-                                textDecoration: "underline",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "3px",
-                              }}
-                            >
-                              <span>View Pin on Google Maps</span>
-                              <span aria-hidden="true">↗</span>
-                            </a>
-                          )}
-                        </div>
+                        <label style={{ fontSize: "0.8rem", fontWeight: 700, color: "#0f172a", display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
+                          <MapPinIcon size={14} color="#15803d" />
+                          <span>Farm Location / Address *</span>
+                        </label>
 
                         <p style={{ fontSize: "0.74rem", color: "#64748b", margin: "0 0 8px" }}>
                           Enter the barangay, sitio, or landmark for machinery transport and field operations.
                         </p>
 
-                        <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                          <div style={{ position: "relative", flex: 1 }}>
-                            <input
-                              type="text"
-                              required
-                              placeholder="e.g. Purok 4, Lampanusan, Kalilangan, Bukidnon"
-                              value={booking.location || ""}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setBooking((prev) => ({
-                                  ...prev,
-                                  location: val,
-                                  coordinates: prev.formattedAddress === val ? prev.coordinates : null,
-                                }));
-                                if (geocodeNotice) setGeocodeNotice("");
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  e.preventDefault();
-                                  handleGeocodeAddress(booking.location);
-                                }
-                              }}
-                              style={{
-                                width: "100%",
-                                padding: "9px 12px",
-                                borderRadius: "8px",
-                                border: "1px solid #cbd5e1",
-                                fontSize: "0.85rem",
-                                fontWeight: 500,
-                                color: "#0f172a",
-                                background: "#ffffff",
-                                outline: "none",
-                              }}
-                            />
-                          </div>
-
-                          {/* Geocode Button */}
-                          <button
-                            type="button"
-                            disabled={geocoding || !booking.location?.trim()}
-                            onClick={() => handleGeocodeAddress(booking.location)}
-                            title="Verify address coordinates using Google Geocoding"
-                            style={{
-                              padding: "9px 12px",
-                              borderRadius: "8px",
-                              border: "1px solid #cbd5e1",
-                              background: geocoding ? "#f1f5f9" : "#ffffff",
-                              color: geocoding ? "#94a3b8" : "#15803d",
-                              fontSize: "0.78rem",
-                              fontWeight: 700,
-                              cursor: geocoding || !booking.location?.trim() ? "not-allowed" : "pointer",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "5px",
-                              whiteSpace: "nowrap",
-                              transition: "all 0.12s ease",
-                            }}
-                          >
-                            <MapPinIcon size={14} color={geocoding ? "#94a3b8" : "#15803d"} />
-                            <span>{geocoding ? "Locating..." : "Geocode"}</span>
-                          </button>
-
-                          {/* Current GPS Button */}
-                          <button
-                            type="button"
-                            disabled={detectingGps}
-                            onClick={handleDetectGPS}
-                            title="Detect farm location using current device GPS"
-                            style={{
-                              padding: "9px 12px",
-                              borderRadius: "8px",
-                              border: "1px solid #cbd5e1",
-                              background: detectingGps ? "#f1f5f9" : "#ffffff",
-                              color: detectingGps ? "#94a3b8" : "#0284c7",
-                              fontSize: "0.78rem",
-                              fontWeight: 700,
-                              cursor: detectingGps ? "not-allowed" : "pointer",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "5px",
-                              whiteSpace: "nowrap",
-                              transition: "all 0.12s ease",
-                            }}
-                          >
-                            <GpsIcon size={14} color={detectingGps ? "#94a3b8" : "#0284c7"} />
-                            <span>{detectingGps ? "GPS..." : "GPS"}</span>
-                          </button>
-                        </div>
-
-                        {/* Suggestions Dropdown */}
-                        {geocodeSuggestions.length > 0 && (
-                          <div
-                            style={{
-                              marginTop: "6px",
-                              background: "#ffffff",
-                              border: "1px solid #cbd5e1",
-                              borderRadius: "8px",
-                              boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-                              maxHeight: "160px",
-                              overflowY: "auto",
-                              zIndex: 10,
-                            }}
-                          >
-                            <div style={{ padding: "6px 10px", fontSize: "0.68rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", background: "#f8fafc", borderBottom: "1px solid #f1f5f9" }}>
-                              Suggested Geocoded Locations (Click to select)
-                            </div>
-                            {geocodeSuggestions.map((item, idx) => (
-                              <button
-                                key={idx}
-                                type="button"
-                                onClick={() => handleSelectGeocodeSuggestion(item)}
-                                style={{
-                                  width: "100%",
-                                  textAlign: "left",
-                                  padding: "8px 12px",
-                                  border: "none",
-                                  borderBottom: idx === geocodeSuggestions.length - 1 ? "none" : "1px solid #f1f5f9",
-                                  background: "transparent",
-                                  fontSize: "0.78rem",
-                                  color: "#0f172a",
-                                  cursor: "pointer",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "space-between",
-                                }}
-                                onMouseEnter={(e) => { e.currentTarget.style.background = "#f0fdf4"; }}
-                                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                              >
-                                <span style={{ fontWeight: 600 }}>{item.formattedAddress}</span>
-                                <span style={{ fontSize: "0.7rem", color: "#15803d", marginLeft: "8px" }}>
-                                  {Number(item.lat).toFixed(4)}, {Number(item.lng).toFixed(4)}
-                                </span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Coordinates Pill / Notice */}
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
-                          {booking.coordinates ? (
-                            <span
-                              style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "5px",
-                                padding: "3px 8px",
-                                borderRadius: "6px",
-                                background: "#dcfce7",
-                                color: "#15803d",
-                                fontSize: "0.72rem",
-                                fontWeight: 700,
-                              }}
-                            >
-                              <CheckCircleIcon size={12} />
-                              GPS Coordinates: {Number(booking.coordinates.lat).toFixed(5)}° N, {Number(booking.coordinates.lng).toFixed(5)}° E
-                            </span>
-                          ) : null}
-
-                          {geocodeNotice && (
-                            <span style={{ fontSize: "0.72rem", color: "#64748b", fontStyle: "italic" }}>
-                              {geocodeNotice}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Quick Barangay Presets for Kalilangan */}
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "8px", flexWrap: "wrap" }}>
-                          <span style={{ fontSize: "0.7rem", color: "#64748b", fontWeight: 600 }}>Kalilangan Quick-Select:</span>
-                          {["Lampanusan", "Poblacion", "West Poblacion", "Malinao", "Pamotolon", "San Vicente", "Canituan", "Public"].map((brgy) => (
-                            <button
-                              key={brgy}
-                              type="button"
-                              onClick={() => {
-                                const fullAddr = `${brgy}, Kalilangan, Bukidnon`;
-                                setBooking((prev) => ({ ...prev, location: fullAddr }));
-                                handleGeocodeAddress(fullAddr);
-                              }}
-                              style={{
-                                padding: "3px 8px",
-                                borderRadius: "4px",
-                                border: "1px solid #e2e8f0",
-                                background: booking.location?.includes(brgy) ? "#dcfce7" : "#f8fafc",
-                                color: booking.location?.includes(brgy) ? "#15803d" : "#475569",
-                                fontSize: "0.72rem",
-                                fontWeight: 600,
-                                cursor: "pointer",
-                              }}
-                            >
-                              {brgy}
-                            </button>
-                          ))}
-                        </div>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Purok 4, Lampanusan, Kalilangan, Bukidnon"
+                          value={booking.location || ""}
+                          onChange={(e) => setBooking((prev) => ({ ...prev, location: e.target.value }))}
+                          style={{
+                            width: "100%",
+                            padding: "9px 12px",
+                            borderRadius: "8px",
+                            border: "1px solid #cbd5e1",
+                            fontSize: "0.85rem",
+                            fontWeight: 500,
+                            color: "#0f172a",
+                            background: "#ffffff",
+                            outline: "none",
+                          }}
+                        />
                       </div>
                     </div>
                   </div>
