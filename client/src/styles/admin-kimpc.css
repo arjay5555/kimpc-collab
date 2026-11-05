@@ -2132,43 +2132,81 @@
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
 }
 
-/* Approved Event Card: Matches exact uploaded image */
-.wz-event-approved {
+/* Pickup Event Card: YELLOW */
+.wz-event-pickup {
+  background-color: #fefce8 !important; /* Soft warm yellow */
+  border: 1px solid #fde047 !important;
+  box-shadow: 0 1px 3px rgba(234, 179, 8, 0.06);
+}
+
+.wz-event-pickup:hover {
+  border-color: #facc15 !important;
+  box-shadow: 0 4px 12px rgba(234, 179, 8, 0.15);
+}
+
+.wz-event-pickup .wz-cal-event-time {
+  color: #b45309 !important; /* Bold amber/yellow */
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+/* Return Event Card: RED (matches uploaded picture) */
+.wz-event-return {
   background-color: #fef2f2 !important; /* Soft rose / light pink */
   border: 1px solid #fecdd3 !important;
   box-shadow: 0 1px 3px rgba(225, 29, 72, 0.05);
 }
 
-.wz-event-approved:hover {
+.wz-event-return:hover {
   border-color: #fda4af !important;
   box-shadow: 0 4px 12px rgba(225, 29, 72, 0.12);
 }
 
-.wz-event-approved .wz-cal-event-time {
+.wz-event-return .wz-cal-event-time {
   color: #e11d48 !important; /* Bold red/magenta */
   font-size: 0.8rem;
   font-weight: 800;
 }
 
-/* Pending Event Card: Yellow dot indicator as requested */
-.wz-event-pending {
-  background-color: #fefce8 !important; /* Soft amber/yellow */
-  border: 1px solid #fde047 !important;
-  box-shadow: 0 1px 3px rgba(234, 179, 8, 0.05);
-}
-
-.wz-event-pending:hover {
-  border-color: #facc15 !important;
-  box-shadow: 0 4px 12px rgba(234, 179, 8, 0.12);
-}
-
-.wz-event-pending .wz-cal-event-time {
-  color: #b45309 !important;
-  font-size: 0.76rem;
-  font-weight: 800;
+/* Pending Indicator: ONLY A YELLOW DOT */
+.wz-cal-pending-dot-item {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: #fffbeb;
+  border: 1px dashed #fde047;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  text-align: left;
+}
+
+.wz-cal-pending-dot-item:hover {
+  background: #fef3c7;
+  border-color: #f59e0b;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.15);
+}
+
+.wz-cal-yellow-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background-color: #eab308;
+  box-shadow: 0 0 6px rgba(234, 179, 8, 0.9);
+  flex-shrink: 0;
+}
+
+.wz-cal-pending-dot-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #92400e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Checked-Out & Returned Variants */
@@ -2192,16 +2230,6 @@
   font-weight: 800;
 }
 
-.wz-event-pickup {
-  background-color: #e0f2fe;
-  border: 1px solid #bae6fd;
-}
-
-.wz-event-return {
-  background-color: #ffe4e6;
-  border: 1px solid #fecdd3;
-}
-
 .wz-event-selected {
   border: 2px solid #0f172a !important;
   box-shadow: 0 4px 14px rgba(15, 23, 42, 0.2) !important;
@@ -2214,17 +2242,6 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-}
-
-/* Bright yellow dot for Pending bookings */
-.wz-cal-yellow-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: #eab308;
-  box-shadow: 0 0 5px rgba(234, 179, 8, 0.8);
-  flex-shrink: 0;
 }
 
 .wz-cal-rescheduled-badge {

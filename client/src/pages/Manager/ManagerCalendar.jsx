@@ -23,22 +23,21 @@ function parseDateKey(str) {
   return new Date(parts[0], parts[1] - 1, parts[2]);
 }
 
-// Generates 7 days (Monday to Sunday) for the week of refDate
+// Generates standard 7 days (Sunday to Saturday) for the week of refDate
 function getWeekDays(refDate) {
   const cur = new Date(refDate);
   const dayOfWeek = cur.getDay(); // 0 is Sun, 1 is Mon...
-  const diffToMon = (dayOfWeek + 6) % 7; // Mon=0, Sun=6
-  const mon = new Date(cur);
-  mon.setDate(cur.getDate() - diffToMon);
-  mon.setHours(0, 0, 0, 0);
+  const sun = new Date(cur);
+  sun.setDate(cur.getDate() - dayOfWeek);
+  sun.setHours(0, 0, 0, 0);
 
   const days = [];
-  const names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const todayKey = toDateKey(new Date());
 
   for (let i = 0; i < 7; i++) {
-    const d = new Date(mon);
-    d.setDate(mon.getDate() + i);
+    const d = new Date(sun);
+    d.setDate(sun.getDate() + i);
     const key = toDateKey(d);
     days.push({
       date: d,
@@ -51,13 +50,13 @@ function getWeekDays(refDate) {
   return days;
 }
 
-// Generates calendar matrix (35 or 42 cells) for month of refDate
+// Generates calendar matrix (35 or 42 cells, Sunday to Saturday) for month of refDate
 function getMonthMatrix(refDate) {
   const year = refDate.getFullYear();
   const month = refDate.getMonth();
   const firstDay = new Date(year, month, 1);
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const leadCount = (firstDay.getDay() + 6) % 7; // Monday-based start
+  const leadCount = firstDay.getDay(); // Sunday-first: 0 for Sun, 1 for Mon...
 
   const cells = [];
   const todayKey = toDateKey(new Date());
@@ -89,7 +88,7 @@ function getMonthMatrix(refDate) {
     });
   }
 
-  // Trailing days from next month to complete row
+  // Trailing days from next month to complete standard calendar rows
   const totalCells = cells.length > 35 ? 42 : 35;
   const remaining = totalCells - cells.length;
   for (let i = 1; i <= remaining; i++) {
@@ -205,7 +204,8 @@ export default function ManagerCalendar() {
     }
   };
 
-  // Convert raw applications to calendar events with strict exclusion and reschedule date adjustment
+  // Convert raw applications to calendar events
+  // Pickup = Yellow, Return = Red, Pending = Only yellow dot, Cancelled/Rejected/Void = Excluded
   const calendarEvents = useMemo(() => {
     const events = [];
     const EXCLUDED_STATUSES = ["cancelled", "canceled", "rejected", "void", "voided"];
@@ -241,6 +241,8 @@ export default function ManagerCalendar() {
 
       if (!effectiveStartDate) return;
 
+      const isPending = statusLower.includes("pending");
+
       const clientAvatar =
         app.clientAvatar ||
         `https://ui-avatars.com/api/?name=${encodeURIComponent(app.memberName || "Member")}&background=f1f5f9&color=334155&size=64&bold=true`;
@@ -272,6 +274,7 @@ export default function ManagerCalendar() {
         isRescheduled,
         rescheduleReason,
         status: rawStatus,
+        isPending,
         totalAmount: app.totalAmount || 0,
         paymentStatus: app.paymentStatus || "Pending",
         paymentMethod: app.paymentMethod || "Cash",
@@ -281,19 +284,20 @@ export default function ManagerCalendar() {
         appData: app,
       };
 
-      // If single day booking
-      if (effectiveStartDate === effectiveEndDate) {
+      if (isPending) {
+        // Pending booking: only yellow dot will see so that schedule determined by manager is still pending
         events.push({
           ...baseItem,
-          id: `${app.id || app._id}-single`,
+          id: `${app.id || app._id}-pending`,
           dateKey: effectiveStartDate,
-          type: "pickup",
+          type: "pending",
           timeSlot: "9:00 AM",
           timeExact: app.preferredTime || "9:00 AM",
-          agenda: "Equipment Pickup & Return (Single Day)",
+          agenda: "Pending Reservation Request",
         });
       } else {
-        // Start date: Pickup
+        // Approved booking:
+        // Rule: Pickup day is YELLOW
         events.push({
           ...baseItem,
           id: `${app.id || app._id}-pickup`,
@@ -301,38 +305,31 @@ export default function ManagerCalendar() {
           type: "pickup",
           timeSlot: "9:00 AM",
           timeExact: app.preferredTime || "9:00 AM",
-          agenda: "Equipment Pickup / Dispatch",
+          agenda: "Approved Equipment Pickup",
         });
 
-        // End date: Return
-        events.push({
-          ...baseItem,
-          id: `${app.id || app._id}-return`,
-          dateKey: effectiveEndDate,
-          type: "return",
-          timeSlot: "4:00 PM",
-          timeExact: "4:00 PM",
-          agenda: "Equipment Return / Check-in",
-        });
-
-        // Days in between: active in-use rental
-        const sDate = parseDateKey(effectiveStartDate);
-        const eDate = parseDateKey(effectiveEndDate);
-        const cur = new Date(sDate);
-        cur.setDate(cur.getDate() + 1);
-
-        while (cur < eDate) {
-          const midKey = toDateKey(cur);
+        // Rule: Return day is RED
+        if (effectiveEndDate && effectiveEndDate !== effectiveStartDate) {
           events.push({
             ...baseItem,
-            id: `${app.id || app._id}-mid-${midKey}`,
-            dateKey: midKey,
-            type: "ongoing",
-            timeSlot: "12:00 PM",
-            timeExact: "In Use",
-            agenda: "Rental In-Use On Field",
+            id: `${app.id || app._id}-return`,
+            dateKey: effectiveEndDate,
+            type: "return",
+            timeSlot: "4:00 PM",
+            timeExact: "4:00 PM",
+            agenda: "Approved Equipment Return",
           });
-          cur.setDate(cur.getDate() + 1);
+        } else if (effectiveEndDate === effectiveStartDate) {
+          // Single day rental: Return on the same day in the afternoon (Red)
+          events.push({
+            ...baseItem,
+            id: `${app.id || app._id}-return`,
+            dateKey: effectiveStartDate,
+            type: "return",
+            timeSlot: "4:00 PM",
+            timeExact: "4:00 PM",
+            agenda: "Approved Equipment Return (Same Day)",
+          });
         }
       }
     });
@@ -442,10 +439,10 @@ export default function ManagerCalendar() {
     });
   }, [currentDate, viewMode]);
 
-  // Current week days
+  // Current week days (Sunday to Saturday)
   const currentWeekDays = useMemo(() => getWeekDays(currentDate), [currentDate]);
 
-  // Current month matrix
+  // Current month matrix (Sunday to Saturday)
   const currentMonthCells = useMemo(() => getMonthMatrix(currentDate), [currentDate]);
 
   // Day view events for currentDate
@@ -454,23 +451,36 @@ export default function ManagerCalendar() {
     return filteredEvents.filter((evt) => evt.dateKey === key);
   }, [filteredEvents, currentDate]);
 
-  // Render a standard Event Card (Approved = pink image design, Pending = yellow dot)
-  const renderEventCard = (evt, isCompact = false) => {
+  // Render Event Item:
+  // - Pending: ONLY A YELLOW DOT with title
+  // - Pickup: YELLOW card
+  // - Return: RED card (like uploaded picture)
+  const renderEventItem = (evt, isCompact = false) => {
     const isSelected = selectedEvent?.id === evt.id;
-    const isApproved = (evt.status || "").toLowerCase() === "approved";
-    const isPending = (evt.status || "").toLowerCase().includes("pending");
-    const isCheckedOut = (evt.status || "").toLowerCase().includes("checked-out") || (evt.status || "").toLowerCase().includes("dispatched");
 
-    let cardClass = "wz-event-return"; // default
-    if (isApproved) {
-      cardClass = "wz-event-approved";
-    } else if (isPending) {
-      cardClass = "wz-event-pending";
-    } else if (isCheckedOut) {
-      cardClass = "wz-event-checkedout";
-    } else if (evt.type === "pickup") {
-      cardClass = "wz-event-pickup";
+    // Rule: When pending, only dot will see so that schedule determine by the manager still pending
+    if (evt.isPending || evt.type === "pending") {
+      return (
+        <div
+          key={evt.id}
+          className="wz-cal-pending-dot-item"
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelectedEvent(evt);
+            setShowDetailPanel(true);
+          }}
+          title={`Pending Approval: ${evt.equipment} - ${evt.clientName} (${evt.timeExact})`}
+        >
+          <span className="wz-cal-yellow-dot" />
+          <span className="wz-cal-pending-dot-label">
+            {evt.timeExact} • Pending: {evt.equipment}
+          </span>
+        </div>
+      );
     }
+
+    // Approved: Pickup = Yellow card, Return = Red card
+    const cardClass = evt.type === "pickup" ? "wz-event-pickup" : "wz-event-return";
 
     return (
       <div
@@ -481,20 +491,30 @@ export default function ManagerCalendar() {
           setSelectedEvent(evt);
           setShowDetailPanel(true);
         }}
-        title={`${evt.equipment} - ${evt.clientName} (${evt.status})`}
+        title={`${evt.type === "pickup" ? "Pickup (Yellow)" : "Return (Red)"}: ${evt.equipment} - ${evt.clientName}`}
       >
-        {/* Top Line: Time + Status Indicators */}
+        {/* Top Line: Time + Type Tag */}
         <div className="wz-cal-event-time">
-          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-            {isPending && <span className="wz-cal-yellow-dot" title="Pending Approval" />}
-            <span>{evt.timeExact || "9:00 AM"}</span>
-          </div>
-
-          {evt.isRescheduled && (
-            <span className="wz-cal-rescheduled-badge" title="Rescheduled Rental Day">
-              Rescheduled
+          <span style={{ fontWeight: 800 }}>{evt.timeExact || "9:00 AM"}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            <span
+              style={{
+                fontSize: "0.65rem",
+                fontWeight: 700,
+                padding: "1px 5px",
+                borderRadius: "4px",
+                background: evt.type === "pickup" ? "#fef3c7" : "#ffe4e6",
+                color: evt.type === "pickup" ? "#92400e" : "#be123c",
+              }}
+            >
+              {evt.type === "pickup" ? "Pickup" : "Return"}
             </span>
-          )}
+            {evt.isRescheduled && (
+              <span className="wz-cal-rescheduled-badge" title="Rescheduled Rental Day">
+                Rescheduled
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Middle Line: Equipment Name */}
@@ -688,7 +708,7 @@ export default function ManagerCalendar() {
           </div>
         </div>
 
-        {/* Filter Toolbar: Search, Status, Machinery */}
+        {/* Filter Toolbar: Search, Status, Machinery (Cleaned line without badges) */}
         <div className="wz-cal-filter-bar">
           <div className="wz-cal-search-box">
             <span className="wz-cal-search-icon">🔍</span>
@@ -751,26 +771,6 @@ export default function ManagerCalendar() {
               </>
             )}
           </div>
-
-          {/* Quick Legend Indicators */}
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "12px", fontSize: "0.76rem" }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-              <span style={{ width: "9px", height: "9px", borderRadius: "3px", background: "#fef2f2", border: "1px solid #fecdd3" }} />
-              <strong style={{ color: "#e11d48" }}>Approved</strong>
-            </span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-              <span className="wz-cal-yellow-dot" />
-              <strong style={{ color: "#b45309" }}>Pending</strong>
-            </span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-              <span className="wz-cal-legend-dot-pickup" />
-              <span style={{ color: "#0369a1" }}>Pickup</span>
-            </span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-              <span className="wz-cal-legend-dot-return" />
-              <span style={{ color: "#e11d48" }}>Return</span>
-            </span>
-          </div>
         </div>
 
         {/* ================= Calendar Body Layout ================= */}
@@ -780,7 +780,7 @@ export default function ManagerCalendar() {
             {/* VIEW 1: WEEK VIEW */}
             {viewMode === "Week" && (
               <>
-                {/* Header Row: 7 Days (Mon to Sun) */}
+                {/* Header Row: 7 Days (Sun to Sat) */}
                 <div className="wz-cal-header-row">
                   <div className="wz-cal-tz-cell">Time</div>
                   {currentWeekDays.map((day) => (
@@ -806,7 +806,7 @@ export default function ManagerCalendar() {
                       {/* Left Column: Time label */}
                       <div className="wz-cal-time-cell">{time}</div>
 
-                      {/* 7 Day Columns (Mon to Sun) */}
+                      {/* 7 Day Columns (Sun to Sat) */}
                       {currentWeekDays.map((day) => {
                         // Match events for this day and time slot
                         const slotEvents = filteredEvents.filter(
@@ -815,7 +815,7 @@ export default function ManagerCalendar() {
 
                         return (
                           <div key={day.dateKey} className="wz-cal-day-slot">
-                            {slotEvents.map((evt) => renderEventCard(evt))}
+                            {slotEvents.map((evt) => renderEventItem(evt))}
                           </div>
                         );
                       })}
@@ -825,19 +825,19 @@ export default function ManagerCalendar() {
               </>
             )}
 
-            {/* VIEW 2: MONTH VIEW */}
+            {/* VIEW 2: MONTH VIEW (Formatted Sunday to Saturday) */}
             {viewMode === "Month" && (
               <div className="wz-cal-month-container">
-                {/* Weekday Labels Mon - Sun */}
+                {/* Weekday Labels Sun - Sat */}
                 <div className="wz-cal-month-weekdays">
-                  {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((name) => (
+                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((name) => (
                     <div key={name} className="wz-cal-month-weekday-cell">
                       {name}
                     </div>
                   ))}
                 </div>
 
-                {/* 35 or 42 Month Grid Cells */}
+                {/* Month Grid Cells */}
                 <div className="wz-cal-month-grid">
                   {currentMonthCells.map((cell) => {
                     const cellEvents = filteredEvents.filter((evt) => evt.dateKey === cell.dateKey);
@@ -866,7 +866,7 @@ export default function ManagerCalendar() {
                         </div>
 
                         <div className="wz-cal-month-events-list">
-                          {visibleEvents.map((evt) => renderEventCard(evt, true))}
+                          {visibleEvents.map((evt) => renderEventItem(evt, true))}
                           {overflowCount > 0 && (
                             <button
                               type="button"
@@ -909,13 +909,17 @@ export default function ManagerCalendar() {
 
                   <div className="wz-cal-day-banner-stats">
                     <span className="wz-cal-day-stat-pill" style={{ background: "#f1f5f9", color: "#334155" }}>
-                      <strong>{dayViewEvents.length}</strong> Total Bookings
+                      <strong>{dayViewEvents.length}</strong> Total Events
                     </span>
-                    <span className="wz-cal-day-stat-pill" style={{ background: "#e0f2fe", color: "#0369a1" }}>
-                      <strong>{dayViewEvents.filter((e) => e.type === "pickup").length}</strong> Pickups
+                    <span className="wz-cal-day-stat-pill" style={{ background: "#fef3c7", color: "#92400e" }}>
+                      <strong>{dayViewEvents.filter((e) => e.type === "pickup").length}</strong> Pickups (Yellow)
                     </span>
                     <span className="wz-cal-day-stat-pill" style={{ background: "#fef2f2", color: "#e11d48" }}>
-                      <strong>{dayViewEvents.filter((e) => e.type === "return").length}</strong> Returns
+                      <strong>{dayViewEvents.filter((e) => e.type === "return").length}</strong> Returns (Red)
+                    </span>
+                    <span className="wz-cal-day-stat-pill" style={{ background: "#fffbeb", color: "#b45309" }}>
+                      <span className="wz-cal-yellow-dot" style={{ width: "7px", height: "7px" }} />
+                      <strong>{dayViewEvents.filter((e) => e.isPending).length}</strong> Pending
                     </span>
                   </div>
                 </div>
@@ -935,16 +939,35 @@ export default function ManagerCalendar() {
                             </span>
                           ) : (
                             hourEvents.map((evt) => {
-                              const isApproved = (evt.status || "").toLowerCase() === "approved";
-                              const isPending = (evt.status || "").toLowerCase().includes("pending");
+                              // If pending: show as yellow dot item
+                              if (evt.isPending || evt.type === "pending") {
+                                return (
+                                  <div
+                                    key={evt.id}
+                                    className="wz-cal-pending-dot-item"
+                                    style={{ padding: "10px 14px" }}
+                                    onClick={() => {
+                                      setSelectedEvent(evt);
+                                      setShowDetailPanel(true);
+                                    }}
+                                  >
+                                    <span className="wz-cal-yellow-dot" />
+                                    <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#92400e" }}>
+                                      {evt.timeExact} • Pending Approval: {evt.equipment} (Member: {evt.clientName})
+                                    </span>
+                                  </div>
+                                );
+                              }
+
+                              const isPickup = evt.type === "pickup";
 
                               return (
                                 <div
                                   key={evt.id}
                                   className="wz-cal-day-card"
                                   style={{
-                                    background: isApproved ? "#fef2f2" : isPending ? "#fefce8" : "#f8fafc",
-                                    border: `1px solid ${isApproved ? "#fecdd3" : isPending ? "#fde047" : "#e2e8f0"}`,
+                                    background: isPickup ? "#fefce8" : "#fef2f2",
+                                    border: `1px solid ${isPickup ? "#fde047" : "#fecdd3"}`,
                                   }}
                                   onClick={() => {
                                     setSelectedEvent(evt);
@@ -967,7 +990,7 @@ export default function ManagerCalendar() {
                                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                                         <span
                                           style={{
-                                            color: isApproved ? "#e11d48" : isPending ? "#b45309" : "#0369a1",
+                                            color: isPickup ? "#b45309" : "#e11d48",
                                             fontWeight: 800,
                                             fontSize: "0.85rem",
                                             display: "inline-flex",
@@ -975,8 +998,7 @@ export default function ManagerCalendar() {
                                             gap: "5px",
                                           }}
                                         >
-                                          {isPending && <span className="wz-cal-yellow-dot" />}
-                                          {evt.timeExact}
+                                          {evt.timeExact} ({isPickup ? "Pickup - Yellow" : "Return - Red"})
                                         </span>
                                         <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "#64748b" }}>
                                           • {evt.agenda}
@@ -1001,11 +1023,11 @@ export default function ManagerCalendar() {
                                         borderRadius: "6px",
                                         fontSize: "0.74rem",
                                         fontWeight: 800,
-                                        background: isApproved ? "#ffe4e6" : isPending ? "#fef3c7" : "#e0f2fe",
-                                        color: isApproved ? "#be123c" : isPending ? "#92400e" : "#0369a1",
+                                        background: isPickup ? "#fef3c7" : "#ffe4e6",
+                                        color: isPickup ? "#92400e" : "#be123c",
                                       }}
                                     >
-                                      {evt.status}
+                                      {isPickup ? "Pickup Scheduled" : "Return Scheduled"}
                                     </span>
                                     <button
                                       type="button"
@@ -1066,13 +1088,25 @@ export default function ManagerCalendar() {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  background: (selectedEvent.status || "").toLowerCase() === "approved" ? "#fef2f2" : "#fefce8",
-                  border: `1px solid ${(selectedEvent.status || "").toLowerCase() === "approved" ? "#fecdd3" : "#fde047"}`,
+                  background: selectedEvent.isPending
+                    ? "#fefce8"
+                    : selectedEvent.type === "pickup"
+                    ? "#fef3c7"
+                    : "#fef2f2",
+                  border: `1px solid ${
+                    selectedEvent.isPending
+                      ? "#fde047"
+                      : selectedEvent.type === "pickup"
+                      ? "#fde68a"
+                      : "#fecdd3"
+                  }`,
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  {(selectedEvent.status || "").toLowerCase().includes("pending") ? (
+                  {selectedEvent.isPending ? (
                     <span className="wz-cal-yellow-dot" />
+                  ) : selectedEvent.type === "pickup" ? (
+                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#d97706" }} />
                   ) : (
                     <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#e11d48" }} />
                   )}
@@ -1080,10 +1114,18 @@ export default function ManagerCalendar() {
                     style={{
                       fontWeight: 800,
                       fontSize: "0.8rem",
-                      color: (selectedEvent.status || "").toLowerCase() === "approved" ? "#be123c" : "#92400e",
+                      color: selectedEvent.isPending
+                        ? "#92400e"
+                        : selectedEvent.type === "pickup"
+                        ? "#b45309"
+                        : "#be123c",
                     }}
                   >
-                    {selectedEvent.status}
+                    {selectedEvent.isPending
+                      ? "Pending Approval (Schedule Not Final)"
+                      : selectedEvent.type === "pickup"
+                      ? "Approved Pickup (Yellow)"
+                      : "Approved Return (Red)"}
                   </span>
                 </div>
                 {selectedEvent.isRescheduled && (
