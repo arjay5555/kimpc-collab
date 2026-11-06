@@ -7,6 +7,19 @@ const authenticate = require("../middleware/authenticate");
 const { logAudit } = require("../services/auditLogger");
 const { sendPasswordResetEmail, sendPasswordChangedNotificationEmail } = require("../services/mailer");
 const {
+  updateEnvFile,
+  DEFAULT_GOOGLE_CLIENT_ID,
+  DEFAULT_GOOGLE_CLIENT_SECRET,
+  DEFAULT_FACEBOOK_APP_ID,
+  DEFAULT_FACEBOOK_APP_SECRET,
+  DEFAULT_RECAPTCHA_SITE_KEY,
+  DEFAULT_RECAPTCHA_SECRET_KEY,
+  DEFAULT_WEATHER_API_KEY,
+  DEFAULT_ONESIGNAL_APP_ID,
+  DEFAULT_ONESIGNAL_REST_KEY,
+  DEFAULT_CLOUDINARY_CLOUD_NAME,
+  DEFAULT_CLOUDINARY_API_KEY,
+  DEFAULT_CLOUDINARY_API_SECRET,
   getEffectiveGoogleKeys,
   getEffectiveFacebookKeys,
   getEffectiveRecaptchaKeys,
@@ -371,6 +384,12 @@ router.post("/admin/api-keys/google", requireAdmin, async (req, res) => {
     if (isReset) {
       await SystemSetting.findOneAndDelete({ key: "customGoogleClientId" });
       await SystemSetting.findOneAndDelete({ key: "customGoogleClientSecret" });
+      updateEnvFile({
+        CUSTOM_GOOGLE_CLIENT_ID: "",
+        CUSTOM_GOOGLE_CLIENT_SECRET: "",
+        GOOGLE_CLIENT_ID: process.env.DEFAULT_GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID,
+        GOOGLE_CLIENT_SECRET: process.env.DEFAULT_GOOGLE_CLIENT_SECRET || DEFAULT_GOOGLE_CLIENT_SECRET,
+      });
       await logAudit({
         action: "SETTINGS_UPDATED",
         actorEmail: updatedBy,
@@ -403,6 +422,13 @@ router.post("/admin/api-keys/google", requireAdmin, async (req, res) => {
       );
     }
 
+    updateEnvFile({
+      CUSTOM_GOOGLE_CLIENT_ID: clientId || "",
+      CUSTOM_GOOGLE_CLIENT_SECRET: clientSecret || "",
+      GOOGLE_CLIENT_ID: clientId || process.env.DEFAULT_GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID,
+      GOOGLE_CLIENT_SECRET: clientSecret || process.env.DEFAULT_GOOGLE_CLIENT_SECRET || DEFAULT_GOOGLE_CLIENT_SECRET,
+    });
+
     await logAudit({
       action: "SETTINGS_UPDATED",
       actorEmail: updatedBy,
@@ -433,6 +459,12 @@ router.post("/admin/api-keys/facebook", requireAdmin, async (req, res) => {
     if (isReset) {
       await SystemSetting.findOneAndDelete({ key: "customFacebookAppId" });
       await SystemSetting.findOneAndDelete({ key: "customFacebookAppSecret" });
+      updateEnvFile({
+        CUSTOM_FACEBOOK_APP_ID: "",
+        CUSTOM_FACEBOOK_APP_SECRET: "",
+        FACEBOOK_APP_ID: process.env.DEFAULT_FACEBOOK_APP_ID || DEFAULT_FACEBOOK_APP_ID,
+        FACEBOOK_APP_SECRET: process.env.DEFAULT_FACEBOOK_APP_SECRET || DEFAULT_FACEBOOK_APP_SECRET,
+      });
       await logAudit({
         action: "SETTINGS_UPDATED",
         actorEmail: updatedBy,
@@ -465,6 +497,13 @@ router.post("/admin/api-keys/facebook", requireAdmin, async (req, res) => {
       );
     }
 
+    updateEnvFile({
+      CUSTOM_FACEBOOK_APP_ID: appId || "",
+      CUSTOM_FACEBOOK_APP_SECRET: appSecret || "",
+      FACEBOOK_APP_ID: appId || process.env.DEFAULT_FACEBOOK_APP_ID || DEFAULT_FACEBOOK_APP_ID,
+      FACEBOOK_APP_SECRET: appSecret || process.env.DEFAULT_FACEBOOK_APP_SECRET || DEFAULT_FACEBOOK_APP_SECRET,
+    });
+
     await logAudit({
       action: "SETTINGS_UPDATED",
       actorEmail: updatedBy,
@@ -495,6 +534,12 @@ router.post("/admin/api-keys/recaptcha", requireAdmin, async (req, res) => {
     if (isReset) {
       await SystemSetting.findOneAndDelete({ key: "customRecaptchaSiteKey" });
       await SystemSetting.findOneAndDelete({ key: "customRecaptchaSecretKey" });
+      updateEnvFile({
+        CUSTOM_RECAPTCHA_SITE_KEY: "",
+        CUSTOM_RECAPTCHA_SECRET_KEY: "",
+        RECAPTCHA_SITE_KEY: process.env.DEFAULT_RECAPTCHA_SITE_KEY || DEFAULT_RECAPTCHA_SITE_KEY,
+        RECAPTCHA_SECRET_KEY: process.env.DEFAULT_RECAPTCHA_SECRET_KEY || DEFAULT_RECAPTCHA_SECRET_KEY,
+      });
       await logAudit({
         action: "SETTINGS_UPDATED",
         actorEmail: updatedBy,
@@ -527,6 +572,13 @@ router.post("/admin/api-keys/recaptcha", requireAdmin, async (req, res) => {
       );
     }
 
+    updateEnvFile({
+      CUSTOM_RECAPTCHA_SITE_KEY: siteKey || "",
+      CUSTOM_RECAPTCHA_SECRET_KEY: secretKey || "",
+      RECAPTCHA_SITE_KEY: siteKey || process.env.DEFAULT_RECAPTCHA_SITE_KEY || DEFAULT_RECAPTCHA_SITE_KEY,
+      RECAPTCHA_SECRET_KEY: secretKey || process.env.DEFAULT_RECAPTCHA_SECRET_KEY || DEFAULT_RECAPTCHA_SECRET_KEY,
+    });
+
     await logAudit({
       action: "SETTINGS_UPDATED",
       actorEmail: updatedBy,
@@ -555,6 +607,10 @@ router.post("/admin/api-keys/weather", requireAdmin, async (req, res) => {
 
     if (isReset) {
       await SystemSetting.findOneAndDelete({ key: "customWeatherApiKey" });
+      updateEnvFile({
+        CUSTOM_WEATHER_API_KEY: "",
+        WEATHER_API_KEY: process.env.DEFAULT_WEATHER_API_KEY || DEFAULT_WEATHER_API_KEY,
+      });
       await logAudit({
         action: "SETTINGS_UPDATED",
         actorEmail: updatedBy,
@@ -576,6 +632,11 @@ router.post("/admin/api-keys/weather", requireAdmin, async (req, res) => {
       "Custom WeatherAPI.com API Key",
       updatedBy
     );
+
+    updateEnvFile({
+      CUSTOM_WEATHER_API_KEY: key,
+      WEATHER_API_KEY: key,
+    });
 
     await logAudit({
       action: "SETTINGS_UPDATED",
@@ -607,6 +668,12 @@ router.post("/admin/api-keys/onesignal", requireAdmin, async (req, res) => {
     if (isReset) {
       await SystemSetting.findOneAndDelete({ key: "customOneSignalAppId" });
       await SystemSetting.findOneAndDelete({ key: "customOneSignalRestApiKey" });
+      updateEnvFile({
+        CUSTOM_ONESIGNAL_APP_ID: "",
+        CUSTOM_ONESIGNAL_REST_KEY: "",
+        ONESIGNAL_APP_ID: process.env.DEFAULT_ONESIGNAL_APP_ID || DEFAULT_ONESIGNAL_APP_ID,
+        ONESIGNAL_REST_API_KEY: process.env.DEFAULT_ONESIGNAL_REST_KEY || DEFAULT_ONESIGNAL_REST_KEY,
+      });
       await logAudit({
         action: "SETTINGS_UPDATED",
         actorEmail: updatedBy,
@@ -638,6 +705,13 @@ router.post("/admin/api-keys/onesignal", requireAdmin, async (req, res) => {
         updatedBy
       );
     }
+
+    updateEnvFile({
+      CUSTOM_ONESIGNAL_APP_ID: appId || "",
+      CUSTOM_ONESIGNAL_REST_KEY: restApiKey || "",
+      ONESIGNAL_APP_ID: appId || process.env.DEFAULT_ONESIGNAL_APP_ID || DEFAULT_ONESIGNAL_APP_ID,
+      ONESIGNAL_REST_API_KEY: restApiKey || process.env.DEFAULT_ONESIGNAL_REST_KEY || DEFAULT_ONESIGNAL_REST_KEY,
+    });
 
     await logAudit({
       action: "SETTINGS_UPDATED",
@@ -671,6 +745,14 @@ router.post("/admin/api-keys/cloudinary", requireAdmin, async (req, res) => {
       await SystemSetting.findOneAndDelete({ key: "customCloudinaryCloudName" });
       await SystemSetting.findOneAndDelete({ key: "customCloudinaryApiKey" });
       await SystemSetting.findOneAndDelete({ key: "customCloudinaryApiSecret" });
+      updateEnvFile({
+        CUSTOM_CLOUDINARY_CLOUD_NAME: "",
+        CUSTOM_CLOUDINARY_API_KEY: "",
+        CUSTOM_CLOUDINARY_API_SECRET: "",
+        CLOUDINARY_CLOUD_NAME: process.env.DEFAULT_CLOUDINARY_CLOUD_NAME || DEFAULT_CLOUDINARY_CLOUD_NAME,
+        CLOUDINARY_API_KEY: process.env.DEFAULT_CLOUDINARY_API_KEY || DEFAULT_CLOUDINARY_API_KEY,
+        CLOUDINARY_API_SECRET: process.env.DEFAULT_CLOUDINARY_API_SECRET || DEFAULT_CLOUDINARY_API_SECRET,
+      });
       await logAudit({
         action: "SETTINGS_UPDATED",
         actorEmail: updatedBy,
@@ -711,6 +793,15 @@ router.post("/admin/api-keys/cloudinary", requireAdmin, async (req, res) => {
       );
     }
 
+    updateEnvFile({
+      CUSTOM_CLOUDINARY_CLOUD_NAME: cloudName || "",
+      CUSTOM_CLOUDINARY_API_KEY: apiKey || "",
+      CUSTOM_CLOUDINARY_API_SECRET: apiSecret || "",
+      CLOUDINARY_CLOUD_NAME: cloudName || process.env.DEFAULT_CLOUDINARY_CLOUD_NAME || DEFAULT_CLOUDINARY_CLOUD_NAME,
+      CLOUDINARY_API_KEY: apiKey || process.env.DEFAULT_CLOUDINARY_API_KEY || DEFAULT_CLOUDINARY_API_KEY,
+      CLOUDINARY_API_SECRET: apiSecret || process.env.DEFAULT_CLOUDINARY_API_SECRET || DEFAULT_CLOUDINARY_API_SECRET,
+    });
+
     await logAudit({
       action: "SETTINGS_UPDATED",
       actorEmail: updatedBy,
@@ -719,6 +810,17 @@ router.post("/admin/api-keys/cloudinary", requireAdmin, async (req, res) => {
       status: "Success",
       req,
     });
+
+    res.json({
+      ok: true,
+      isCustom: true,
+      message: "Custom Cloudinary credentials saved successfully.",
+    });
+  } catch (err) {
+    console.error("Error saving custom Cloudinary credentials:", err);
+    fail(res, 500, "Failed to save Cloudinary credentials.");
+  }
+});
 
     res.json({
       ok: true,
