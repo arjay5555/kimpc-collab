@@ -71,8 +71,10 @@ async function getEffectiveGoogleKeys() {
     console.warn("[apiKeyManager] Error reading customGoogleKeys:", err.message);
   }
 
-  const clientId = customClientId || DEFAULT_GOOGLE_CLIENT_ID;
-  const clientSecret = customClientSecret || DEFAULT_GOOGLE_CLIENT_SECRET;
+  const defaultId = (process.env.GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID || "").trim();
+  const defaultSecret = (process.env.GOOGLE_CLIENT_SECRET || DEFAULT_GOOGLE_CLIENT_SECRET || "").trim();
+  const clientId = customClientId || defaultId;
+  const clientSecret = customClientSecret || defaultSecret;
   const isCustom = Boolean(customClientId || customClientSecret);
 
   return { clientId, clientSecret, isCustom, customClientId, customClientSecret };
@@ -202,8 +204,8 @@ async function getAdminApiKeysSummary() {
       isCustom: google.isCustom,
       customClientId: google.customClientId || "",
       customClientSecret: google.customClientSecret || "",
-      defaultClientIdMasked: maskValue(DEFAULT_GOOGLE_CLIENT_ID),
-      defaultClientSecretMasked: maskValue(DEFAULT_GOOGLE_CLIENT_SECRET),
+      defaultClientIdMasked: maskValue(process.env.GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID),
+      defaultClientSecretMasked: maskValue(process.env.GOOGLE_CLIENT_SECRET || DEFAULT_GOOGLE_CLIENT_SECRET),
     },
     facebook: {
       isCustom: facebook.isCustom,
