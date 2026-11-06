@@ -7,7 +7,7 @@ import "../../styles/admin-kimpc.css";
 export default function AdminIntegrations() {
   const [settings, setSettings] = useState({
     googleLoginEnabled: true,
-    facebookLoginEnabled: true,
+    facebookLoginEnabled: false,
     recaptchaEnabled: true,
     weatherEnabled: true,
     oneSignalEnabled: true,
@@ -18,29 +18,25 @@ export default function AdminIntegrations() {
 
   // Customizable API Keys State
   const [apiKeys, setApiKeys] = useState({
-    google: { isCustom: false, customClientId: "", customClientSecret: "", defaultClientIdMasked: "", defaultClientSecretMasked: "" },
-    facebook: { isCustom: false, customAppId: "", customAppSecret: "", defaultAppIdMasked: "", defaultAppSecretMasked: "" },
-    recaptcha: { isCustom: false, customSiteKey: "", customSecretKey: "", defaultSiteKeyMasked: "", defaultSecretKeyMasked: "" },
-    weather: { isCustom: false, customKey: "", defaultKeyMasked: "" },
-    oneSignal: { isCustom: false, customAppId: "", customRestApiKey: "", defaultAppIdMasked: "", defaultRestKeyMasked: "" },
-    cloudinary: { isCustom: false, customCloudName: "", customApiKey: "", customApiSecret: "", defaultCloudName: "", defaultApiKeyMasked: "", defaultApiSecretMasked: "" },
+    google: { clientId: "", clientSecret: "", isCustom: false, source: "default" },
+    facebook: { appId: "", appSecret: "", isCustom: false, source: "default" },
+    recaptcha: { siteKey: "", secretKey: "", isCustom: false, source: "default" },
+    weather: { apiKey: "", isCustom: false, source: "default" },
+    oneSignal: { appId: "", restApiKey: "", isCustom: false, source: "default" },
+    cloudinary: { cloudName: "", apiKey: "", apiSecret: "", isCustom: false, source: "default" },
   });
 
-  const [keyForms, setKeyForms] = useState({
-    googleClientId: "",
-    googleClientSecret: "",
-    facebookAppId: "",
-    facebookAppSecret: "",
-    recaptchaSiteKey: "",
-    recaptchaSecretKey: "",
-    weatherApiKey: "",
-    oneSignalAppId: "",
-    oneSignalRestApiKey: "",
-    cloudinaryCloudName: "",
-    cloudinaryApiKey: "",
-    cloudinaryApiSecret: "",
+  // Key form inputs
+  const [keyInputs, setKeyInputs] = useState({
+    google: { clientId: "", clientSecret: "" },
+    facebook: { appId: "", appSecret: "" },
+    recaptcha: { siteKey: "", secretKey: "" },
+    weather: { apiKey: "" },
+    oneSignal: { appId: "", restApiKey: "" },
+    cloudinary: { cloudName: "", apiKey: "", apiSecret: "" },
   });
 
+  // Drawer expansion state
   const [expandedKeys, setExpandedKeys] = useState({
     google: false,
     facebook: false,
@@ -50,6 +46,7 @@ export default function AdminIntegrations() {
     cloudinary: false,
   });
 
+  // Reveal / Hide secrets toggle
   const [revealSecrets, setRevealSecrets] = useState({
     google: false,
     facebook: false,
@@ -59,368 +56,359 @@ export default function AdminIntegrations() {
     cloudinary: false,
   });
 
-  const [keyFeedback, setKeyFeedback] = useState({});
+  // Individual saving state & feedback
   const [keySaving, setKeySaving] = useState({});
+  const [keyFeedback, setKeyFeedback] = useState({});
 
-  const loadApiKeys = async () => {
-    const { ok, data } = await api("/admin/api-keys");
-    if (ok && data) {
-      setApiKeys(data);
-      setKeyForms({
-        googleClientId: data.google?.customClientId || "",
-        googleClientSecret: data.google?.customClientSecret || "",
-        facebookAppId: data.facebook?.customAppId || "",
-        facebookAppSecret: data.facebook?.customAppSecret || "",
-        recaptchaSiteKey: data.recaptcha?.customSiteKey || "",
-        recaptchaSecretKey: data.recaptcha?.customSecretKey || "",
-        weatherApiKey: data.weather?.customKey || "",
-        oneSignalAppId: data.oneSignal?.customAppId || "",
-        oneSignalRestApiKey: data.oneSignal?.customRestApiKey || "",
-        cloudinaryCloudName: data.cloudinary?.customCloudName || "",
-        cloudinaryApiKey: data.cloudinary?.customApiKey || "",
-        cloudinaryApiSecret: data.cloudinary?.customApiSecret || "",
-      });
-    }
-  };
+  // 1. Fetch current integration switches & customizable keys
+  const fetchSettingsAndKeys = async () => {
+    setLoading(true);
+    try {
+      const res = await api("/admin/settings");
+      if (res.ok && res.data) {
+        setSettings({
+          googleLoginEnabled: res.data.googleLoginEnabled ?? true,
+          facebookLoginEnabled: res.data.facebookLoginEnabled ?? false,
+          recaptchaEnabled: res.data.recaptchaEnabled ?? true,
+          weatherEnabled: res.data.weatherEnabled ?? true,
+          oneSignalEnabled: res.data.oneSignalEnabled ?? true,
+          cloudinaryEnabled: res.data.cloudinaryEnabled ?? true,
+        });
+      }
 
-  const loadConfig = async () => {
-    const { ok, data } = await api("/config");
-    if (ok && data) {
-      setSettings({
-        googleLoginEnabled: data.googleLoginEnabled !== false,
-        facebookLoginEnabled: data.facebookLoginEnabled !== false,
-        recaptchaEnabled: data.recaptchaEnabled !== false,
-        weatherEnabled: data.weatherEnabled !== false,
-        oneSignalEnabled: data.oneSignalEnabled !== false,
-        cloudinaryEnabled: data.cloudinaryEnabled !== false,
-      });
+      const keysRes = await api("/admin/integrations/keys");
+      if (keysRes.ok && keysRes.data?.data) {
+        const d = keysRes.data.data;
+        setApiKeys({
+          google: d.google || {},
+          facebook: d.facebook || {},
+          recaptcha: d.recaptcha || {},
+          weather: d.weather || {},
+          oneSignal: d.oneSignal || {},
+          cloudinary: d.cloudinary || {},
+        });
+
+        setKeyInputs({
+          google: {
+            clientId: d.google?.clientId || "",
+            clientSecret: d.google?.clientSecret || "",
+          },
+          facebook: {
+            appId: d.facebook?.appId || "",
+            appSecret: d.facebook?.appSecret || "",
+          },
+          recaptcha: {
+            siteKey: d.recaptcha?.siteKey || "",
+            secretKey: d.recaptcha?.secretKey || "",
+          },
+          weather: {
+            apiKey: d.weather?.apiKey || "",
+          },
+          oneSignal: {
+            appId: d.oneSignal?.appId || "",
+            restApiKey: d.oneSignal?.restApiKey || "",
+          },
+          cloudinary: {
+            cloudName: d.cloudinary?.cloudName || "",
+            apiKey: d.cloudinary?.apiKey || "",
+            apiSecret: d.cloudinary?.apiSecret || "",
+          },
+        });
+      }
+    } catch (err) {
+      console.error("Error fetching integrations:", err);
+      setFeedback({ message: "Could not load integration settings.", isError: true });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
-    loadConfig();
-    loadApiKeys();
+    fetchSettingsAndKeys();
   }, []);
 
-  // Toggle Handlers
-  const handleToggleGoogle = async () => {
-    const nextVal = !settings.googleLoginEnabled;
-    setSettings((p) => ({ ...p, googleLoginEnabled: nextVal }));
-    const { ok, data } = await api("/admin/settings/google-auth", {
-      method: "PATCH",
-      body: { enabled: nextVal },
-    });
-    if (ok) {
-      setFeedback({ message: data.message || `Google sign-in ${nextVal ? "enabled" : "disabled"}.`, isError: false });
-    } else {
-      setSettings((p) => ({ ...p, googleLoginEnabled: !nextVal }));
-      setFeedback({ message: "Failed to update Google auth setting.", isError: true });
+  // Update a single setting switch
+  const updateSetting = async (key, value, label) => {
+    const previous = settings[key];
+    setSettings((prev) => ({ ...prev, [key]: value }));
+    setFeedback({ message: `Updating ${label}...`, isError: false });
+
+    try {
+      const res = await api("/admin/settings", {
+        method: "PUT",
+        body: { [key]: value },
+      });
+
+      if (!res.ok) {
+        setSettings((prev) => ({ ...prev, [key]: previous }));
+        setFeedback({ message: res.data?.error || `Failed to update ${label}.`, isError: true });
+      } else {
+        setFeedback({
+          message: `${label} has been ${value ? "enabled" : "disabled"} successfully.`,
+          isError: false,
+        });
+        setTimeout(() => setFeedback({ message: "", isError: false }), 4000);
+      }
+    } catch {
+      setSettings((prev) => ({ ...prev, [key]: previous }));
+      setFeedback({ message: `Network error updating ${label}.`, isError: true });
     }
-    setTimeout(() => setFeedback({ message: "", isError: false }), 4000);
   };
 
-  const handleToggleFacebook = async () => {
-    const nextVal = !settings.facebookLoginEnabled;
-    setSettings((p) => ({ ...p, facebookLoginEnabled: nextVal }));
-    const { ok, data } = await api("/admin/settings/facebook-auth", {
-      method: "PATCH",
-      body: { enabled: nextVal },
-    });
-    if (ok) {
-      setFeedback({ message: data.message || `Facebook sign-in ${nextVal ? "enabled" : "disabled"}.`, isError: false });
-    } else {
-      setSettings((p) => ({ ...p, facebookLoginEnabled: !nextVal }));
-      setFeedback({ message: "Failed to update Facebook auth setting.", isError: true });
-    }
-    setTimeout(() => setFeedback({ message: "", isError: false }), 4000);
-  };
+  // Toggle handlers
+  const handleToggleGoogle = () =>
+    updateSetting("googleLoginEnabled", !settings.googleLoginEnabled, "Google Sign-In");
+  const handleToggleFacebook = () =>
+    updateSetting("facebookLoginEnabled", !settings.facebookLoginEnabled, "Facebook Sign-In");
+  const handleToggleRecaptcha = () =>
+    updateSetting("recaptchaEnabled", !settings.recaptchaEnabled, "Google reCAPTCHA v2");
+  const handleToggleWeather = () =>
+    updateSetting("weatherEnabled", !settings.weatherEnabled, "Kalilangan Weather Forecast API");
+  const handleToggleOneSignal = () =>
+    updateSetting("oneSignalEnabled", !settings.oneSignalEnabled, "OneSignal Web Push");
+  const handleToggleCloudinary = () =>
+    updateSetting("cloudinaryEnabled", !settings.cloudinaryEnabled, "Cloudinary Media Storage");
 
-  const handleToggleRecaptcha = async () => {
-    const nextVal = !settings.recaptchaEnabled;
-    setSettings((p) => ({ ...p, recaptchaEnabled: nextVal }));
-    const { ok, data } = await api("/admin/settings/recaptcha", {
-      method: "PATCH",
-      body: { enabled: nextVal },
-    });
-    if (ok) {
-      setFeedback({ message: data.message || `Google reCAPTCHA ${nextVal ? "enabled" : "disabled"}.`, isError: false });
-    } else {
-      setSettings((p) => ({ ...p, recaptchaEnabled: !nextVal }));
-      setFeedback({ message: "Failed to update reCAPTCHA setting.", isError: true });
-    }
-    setTimeout(() => setFeedback({ message: "", isError: false }), 4000);
-  };
-
-  const handleToggleWeather = async () => {
-    const nextVal = settings.weatherEnabled === false;
-    setSettings((p) => ({ ...p, weatherEnabled: nextVal }));
-    const { ok, data } = await api("/admin/settings/weather", {
-      method: "PATCH",
-      body: { enabled: nextVal },
-    });
-    if (ok) {
-      setFeedback({ message: data.message || `Kalilangan Weather API ${nextVal ? "enabled" : "disabled"}.`, isError: false });
-    } else {
-      setSettings((p) => ({ ...p, weatherEnabled: !nextVal }));
-      setFeedback({ message: "Failed to update Weather API setting.", isError: true });
-    }
-    setTimeout(() => setFeedback({ message: "", isError: false }), 4000);
-  };
-
-  const handleToggleOneSignal = async () => {
-    const nextVal = settings.oneSignalEnabled === false;
-    setSettings((p) => ({ ...p, oneSignalEnabled: nextVal }));
-    const { ok, data } = await api("/admin/settings/onesignal", {
-      method: "PATCH",
-      body: { enabled: nextVal },
-    });
-    if (ok) {
-      setFeedback({ message: data.message || `OneSignal push notifications ${nextVal ? "enabled" : "disabled"}.`, isError: false });
-    } else {
-      setSettings((p) => ({ ...p, oneSignalEnabled: !nextVal }));
-      setFeedback({ message: "Failed to update OneSignal setting.", isError: true });
-    }
-    setTimeout(() => setFeedback({ message: "", isError: false }), 4000);
-  };
-
-  const handleToggleCloudinary = async () => {
-    const nextVal = settings.cloudinaryEnabled === false;
-    setSettings((p) => ({ ...p, cloudinaryEnabled: nextVal }));
-    const { ok, data } = await api("/admin/settings/cloudinary", {
-      method: "PATCH",
-      body: { enabled: nextVal },
-    });
-    if (ok) {
-      setFeedback({ message: data.message || `Cloudinary media storage ${nextVal ? "enabled" : "disabled"}.`, isError: false });
-    } else {
-      setSettings((p) => ({ ...p, cloudinaryEnabled: !nextVal }));
-      setFeedback({ message: "Failed to update Cloudinary setting.", isError: true });
-    }
-    setTimeout(() => setFeedback({ message: "", isError: false }), 4000);
-  };
-
-  // Save & Reset Key Handlers
+  // Save / Reset Handlers for Customizable Keys
   const handleSaveGoogleKeys = async () => {
     setKeySaving((p) => ({ ...p, google: true }));
-    const res = await api("/admin/api-keys/google", {
-      method: "POST",
-      body: {
-        clientId: keyForms.googleClientId.trim(),
-        clientSecret: keyForms.googleClientSecret.trim(),
-      },
-    });
-    setKeySaving((p) => ({ ...p, google: false }));
-    if (res.ok) {
-      setKeyFeedback((p) => ({ ...p, google: { message: res.data?.message || "Google OAuth credentials saved to .env!", isError: false } }));
-      loadApiKeys();
-      setTimeout(() => setKeyFeedback((p) => ({ ...p, google: null })), 4000);
-    } else {
-      setKeyFeedback((p) => ({ ...p, google: { message: res.data?.error || "Failed to save credentials.", isError: true } }));
+    setKeyFeedback((p) => ({ ...p, google: null }));
+    try {
+      const res = await api("/admin/integrations/keys/google", {
+        method: "POST",
+        body: {
+          clientId: keyInputs.google.clientId.trim(),
+          clientSecret: keyInputs.google.clientSecret.trim(),
+        },
+      });
+      if (!res.ok) {
+        setKeyFeedback((p) => ({ ...p, google: { isError: true, message: res.data?.error || "Failed to update Google credentials." } }));
+      } else {
+        setKeyFeedback((p) => ({ ...p, google: { isError: false, message: "Google credentials saved & written to server/.env successfully!" } }));
+        fetchSettingsAndKeys();
+        setTimeout(() => setKeyFeedback((p) => ({ ...p, google: null })), 4000);
+      }
+    } catch {
+      setKeyFeedback((p) => ({ ...p, google: { isError: true, message: "Network error saving Google credentials." } }));
+    } finally {
+      setKeySaving((p) => ({ ...p, google: false }));
     }
   };
 
   const handleResetGoogleKeys = async () => {
+    if (!window.confirm("Reset Google credentials to default system code keys?")) return;
     setKeySaving((p) => ({ ...p, google: true }));
-    const res = await api("/admin/api-keys/google", {
-      method: "POST",
-      body: { reset: true },
-    });
-    setKeySaving((p) => ({ ...p, google: false }));
-    if (res.ok) {
-      setKeyForms((p) => ({ ...p, googleClientId: "", googleClientSecret: "" }));
-      setKeyFeedback((p) => ({ ...p, google: { message: "Reset to default code keys.", isError: false } }));
-      loadApiKeys();
-      setTimeout(() => setKeyFeedback((p) => ({ ...p, google: null })), 4000);
+    try {
+      const res = await api("/admin/integrations/keys/google/reset", { method: "POST" });
+      if (res.ok) {
+        setKeyFeedback((p) => ({ ...p, google: { isError: false, message: "Reset to default system credentials." } }));
+        fetchSettingsAndKeys();
+        setTimeout(() => setKeyFeedback((p) => ({ ...p, google: null })), 4000);
+      }
+    } finally {
+      setKeySaving((p) => ({ ...p, google: false }));
     }
   };
 
   const handleSaveFacebookKeys = async () => {
     setKeySaving((p) => ({ ...p, facebook: true }));
-    const res = await api("/admin/api-keys/facebook", {
-      method: "POST",
-      body: {
-        appId: keyForms.facebookAppId.trim(),
-        appSecret: keyForms.facebookAppSecret.trim(),
-      },
-    });
-    setKeySaving((p) => ({ ...p, facebook: false }));
-    if (res.ok) {
-      setKeyFeedback((p) => ({ ...p, facebook: { message: res.data?.message || "Facebook OAuth credentials saved to .env!", isError: false } }));
-      loadApiKeys();
-      setTimeout(() => setKeyFeedback((p) => ({ ...p, facebook: null })), 4000);
-    } else {
-      setKeyFeedback((p) => ({ ...p, facebook: { message: res.data?.error || "Failed to save credentials.", isError: true } }));
+    setKeyFeedback((p) => ({ ...p, facebook: null }));
+    try {
+      const res = await api("/admin/integrations/keys/facebook", {
+        method: "POST",
+        body: {
+          appId: keyInputs.facebook.appId.trim(),
+          appSecret: keyInputs.facebook.appSecret.trim(),
+        },
+      });
+      if (!res.ok) {
+        setKeyFeedback((p) => ({ ...p, facebook: { isError: true, message: res.data?.error || "Failed to update Facebook credentials." } }));
+      } else {
+        setKeyFeedback((p) => ({ ...p, facebook: { isError: false, message: "Facebook credentials saved & written to server/.env successfully!" } }));
+        fetchSettingsAndKeys();
+        setTimeout(() => setKeyFeedback((p) => ({ ...p, facebook: null })), 4000);
+      }
+    } catch {
+      setKeyFeedback((p) => ({ ...p, facebook: { isError: true, message: "Network error saving Facebook credentials." } }));
+    } finally {
+      setKeySaving((p) => ({ ...p, facebook: false }));
     }
   };
 
   const handleResetFacebookKeys = async () => {
+    if (!window.confirm("Reset Facebook credentials to default system code keys?")) return;
     setKeySaving((p) => ({ ...p, facebook: true }));
-    const res = await api("/admin/api-keys/facebook", {
-      method: "POST",
-      body: { reset: true },
-    });
-    setKeySaving((p) => ({ ...p, facebook: false }));
-    if (res.ok) {
-      setKeyForms((p) => ({ ...p, facebookAppId: "", facebookAppSecret: "" }));
-      setKeyFeedback((p) => ({ ...p, facebook: { message: "Reset to default code keys.", isError: false } }));
-      loadApiKeys();
-      setTimeout(() => setKeyFeedback((p) => ({ ...p, facebook: null })), 4000);
+    try {
+      const res = await api("/admin/integrations/keys/facebook/reset", { method: "POST" });
+      if (res.ok) {
+        setKeyFeedback((p) => ({ ...p, facebook: { isError: false, message: "Reset to default system credentials." } }));
+        fetchSettingsAndKeys();
+        setTimeout(() => setKeyFeedback((p) => ({ ...p, facebook: null })), 4000);
+      }
+    } finally {
+      setKeySaving((p) => ({ ...p, facebook: false }));
     }
   };
 
   const handleSaveRecaptchaKeys = async () => {
     setKeySaving((p) => ({ ...p, recaptcha: true }));
-    const res = await api("/admin/api-keys/recaptcha", {
-      method: "POST",
-      body: {
-        siteKey: keyForms.recaptchaSiteKey.trim(),
-        secretKey: keyForms.recaptchaSecretKey.trim(),
-      },
-    });
-    setKeySaving((p) => ({ ...p, recaptcha: false }));
-    if (res.ok) {
-      setKeyFeedback((p) => ({ ...p, recaptcha: { message: res.data?.message || "Google reCAPTCHA keys saved to .env!", isError: false } }));
-      loadApiKeys();
-      setTimeout(() => setKeyFeedback((p) => ({ ...p, recaptcha: null })), 4000);
-    } else {
-      setKeyFeedback((p) => ({ ...p, recaptcha: { message: res.data?.error || "Failed to save keys.", isError: true } }));
+    setKeyFeedback((p) => ({ ...p, recaptcha: null }));
+    try {
+      const res = await api("/admin/integrations/keys/recaptcha", {
+        method: "POST",
+        body: {
+          siteKey: keyInputs.recaptcha.siteKey.trim(),
+          secretKey: keyInputs.recaptcha.secretKey.trim(),
+        },
+      });
+      if (!res.ok) {
+        setKeyFeedback((p) => ({ ...p, recaptcha: { isError: true, message: res.data?.error || "Failed to update reCAPTCHA keys." } }));
+      } else {
+        setKeyFeedback((p) => ({ ...p, recaptcha: { isError: false, message: "reCAPTCHA keys saved & written to server/.env successfully!" } }));
+        fetchSettingsAndKeys();
+        setTimeout(() => setKeyFeedback((p) => ({ ...p, recaptcha: null })), 4000);
+      }
+    } catch {
+      setKeyFeedback((p) => ({ ...p, recaptcha: { isError: true, message: "Network error saving reCAPTCHA keys." } }));
+    } finally {
+      setKeySaving((p) => ({ ...p, recaptcha: false }));
     }
   };
 
   const handleResetRecaptchaKeys = async () => {
+    if (!window.confirm("Reset reCAPTCHA keys to default system code keys?")) return;
     setKeySaving((p) => ({ ...p, recaptcha: true }));
-    const res = await api("/admin/api-keys/recaptcha", {
-      method: "POST",
-      body: { reset: true },
-    });
-    setKeySaving((p) => ({ ...p, recaptcha: false }));
-    if (res.ok) {
-      setKeyForms((p) => ({ ...p, recaptchaSiteKey: "", recaptchaSecretKey: "" }));
-      setKeyFeedback((p) => ({ ...p, recaptcha: { message: "Reset to default code keys.", isError: false } }));
-      loadApiKeys();
-      setTimeout(() => setKeyFeedback((p) => ({ ...p, recaptcha: null })), 4000);
+    try {
+      const res = await api("/admin/integrations/keys/recaptcha/reset", { method: "POST" });
+      if (res.ok) {
+        setKeyFeedback((p) => ({ ...p, recaptcha: { isError: false, message: "Reset to default system credentials." } }));
+        fetchSettingsAndKeys();
+        setTimeout(() => setKeyFeedback((p) => ({ ...p, recaptcha: null })), 4000);
+      }
+    } finally {
+      setKeySaving((p) => ({ ...p, recaptcha: false }));
     }
   };
 
   const handleSaveWeatherKey = async () => {
     setKeySaving((p) => ({ ...p, weather: true }));
-    const res = await api("/admin/api-keys/weather", {
-      method: "POST",
-      body: { apiKey: keyForms.weatherApiKey.trim() },
-    });
-    setKeySaving((p) => ({ ...p, weather: false }));
-    if (res.ok) {
-      setKeyFeedback((p) => ({ ...p, weather: { message: res.data?.message || "Weather API key saved to .env!", isError: false } }));
-      loadApiKeys();
-      setTimeout(() => setKeyFeedback((p) => ({ ...p, weather: null })), 4000);
-    } else {
-      setKeyFeedback((p) => ({ ...p, weather: { message: res.data?.error || "Failed to save key.", isError: true } }));
+    setKeyFeedback((p) => ({ ...p, weather: null }));
+    try {
+      const res = await api("/admin/integrations/keys/weather", {
+        method: "POST",
+        body: {
+          apiKey: keyInputs.weather.apiKey.trim(),
+        },
+      });
+      if (!res.ok) {
+        setKeyFeedback((p) => ({ ...p, weather: { isError: true, message: res.data?.error || "Failed to update Weather API key." } }));
+      } else {
+        setKeyFeedback((p) => ({ ...p, weather: { isError: false, message: "Weather API key saved & written to server/.env successfully!" } }));
+        fetchSettingsAndKeys();
+        setTimeout(() => setKeyFeedback((p) => ({ ...p, weather: null })), 4000);
+      }
+    } catch {
+      setKeyFeedback((p) => ({ ...p, weather: { isError: true, message: "Network error saving Weather API key." } }));
+    } finally {
+      setKeySaving((p) => ({ ...p, weather: false }));
     }
   };
 
   const handleResetWeatherKey = async () => {
+    if (!window.confirm("Reset Weather API key to default system code key?")) return;
     setKeySaving((p) => ({ ...p, weather: true }));
-    const res = await api("/admin/api-keys/weather", {
-      method: "POST",
-      body: { reset: true },
-    });
-    setKeySaving((p) => ({ ...p, weather: false }));
-    if (res.ok) {
-      setKeyForms((p) => ({ ...p, weatherApiKey: "" }));
-      setKeyFeedback((p) => ({ ...p, weather: { message: "Reset to default code key.", isError: false } }));
-      loadApiKeys();
-      setTimeout(() => setKeyFeedback((p) => ({ ...p, weather: null })), 4000);
+    try {
+      const res = await api("/admin/integrations/keys/weather/reset", { method: "POST" });
+      if (res.ok) {
+        setKeyFeedback((p) => ({ ...p, weather: { isError: false, message: "Reset to default system credentials." } }));
+        fetchSettingsAndKeys();
+        setTimeout(() => setKeyFeedback((p) => ({ ...p, weather: null })), 4000);
+      }
+    } finally {
+      setKeySaving((p) => ({ ...p, weather: false }));
     }
   };
 
   const handleSaveOneSignalKeys = async () => {
     setKeySaving((p) => ({ ...p, oneSignal: true }));
-    const res = await api("/admin/api-keys/onesignal", {
-      method: "POST",
-      body: {
-        appId: keyForms.oneSignalAppId.trim(),
-        restApiKey: keyForms.oneSignalRestApiKey.trim(),
-      },
-    });
-    setKeySaving((p) => ({ ...p, oneSignal: false }));
-    if (res.ok) {
-      setKeyFeedback((p) => ({ ...p, oneSignal: { message: res.data?.message || "OneSignal credentials saved to .env!", isError: false } }));
-      loadApiKeys();
-      setTimeout(() => setKeyFeedback((p) => ({ ...p, oneSignal: null })), 4000);
-    } else {
-      setKeyFeedback((p) => ({ ...p, oneSignal: { message: res.data?.error || "Failed to save credentials.", isError: true } }));
+    setKeyFeedback((p) => ({ ...p, oneSignal: null }));
+    try {
+      const res = await api("/admin/integrations/keys/onesignal", {
+        method: "POST",
+        body: {
+          appId: keyInputs.oneSignal.appId.trim(),
+          restApiKey: keyInputs.oneSignal.restApiKey.trim(),
+        },
+      });
+      if (!res.ok) {
+        setKeyFeedback((p) => ({ ...p, oneSignal: { isError: true, message: res.data?.error || "Failed to update OneSignal credentials." } }));
+      } else {
+        setKeyFeedback((p) => ({ ...p, oneSignal: { isError: false, message: "OneSignal credentials saved & written to server/.env successfully!" } }));
+        fetchSettingsAndKeys();
+        setTimeout(() => setKeyFeedback((p) => ({ ...p, oneSignal: null })), 4000);
+      }
+    } catch {
+      setKeyFeedback((p) => ({ ...p, oneSignal: { isError: true, message: "Network error saving OneSignal credentials." } }));
+    } finally {
+      setKeySaving((p) => ({ ...p, oneSignal: false }));
     }
   };
 
   const handleResetOneSignalKeys = async () => {
+    if (!window.confirm("Reset OneSignal credentials to default system code keys?")) return;
     setKeySaving((p) => ({ ...p, oneSignal: true }));
-    const res = await api("/admin/api-keys/onesignal", {
-      method: "POST",
-      body: { reset: true },
-    });
-    setKeySaving((p) => ({ ...p, oneSignal: false }));
-    if (res.ok) {
-      setKeyForms((p) => ({ ...p, oneSignalAppId: "", oneSignalRestApiKey: "" }));
-      setKeyFeedback((p) => ({ ...p, oneSignal: { message: "Reset to default code keys.", isError: false } }));
-      loadApiKeys();
-      setTimeout(() => setKeyFeedback((p) => ({ ...p, oneSignal: null })), 4000);
+    try {
+      const res = await api("/admin/integrations/keys/onesignal/reset", { method: "POST" });
+      if (res.ok) {
+        setKeyFeedback((p) => ({ ...p, oneSignal: { isError: false, message: "Reset to default system credentials." } }));
+        fetchSettingsAndKeys();
+        setTimeout(() => setKeyFeedback((p) => ({ ...p, oneSignal: null })), 4000);
+      }
+    } finally {
+      setKeySaving((p) => ({ ...p, oneSignal: false }));
     }
   };
 
   const handleSaveCloudinaryKeys = async () => {
     setKeySaving((p) => ({ ...p, cloudinary: true }));
-    const res = await api("/admin/api-keys/cloudinary", {
-      method: "POST",
-      body: {
-        cloudName: keyForms.cloudinaryCloudName.trim(),
-        apiKey: keyForms.cloudinaryApiKey.trim(),
-        apiSecret: keyForms.cloudinaryApiSecret.trim(),
-      },
-    });
-    setKeySaving((p) => ({ ...p, cloudinary: false }));
-    if (res.ok) {
-      setKeyFeedback((p) => ({ ...p, cloudinary: { message: res.data?.message || "Cloudinary credentials saved to .env!", isError: false } }));
-      loadApiKeys();
-      setTimeout(() => setKeyFeedback((p) => ({ ...p, cloudinary: null })), 4000);
-    } else {
-      setKeyFeedback((p) => ({ ...p, cloudinary: { message: res.data?.error || "Failed to save credentials.", isError: true } }));
+    setKeyFeedback((p) => ({ ...p, cloudinary: null }));
+    try {
+      const res = await api("/admin/integrations/keys/cloudinary", {
+        method: "POST",
+        body: {
+          cloudName: keyInputs.cloudinary.cloudName.trim(),
+          apiKey: keyInputs.cloudinary.apiKey.trim(),
+          apiSecret: keyInputs.cloudinary.apiSecret.trim(),
+        },
+      });
+      if (!res.ok) {
+        setKeyFeedback((p) => ({ ...p, cloudinary: { isError: true, message: res.data?.error || "Failed to update Cloudinary credentials." } }));
+      } else {
+        setKeyFeedback((p) => ({ ...p, cloudinary: { isError: false, message: "Cloudinary credentials saved & written to server/.env successfully!" } }));
+        fetchSettingsAndKeys();
+        setTimeout(() => setKeyFeedback((p) => ({ ...p, cloudinary: null })), 4000);
+      }
+    } catch {
+      setKeyFeedback((p) => ({ ...p, cloudinary: { isError: true, message: "Network error saving Cloudinary credentials." } }));
+    } finally {
+      setKeySaving((p) => ({ ...p, cloudinary: false }));
     }
   };
 
   const handleResetCloudinaryKeys = async () => {
+    if (!window.confirm("Reset Cloudinary credentials to default system code keys?")) return;
     setKeySaving((p) => ({ ...p, cloudinary: true }));
-    const res = await api("/admin/api-keys/cloudinary", {
-      method: "POST",
-      body: { reset: true },
-    });
-    setKeySaving((p) => ({ ...p, cloudinary: false }));
-    if (res.ok) {
-      setKeyForms((p) => ({ ...p, cloudinaryCloudName: "", cloudinaryApiKey: "", cloudinaryApiSecret: "" }));
-      setKeyFeedback((p) => ({ ...p, cloudinary: { message: "Reset to default code keys.", isError: false } }));
-      loadApiKeys();
-      setTimeout(() => setKeyFeedback((p) => ({ ...p, cloudinary: null })), 4000);
+    try {
+      const res = await api("/admin/integrations/keys/cloudinary/reset", { method: "POST" });
+      if (res.ok) {
+        setKeyFeedback((p) => ({ ...p, cloudinary: { isError: false, message: "Reset to default system credentials." } }));
+        fetchSettingsAndKeys();
+        setTimeout(() => setKeyFeedback((p) => ({ ...p, cloudinary: null })), 4000);
+      }
+    } finally {
+      setKeySaving((p) => ({ ...p, cloudinary: false }));
     }
   };
-
-  // Metrics calculation
-  const totalEnabled = [
-    settings.googleLoginEnabled,
-    settings.facebookLoginEnabled,
-    settings.recaptchaEnabled,
-    settings.weatherEnabled !== false,
-    settings.oneSignalEnabled !== false,
-    settings.cloudinaryEnabled !== false,
-  ].filter(Boolean).length;
-
-  const totalCustom = [
-    apiKeys.google?.isCustom,
-    apiKeys.facebook?.isCustom,
-    apiKeys.recaptcha?.isCustom,
-    apiKeys.weather?.isCustom,
-    apiKeys.oneSignal?.isCustom,
-    apiKeys.cloudinary?.isCustom,
-  ].filter(Boolean).length;
 
   return (
     <div className="wz-dashboard-container">
@@ -469,116 +457,21 @@ export default function AdminIntegrations() {
           </div>
         )}
 
-        {/* 4 Summary KPI Cards */}
-        <div className="wz-kpi-grid" style={{ marginBottom: "24px" }}>
-          <div className="wz-kpi-card">
-            <div className="wz-kpi-left">
-              <div className="wz-kpi-icon-wrap" style={{ background: "#ecfdf5", color: "#166534" }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 22v-5" />
-                  <path d="M9 8V2" />
-                  <path d="M15 2v6" />
-                  <path d="M18 8v5a6 6 0 0 1-12 0V8z" />
-                </svg>
-              </div>
-              <div>
-                <div className="wz-kpi-label">Active Integrations</div>
-                <div className="wz-kpi-value">{loading ? "..." : `${totalEnabled} of 6`}</div>
-              </div>
-            </div>
-            <div className="wz-kpi-badge-wrap">
-              <span className="wz-trend-badge wz-trend-positive">Live</span>
-              <span className="wz-trend-subtitle">Operational</span>
-            </div>
-          </div>
-
-          <div className="wz-kpi-card">
-            <div className="wz-kpi-left">
-              <div className="wz-kpi-icon-wrap" style={{ background: "#eff6ff", color: "#2563eb" }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
-              </div>
-              <div>
-                <div className="wz-kpi-label">OAuth &amp; Security</div>
-                <div className="wz-kpi-value">
-                  {settings.googleLoginEnabled || settings.facebookLoginEnabled || settings.recaptchaEnabled ? "Active" : "Disabled"}
-                </div>
-              </div>
-            </div>
-            <div className="wz-kpi-badge-wrap">
-              <span className="wz-trend-badge wz-trend-positive">Google / FB / Captcha</span>
-              <span className="wz-trend-subtitle">Auth Gateways</span>
-            </div>
-          </div>
-
-          <div className="wz-kpi-card">
-            <div className="wz-kpi-left">
-              <div className="wz-kpi-icon-wrap" style={{ background: "#fef3c7", color: "#d97706" }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-                </svg>
-              </div>
-              <div>
-                <div className="wz-kpi-label">Custom .env Keys</div>
-                <div className="wz-kpi-value">{totalCustom} Custom</div>
-              </div>
-            </div>
-            <div className="wz-kpi-badge-wrap">
-              <span className="wz-trend-badge wz-trend-positive">{6 - totalCustom} Defaults</span>
-              <span className="wz-trend-subtitle">Synced to .env</span>
-            </div>
-          </div>
-
-          <div className="wz-kpi-card">
-            <div className="wz-kpi-left">
-              <div className="wz-kpi-icon-wrap" style={{ background: "#f0fdf4", color: "#15803d" }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                  <polyline points="9 12 11 14 15 10" />
-                </svg>
-              </div>
-              <div>
-                <div className="wz-kpi-label">Sync Status</div>
-                <div className="wz-kpi-value" style={{ fontSize: "1.05rem", color: "#16a34a" }}>
-                  ● Synchronized
-                </div>
-              </div>
-            </div>
-            <div className="wz-kpi-badge-wrap">
-              <span className="wz-trend-badge wz-trend-positive">MongoDB &amp; .env</span>
-              <span className="wz-trend-subtitle">Zero Restart Required</span>
-            </div>
-          </div>
-        </div>
-
-        {/* ================= Single Container for All Integrations ================= */}
-        <div className="wz-card" style={{ padding: "0", overflow: "hidden", marginBottom: "28px" }}>
-          {/* Header row of the container */}
-          <div
-            style={{
-              padding: "18px 24px",
-              borderBottom: "1px solid #e2e8f0",
-              background: "#ffffff",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <div>
-              <h2 className="wz-card-title" style={{ fontSize: "1.1rem", margin: 0 }}>
-                All System Integrations
-              </h2>
-            </div>
-            <span style={{ fontSize: "0.78rem", color: "#64748b", fontWeight: 600 }}>
-              6 Available Integrations
-            </span>
-          </div>
-
+        {/* ================= Single Seamless Container for All Integrations ================= */}
+        <div
+          style={{
+            background: "#ffffff",
+            borderRadius: "14px",
+            border: "1px solid var(--wz-border, #edf2f7)",
+            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.02)",
+            overflow: "hidden",
+            marginBottom: "28px",
+          }}
+        >
           {/* ================= 1. Google Sign-In ================= */}
-          <div style={{ borderBottom: "1px solid #e2e8f0" }}>
+          <div style={{ borderBottom: "1px solid #f1f5f9" }}>
             <div
+              className="wz-integration-row"
               style={{
                 display: "flex",
                 justifyContent: "space-between",
@@ -590,22 +483,25 @@ export default function AdminIntegrations() {
               <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
                 <div
                   style={{
-                    width: "38px",
-                    height: "38px",
+                    width: "42px",
+                    height: "42px",
                     borderRadius: "10px",
                     background: "#ffffff",
-                    border: "1px solid #e2e8f0",
+                    border: "1px solid #edf2f7",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    fontWeight: 800,
-                    color: "#ea4335",
-                    fontSize: "1.15rem",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                    padding: "4px",
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
                     flexShrink: 0,
+                    overflow: "hidden",
                   }}
                 >
-                  G
+                  <img
+                    src="/images/google logo.png"
+                    alt="Google"
+                    style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                  />
                 </div>
                 <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Google Sign-In</strong>
               </div>
@@ -654,44 +550,59 @@ export default function AdminIntegrations() {
               </div>
             </div>
 
-            {/* Expandable Google Drawer */}
+            {/* Custom Google Keys Expandable Drawer */}
             {expandedKeys.google && (
-              <div style={{ padding: "18px 24px", background: "#f8fafc", borderTop: "1px solid #e2e8f0" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-                  <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#334155" }}>
-                    Google OAuth 2.0 Credentials:
-                  </span>
-                  <span style={{ fontSize: "0.76rem", color: apiKeys.google?.isCustom ? "#16a34a" : "#0284c7", fontWeight: 600 }}>
-                    {apiKeys.google?.isCustom ? "● Custom Credentials active in server/.env" : `● Using Code Defaults (${apiKeys.google?.defaultClientIdMasked || "1042••••0nii4"})`}
+              <div
+                style={{
+                  background: "#f8fafc",
+                  padding: "18px 24px",
+                  borderTop: "1px solid #f1f5f9",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                  <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#334155" }}>
+                    Configure Custom Google OAuth Credentials (.env)
+                  </div>
+                  <span
+                    style={{
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      background: apiKeys.google?.isCustom ? "#dcfce7" : "#e2e8f0",
+                      color: apiKeys.google?.isCustom ? "#15803d" : "#475569",
+                    }}
+                  >
+                    Active Source: {apiKeys.google?.isCustom ? "Custom .env Key" : "Default Hardcoded Code"}
                   </span>
                 </div>
 
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                   <div>
-                    <label style={{ fontSize: "0.76rem", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "4px" }}>
-                      Google Client ID (Saved to CUSTOM_GOOGLE_CLIENT_ID in .env)
+                    <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
+                      GOOGLE_CLIENT_ID
                     </label>
                     <input
                       type="text"
                       className="wz-form-input"
-                      style={{ width: "100%", padding: "9px 12px", fontSize: "0.84rem", fontFamily: "monospace" }}
-                      placeholder={`Default in code: ${apiKeys.google?.defaultClientIdMasked || "1042••••0nii4"}`}
-                      value={keyForms.googleClientId}
-                      onChange={(e) => setKeyForms((p) => ({ ...p, googleClientId: e.target.value }))}
+                      style={{ fontSize: "0.82rem", background: "#ffffff" }}
+                      placeholder="e.g. 10834...apps.googleusercontent.com"
+                      value={keyInputs.google.clientId}
+                      onChange={(e) => setKeyInputs((p) => ({ ...p, google: { ...p.google, clientId: e.target.value } }))}
                     />
                   </div>
                   <div>
-                    <label style={{ fontSize: "0.76rem", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "4px" }}>
-                      Google Client Secret (Saved to CUSTOM_GOOGLE_CLIENT_SECRET in .env)
+                    <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
+                      GOOGLE_CLIENT_SECRET
                     </label>
-                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <div style={{ display: "flex", gap: "6px" }}>
                       <input
                         type={revealSecrets.google ? "text" : "password"}
                         className="wz-form-input"
-                        style={{ flex: 1, padding: "9px 12px", fontSize: "0.84rem", fontFamily: "monospace" }}
-                        placeholder={`Default in code: ${apiKeys.google?.defaultClientSecretMasked || "GOCS••••wnVd"}`}
-                        value={keyForms.googleClientSecret}
-                        onChange={(e) => setKeyForms((p) => ({ ...p, googleClientSecret: e.target.value }))}
+                        style={{ fontSize: "0.82rem", background: "#ffffff", flex: 1 }}
+                        placeholder="e.g. GOCSPX-..."
+                        value={keyInputs.google.clientSecret}
+                        onChange={(e) => setKeyInputs((p) => ({ ...p, google: { ...p.google, clientSecret: e.target.value } }))}
                       />
                       <button
                         type="button"
@@ -773,8 +684,9 @@ export default function AdminIntegrations() {
           </div>
 
           {/* ================= 2. Facebook Sign-In ================= */}
-          <div style={{ borderBottom: "1px solid #e2e8f0" }}>
+          <div style={{ borderBottom: "1px solid #f1f5f9" }}>
             <div
+              className="wz-integration-row"
               style={{
                 display: "flex",
                 justifyContent: "space-between",
@@ -786,22 +698,25 @@ export default function AdminIntegrations() {
               <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
                 <div
                   style={{
-                    width: "38px",
-                    height: "38px",
+                    width: "42px",
+                    height: "42px",
                     borderRadius: "10px",
                     background: "#ffffff",
-                    border: "1px solid #e2e8f0",
+                    border: "1px solid #edf2f7",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    fontWeight: 800,
-                    color: "#1877f2",
-                    fontSize: "1.15rem",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                    padding: "4px",
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
                     flexShrink: 0,
+                    overflow: "hidden",
                   }}
                 >
-                  f
+                  <img
+                    src="/images/FB LOGO.webp"
+                    alt="Facebook"
+                    style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                  />
                 </div>
                 <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Facebook Sign-In</strong>
               </div>
@@ -850,44 +765,59 @@ export default function AdminIntegrations() {
               </div>
             </div>
 
-            {/* Expandable Facebook Drawer */}
+            {/* Custom Facebook Keys Expandable Drawer */}
             {expandedKeys.facebook && (
-              <div style={{ padding: "18px 24px", background: "#f8fafc", borderTop: "1px solid #e2e8f0" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-                  <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#334155" }}>
-                    Facebook Graph API Credentials:
-                  </span>
-                  <span style={{ fontSize: "0.76rem", color: apiKeys.facebook?.isCustom ? "#16a34a" : "#0284c7", fontWeight: 600 }}>
-                    {apiKeys.facebook?.isCustom ? "● Custom Credentials active in server/.env" : `● Using Code Defaults (${apiKeys.facebook?.defaultAppIdMasked || "4031••••3782"})`}
+              <div
+                style={{
+                  background: "#f8fafc",
+                  padding: "18px 24px",
+                  borderTop: "1px solid #f1f5f9",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                  <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#334155" }}>
+                    Configure Custom Facebook App Credentials (.env)
+                  </div>
+                  <span
+                    style={{
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      background: apiKeys.facebook?.isCustom ? "#dcfce7" : "#e2e8f0",
+                      color: apiKeys.facebook?.isCustom ? "#15803d" : "#475569",
+                    }}
+                  >
+                    Active Source: {apiKeys.facebook?.isCustom ? "Custom .env Key" : "Default Hardcoded Code"}
                   </span>
                 </div>
 
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                   <div>
-                    <label style={{ fontSize: "0.76rem", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "4px" }}>
-                      Facebook App ID (Saved to CUSTOM_FACEBOOK_APP_ID in .env)
+                    <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
+                      FACEBOOK_APP_ID
                     </label>
                     <input
                       type="text"
                       className="wz-form-input"
-                      style={{ width: "100%", padding: "9px 12px", fontSize: "0.84rem", fontFamily: "monospace" }}
-                      placeholder={`Default in code: ${apiKeys.facebook?.defaultAppIdMasked || "4031••••3782"}`}
-                      value={keyForms.facebookAppId}
-                      onChange={(e) => setKeyForms((p) => ({ ...p, facebookAppId: e.target.value }))}
+                      style={{ fontSize: "0.82rem", background: "#ffffff" }}
+                      placeholder="e.g. 19582..."
+                      value={keyInputs.facebook.appId}
+                      onChange={(e) => setKeyInputs((p) => ({ ...p, facebook: { ...p.facebook, appId: e.target.value } }))}
                     />
                   </div>
                   <div>
-                    <label style={{ fontSize: "0.76rem", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "4px" }}>
-                      Facebook App Secret (Saved to CUSTOM_FACEBOOK_APP_SECRET in .env)
+                    <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
+                      FACEBOOK_APP_SECRET
                     </label>
-                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <div style={{ display: "flex", gap: "6px" }}>
                       <input
                         type={revealSecrets.facebook ? "text" : "password"}
                         className="wz-form-input"
-                        style={{ flex: 1, padding: "9px 12px", fontSize: "0.84rem", fontFamily: "monospace" }}
-                        placeholder={`Default in code: ${apiKeys.facebook?.defaultAppSecretMasked || "4495••••139"}`}
-                        value={keyForms.facebookAppSecret}
-                        onChange={(e) => setKeyForms((p) => ({ ...p, facebookAppSecret: e.target.value }))}
+                        style={{ fontSize: "0.82rem", background: "#ffffff", flex: 1 }}
+                        placeholder="e.g. 38d9f..."
+                        value={keyInputs.facebook.appSecret}
+                        onChange={(e) => setKeyInputs((p) => ({ ...p, facebook: { ...p.facebook, appSecret: e.target.value } }))}
                       />
                       <button
                         type="button"
@@ -969,8 +899,9 @@ export default function AdminIntegrations() {
           </div>
 
           {/* ================= 3. Google reCAPTCHA v2 ================= */}
-          <div style={{ borderBottom: "1px solid #e2e8f0" }}>
+          <div style={{ borderBottom: "1px solid #f1f5f9" }}>
             <div
+              className="wz-integration-row"
               style={{
                 display: "flex",
                 justifyContent: "space-between",
@@ -982,23 +913,25 @@ export default function AdminIntegrations() {
               <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
                 <div
                   style={{
-                    width: "38px",
-                    height: "38px",
+                    width: "42px",
+                    height: "42px",
                     borderRadius: "10px",
-                    background: "#e0f2fe",
-                    border: "1px solid #bae6fd",
+                    background: "#ffffff",
+                    border: "1px solid #edf2f7",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    color: "#0284c7",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                    padding: "4px",
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
                     flexShrink: 0,
+                    overflow: "hidden",
                   }}
                 >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                    <path d="m9 12 2 2 4-4" />
-                  </svg>
+                  <img
+                    src="/images/recaptcha.jpg"
+                    alt="reCAPTCHA"
+                    style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                  />
                 </div>
                 <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Google reCAPTCHA v2</strong>
               </div>
@@ -1047,44 +980,59 @@ export default function AdminIntegrations() {
               </div>
             </div>
 
-            {/* Expandable reCAPTCHA Drawer */}
+            {/* Custom reCAPTCHA Keys Expandable Drawer */}
             {expandedKeys.recaptcha && (
-              <div style={{ padding: "18px 24px", background: "#f8fafc", borderTop: "1px solid #e2e8f0" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-                  <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#334155" }}>
-                    Google reCAPTCHA v2 API Keys:
-                  </span>
-                  <span style={{ fontSize: "0.76rem", color: apiKeys.recaptcha?.isCustom ? "#16a34a" : "#0284c7", fontWeight: 600 }}>
-                    {apiKeys.recaptcha?.isCustom ? "● Custom Keys active in server/.env" : `● Using Code Defaults (${apiKeys.recaptcha?.defaultSiteKeyMasked || "6Lfr••••6UG5"})`}
+              <div
+                style={{
+                  background: "#f8fafc",
+                  padding: "18px 24px",
+                  borderTop: "1px solid #f1f5f9",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                  <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#334155" }}>
+                    Configure Custom Google reCAPTCHA v2 Keys (.env)
+                  </div>
+                  <span
+                    style={{
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      background: apiKeys.recaptcha?.isCustom ? "#dcfce7" : "#e2e8f0",
+                      color: apiKeys.recaptcha?.isCustom ? "#15803d" : "#475569",
+                    }}
+                  >
+                    Active Source: {apiKeys.recaptcha?.isCustom ? "Custom .env Key" : "Default Hardcoded Code"}
                   </span>
                 </div>
 
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                   <div>
-                    <label style={{ fontSize: "0.76rem", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "4px" }}>
-                      Site Key (Client-side, saved to CUSTOM_RECAPTCHA_SITE_KEY in .env)
+                    <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
+                      RECAPTCHA_SITE_KEY (Frontend)
                     </label>
                     <input
                       type="text"
                       className="wz-form-input"
-                      style={{ width: "100%", padding: "9px 12px", fontSize: "0.84rem", fontFamily: "monospace" }}
-                      placeholder={`Default in code: ${apiKeys.recaptcha?.defaultSiteKeyMasked || "6Lfr••••6UG5"}`}
-                      value={keyForms.recaptchaSiteKey}
-                      onChange={(e) => setKeyForms((p) => ({ ...p, recaptchaSiteKey: e.target.value }))}
+                      style={{ fontSize: "0.82rem", background: "#ffffff" }}
+                      placeholder="e.g. 6Ldxq..."
+                      value={keyInputs.recaptcha.siteKey}
+                      onChange={(e) => setKeyInputs((p) => ({ ...p, recaptcha: { ...p.recaptcha, siteKey: e.target.value } }))}
                     />
                   </div>
                   <div>
-                    <label style={{ fontSize: "0.76rem", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "4px" }}>
-                      Secret Key (Server-side, saved to CUSTOM_RECAPTCHA_SECRET_KEY in .env)
+                    <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
+                      RECAPTCHA_SECRET_KEY (Backend Verification)
                     </label>
-                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <div style={{ display: "flex", gap: "6px" }}>
                       <input
                         type={revealSecrets.recaptcha ? "text" : "password"}
                         className="wz-form-input"
-                        style={{ flex: 1, padding: "9px 12px", fontSize: "0.84rem", fontFamily: "monospace" }}
-                        placeholder={`Default in code: ${apiKeys.recaptcha?.defaultSecretKeyMasked || "6Lfr••••ST12"}`}
-                        value={keyForms.recaptchaSecretKey}
-                        onChange={(e) => setKeyForms((p) => ({ ...p, recaptchaSecretKey: e.target.value }))}
+                        style={{ fontSize: "0.82rem", background: "#ffffff", flex: 1 }}
+                        placeholder="e.g. 6Ldxq..."
+                        value={keyInputs.recaptcha.secretKey}
+                        onChange={(e) => setKeyInputs((p) => ({ ...p, recaptcha: { ...p.recaptcha, secretKey: e.target.value } }))}
                       />
                       <button
                         type="button"
@@ -1144,7 +1092,7 @@ export default function AdminIntegrations() {
                         cursor: "pointer",
                       }}
                     >
-                      {keySaving.recaptcha ? "Saving to .env..." : "Save Keys"}
+                      {keySaving.recaptcha ? "Saving to .env..." : "Save Credentials"}
                     </button>
                   </div>
                 </div>
@@ -1166,8 +1114,9 @@ export default function AdminIntegrations() {
           </div>
 
           {/* ================= 4. Kalilangan Weather Forecast API ================= */}
-          <div style={{ borderBottom: "1px solid #e2e8f0" }}>
+          <div style={{ borderBottom: "1px solid #f1f5f9" }}>
             <div
+              className="wz-integration-row"
               style={{
                 display: "flex",
                 justifyContent: "space-between",
@@ -1179,29 +1128,20 @@ export default function AdminIntegrations() {
               <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
                 <div
                   style={{
-                    width: "38px",
-                    height: "38px",
+                    width: "42px",
+                    height: "42px",
                     borderRadius: "10px",
-                    background: "#fef3c7",
-                    border: "1px solid #fde68a",
+                    background: "#f0f9ff",
+                    border: "1px solid #e0f2fe",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    color: "#d97706",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
                     flexShrink: 0,
                   }}
                 >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="4" />
-                    <path d="M12 2v2" />
-                    <path d="M12 20v2" />
-                    <path d="m4.93 4.93 1.41 1.41" />
-                    <path d="m17.66 17.66 1.41 1.41" />
-                    <path d="M2 12h2" />
-                    <path d="M20 12h2" />
-                    <path d="m6.34 17.66-1.41 1.41" />
-                    <path d="m19.07 4.93-1.41 1.41" />
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
                   </svg>
                 </div>
                 <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Kalilangan Weather Forecast API</strong>
@@ -1226,24 +1166,24 @@ export default function AdminIntegrations() {
                   }}
                   title="Configure custom WeatherAPI key"
                 >
-                  <span>{apiKeys.weather?.isCustom ? "● Custom Key (.env)" : "⚙️ Code Default Key"}</span>
+                  <span>{apiKeys.weather?.isCustom ? "● Custom Keys (.env)" : "⚙️ Code Default Keys"}</span>
                   <span>{expandedKeys.weather ? "▲" : "▼"}</span>
                 </button>
                 <span
                   style={{
                     fontSize: "0.82rem",
                     fontWeight: 700,
-                    color: settings.weatherEnabled !== false ? "#16a34a" : "#64748b",
+                    color: settings.weatherEnabled ? "#16a34a" : "#64748b",
                     minWidth: "55px",
                     textAlign: "right",
                   }}
                 >
-                  {settings.weatherEnabled !== false ? "Enabled" : "Disabled"}
+                  {settings.weatherEnabled ? "Enabled" : "Disabled"}
                 </span>
                 <label className="wz-switch-toggle">
                   <input
                     type="checkbox"
-                    checked={settings.weatherEnabled !== false}
+                    checked={settings.weatherEnabled}
                     onChange={handleToggleWeather}
                   />
                   <span className="wz-switch-slider" />
@@ -1251,30 +1191,45 @@ export default function AdminIntegrations() {
               </div>
             </div>
 
-            {/* Expandable Weather Drawer */}
+            {/* Custom Weather Key Expandable Drawer */}
             {expandedKeys.weather && (
-              <div style={{ padding: "18px 24px", background: "#f8fafc", borderTop: "1px solid #e2e8f0" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-                  <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#334155" }}>
-                    WeatherAPI.com API Key:
-                  </span>
-                  <span style={{ fontSize: "0.76rem", color: apiKeys.weather?.isCustom ? "#16a34a" : "#0284c7", fontWeight: 600 }}>
-                    {apiKeys.weather?.isCustom ? "● Custom Key active in server/.env" : `● Using Code Default (${apiKeys.weather?.defaultKeyMasked || "7145••••••••0611"})`}
+              <div
+                style={{
+                  background: "#f8fafc",
+                  padding: "18px 24px",
+                  borderTop: "1px solid #f1f5f9",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                  <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#334155" }}>
+                    Configure Custom WeatherAPI Key (.env)
+                  </div>
+                  <span
+                    style={{
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      background: apiKeys.weather?.isCustom ? "#dcfce7" : "#e2e8f0",
+                      color: apiKeys.weather?.isCustom ? "#15803d" : "#475569",
+                    }}
+                  >
+                    Active Source: {apiKeys.weather?.isCustom ? "Custom .env Key" : "Default Hardcoded Code"}
                   </span>
                 </div>
 
                 <div>
-                  <label style={{ fontSize: "0.76rem", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "4px" }}>
-                    API Key (Saved to CUSTOM_WEATHER_API_KEY in .env)
+                  <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
+                    WEATHER_API_KEY (WeatherAPI.com Token)
                   </label>
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <div style={{ display: "flex", gap: "6px" }}>
                     <input
                       type={revealSecrets.weather ? "text" : "password"}
                       className="wz-form-input"
-                      style={{ flex: 1, padding: "9px 12px", fontSize: "0.84rem", fontFamily: "monospace" }}
-                      placeholder={`Code default: ${apiKeys.weather?.defaultKeyMasked || "7145••••••••0611"}`}
-                      value={keyForms.weatherApiKey}
-                      onChange={(e) => setKeyForms((p) => ({ ...p, weatherApiKey: e.target.value }))}
+                      style={{ fontSize: "0.82rem", background: "#ffffff", flex: 1 }}
+                      placeholder="e.g. 7145472cabdc45fe8f414215260611"
+                      value={keyInputs.weather.apiKey}
+                      onChange={(e) => setKeyInputs((p) => ({ ...p, weather: { ...p.weather, apiKey: e.target.value } }))}
                     />
                     <button
                       type="button"
@@ -1296,7 +1251,7 @@ export default function AdminIntegrations() {
 
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "14px", flexWrap: "wrap", gap: "10px" }}>
                   <span style={{ fontSize: "0.76rem", color: "#64748b" }}>
-                    Leave blank or click Reset to Default to revert back to the code default key.
+                    Leave blank or click Reset to Default to revert back to system code keys.
                   </span>
                   <div style={{ display: "flex", gap: "10px" }}>
                     {apiKeys.weather?.isCustom && (
@@ -1333,7 +1288,7 @@ export default function AdminIntegrations() {
                         cursor: "pointer",
                       }}
                     >
-                      {keySaving.weather ? "Saving to .env..." : "Save Custom Key"}
+                      {keySaving.weather ? "Saving to .env..." : "Save Credentials"}
                     </button>
                   </div>
                 </div>
@@ -1354,9 +1309,10 @@ export default function AdminIntegrations() {
             )}
           </div>
 
-          {/* ================= 5. OneSignal Web Push ================= */}
-          <div style={{ borderBottom: "1px solid #e2e8f0" }}>
+          {/* ================= 5. OneSignal Web Push Notifications ================= */}
+          <div style={{ borderBottom: "1px solid #f1f5f9" }}>
             <div
+              className="wz-integration-row"
               style={{
                 display: "flex",
                 justifyContent: "space-between",
@@ -1368,23 +1324,25 @@ export default function AdminIntegrations() {
               <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
                 <div
                   style={{
-                    width: "38px",
-                    height: "38px",
+                    width: "42px",
+                    height: "42px",
                     borderRadius: "10px",
-                    background: "#fef2f2",
-                    border: "1px solid #fecaca",
+                    background: "#ffffff",
+                    border: "1px solid #edf2f7",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    color: "#e11d48",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                    padding: "4px",
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
                     flexShrink: 0,
+                    overflow: "hidden",
                   }}
                 >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-                    <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-                  </svg>
+                  <img
+                    src="/images/one signal logo.webp"
+                    alt="OneSignal"
+                    style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                  />
                 </div>
                 <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>OneSignal Web Push Notifications</strong>
               </div>
@@ -1415,17 +1373,17 @@ export default function AdminIntegrations() {
                   style={{
                     fontSize: "0.82rem",
                     fontWeight: 700,
-                    color: settings.oneSignalEnabled !== false ? "#16a34a" : "#64748b",
+                    color: settings.oneSignalEnabled ? "#16a34a" : "#64748b",
                     minWidth: "55px",
                     textAlign: "right",
                   }}
                 >
-                  {settings.oneSignalEnabled !== false ? "Enabled" : "Disabled"}
+                  {settings.oneSignalEnabled ? "Enabled" : "Disabled"}
                 </span>
                 <label className="wz-switch-toggle">
                   <input
                     type="checkbox"
-                    checked={settings.oneSignalEnabled !== false}
+                    checked={settings.oneSignalEnabled}
                     onChange={handleToggleOneSignal}
                   />
                   <span className="wz-switch-slider" />
@@ -1433,44 +1391,59 @@ export default function AdminIntegrations() {
               </div>
             </div>
 
-            {/* Expandable OneSignal Drawer */}
+            {/* Custom OneSignal Keys Expandable Drawer */}
             {expandedKeys.oneSignal && (
-              <div style={{ padding: "18px 24px", background: "#f8fafc", borderTop: "1px solid #e2e8f0" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-                  <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#334155" }}>
-                    OneSignal REST API &amp; App Credentials:
-                  </span>
-                  <span style={{ fontSize: "0.76rem", color: apiKeys.oneSignal?.isCustom ? "#16a34a" : "#0284c7", fontWeight: 600 }}>
-                    {apiKeys.oneSignal?.isCustom ? "● Custom Keys active in server/.env" : `● Using Code Defaults (${apiKeys.oneSignal?.defaultAppIdMasked || "fc81••••896839"})`}
+              <div
+                style={{
+                  background: "#f8fafc",
+                  padding: "18px 24px",
+                  borderTop: "1px solid #f1f5f9",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                  <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#334155" }}>
+                    Configure Custom OneSignal Credentials (.env)
+                  </div>
+                  <span
+                    style={{
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      background: apiKeys.oneSignal?.isCustom ? "#dcfce7" : "#e2e8f0",
+                      color: apiKeys.oneSignal?.isCustom ? "#15803d" : "#475569",
+                    }}
+                  >
+                    Active Source: {apiKeys.oneSignal?.isCustom ? "Custom .env Key" : "Default Hardcoded Code"}
                   </span>
                 </div>
 
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                   <div>
-                    <label style={{ fontSize: "0.76rem", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "4px" }}>
-                      OneSignal App ID (Saved to CUSTOM_ONESIGNAL_APP_ID in .env)
+                    <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
+                      ONESIGNAL_APP_ID
                     </label>
                     <input
                       type="text"
                       className="wz-form-input"
-                      style={{ width: "100%", padding: "9px 12px", fontSize: "0.84rem", fontFamily: "monospace" }}
-                      placeholder={`Default in code: ${apiKeys.oneSignal?.defaultAppIdMasked || "fc81••••896839"}`}
-                      value={keyForms.oneSignalAppId}
-                      onChange={(e) => setKeyForms((p) => ({ ...p, oneSignalAppId: e.target.value }))}
+                      style={{ fontSize: "0.82rem", background: "#ffffff" }}
+                      placeholder="e.g. 8fa1947b-..."
+                      value={keyInputs.oneSignal.appId}
+                      onChange={(e) => setKeyInputs((p) => ({ ...p, oneSignal: { ...p.oneSignal, appId: e.target.value } }))}
                     />
                   </div>
                   <div>
-                    <label style={{ fontSize: "0.76rem", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "4px" }}>
-                      OneSignal REST API Key (Saved to CUSTOM_ONESIGNAL_REST_API_KEY in .env)
+                    <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
+                      ONESIGNAL_REST_API_KEY
                     </label>
-                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <div style={{ display: "flex", gap: "6px" }}>
                       <input
                         type={revealSecrets.oneSignal ? "text" : "password"}
                         className="wz-form-input"
-                        style={{ flex: 1, padding: "9px 12px", fontSize: "0.84rem", fontFamily: "monospace" }}
-                        placeholder={`Default in code: ${apiKeys.oneSignal?.defaultRestKeyMasked || "os_v2_••••••••nbyq"}`}
-                        value={keyForms.oneSignalRestApiKey}
-                        onChange={(e) => setKeyForms((p) => ({ ...p, oneSignalRestApiKey: e.target.value }))}
+                        style={{ fontSize: "0.82rem", background: "#ffffff", flex: 1 }}
+                        placeholder="e.g. os_v2_app_..."
+                        value={keyInputs.oneSignal.restApiKey}
+                        onChange={(e) => setKeyInputs((p) => ({ ...p, oneSignal: { ...p.oneSignal, restApiKey: e.target.value } }))}
                       />
                       <button
                         type="button"
@@ -1530,7 +1503,7 @@ export default function AdminIntegrations() {
                         cursor: "pointer",
                       }}
                     >
-                      {keySaving.oneSignal ? "Saving to .env..." : "Save Custom Keys"}
+                      {keySaving.oneSignal ? "Saving to .env..." : "Save Credentials"}
                     </button>
                   </div>
                 </div>
@@ -1551,9 +1524,10 @@ export default function AdminIntegrations() {
             )}
           </div>
 
-          {/* ================= 6. Cloudinary Cloud Media ================= */}
-          <div>
+          {/* ================= 6. Cloudinary Cloud Media Storage ================= */}
+          <div style={{ borderBottom: "none" }}>
             <div
+              className="wz-integration-row"
               style={{
                 display: "flex",
                 justifyContent: "space-between",
@@ -1565,24 +1539,25 @@ export default function AdminIntegrations() {
               <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
                 <div
                   style={{
-                    width: "38px",
-                    height: "38px",
+                    width: "42px",
+                    height: "42px",
                     borderRadius: "10px",
-                    background: "#eff6ff",
-                    border: "1px solid #bfdbfe",
+                    background: "#ffffff",
+                    border: "1px solid #edf2f7",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    color: "#2563eb",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                    padding: "4px",
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
                     flexShrink: 0,
+                    overflow: "hidden",
                   }}
                 >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
-                    <path d="M12 13v-5" />
-                    <path d="m9 10 3-3 3 3" />
-                  </svg>
+                  <img
+                    src="/images/Cloudinary logo.webp"
+                    alt="Cloudinary"
+                    style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                  />
                 </div>
                 <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Cloudinary Cloud Media Storage</strong>
               </div>
@@ -1613,17 +1588,17 @@ export default function AdminIntegrations() {
                   style={{
                     fontSize: "0.82rem",
                     fontWeight: 700,
-                    color: settings.cloudinaryEnabled !== false ? "#16a34a" : "#64748b",
+                    color: settings.cloudinaryEnabled ? "#16a34a" : "#64748b",
                     minWidth: "55px",
                     textAlign: "right",
                   }}
                 >
-                  {settings.cloudinaryEnabled !== false ? "Enabled" : "Disabled"}
+                  {settings.cloudinaryEnabled ? "Enabled" : "Disabled"}
                 </span>
                 <label className="wz-switch-toggle">
                   <input
                     type="checkbox"
-                    checked={settings.cloudinaryEnabled !== false}
+                    checked={settings.cloudinaryEnabled}
                     onChange={handleToggleCloudinary}
                   />
                   <span className="wz-switch-slider" />
@@ -1631,60 +1606,72 @@ export default function AdminIntegrations() {
               </div>
             </div>
 
-            {/* Expandable Cloudinary Drawer */}
+            {/* Custom Cloudinary Keys Expandable Drawer */}
             {expandedKeys.cloudinary && (
-              <div style={{ padding: "18px 24px", background: "#f8fafc", borderTop: "1px solid #e2e8f0" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-                  <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#334155" }}>
-                    Cloudinary Cloud Credentials:
-                  </span>
-                  <span style={{ fontSize: "0.76rem", color: apiKeys.cloudinary?.isCustom ? "#16a34a" : "#0284c7", fontWeight: 600 }}>
-                    {apiKeys.cloudinary?.isCustom ? "● Custom Credentials active in server/.env" : `● Using Code Defaults (${apiKeys.cloudinary?.defaultCloudName || "kimpc"})`}
+              <div
+                style={{
+                  background: "#f8fafc",
+                  padding: "18px 24px",
+                  borderTop: "1px solid #f1f5f9",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                  <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#334155" }}>
+                    Configure Custom Cloudinary Credentials (.env)
+                  </div>
+                  <span
+                    style={{
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      background: apiKeys.cloudinary?.isCustom ? "#dcfce7" : "#e2e8f0",
+                      color: apiKeys.cloudinary?.isCustom ? "#15803d" : "#475569",
+                    }}
+                  >
+                    Active Source: {apiKeys.cloudinary?.isCustom ? "Custom .env Key" : "Default Hardcoded Code"}
                   </span>
                 </div>
 
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                    <div>
-                      <label style={{ fontSize: "0.76rem", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "4px" }}>
-                        Cloud Name (Saved to CUSTOM_CLOUDINARY_CLOUD_NAME in .env)
-                      </label>
-                      <input
-                        type="text"
-                        className="wz-form-input"
-                        style={{ width: "100%", padding: "9px 12px", fontSize: "0.84rem", fontFamily: "monospace" }}
-                        placeholder={`Default in code: ${apiKeys.cloudinary?.defaultCloudName || "kimpc"}`}
-                        value={keyForms.cloudinaryCloudName}
-                        onChange={(e) => setKeyForms((p) => ({ ...p, cloudinaryCloudName: e.target.value }))}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: "0.76rem", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "4px" }}>
-                        API Key (Saved to CUSTOM_CLOUDINARY_API_KEY in .env)
-                      </label>
-                      <input
-                        type="text"
-                        className="wz-form-input"
-                        style={{ width: "100%", padding: "9px 12px", fontSize: "0.84rem", fontFamily: "monospace" }}
-                        placeholder={`Default in code: ${apiKeys.cloudinary?.defaultApiKeyMasked || "6913••••7346"}`}
-                        value={keyForms.cloudinaryApiKey}
-                        onChange={(e) => setKeyForms((p) => ({ ...p, cloudinaryApiKey: e.target.value }))}
-                      />
-                    </div>
-                  </div>
-
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
                   <div>
-                    <label style={{ fontSize: "0.76rem", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "4px" }}>
-                      API Secret (Saved to CUSTOM_CLOUDINARY_API_SECRET in .env)
+                    <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
+                      CLOUDINARY_CLOUD_NAME
                     </label>
-                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <input
+                      type="text"
+                      className="wz-form-input"
+                      style={{ fontSize: "0.82rem", background: "#ffffff" }}
+                      placeholder="e.g. dfq..."
+                      value={keyInputs.cloudinary.cloudName}
+                      onChange={(e) => setKeyInputs((p) => ({ ...p, cloudinary: { ...p.cloudinary, cloudName: e.target.value } }))}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
+                      CLOUDINARY_API_KEY
+                    </label>
+                    <input
+                      type="text"
+                      className="wz-form-input"
+                      style={{ fontSize: "0.82rem", background: "#ffffff" }}
+                      placeholder="e.g. 52417..."
+                      value={keyInputs.cloudinary.apiKey}
+                      onChange={(e) => setKeyInputs((p) => ({ ...p, cloudinary: { ...p.cloudinary, apiKey: e.target.value } }))}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
+                      CLOUDINARY_API_SECRET
+                    </label>
+                    <div style={{ display: "flex", gap: "6px" }}>
                       <input
                         type={revealSecrets.cloudinary ? "text" : "password"}
                         className="wz-form-input"
-                        style={{ flex: 1, padding: "9px 12px", fontSize: "0.84rem", fontFamily: "monospace" }}
-                        placeholder={`Default in code: ${apiKeys.cloudinary?.defaultApiSecretMasked || "0aNA••••••••KnY"}`}
-                        value={keyForms.cloudinaryApiSecret}
-                        onChange={(e) => setKeyForms((p) => ({ ...p, cloudinaryApiSecret: e.target.value }))}
+                        style={{ fontSize: "0.82rem", background: "#ffffff", flex: 1 }}
+                        placeholder="e.g. jU9..."
+                        value={keyInputs.cloudinary.apiSecret}
+                        onChange={(e) => setKeyInputs((p) => ({ ...p, cloudinary: { ...p.cloudinary, apiSecret: e.target.value } }))}
                       />
                       <button
                         type="button"
@@ -1763,49 +1750,6 @@ export default function AdminIntegrations() {
                 )}
               </div>
             )}
-          </div>
-        </div>
-
-        {/* Cooperative Architecture & .env Information Box */}
-        <div
-          style={{
-            padding: "20px 24px",
-            background: "#f0fdf4",
-            borderRadius: "14px",
-            border: "1px solid #bbf7d0",
-            display: "flex",
-            alignItems: "flex-start",
-            gap: "16px",
-            marginBottom: "30px",
-          }}
-        >
-          <div
-            style={{
-              width: "36px",
-              height: "36px",
-              borderRadius: "50%",
-              background: "#dcfce7",
-              color: "#15803d",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-              <polyline points="9 12 11 14 15 10" />
-            </svg>
-          </div>
-          <div>
-            <h4 style={{ margin: "0 0 4px", fontSize: "0.95rem", color: "#166534", fontWeight: 800 }}>
-              Automatic .env &amp; Database Synchronization Architecture
-            </h4>
-            <p style={{ margin: 0, fontSize: "0.82rem", color: "#166534", lineHeight: 1.5 }}>
-              Any custom API keys saved in this portal are automatically written into both the system database and the
-              backend <code style={{ background: "#dcfce7", padding: "1px 6px", borderRadius: "4px" }}>server/.env</code> file.
-              The default system keys hardcoded in the codebase remain untouched as a fail-safe fallback whenever a custom key is left empty or reset.
-            </p>
           </div>
         </div>
       </main>

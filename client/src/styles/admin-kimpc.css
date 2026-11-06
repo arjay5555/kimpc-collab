@@ -1914,6 +1914,21 @@
   margin-left: 6px;
 }
 
+/* Integrations row hover & styling matching Account & Role */
+.wz-integration-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  background-color: #ffffff;
+  transition: background-color 0.15s ease;
+}
+
+.wz-integration-row:hover {
+  background-color: #fafbfc;
+}
+
+
 .wz-cal-controls-right {
   display: flex;
   align-items: center;
@@ -6281,3 +6296,18 @@
   color: #475569;
   margin-left: 6px;
 }
+
+/* Integrations row hover & styling matching Account & Role */
+.wz-integration-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  background-color: #ffffff;
+  transition: background-color 0.15s ease;
+}
+
+.wz-integration-row:hover {
+  background-color: #fafbfc;
+}
+
