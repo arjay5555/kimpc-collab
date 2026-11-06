@@ -822,17 +822,6 @@ router.post("/admin/api-keys/cloudinary", requireAdmin, async (req, res) => {
   }
 });
 
-    res.json({
-      ok: true,
-      isCustom: true,
-      message: "Custom Cloudinary credentials saved successfully.",
-    });
-  } catch (err) {
-    console.error("Error saving custom Cloudinary credentials:", err);
-    fail(res, 500, "Failed to save Cloudinary credentials.");
-  }
-});
-
 // ---------- Core Login & Password Recovery ----------
 
 router.post("/login", async (req, res) => {
