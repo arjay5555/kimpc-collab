@@ -142,7 +142,7 @@ export default function ProfileDropdown({
             className="wz-profile-action-btn"
             onClick={() => {
               onClose();
-              if (onOpenSettings) onOpenSettings();
+              navigate("/member/settings");
             }}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../services/api";
 import { getStoredTheme, applyTheme } from "../services/theme";
@@ -13,6 +14,7 @@ export default function SettingsModal({
   onToggleRecaptcha = null,
 }) {
   const { user, updateProfile } = useAuth();
+  const navigate = useNavigate();
   const isAdmin = user?.role === "admin";
 
   const [activeTab, setActiveTab] = useState(initialTab);
@@ -231,6 +233,54 @@ export default function SettingsModal({
                       Update your cooperative display name and contact phone.
                     </p>
                   </div>
+                </div>
+
+                {/* Quick Link to Web Push & Full Settings */}
+                <div
+                  style={{
+                    background: "#f0fdf4",
+                    border: "1px solid #bbf7d0",
+                    borderRadius: "10px",
+                    padding: "10px 14px",
+                    marginBottom: "16px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    flexWrap: "wrap",
+                    gap: "10px",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span style={{ fontSize: "1.1rem" }}>🔔</span>
+                    <div>
+                      <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#166534" }}>
+                        Push Notifications &amp; Member Preferences
+                      </div>
+                      <div style={{ fontSize: "0.72rem", color: "#15803d" }}>
+                        Configure OneSignal web push alerts, booking reminders &amp; farm settings.
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      navigate("/member/settings");
+                    }}
+                    style={{
+                      background: "#166534",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "6px",
+                      padding: "6px 12px",
+                      fontSize: "0.74rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Open Notification Settings →
+                  </button>
                 </div>
 
                 {profileFeedback.message && (

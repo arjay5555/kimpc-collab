@@ -369,9 +369,9 @@ export default function MemberTopbar({
             <button
               type="button"
               className="wz-icon-btn"
-              title="Account, Security & Appearance Settings"
+              title="Account, Notifications & System Settings"
               aria-label="Settings"
-              onClick={() => handleOpenSettings("account")}
+              onClick={() => navigate("/member/settings")}
             >
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="12" cy="12" r="3" />
