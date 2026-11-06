@@ -13,6 +13,7 @@ const Account = require("../models/Account");
 const authManager = require("../middleware/authManager");
 const { logAudit } = require("../services/auditLogger");
 const { syncMaintenanceToGoogleCalendar } = require("../services/googleCalendarService");
+const cloudinaryService = require("../services/cloudinaryService");
 const { getMachineryUtilization } = require("../controllers/managerAnalyticsController");
 const { clean, fail, isSameMachineryMatch } = require("./routeHelpers");
 
@@ -465,7 +466,7 @@ function normalizeUnit(unit) {
 
 /**
  * POST /api/machinery-units/upload-photo
- * Handles image upload with validation and local disk storage
+ * Handles image upload to Cloudinary (with automatic local fallback)
  */
 router.post("/machinery-units/upload-photo", authManager, async (req, res) => {
   try {
@@ -474,43 +475,21 @@ router.post("/machinery-units/upload-photo", authManager, async (req, res) => {
       return fail(res, 400, "Image data payload is required.");
     }
 
-    // Validate MIME type
-    const matches = image.match(/^data:image\/(jpeg|png|webp|jpg);base64,(.+)$/i);
-    if (!matches) {
-      return fail(res, 400, "Invalid image format. Only JPEG, PNG, or WebP images are allowed.");
-    }
+    const uploadResult = await cloudinaryService.uploadImage(image, {
+      folder: "kimpc/machinery",
+      filename: filename || "machinery-unit",
+    });
 
-    const rawExt = matches[1].toLowerCase();
-    const ext = rawExt === "jpeg" ? "jpg" : rawExt;
-    const base64Data = matches[2];
-    const buffer = Buffer.from(base64Data, "base64");
-
-    // Validate size limit (max 5MB)
-    if (buffer.length > 5 * 1024 * 1024) {
-      return fail(res, 400, "Image size exceeds 5MB limit. Please select an optimized photo.");
-    }
-
-    const uploadsDir = path.join(__dirname, "..", "uploads");
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
-    }
-
-    const timestamp = Date.now();
-    const rand = Math.floor(100000 + Math.random() * 900000);
-    const safeFilename = `machinery-${timestamp}-${rand}.${ext}`;
-    const targetPath = path.join(uploadsDir, safeFilename);
-
-    fs.writeFileSync(targetPath, buffer);
-
-    const imageUrl = `/uploads/${safeFilename}`;
     return res.status(201).json({
       ok: true,
-      imageUrl,
-      message: "Machinery photo uploaded successfully."
+      imageUrl: uploadResult.url,
+      publicId: uploadResult.publicId || "",
+      provider: uploadResult.provider,
+      message: `Machinery photo uploaded successfully via ${uploadResult.provider}.`
     });
   } catch (err) {
     console.error("Error uploading machinery photo:", err);
-    return res.status(500).json({ ok: false, error: "Failed to upload machinery photo." });
+    return res.status(500).json({ ok: false, error: err.message || "Failed to upload machinery photo." });
   }
 });
 

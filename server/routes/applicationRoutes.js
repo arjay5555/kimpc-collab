@@ -15,6 +15,7 @@ const {
   syncBookingToGoogleCalendar,
   deleteBookingFromGoogleCalendar,
 } = require("../services/googleCalendarService");
+const cloudinaryService = require("../services/cloudinaryService");
 
 const {
   STATUSES,
@@ -202,7 +203,21 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
 
     const paymentMethod = clean(req.body.paymentMethod) === "GCash" ? "GCash" : "Cash";
     const cashPaymentOption = paymentMethod === "Cash" ? clean(req.body.cashPaymentOption) || "Upon Pickup" : "";
-    const gcashProof = paymentMethod === "GCash" ? clean(req.body.gcashProof) : "";
+    let gcashProof = paymentMethod === "GCash" ? clean(req.body.gcashProof) : "";
+
+    // Upload GCash receipt proof to Cloudinary if base64 data URI provided
+    if (paymentMethod === "GCash" && gcashProof && gcashProof.startsWith("data:image/")) {
+      try {
+        const uploadResult = await cloudinaryService.uploadImage(gcashProof, {
+          folder: "kimpc/receipts",
+          filename: `gcash-${Date.now()}`,
+        });
+        gcashProof = uploadResult.url;
+      } catch (err) {
+        console.warn("Could not upload GCash proof to Cloudinary, saving local fallback/base64:", err.message);
+      }
+    }
+
     const paymentStatus = paymentMethod === "GCash" && gcashProof ? "Paid" : clean(req.body.paymentStatus) || "Pending";
     const receiptNo = `REC-${now.getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 

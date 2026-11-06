@@ -209,12 +209,18 @@ export default function Settings() {
 
           setProfile((p) => ({ ...p, avatar: compressedDataUrl }));
           updateProfile({ avatar: compressedDataUrl });
-          localStorage.setItem(`kimpc-avatar-${user?.email || "current"}`, compressedDataUrl);
 
-          await api("/member/profile", {
+          const patchRes = await api("/member/profile", {
             method: "PATCH",
             body: { ...profile, avatar: compressedDataUrl },
           });
+
+          if (patchRes.ok && patchRes.data?.avatar) {
+            const uploadedUrl = patchRes.data.avatar;
+            setProfile((p) => ({ ...p, avatar: uploadedUrl }));
+            updateProfile({ avatar: uploadedUrl });
+            localStorage.setItem(`kimpc-avatar-${user?.email || "current"}`, uploadedUrl);
+          }
 
           setFeedback("Profile picture updated successfully!");
         } catch {

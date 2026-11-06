@@ -9,6 +9,7 @@ const { logAudit } = require("../services/auditLogger");
 const authManager = require("../middleware/authManager");
 const { fail, clean, cleanEmail } = require("./routeHelpers");
 const { sendMemberSupportEmail } = require("../services/mailer");
+const cloudinaryService = require("../services/cloudinaryService");
 
 const router = express.Router();
 
@@ -83,14 +84,45 @@ router.patch("/member/preferences", async (req, res) => {
   });
 });
 
-router.patch("/member/profile", async (req, res) => {
-  const fields = ["fullName", "phone", "address", "address2", "city", "region", "postalCode", "country", "avatar"];
+router.patch(["/member/profile", "/member/update-profile"], async (req, res) => {
+  const fields = ["fullName", "phone", "address", "address2", "city", "region", "postalCode", "country"];
   for (const field of fields) {
     if (req.body[field] !== undefined) req.user[field] = clean(req.body[field]);
   }
+
+  // Handle avatar upload to Cloudinary
+  if (req.body.avatar !== undefined) {
+    const rawAvatar = String(req.body.avatar || "").trim();
+    if (rawAvatar.startsWith("data:image/")) {
+      try {
+        const uploadResult = await cloudinaryService.uploadImage(rawAvatar, {
+          folder: "kimpc/avatars",
+          filename: `avatar-${req.user._id}`,
+        });
+        req.user.avatar = uploadResult.url;
+      } catch (err) {
+        console.warn("Could not upload avatar to Cloudinary, fallback applied:", err.message);
+        req.user.avatar = clean(rawAvatar);
+      }
+    } else {
+      req.user.avatar = clean(rawAvatar);
+    }
+  }
+
   if (!req.user.fullName) return fail(res, 400, "Full name is required.");
   await req.user.save();
-  return res.json({ fullName: req.user.fullName, email: req.user.email, phone: req.user.phone, avatar: req.user.avatar, address: req.user.address, address2: req.user.address2, city: req.user.city, region: req.user.region, postalCode: req.user.postalCode, country: req.user.country });
+  return res.json({
+    fullName: req.user.fullName,
+    email: req.user.email,
+    phone: req.user.phone,
+    avatar: req.user.avatar,
+    address: req.user.address,
+    address2: req.user.address2,
+    city: req.user.city,
+    region: req.user.region,
+    postalCode: req.user.postalCode,
+    country: req.user.country
+  });
 });
 
 router.post("/member/change-password", async (req, res) => {
