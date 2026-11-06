@@ -78,7 +78,7 @@ export default function AdminIntegrations() {
 
       const keysRes = await api("/admin/integrations/keys");
       if (keysRes.ok && keysRes.data?.data) {
-        const d = keysRes.data.data;
+        const d = keysRes.data?.data || keysRes.data || {};
         setApiKeys({
           google: d.google || {},
           facebook: d.facebook || {},
@@ -90,28 +90,28 @@ export default function AdminIntegrations() {
 
         setKeyInputs({
           google: {
-            clientId: d.google?.clientId || "",
-            clientSecret: d.google?.clientSecret || "",
+            clientId: d.google?.customClientId || d.google?.clientId || "",
+            clientSecret: d.google?.customClientSecret || d.google?.clientSecret || "",
           },
           facebook: {
-            appId: d.facebook?.appId || "",
-            appSecret: d.facebook?.appSecret || "",
+            appId: d.facebook?.customAppId || d.facebook?.appId || "",
+            appSecret: d.facebook?.customAppSecret || d.facebook?.appSecret || "",
           },
           recaptcha: {
-            siteKey: d.recaptcha?.siteKey || "",
-            secretKey: d.recaptcha?.secretKey || "",
+            siteKey: d.recaptcha?.customSiteKey || d.recaptcha?.siteKey || "",
+            secretKey: d.recaptcha?.customSecretKey || d.recaptcha?.secretKey || "",
           },
           weather: {
-            apiKey: d.weather?.apiKey || "",
+            apiKey: d.weather?.customKey || d.weather?.apiKey || "",
           },
           oneSignal: {
-            appId: d.oneSignal?.appId || "",
-            restApiKey: d.oneSignal?.restApiKey || "",
+            appId: d.oneSignal?.customAppId || d.oneSignal?.appId || "",
+            restApiKey: d.oneSignal?.customRestApiKey || d.oneSignal?.restApiKey || "",
           },
           cloudinary: {
-            cloudName: d.cloudinary?.cloudName || "",
-            apiKey: d.cloudinary?.apiKey || "",
-            apiSecret: d.cloudinary?.apiSecret || "",
+            cloudName: d.cloudinary?.customCloudName || d.cloudinary?.cloudName || "",
+            apiKey: d.cloudinary?.customApiKey || d.cloudinary?.apiKey || "",
+            apiSecret: d.cloudinary?.customApiSecret || d.cloudinary?.apiSecret || "",
           },
         });
       }

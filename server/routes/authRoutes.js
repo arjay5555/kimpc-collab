@@ -420,21 +420,25 @@ router.post("/admin/settings/cloudinary", requireAdmin, async (req, res) => {
 
 // ---------- Customizable API Keys & Credentials (Admin Only) ----------
 
-router.get("/admin/api-keys", requireAdmin, async (req, res) => {
+router.get(["/admin/api-keys", "/admin/integrations/keys"], requireAdmin, async (req, res) => {
   try {
     const summary = await getAdminApiKeysSummary();
-    res.json(summary);
+    res.json({
+      ok: true,
+      data: summary,
+      ...summary,
+    });
   } catch (err) {
     console.error("Error retrieving API keys summary:", err);
     fail(res, 500, "Failed to load API keys summary.");
   }
 });
 
-router.post("/admin/api-keys/google", requireAdmin, async (req, res) => {
+router.post(["/admin/api-keys/google", "/admin/integrations/keys/google", "/admin/integrations/keys/google/reset"], requireAdmin, async (req, res) => {
   try {
     const clientId = clean(req.body.clientId);
     const clientSecret = clean(req.body.clientSecret);
-    const isReset = Boolean(req.body.reset) || (!clientId && !clientSecret);
+    const isReset = req.path.endsWith("/reset") || Boolean(req.body.reset) || (!clientId && !clientSecret);
     const updatedBy = req.admin?.email || "admin";
 
     if (isReset) {
@@ -443,9 +447,9 @@ router.post("/admin/api-keys/google", requireAdmin, async (req, res) => {
       updateEnvFile({
         CUSTOM_GOOGLE_CLIENT_ID: "",
         CUSTOM_GOOGLE_CLIENT_SECRET: "",
-        GOOGLE_CLIENT_ID: process.env.DEFAULT_GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID,
-        GOOGLE_CLIENT_SECRET: process.env.DEFAULT_GOOGLE_CLIENT_SECRET || DEFAULT_GOOGLE_CLIENT_SECRET,
       });
+      process.env.GOOGLE_CLIENT_ID = process.env.DEFAULT_GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID;
+      process.env.GOOGLE_CLIENT_SECRET = process.env.DEFAULT_GOOGLE_CLIENT_SECRET || DEFAULT_GOOGLE_CLIENT_SECRET;
       await logAudit({
         action: "SETTINGS_UPDATED",
         actorEmail: updatedBy,
@@ -481,9 +485,9 @@ router.post("/admin/api-keys/google", requireAdmin, async (req, res) => {
     updateEnvFile({
       CUSTOM_GOOGLE_CLIENT_ID: clientId || "",
       CUSTOM_GOOGLE_CLIENT_SECRET: clientSecret || "",
-      GOOGLE_CLIENT_ID: clientId || process.env.DEFAULT_GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID,
-      GOOGLE_CLIENT_SECRET: clientSecret || process.env.DEFAULT_GOOGLE_CLIENT_SECRET || DEFAULT_GOOGLE_CLIENT_SECRET,
     });
+    process.env.GOOGLE_CLIENT_ID = clientId || process.env.DEFAULT_GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID;
+    process.env.GOOGLE_CLIENT_SECRET = clientSecret || process.env.DEFAULT_GOOGLE_CLIENT_SECRET || DEFAULT_GOOGLE_CLIENT_SECRET;
 
     await logAudit({
       action: "SETTINGS_UPDATED",
@@ -505,11 +509,11 @@ router.post("/admin/api-keys/google", requireAdmin, async (req, res) => {
   }
 });
 
-router.post("/admin/api-keys/facebook", requireAdmin, async (req, res) => {
+router.post(["/admin/api-keys/facebook", "/admin/integrations/keys/facebook", "/admin/integrations/keys/facebook/reset"], requireAdmin, async (req, res) => {
   try {
     const appId = clean(req.body.appId);
     const appSecret = clean(req.body.appSecret);
-    const isReset = Boolean(req.body.reset) || (!appId && !appSecret);
+    const isReset = req.path.endsWith("/reset") || Boolean(req.body.reset) || (!appId && !appSecret);
     const updatedBy = req.admin?.email || "admin";
 
     if (isReset) {
@@ -518,9 +522,9 @@ router.post("/admin/api-keys/facebook", requireAdmin, async (req, res) => {
       updateEnvFile({
         CUSTOM_FACEBOOK_APP_ID: "",
         CUSTOM_FACEBOOK_APP_SECRET: "",
-        FACEBOOK_APP_ID: process.env.DEFAULT_FACEBOOK_APP_ID || DEFAULT_FACEBOOK_APP_ID,
-        FACEBOOK_APP_SECRET: process.env.DEFAULT_FACEBOOK_APP_SECRET || DEFAULT_FACEBOOK_APP_SECRET,
       });
+      process.env.FACEBOOK_APP_ID = process.env.DEFAULT_FACEBOOK_APP_ID || DEFAULT_FACEBOOK_APP_ID;
+      process.env.FACEBOOK_APP_SECRET = process.env.DEFAULT_FACEBOOK_APP_SECRET || DEFAULT_FACEBOOK_APP_SECRET;
       await logAudit({
         action: "SETTINGS_UPDATED",
         actorEmail: updatedBy,
@@ -556,9 +560,9 @@ router.post("/admin/api-keys/facebook", requireAdmin, async (req, res) => {
     updateEnvFile({
       CUSTOM_FACEBOOK_APP_ID: appId || "",
       CUSTOM_FACEBOOK_APP_SECRET: appSecret || "",
-      FACEBOOK_APP_ID: appId || process.env.DEFAULT_FACEBOOK_APP_ID || DEFAULT_FACEBOOK_APP_ID,
-      FACEBOOK_APP_SECRET: appSecret || process.env.DEFAULT_FACEBOOK_APP_SECRET || DEFAULT_FACEBOOK_APP_SECRET,
     });
+    process.env.FACEBOOK_APP_ID = appId || process.env.DEFAULT_FACEBOOK_APP_ID || DEFAULT_FACEBOOK_APP_ID;
+    process.env.FACEBOOK_APP_SECRET = appSecret || process.env.DEFAULT_FACEBOOK_APP_SECRET || DEFAULT_FACEBOOK_APP_SECRET;
 
     await logAudit({
       action: "SETTINGS_UPDATED",
@@ -580,11 +584,11 @@ router.post("/admin/api-keys/facebook", requireAdmin, async (req, res) => {
   }
 });
 
-router.post("/admin/api-keys/recaptcha", requireAdmin, async (req, res) => {
+router.post(["/admin/api-keys/recaptcha", "/admin/integrations/keys/recaptcha", "/admin/integrations/keys/recaptcha/reset"], requireAdmin, async (req, res) => {
   try {
     const siteKey = clean(req.body.siteKey);
     const secretKey = clean(req.body.secretKey);
-    const isReset = Boolean(req.body.reset) || (!siteKey && !secretKey);
+    const isReset = req.path.endsWith("/reset") || Boolean(req.body.reset) || (!siteKey && !secretKey);
     const updatedBy = req.admin?.email || "admin";
 
     if (isReset) {
@@ -593,9 +597,9 @@ router.post("/admin/api-keys/recaptcha", requireAdmin, async (req, res) => {
       updateEnvFile({
         CUSTOM_RECAPTCHA_SITE_KEY: "",
         CUSTOM_RECAPTCHA_SECRET_KEY: "",
-        RECAPTCHA_SITE_KEY: process.env.DEFAULT_RECAPTCHA_SITE_KEY || DEFAULT_RECAPTCHA_SITE_KEY,
-        RECAPTCHA_SECRET_KEY: process.env.DEFAULT_RECAPTCHA_SECRET_KEY || DEFAULT_RECAPTCHA_SECRET_KEY,
       });
+      process.env.RECAPTCHA_SITE_KEY = process.env.DEFAULT_RECAPTCHA_SITE_KEY || DEFAULT_RECAPTCHA_SITE_KEY;
+      process.env.RECAPTCHA_SECRET_KEY = process.env.DEFAULT_RECAPTCHA_SECRET_KEY || DEFAULT_RECAPTCHA_SECRET_KEY;
       await logAudit({
         action: "SETTINGS_UPDATED",
         actorEmail: updatedBy,
@@ -631,9 +635,9 @@ router.post("/admin/api-keys/recaptcha", requireAdmin, async (req, res) => {
     updateEnvFile({
       CUSTOM_RECAPTCHA_SITE_KEY: siteKey || "",
       CUSTOM_RECAPTCHA_SECRET_KEY: secretKey || "",
-      RECAPTCHA_SITE_KEY: siteKey || process.env.DEFAULT_RECAPTCHA_SITE_KEY || DEFAULT_RECAPTCHA_SITE_KEY,
-      RECAPTCHA_SECRET_KEY: secretKey || process.env.DEFAULT_RECAPTCHA_SECRET_KEY || DEFAULT_RECAPTCHA_SECRET_KEY,
     });
+    process.env.RECAPTCHA_SITE_KEY = siteKey || process.env.DEFAULT_RECAPTCHA_SITE_KEY || DEFAULT_RECAPTCHA_SITE_KEY;
+    process.env.RECAPTCHA_SECRET_KEY = secretKey || process.env.DEFAULT_RECAPTCHA_SECRET_KEY || DEFAULT_RECAPTCHA_SECRET_KEY;
 
     await logAudit({
       action: "SETTINGS_UPDATED",
@@ -655,18 +659,18 @@ router.post("/admin/api-keys/recaptcha", requireAdmin, async (req, res) => {
   }
 });
 
-router.post("/admin/api-keys/weather", requireAdmin, async (req, res) => {
+router.post(["/admin/api-keys/weather", "/admin/integrations/keys/weather", "/admin/integrations/keys/weather/reset"], requireAdmin, async (req, res) => {
   try {
     const key = clean(req.body.apiKey);
-    const isReset = Boolean(req.body.reset) || !key;
+    const isReset = req.path.endsWith("/reset") || Boolean(req.body.reset) || !key;
     const updatedBy = req.admin?.email || "admin";
 
     if (isReset) {
       await SystemSetting.findOneAndDelete({ key: "customWeatherApiKey" });
       updateEnvFile({
         CUSTOM_WEATHER_API_KEY: "",
-        WEATHER_API_KEY: process.env.DEFAULT_WEATHER_API_KEY || DEFAULT_WEATHER_API_KEY,
       });
+      process.env.WEATHER_API_KEY = process.env.DEFAULT_WEATHER_API_KEY || DEFAULT_WEATHER_API_KEY;
       await logAudit({
         action: "SETTINGS_UPDATED",
         actorEmail: updatedBy,
@@ -691,8 +695,8 @@ router.post("/admin/api-keys/weather", requireAdmin, async (req, res) => {
 
     updateEnvFile({
       CUSTOM_WEATHER_API_KEY: key,
-      WEATHER_API_KEY: key,
     });
+    process.env.WEATHER_API_KEY = key;
 
     await logAudit({
       action: "SETTINGS_UPDATED",
@@ -714,11 +718,11 @@ router.post("/admin/api-keys/weather", requireAdmin, async (req, res) => {
   }
 });
 
-router.post("/admin/api-keys/onesignal", requireAdmin, async (req, res) => {
+router.post(["/admin/api-keys/onesignal", "/admin/integrations/keys/onesignal", "/admin/integrations/keys/onesignal/reset"], requireAdmin, async (req, res) => {
   try {
     const appId = clean(req.body.appId);
     const restApiKey = clean(req.body.restApiKey);
-    const isReset = Boolean(req.body.reset) || (!appId && !restApiKey);
+    const isReset = req.path.endsWith("/reset") || Boolean(req.body.reset) || (!appId && !restApiKey);
     const updatedBy = req.admin?.email || "admin";
 
     if (isReset) {
@@ -727,9 +731,9 @@ router.post("/admin/api-keys/onesignal", requireAdmin, async (req, res) => {
       updateEnvFile({
         CUSTOM_ONESIGNAL_APP_ID: "",
         CUSTOM_ONESIGNAL_REST_KEY: "",
-        ONESIGNAL_APP_ID: process.env.DEFAULT_ONESIGNAL_APP_ID || DEFAULT_ONESIGNAL_APP_ID,
-        ONESIGNAL_REST_API_KEY: process.env.DEFAULT_ONESIGNAL_REST_KEY || DEFAULT_ONESIGNAL_REST_KEY,
       });
+      process.env.ONESIGNAL_APP_ID = process.env.DEFAULT_ONESIGNAL_APP_ID || DEFAULT_ONESIGNAL_APP_ID;
+      process.env.ONESIGNAL_REST_API_KEY = process.env.DEFAULT_ONESIGNAL_REST_KEY || DEFAULT_ONESIGNAL_REST_KEY;
       await logAudit({
         action: "SETTINGS_UPDATED",
         actorEmail: updatedBy,
@@ -765,9 +769,9 @@ router.post("/admin/api-keys/onesignal", requireAdmin, async (req, res) => {
     updateEnvFile({
       CUSTOM_ONESIGNAL_APP_ID: appId || "",
       CUSTOM_ONESIGNAL_REST_KEY: restApiKey || "",
-      ONESIGNAL_APP_ID: appId || process.env.DEFAULT_ONESIGNAL_APP_ID || DEFAULT_ONESIGNAL_APP_ID,
-      ONESIGNAL_REST_API_KEY: restApiKey || process.env.DEFAULT_ONESIGNAL_REST_KEY || DEFAULT_ONESIGNAL_REST_KEY,
     });
+    process.env.ONESIGNAL_APP_ID = appId || process.env.DEFAULT_ONESIGNAL_APP_ID || DEFAULT_ONESIGNAL_APP_ID;
+    process.env.ONESIGNAL_REST_API_KEY = restApiKey || process.env.DEFAULT_ONESIGNAL_REST_KEY || DEFAULT_ONESIGNAL_REST_KEY;
 
     await logAudit({
       action: "SETTINGS_UPDATED",
@@ -789,12 +793,12 @@ router.post("/admin/api-keys/onesignal", requireAdmin, async (req, res) => {
   }
 });
 
-router.post("/admin/api-keys/cloudinary", requireAdmin, async (req, res) => {
+router.post(["/admin/api-keys/cloudinary", "/admin/integrations/keys/cloudinary", "/admin/integrations/keys/cloudinary/reset"], requireAdmin, async (req, res) => {
   try {
     const cloudName = clean(req.body.cloudName);
     const apiKey = clean(req.body.apiKey);
     const apiSecret = clean(req.body.apiSecret);
-    const isReset = Boolean(req.body.reset) || (!cloudName && !apiKey && !apiSecret);
+    const isReset = req.path.endsWith("/reset") || Boolean(req.body.reset) || (!cloudName && !apiKey && !apiSecret);
     const updatedBy = req.admin?.email || "admin";
 
     if (isReset) {
@@ -805,10 +809,10 @@ router.post("/admin/api-keys/cloudinary", requireAdmin, async (req, res) => {
         CUSTOM_CLOUDINARY_CLOUD_NAME: "",
         CUSTOM_CLOUDINARY_API_KEY: "",
         CUSTOM_CLOUDINARY_API_SECRET: "",
-        CLOUDINARY_CLOUD_NAME: process.env.DEFAULT_CLOUDINARY_CLOUD_NAME || DEFAULT_CLOUDINARY_CLOUD_NAME,
-        CLOUDINARY_API_KEY: process.env.DEFAULT_CLOUDINARY_API_KEY || DEFAULT_CLOUDINARY_API_KEY,
-        CLOUDINARY_API_SECRET: process.env.DEFAULT_CLOUDINARY_API_SECRET || DEFAULT_CLOUDINARY_API_SECRET,
       });
+      process.env.CLOUDINARY_CLOUD_NAME = process.env.DEFAULT_CLOUDINARY_CLOUD_NAME || DEFAULT_CLOUDINARY_CLOUD_NAME;
+      process.env.CLOUDINARY_API_KEY = process.env.DEFAULT_CLOUDINARY_API_KEY || DEFAULT_CLOUDINARY_API_KEY;
+      process.env.CLOUDINARY_API_SECRET = process.env.DEFAULT_CLOUDINARY_API_SECRET || DEFAULT_CLOUDINARY_API_SECRET;
       await logAudit({
         action: "SETTINGS_UPDATED",
         actorEmail: updatedBy,
@@ -853,10 +857,10 @@ router.post("/admin/api-keys/cloudinary", requireAdmin, async (req, res) => {
       CUSTOM_CLOUDINARY_CLOUD_NAME: cloudName || "",
       CUSTOM_CLOUDINARY_API_KEY: apiKey || "",
       CUSTOM_CLOUDINARY_API_SECRET: apiSecret || "",
-      CLOUDINARY_CLOUD_NAME: cloudName || process.env.DEFAULT_CLOUDINARY_CLOUD_NAME || DEFAULT_CLOUDINARY_CLOUD_NAME,
-      CLOUDINARY_API_KEY: apiKey || process.env.DEFAULT_CLOUDINARY_API_KEY || DEFAULT_CLOUDINARY_API_KEY,
-      CLOUDINARY_API_SECRET: apiSecret || process.env.DEFAULT_CLOUDINARY_API_SECRET || DEFAULT_CLOUDINARY_API_SECRET,
     });
+    process.env.CLOUDINARY_CLOUD_NAME = cloudName || process.env.DEFAULT_CLOUDINARY_CLOUD_NAME || DEFAULT_CLOUDINARY_CLOUD_NAME;
+    process.env.CLOUDINARY_API_KEY = apiKey || process.env.DEFAULT_CLOUDINARY_API_KEY || DEFAULT_CLOUDINARY_API_KEY;
+    process.env.CLOUDINARY_API_SECRET = apiSecret || process.env.DEFAULT_CLOUDINARY_API_SECRET || DEFAULT_CLOUDINARY_API_SECRET;
 
     await logAudit({
       action: "SETTINGS_UPDATED",
@@ -868,6 +872,15 @@ router.post("/admin/api-keys/cloudinary", requireAdmin, async (req, res) => {
     });
 
     res.json({
+      ok: true,
+      isCustom: true,
+      message: "Custom Cloudinary credentials saved successfully.",
+    });
+  } catch (err) {
+    console.error("Error saving custom Cloudinary credentials:", err);
+    fail(res, 500, "Failed to save Cloudinary credentials.");
+  }
+});
       ok: true,
       isCustom: true,
       message: "Custom Cloudinary credentials saved successfully.",
