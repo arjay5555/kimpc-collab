@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { api, getSignedInEmail, getSignedInRole, getSignedInName, getAuthToken, isAuthenticated } from "../services/api";
+import { initOneSignal, logoutOneSignal } from "../services/oneSignal";
 
 const AuthContext = createContext(null);
 
@@ -32,6 +33,12 @@ export function AuthProvider({ children }) {
     setLoading(false);
   }, []);
 
+  useEffect(() => {
+    if (user?.email) {
+      initOneSignal(user);
+    }
+  }, [user?.email]);
+
   const completeSignIn = (data) => {
     const role = data.role || "member";
     if (data.token) {
@@ -56,6 +63,7 @@ export function AuthProvider({ children }) {
       token: data.token || "",
     };
     setUser(newUser);
+    initOneSignal(newUser);
     return newUser;
   };
 
@@ -126,6 +134,7 @@ export function AuthProvider({ children }) {
     sessionStorage.removeItem("minders-account-name");
     sessionStorage.removeItem("minders-jwt-token");
     localStorage.removeItem("token");
+    logoutOneSignal();
     setUser(null);
   };
 

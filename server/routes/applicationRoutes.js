@@ -16,6 +16,7 @@ const {
   deleteBookingFromGoogleCalendar,
 } = require("../services/googleCalendarService");
 const cloudinaryService = require("../services/cloudinaryService");
+const oneSignalService = require("../services/oneSignalService");
 
 const {
   STATUSES,
@@ -541,6 +542,12 @@ const handleApplicationUpdate = async (req, res) => {
         req,
       });
 
+      if (previousDates !== `${newStartDate} – ${newEndDate}`) {
+        oneSignalService.sendBookingStatusPush(existing, "Rescheduled").catch((err) => {
+          console.warn("[OneSignal] Background booking reschedule push error:", err.message);
+        });
+      }
+
       return res.json({ ok: true, message: "Booking updated successfully.", application: existing });
     }
 
@@ -693,6 +700,13 @@ const handleApplicationUpdate = async (req, res) => {
           relatedApplicationId: existing._id,
         });
       }
+    }
+
+    // Dispatch OneSignal Web Push notification to member
+    if (previousStatus !== newStatus) {
+      oneSignalService.sendBookingStatusPush(existing, newStatus, existing.managerRemarks || existing.cancellationReason).catch((err) => {
+        console.warn("[OneSignal] Background booking status push error:", err.message);
+      });
     }
 
     res.json(existing);
@@ -934,6 +948,10 @@ router.post("/applications/:id/grant-cancellation", authManager, async (req, res
       relatedApplicationId: existing._id,
     });
 
+    oneSignalService.sendBookingStatusPush(existing, "Cancellation Granted").catch((err) => {
+      console.warn("[OneSignal] Background grant cancellation push error:", err.message);
+    });
+
     await logAudit({
       action: "CANCELLATION_GRANTED",
       actorEmail: req.user?.email || "manager",
@@ -981,6 +999,10 @@ router.post("/applications/:id/decline-cancellation", authManager, async (req, r
       message: `Your cancellation request for ${existing.equipment} was declined by the manager: ${reason}`,
       type: "alert",
       relatedApplicationId: existing._id,
+    });
+
+    oneSignalService.sendBookingStatusPush(existing, "Cancellation Declined", reason).catch((err) => {
+      console.warn("[OneSignal] Background decline cancellation push error:", err.message);
     });
 
     await logAudit({

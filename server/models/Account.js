@@ -30,7 +30,8 @@ const accountSchema = new mongoose.Schema(
         email: { type: Boolean, default: true },
         inApp: { type: Boolean, default: true },
         bookingReminders: { type: Boolean, default: true },
-        systemUpdates: { type: Boolean, default: true }
+        systemUpdates: { type: Boolean, default: true },
+        push: { type: Boolean, default: true }
       }
     },
     // Profile edits wait here until the member confirms them by email.

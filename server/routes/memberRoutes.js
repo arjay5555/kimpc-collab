@@ -10,6 +10,7 @@ const authManager = require("../middleware/authManager");
 const { fail, clean, cleanEmail } = require("./routeHelpers");
 const { sendMemberSupportEmail } = require("../services/mailer");
 const cloudinaryService = require("../services/cloudinaryService");
+const oneSignalService = require("../services/oneSignalService");
 
 const router = express.Router();
 
@@ -43,6 +44,7 @@ router.get("/member/preferences", async (req, res) => {
       inApp: req.user.memberSettings?.notifications?.inApp ?? true,
       bookingReminders: req.user.memberSettings?.notifications?.bookingReminders ?? true,
       systemUpdates: req.user.memberSettings?.notifications?.systemUpdates ?? true,
+      push: req.user.memberSettings?.notifications?.push ?? true,
     },
     supportEmail: process.env.SUPPORT_EMAIL || "",
     supportPhone: process.env.SUPPORT_PHONE || "",
@@ -61,7 +63,7 @@ router.patch("/member/preferences", async (req, res) => {
     settings.defaultFarmLocation = location;
   }
   if (req.body.notifications !== undefined) {
-    const allowed = ["email", "inApp", "bookingReminders", "systemUpdates"];
+    const allowed = ["email", "inApp", "bookingReminders", "systemUpdates", "push"];
     settings.notifications = { ...(settings.notifications || {}) };
     for (const key of allowed) {
       if (req.body.notifications[key] !== undefined) {
@@ -80,8 +82,22 @@ router.patch("/member/preferences", async (req, res) => {
       inApp: settings.notifications?.inApp ?? true,
       bookingReminders: settings.notifications?.bookingReminders ?? true,
       systemUpdates: settings.notifications?.systemUpdates ?? true,
+      push: settings.notifications?.push ?? true,
     },
   });
+});
+
+router.post("/member/push/test", async (req, res) => {
+  try {
+    const result = await oneSignalService.sendPushNotification({
+      email: req.user.email,
+      title: "KIMPC Web Push Test 🚜",
+      message: "Push notifications are active! You will receive instant updates whenever your machinery bookings change status.",
+    });
+    return res.json(result);
+  } catch (err) {
+    return fail(res, 500, err.message || "Failed to trigger test push.");
+  }
 });
 
 router.patch(["/member/profile", "/member/update-profile"], async (req, res) => {

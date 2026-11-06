@@ -3,11 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { api } from "../../services/api";
 import MemberTopbar from "../../components/MemberTopbar";
+import { setPushEnabled, getPushStatus, isPushSupported } from "../../services/oneSignal";
 
 const initialPreferences = {
   theme: "light",
   defaultFarmLocation: "",
-  notifications: { email: true, inApp: true, bookingReminders: true, systemUpdates: true },
+  notifications: { email: true, inApp: true, bookingReminders: true, systemUpdates: true, push: true },
 };
 
 export default function Settings() {
@@ -39,6 +40,8 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
+  const [pushInfo, setPushInfo] = useState({ supported: true, permission: "default", optedIn: false });
+  const [isTestingPush, setIsTestingPush] = useState(false);
 
   const fetchMyMessages = useCallback(async () => {
     try {
@@ -99,11 +102,17 @@ export default function Settings() {
           setError(preferencesResponse.data?.error || "Could not load saved settings.");
         }
         setLoading(false);
+        getPushStatus().then((info) => {
+          if (active) setPushInfo(info);
+        });
       })
       .catch(() => {
         if (active) {
           setError("Could not load saved settings.");
           setLoading(false);
+        getPushStatus().then((info) => {
+          if (active) setPushInfo(info);
+        });
         }
       });
 
@@ -310,6 +319,45 @@ export default function Settings() {
     const notifications = { ...preferences.notifications, [key]: value };
     setPreferences((current) => ({ ...current, notifications }));
     savePreferences({ notifications });
+  };
+
+  const handlePushToggle = async (checked) => {
+    setError("");
+    setFeedback("");
+    if (checked) {
+      const res = await setPushEnabled(true);
+      if (res.permission === "denied") {
+        setError("Browser notifications are blocked. Please enable notification permissions in your browser's site settings.");
+        updateNotification("push", false);
+      } else {
+        updateNotification("push", true);
+        setFeedback("Push notifications enabled! You will receive live updates when your booking status changes.");
+      }
+    } else {
+      await setPushEnabled(false);
+      updateNotification("push", false);
+      setFeedback("Push notifications turned off.");
+    }
+    const updated = await getPushStatus();
+    setPushInfo(updated);
+  };
+
+  const handleTestPush = async () => {
+    setIsTestingPush(true);
+    setError("");
+    setFeedback("");
+    try {
+      const res = await api("/member/push/test", { method: "POST" });
+      if (res.ok) {
+        setFeedback("Test push notification dispatched! Check your device or notification tray.");
+      } else {
+        setError(res.data?.error || "Could not trigger test push.");
+      }
+    } catch {
+      setError("Error sending test push notification.");
+    } finally {
+      setIsTestingPush(false);
+    }
   };
 
   const saveLocale = () => {
@@ -969,13 +1017,37 @@ export default function Settings() {
 
         {/* Notification Preferences */}
         <div style={{ marginTop: "16px", padding: "16px 18px", background: "#f8fafc", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
-          <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, color: "#0f172a", marginBottom: "8px" }}>
-            Notification Channels
-          </label>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "6px" }}>
+            <label style={{ fontSize: "0.82rem", fontWeight: 700, color: "#0f172a", margin: 0 }}>
+              Notification Channels
+            </label>
+            {isPushSupported() && (
+              <span style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                Push Permission:{" "}
+                <strong
+                  style={{
+                    color:
+                      pushInfo.permission === "granted"
+                        ? "#166534"
+                        : pushInfo.permission === "denied"
+                        ? "#dc2626"
+                        : "#d97706",
+                  }}
+                >
+                  {pushInfo.permission === "granted"
+                    ? "Allowed ✓"
+                    : pushInfo.permission === "denied"
+                    ? "Blocked ✕"
+                    : "Not Prompted"}
+                </strong>
+              </span>
+            )}
+          </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "10px" }}>
             {[
               ["email", "Email Notifications"],
               ["inApp", "In-App Notifications"],
+              ["push", "Web Push Notifications (OneSignal)"],
               ["bookingReminders", "Booking Schedule Reminders"],
               ["systemUpdates", "Cooperative Announcements"],
             ].map(([key, label]) => (
@@ -988,7 +1060,7 @@ export default function Settings() {
                   padding: "8px 12px",
                   borderRadius: "8px",
                   background: "#ffffff",
-                  border: "1px solid #e2e8f0",
+                  border: key === "push" && preferences.notifications.push ? "1.5px solid #16a34a" : "1px solid #e2e8f0",
                   fontSize: "0.8rem",
                   color: "#334155",
                   fontWeight: 600,
@@ -999,11 +1071,70 @@ export default function Settings() {
                 <input
                   type="checkbox"
                   checked={Boolean(preferences.notifications[key])}
-                  onChange={(e) => updateNotification(key, e.target.checked)}
+                  onChange={(e) => {
+                    if (key === "push") {
+                      handlePushToggle(e.target.checked);
+                    } else {
+                      updateNotification(key, e.target.checked);
+                    }
+                  }}
                   style={{ width: "18px", height: "18px", accentColor: "#166534", cursor: "pointer" }}
                 />
               </label>
             ))}
+          </div>
+
+          {/* Web Push Status & Live Test */}
+          <div
+            style={{
+              marginTop: "12px",
+              padding: "12px 14px",
+              background: preferences.notifications.push ? "#f0fdf4" : "#f1f5f9",
+              border: preferences.notifications.push ? "1px solid #bbf7d0" : "1px solid #e2e8f0",
+              borderRadius: "10px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: "10px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <span style={{ fontSize: "1.2rem" }}>{preferences.notifications.push ? "🔔" : "🔕"}</span>
+              <div>
+                <div style={{ fontSize: "0.78rem", fontWeight: 700, color: preferences.notifications.push ? "#166534" : "#475569" }}>
+                  OneSignal Web Push: {preferences.notifications.push ? "Enabled & Linked" : "Turned Off"}
+                </div>
+                <div style={{ fontSize: "0.72rem", color: preferences.notifications.push ? "#15803d" : "#64748b" }}>
+                  {preferences.notifications.push
+                    ? "You will receive instant desktop/mobile push alerts when your bookings are Approved, Dispatched, or Rescheduled."
+                    : "Enable Web Push to stay updated in real-time when managers review your booking requests."}
+                </div>
+              </div>
+            </div>
+            {preferences.notifications.push && (
+              <button
+                type="button"
+                onClick={handleTestPush}
+                disabled={isTestingPush}
+                style={{
+                  background: "#166534",
+                  color: "#ffffff",
+                  border: "none",
+                  padding: "6px 14px",
+                  borderRadius: "8px",
+                  fontSize: "0.74rem",
+                  fontWeight: 600,
+                  cursor: isTestingPush ? "wait" : "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                }}
+              >
+                {isTestingPush ? "Dispatching..." : "Send Test Push"}
+              </button>
+            )}
           </div>
         </div>
       </section>
