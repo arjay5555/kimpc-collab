@@ -26,17 +26,7 @@ if (!fs.existsSync(uploadsDir)) {
 }
 app.use("/uploads", express.static(uploadsDir));
 
-// 3. Redirect legacy .html URLs to clean Node.js route paths
-app.use((req, res, next) => {
-  if (req.path.endsWith(".html")) {
-    const cleanPath = req.path.slice(0, -5);
-    const query = req.url.slice(req.path.length);
-    return res.redirect(301, cleanPath + query);
-  }
-  next();
-});
-
-// 4. API Routes
+// 3. API Routes
 app.use("/api/upload", uploadRoutes);
 app.use("/api/weather", weatherRoutes);
 app.use("/api/calendar", calendarRoutes);
@@ -44,7 +34,7 @@ app.use("/api/manager", authManager);
 app.use("/api/manager", managerRoutes);
 app.use("/api", apiRoutes);
 
-// 5. Serve Frontend Application (Vite React SPA)
+// 4. Serve Frontend Application (Vite React SPA)
 const clientDist = fs.existsSync(path.join(__dirname, "..", "client", "dist"))
   ? path.join(__dirname, "..", "client", "dist")
   : path.join(__dirname, "client", "dist");
@@ -58,8 +48,7 @@ if (fs.existsSync(clientDist)) {
     next();
   });
 } else {
-  // Fallback to legacy static files if client not built
-  app.use(express.static(path.join(__dirname, "public"), { extensions: ["html"] }));
+  app.use(express.static(path.join(__dirname, "public")));
 }
 
 // 6. Centralized Error Handler
