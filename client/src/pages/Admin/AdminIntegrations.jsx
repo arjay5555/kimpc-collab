@@ -90,28 +90,28 @@ export default function AdminIntegrations() {
 
         setKeyInputs({
           google: {
-            clientId: d.google?.customClientId || d.google?.clientId || "",
-            clientSecret: d.google?.customClientSecret || d.google?.clientSecret || "",
+            clientId: d.google?.customClientId || "",
+            clientSecret: d.google?.customClientSecret || "",
           },
           facebook: {
-            appId: d.facebook?.customAppId || d.facebook?.appId || "",
-            appSecret: d.facebook?.customAppSecret || d.facebook?.appSecret || "",
+            appId: d.facebook?.customAppId || "",
+            appSecret: d.facebook?.customAppSecret || "",
           },
           recaptcha: {
-            siteKey: d.recaptcha?.customSiteKey || d.recaptcha?.siteKey || "",
-            secretKey: d.recaptcha?.customSecretKey || d.recaptcha?.secretKey || "",
+            siteKey: d.recaptcha?.customSiteKey || "",
+            secretKey: d.recaptcha?.customSecretKey || "",
           },
           weather: {
-            apiKey: d.weather?.customKey || d.weather?.apiKey || "",
+            apiKey: d.weather?.customKey || "",
           },
           oneSignal: {
-            appId: d.oneSignal?.customAppId || d.oneSignal?.appId || "",
-            restApiKey: d.oneSignal?.customRestApiKey || d.oneSignal?.restApiKey || "",
+            appId: d.oneSignal?.customAppId || "",
+            restApiKey: d.oneSignal?.customRestApiKey || "",
           },
           cloudinary: {
-            cloudName: d.cloudinary?.customCloudName || d.cloudinary?.cloudName || "",
-            apiKey: d.cloudinary?.customApiKey || d.cloudinary?.apiKey || "",
-            apiSecret: d.cloudinary?.customApiSecret || d.cloudinary?.apiSecret || "",
+            cloudName: d.cloudinary?.customCloudName || "",
+            apiKey: d.cloudinary?.customApiKey || "",
+            apiSecret: d.cloudinary?.customApiSecret || "",
           },
         });
       }
@@ -211,6 +211,7 @@ export default function AdminIntegrations() {
     try {
       const res = await api("/admin/integrations/keys/google/reset", { method: "POST" });
       if (res.ok) {
+        setKeyInputs((p) => ({ ...p, google: { clientId: "", clientSecret: "" } }));
         setKeyFeedback((p) => ({ ...p, google: { isError: false, message: "Reset to default system credentials." } }));
         fetchSettingsAndKeys();
         setTimeout(() => setKeyFeedback((p) => ({ ...p, google: null })), 4000);
@@ -251,6 +252,7 @@ export default function AdminIntegrations() {
     try {
       const res = await api("/admin/integrations/keys/facebook/reset", { method: "POST" });
       if (res.ok) {
+        setKeyInputs((p) => ({ ...p, facebook: { appId: "", appSecret: "" } }));
         setKeyFeedback((p) => ({ ...p, facebook: { isError: false, message: "Reset to default system credentials." } }));
         fetchSettingsAndKeys();
         setTimeout(() => setKeyFeedback((p) => ({ ...p, facebook: null })), 4000);
@@ -291,6 +293,7 @@ export default function AdminIntegrations() {
     try {
       const res = await api("/admin/integrations/keys/recaptcha/reset", { method: "POST" });
       if (res.ok) {
+        setKeyInputs((p) => ({ ...p, recaptcha: { siteKey: "", secretKey: "" } }));
         setKeyFeedback((p) => ({ ...p, recaptcha: { isError: false, message: "Reset to default system credentials." } }));
         fetchSettingsAndKeys();
         setTimeout(() => setKeyFeedback((p) => ({ ...p, recaptcha: null })), 4000);
@@ -330,6 +333,7 @@ export default function AdminIntegrations() {
     try {
       const res = await api("/admin/integrations/keys/weather/reset", { method: "POST" });
       if (res.ok) {
+        setKeyInputs((p) => ({ ...p, weather: { apiKey: "" } }));
         setKeyFeedback((p) => ({ ...p, weather: { isError: false, message: "Reset to default system credentials." } }));
         fetchSettingsAndKeys();
         setTimeout(() => setKeyFeedback((p) => ({ ...p, weather: null })), 4000);
@@ -370,6 +374,7 @@ export default function AdminIntegrations() {
     try {
       const res = await api("/admin/integrations/keys/onesignal/reset", { method: "POST" });
       if (res.ok) {
+        setKeyInputs((p) => ({ ...p, oneSignal: { appId: "", restApiKey: "" } }));
         setKeyFeedback((p) => ({ ...p, oneSignal: { isError: false, message: "Reset to default system credentials." } }));
         fetchSettingsAndKeys();
         setTimeout(() => setKeyFeedback((p) => ({ ...p, oneSignal: null })), 4000);
@@ -411,6 +416,7 @@ export default function AdminIntegrations() {
     try {
       const res = await api("/admin/integrations/keys/cloudinary/reset", { method: "POST" });
       if (res.ok) {
+        setKeyInputs((p) => ({ ...p, cloudinary: { cloudName: "", apiKey: "", apiSecret: "" } }));
         setKeyFeedback((p) => ({ ...p, cloudinary: { isError: false, message: "Reset to default system credentials." } }));
         fetchSettingsAndKeys();
         setTimeout(() => setKeyFeedback((p) => ({ ...p, cloudinary: null })), 4000);
@@ -522,38 +528,28 @@ export default function AdminIntegrations() {
                   type="button"
                   onClick={() => setExpandedKeys((p) => ({ ...p, google: !p.google }))}
                   style={{
-                    width: "36px",
-                    height: "36px",
-                    borderRadius: "8px",
-                    border: expandedKeys.google
-                      ? "1.5px solid #166534"
-                      : apiKeys.google?.isCustom
-                      ? "1.5px solid #86efac"
-                      : "1px solid #cbd5e1",
-                    background: expandedKeys.google
-                      ? "#ecfdf5"
-                      : apiKeys.google?.isCustom
-                      ? "#f0fdf4"
-                      : "#ffffff",
-                    color: expandedKeys.google
-                      ? "#166534"
-                      : apiKeys.google?.isCustom
-                      ? "#15803d"
-                      : "#475569",
+                    background: "none",
+                    border: "none",
+                    padding: "4px",
                     display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
                     cursor: "pointer",
-                    transition: "all 0.15s ease",
+                    color: expandedKeys.google
+                      ? "#166534"
+                      : apiKeys.google?.isCustom
+                      ? "#15803d"
+                      : "#64748b",
                     position: "relative",
+                    transition: "color 0.15s ease",
                   }}
                   title={
                     apiKeys.google?.isCustom
-                      ? "Edit Google custom credentials (Custom .env active)"
-                      : "Edit Google credentials (Click to customize)"
+                      ? "Custom Google credentials active (Click to edit)"
+                      : "Edit Google credentials"
                   }
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                   </svg>
@@ -561,13 +557,13 @@ export default function AdminIntegrations() {
                     <span
                       style={{
                         position: "absolute",
-                        top: "-3px",
-                        right: "-3px",
-                        width: "8px",
-                        height: "8px",
+                        top: "1px",
+                        right: "0px",
+                        width: "6px",
+                        height: "6px",
                         borderRadius: "50%",
                         background: "#16a34a",
-                        border: "1.5px solid #ffffff",
+                        border: "1px solid #ffffff",
                       }}
                       title="Custom key active"
                     />
@@ -631,7 +627,7 @@ export default function AdminIntegrations() {
                       type="text"
                       className="wz-form-input"
                       style={{ fontSize: "0.82rem", background: "#ffffff" }}
-                      placeholder="e.g. 10834...apps.googleusercontent.com"
+                      placeholder={apiKeys.google?.defaultClientIdMasked ? `Example (Default): ${apiKeys.google.defaultClientIdMasked}` : "e.g. 1047648325603-...apps.googleusercontent.com"}
                       value={keyInputs.google.clientId}
                       onChange={(e) => setKeyInputs((p) => ({ ...p, google: { ...p.google, clientId: e.target.value } }))}
                     />
@@ -645,24 +641,40 @@ export default function AdminIntegrations() {
                         type={revealSecrets.google ? "text" : "password"}
                         className="wz-form-input"
                         style={{ fontSize: "0.82rem", background: "#ffffff", flex: 1 }}
-                        placeholder="e.g. GOCSPX-..."
+                        placeholder={apiKeys.google?.defaultClientSecretMasked ? `Example (Default): ${apiKeys.google.defaultClientSecretMasked}` : "e.g. GOCSPX-..."}
                         value={keyInputs.google.clientSecret}
                         onChange={(e) => setKeyInputs((p) => ({ ...p, google: { ...p.google, clientSecret: e.target.value } }))}
                       />
                       <button
                         type="button"
                         onClick={() => setRevealSecrets((p) => ({ ...p, google: !p.google }))}
+                        title={revealSecrets.google ? "Hide secret" : "Reveal secret"}
                         style={{
-                          padding: "9px 14px",
+                          width: "38px",
+                          height: "38px",
                           background: "#ffffff",
                           border: "1px solid #cbd5e1",
                           borderRadius: "8px",
-                          fontSize: "0.8rem",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
                           cursor: "pointer",
-                          whiteSpace: "nowrap",
+                          color: revealSecrets.google ? "#166534" : "#64748b",
+                          flexShrink: 0,
+                          transition: "all 0.15s ease",
                         }}
                       >
-                        {revealSecrets.google ? "🙈 Hide" : "👁️ Reveal"}
+                        {revealSecrets.google ? (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                            <line x1="1" y1="1" x2="23" y2="23" />
+                          </svg>
+                        ) : (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                            <circle cx="12" cy="12" r="3" />
+                          </svg>
+                        )}
                       </button>
                     </div>
                   </div>
@@ -772,38 +784,28 @@ export default function AdminIntegrations() {
                   type="button"
                   onClick={() => setExpandedKeys((p) => ({ ...p, facebook: !p.facebook }))}
                   style={{
-                    width: "36px",
-                    height: "36px",
-                    borderRadius: "8px",
-                    border: expandedKeys.facebook
-                      ? "1.5px solid #166534"
-                      : apiKeys.facebook?.isCustom
-                      ? "1.5px solid #86efac"
-                      : "1px solid #cbd5e1",
-                    background: expandedKeys.facebook
-                      ? "#ecfdf5"
-                      : apiKeys.facebook?.isCustom
-                      ? "#f0fdf4"
-                      : "#ffffff",
-                    color: expandedKeys.facebook
-                      ? "#166534"
-                      : apiKeys.facebook?.isCustom
-                      ? "#15803d"
-                      : "#475569",
+                    background: "none",
+                    border: "none",
+                    padding: "4px",
                     display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
                     cursor: "pointer",
-                    transition: "all 0.15s ease",
+                    color: expandedKeys.facebook
+                      ? "#166534"
+                      : apiKeys.facebook?.isCustom
+                      ? "#15803d"
+                      : "#64748b",
                     position: "relative",
+                    transition: "color 0.15s ease",
                   }}
                   title={
                     apiKeys.facebook?.isCustom
-                      ? "Edit Facebook custom credentials (Custom .env active)"
-                      : "Edit Facebook credentials (Click to customize)"
+                      ? "Custom Facebook credentials active (Click to edit)"
+                      : "Edit Facebook credentials"
                   }
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                   </svg>
@@ -811,13 +813,13 @@ export default function AdminIntegrations() {
                     <span
                       style={{
                         position: "absolute",
-                        top: "-3px",
-                        right: "-3px",
-                        width: "8px",
-                        height: "8px",
+                        top: "1px",
+                        right: "0px",
+                        width: "6px",
+                        height: "6px",
                         borderRadius: "50%",
                         background: "#16a34a",
-                        border: "1.5px solid #ffffff",
+                        border: "1px solid #ffffff",
                       }}
                       title="Custom key active"
                     />
@@ -881,7 +883,7 @@ export default function AdminIntegrations() {
                       type="text"
                       className="wz-form-input"
                       style={{ fontSize: "0.82rem", background: "#ffffff" }}
-                      placeholder="e.g. 19582..."
+                      placeholder={apiKeys.facebook?.defaultAppIdMasked ? `Example (Default): ${apiKeys.facebook.defaultAppIdMasked}` : "e.g. 19582..."}
                       value={keyInputs.facebook.appId}
                       onChange={(e) => setKeyInputs((p) => ({ ...p, facebook: { ...p.facebook, appId: e.target.value } }))}
                     />
@@ -895,24 +897,40 @@ export default function AdminIntegrations() {
                         type={revealSecrets.facebook ? "text" : "password"}
                         className="wz-form-input"
                         style={{ fontSize: "0.82rem", background: "#ffffff", flex: 1 }}
-                        placeholder="e.g. 38d9f..."
+                        placeholder={apiKeys.facebook?.defaultAppSecretMasked ? `Example (Default): ${apiKeys.facebook.defaultAppSecretMasked}` : "e.g. 38d9f..."}
                         value={keyInputs.facebook.appSecret}
                         onChange={(e) => setKeyInputs((p) => ({ ...p, facebook: { ...p.facebook, appSecret: e.target.value } }))}
                       />
                       <button
                         type="button"
                         onClick={() => setRevealSecrets((p) => ({ ...p, facebook: !p.facebook }))}
+                        title={revealSecrets.facebook ? "Hide secret" : "Reveal secret"}
                         style={{
-                          padding: "9px 14px",
+                          width: "38px",
+                          height: "38px",
                           background: "#ffffff",
                           border: "1px solid #cbd5e1",
                           borderRadius: "8px",
-                          fontSize: "0.8rem",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
                           cursor: "pointer",
-                          whiteSpace: "nowrap",
+                          color: revealSecrets.facebook ? "#166534" : "#64748b",
+                          flexShrink: 0,
+                          transition: "all 0.15s ease",
                         }}
                       >
-                        {revealSecrets.facebook ? "🙈 Hide" : "👁️ Reveal"}
+                        {revealSecrets.facebook ? (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                            <line x1="1" y1="1" x2="23" y2="23" />
+                          </svg>
+                        ) : (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                            <circle cx="12" cy="12" r="3" />
+                          </svg>
+                        )}
                       </button>
                     </div>
                   </div>
@@ -1022,38 +1040,28 @@ export default function AdminIntegrations() {
                   type="button"
                   onClick={() => setExpandedKeys((p) => ({ ...p, recaptcha: !p.recaptcha }))}
                   style={{
-                    width: "36px",
-                    height: "36px",
-                    borderRadius: "8px",
-                    border: expandedKeys.recaptcha
-                      ? "1.5px solid #166534"
-                      : apiKeys.recaptcha?.isCustom
-                      ? "1.5px solid #86efac"
-                      : "1px solid #cbd5e1",
-                    background: expandedKeys.recaptcha
-                      ? "#ecfdf5"
-                      : apiKeys.recaptcha?.isCustom
-                      ? "#f0fdf4"
-                      : "#ffffff",
-                    color: expandedKeys.recaptcha
-                      ? "#166534"
-                      : apiKeys.recaptcha?.isCustom
-                      ? "#15803d"
-                      : "#475569",
+                    background: "none",
+                    border: "none",
+                    padding: "4px",
                     display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
                     cursor: "pointer",
-                    transition: "all 0.15s ease",
+                    color: expandedKeys.recaptcha
+                      ? "#166534"
+                      : apiKeys.recaptcha?.isCustom
+                      ? "#15803d"
+                      : "#64748b",
                     position: "relative",
+                    transition: "color 0.15s ease",
                   }}
                   title={
                     apiKeys.recaptcha?.isCustom
-                      ? "Edit reCAPTCHA custom keys (Custom .env active)"
-                      : "Edit reCAPTCHA keys (Click to customize)"
+                      ? "Custom reCAPTCHA keys active (Click to edit)"
+                      : "Edit reCAPTCHA keys"
                   }
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                   </svg>
@@ -1061,13 +1069,13 @@ export default function AdminIntegrations() {
                     <span
                       style={{
                         position: "absolute",
-                        top: "-3px",
-                        right: "-3px",
-                        width: "8px",
-                        height: "8px",
+                        top: "1px",
+                        right: "0px",
+                        width: "6px",
+                        height: "6px",
                         borderRadius: "50%",
                         background: "#16a34a",
-                        border: "1.5px solid #ffffff",
+                        border: "1px solid #ffffff",
                       }}
                       title="Custom key active"
                     />
@@ -1131,7 +1139,7 @@ export default function AdminIntegrations() {
                       type="text"
                       className="wz-form-input"
                       style={{ fontSize: "0.82rem", background: "#ffffff" }}
-                      placeholder="e.g. 6Ldxq..."
+                      placeholder={apiKeys.recaptcha?.defaultSiteKeyMasked ? `Example (Default): ${apiKeys.recaptcha.defaultSiteKeyMasked}` : "e.g. 6Ldxq..."}
                       value={keyInputs.recaptcha.siteKey}
                       onChange={(e) => setKeyInputs((p) => ({ ...p, recaptcha: { ...p.recaptcha, siteKey: e.target.value } }))}
                     />
@@ -1145,24 +1153,40 @@ export default function AdminIntegrations() {
                         type={revealSecrets.recaptcha ? "text" : "password"}
                         className="wz-form-input"
                         style={{ fontSize: "0.82rem", background: "#ffffff", flex: 1 }}
-                        placeholder="e.g. 6Ldxq..."
+                        placeholder={apiKeys.recaptcha?.defaultSecretKeyMasked ? `Example (Default): ${apiKeys.recaptcha.defaultSecretKeyMasked}` : "e.g. 6Ldxq..."}
                         value={keyInputs.recaptcha.secretKey}
                         onChange={(e) => setKeyInputs((p) => ({ ...p, recaptcha: { ...p.recaptcha, secretKey: e.target.value } }))}
                       />
                       <button
                         type="button"
                         onClick={() => setRevealSecrets((p) => ({ ...p, recaptcha: !p.recaptcha }))}
+                        title={revealSecrets.recaptcha ? "Hide secret" : "Reveal secret"}
                         style={{
-                          padding: "9px 14px",
+                          width: "38px",
+                          height: "38px",
                           background: "#ffffff",
                           border: "1px solid #cbd5e1",
                           borderRadius: "8px",
-                          fontSize: "0.8rem",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
                           cursor: "pointer",
-                          whiteSpace: "nowrap",
+                          color: revealSecrets.recaptcha ? "#166534" : "#64748b",
+                          flexShrink: 0,
+                          transition: "all 0.15s ease",
                         }}
                       >
-                        {revealSecrets.recaptcha ? "🙈 Hide" : "👁️ Reveal"}
+                        {revealSecrets.recaptcha ? (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                            <line x1="1" y1="1" x2="23" y2="23" />
+                          </svg>
+                        ) : (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                            <circle cx="12" cy="12" r="3" />
+                          </svg>
+                        )}
                       </button>
                     </div>
                   </div>
@@ -1268,38 +1292,28 @@ export default function AdminIntegrations() {
                   type="button"
                   onClick={() => setExpandedKeys((p) => ({ ...p, weather: !p.weather }))}
                   style={{
-                    width: "36px",
-                    height: "36px",
-                    borderRadius: "8px",
-                    border: expandedKeys.weather
-                      ? "1.5px solid #166534"
-                      : apiKeys.weather?.isCustom
-                      ? "1.5px solid #86efac"
-                      : "1px solid #cbd5e1",
-                    background: expandedKeys.weather
-                      ? "#ecfdf5"
-                      : apiKeys.weather?.isCustom
-                      ? "#f0fdf4"
-                      : "#ffffff",
-                    color: expandedKeys.weather
-                      ? "#166534"
-                      : apiKeys.weather?.isCustom
-                      ? "#15803d"
-                      : "#475569",
+                    background: "none",
+                    border: "none",
+                    padding: "4px",
                     display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
                     cursor: "pointer",
-                    transition: "all 0.15s ease",
+                    color: expandedKeys.weather
+                      ? "#166534"
+                      : apiKeys.weather?.isCustom
+                      ? "#15803d"
+                      : "#64748b",
                     position: "relative",
+                    transition: "color 0.15s ease",
                   }}
                   title={
                     apiKeys.weather?.isCustom
-                      ? "Edit Weather API custom key (Custom .env active)"
-                      : "Edit Weather API key (Click to customize)"
+                      ? "Custom Weather API key active (Click to edit)"
+                      : "Edit Weather API key"
                   }
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                   </svg>
@@ -1307,13 +1321,13 @@ export default function AdminIntegrations() {
                     <span
                       style={{
                         position: "absolute",
-                        top: "-3px",
-                        right: "-3px",
-                        width: "8px",
-                        height: "8px",
+                        top: "1px",
+                        right: "0px",
+                        width: "6px",
+                        height: "6px",
                         borderRadius: "50%",
                         background: "#16a34a",
-                        border: "1.5px solid #ffffff",
+                        border: "1px solid #ffffff",
                       }}
                       title="Custom key active"
                     />
@@ -1377,24 +1391,40 @@ export default function AdminIntegrations() {
                       type={revealSecrets.weather ? "text" : "password"}
                       className="wz-form-input"
                       style={{ fontSize: "0.82rem", background: "#ffffff", flex: 1 }}
-                      placeholder="e.g. 7145472cabdc45fe8f414215260611"
+                      placeholder={apiKeys.weather?.defaultKeyMasked ? `Example (Default): ${apiKeys.weather.defaultKeyMasked}` : "e.g. 7145472cabdc45fe8f414215260611"}
                       value={keyInputs.weather.apiKey}
                       onChange={(e) => setKeyInputs((p) => ({ ...p, weather: { ...p.weather, apiKey: e.target.value } }))}
                     />
                     <button
                       type="button"
                       onClick={() => setRevealSecrets((p) => ({ ...p, weather: !p.weather }))}
+                      title={revealSecrets.weather ? "Hide secret" : "Reveal secret"}
                       style={{
-                        padding: "9px 14px",
+                        width: "38px",
+                        height: "38px",
                         background: "#ffffff",
                         border: "1px solid #cbd5e1",
                         borderRadius: "8px",
-                        fontSize: "0.8rem",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
                         cursor: "pointer",
-                        whiteSpace: "nowrap",
+                        color: revealSecrets.weather ? "#166534" : "#64748b",
+                        flexShrink: 0,
+                        transition: "all 0.15s ease",
                       }}
                     >
-                      {revealSecrets.weather ? "🙈 Hide" : "👁️ Reveal"}
+                      {revealSecrets.weather ? (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                          <line x1="1" y1="1" x2="23" y2="23" />
+                        </svg>
+                      ) : (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                          <circle cx="12" cy="12" r="3" />
+                        </svg>
+                      )}
                     </button>
                   </div>
                 </div>
@@ -1503,38 +1533,28 @@ export default function AdminIntegrations() {
                   type="button"
                   onClick={() => setExpandedKeys((p) => ({ ...p, oneSignal: !p.oneSignal }))}
                   style={{
-                    width: "36px",
-                    height: "36px",
-                    borderRadius: "8px",
-                    border: expandedKeys.oneSignal
-                      ? "1.5px solid #166534"
-                      : apiKeys.oneSignal?.isCustom
-                      ? "1.5px solid #86efac"
-                      : "1px solid #cbd5e1",
-                    background: expandedKeys.oneSignal
-                      ? "#ecfdf5"
-                      : apiKeys.oneSignal?.isCustom
-                      ? "#f0fdf4"
-                      : "#ffffff",
-                    color: expandedKeys.oneSignal
-                      ? "#166534"
-                      : apiKeys.oneSignal?.isCustom
-                      ? "#15803d"
-                      : "#475569",
+                    background: "none",
+                    border: "none",
+                    padding: "4px",
                     display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
                     cursor: "pointer",
-                    transition: "all 0.15s ease",
+                    color: expandedKeys.oneSignal
+                      ? "#166534"
+                      : apiKeys.oneSignal?.isCustom
+                      ? "#15803d"
+                      : "#64748b",
                     position: "relative",
+                    transition: "color 0.15s ease",
                   }}
                   title={
                     apiKeys.oneSignal?.isCustom
-                      ? "Edit OneSignal custom credentials (Custom .env active)"
-                      : "Edit OneSignal credentials (Click to customize)"
+                      ? "Custom OneSignal credentials active (Click to edit)"
+                      : "Edit OneSignal credentials"
                   }
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                   </svg>
@@ -1542,13 +1562,13 @@ export default function AdminIntegrations() {
                     <span
                       style={{
                         position: "absolute",
-                        top: "-3px",
-                        right: "-3px",
-                        width: "8px",
-                        height: "8px",
+                        top: "1px",
+                        right: "0px",
+                        width: "6px",
+                        height: "6px",
                         borderRadius: "50%",
                         background: "#16a34a",
-                        border: "1.5px solid #ffffff",
+                        border: "1px solid #ffffff",
                       }}
                       title="Custom key active"
                     />
@@ -1612,7 +1632,7 @@ export default function AdminIntegrations() {
                       type="text"
                       className="wz-form-input"
                       style={{ fontSize: "0.82rem", background: "#ffffff" }}
-                      placeholder="e.g. 8fa1947b-..."
+                      placeholder={apiKeys.oneSignal?.defaultAppIdMasked ? `Example (Default): ${apiKeys.oneSignal.defaultAppIdMasked}` : "e.g. fc811113-559c-40c3-ba59-e703db896839"}
                       value={keyInputs.oneSignal.appId}
                       onChange={(e) => setKeyInputs((p) => ({ ...p, oneSignal: { ...p.oneSignal, appId: e.target.value } }))}
                     />
@@ -1626,24 +1646,40 @@ export default function AdminIntegrations() {
                         type={revealSecrets.oneSignal ? "text" : "password"}
                         className="wz-form-input"
                         style={{ fontSize: "0.82rem", background: "#ffffff", flex: 1 }}
-                        placeholder="e.g. os_v2_app_..."
+                        placeholder={apiKeys.oneSignal?.defaultRestKeyMasked ? `Example (Default): ${apiKeys.oneSignal.defaultRestKeyMasked}` : "e.g. os_v2_app_..."}
                         value={keyInputs.oneSignal.restApiKey}
                         onChange={(e) => setKeyInputs((p) => ({ ...p, oneSignal: { ...p.oneSignal, restApiKey: e.target.value } }))}
                       />
                       <button
                         type="button"
                         onClick={() => setRevealSecrets((p) => ({ ...p, oneSignal: !p.oneSignal }))}
+                        title={revealSecrets.oneSignal ? "Hide secret" : "Reveal secret"}
                         style={{
-                          padding: "9px 14px",
+                          width: "38px",
+                          height: "38px",
                           background: "#ffffff",
                           border: "1px solid #cbd5e1",
                           borderRadius: "8px",
-                          fontSize: "0.8rem",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
                           cursor: "pointer",
-                          whiteSpace: "nowrap",
+                          color: revealSecrets.oneSignal ? "#166534" : "#64748b",
+                          flexShrink: 0,
+                          transition: "all 0.15s ease",
                         }}
                       >
-                        {revealSecrets.oneSignal ? "🙈 Hide" : "👁️ Reveal"}
+                        {revealSecrets.oneSignal ? (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                            <line x1="1" y1="1" x2="23" y2="23" />
+                          </svg>
+                        ) : (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                            <circle cx="12" cy="12" r="3" />
+                          </svg>
+                        )}
                       </button>
                     </div>
                   </div>
@@ -1753,38 +1789,28 @@ export default function AdminIntegrations() {
                   type="button"
                   onClick={() => setExpandedKeys((p) => ({ ...p, cloudinary: !p.cloudinary }))}
                   style={{
-                    width: "36px",
-                    height: "36px",
-                    borderRadius: "8px",
-                    border: expandedKeys.cloudinary
-                      ? "1.5px solid #166534"
-                      : apiKeys.cloudinary?.isCustom
-                      ? "1.5px solid #86efac"
-                      : "1px solid #cbd5e1",
-                    background: expandedKeys.cloudinary
-                      ? "#ecfdf5"
-                      : apiKeys.cloudinary?.isCustom
-                      ? "#f0fdf4"
-                      : "#ffffff",
-                    color: expandedKeys.cloudinary
-                      ? "#166534"
-                      : apiKeys.cloudinary?.isCustom
-                      ? "#15803d"
-                      : "#475569",
+                    background: "none",
+                    border: "none",
+                    padding: "4px",
                     display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
                     cursor: "pointer",
-                    transition: "all 0.15s ease",
+                    color: expandedKeys.cloudinary
+                      ? "#166534"
+                      : apiKeys.cloudinary?.isCustom
+                      ? "#15803d"
+                      : "#64748b",
                     position: "relative",
+                    transition: "color 0.15s ease",
                   }}
                   title={
                     apiKeys.cloudinary?.isCustom
-                      ? "Edit Cloudinary custom credentials (Custom .env active)"
-                      : "Edit Cloudinary credentials (Click to customize)"
+                      ? "Custom Cloudinary credentials active (Click to edit)"
+                      : "Edit Cloudinary credentials"
                   }
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                   </svg>
@@ -1792,13 +1818,13 @@ export default function AdminIntegrations() {
                     <span
                       style={{
                         position: "absolute",
-                        top: "-3px",
-                        right: "-3px",
-                        width: "8px",
-                        height: "8px",
+                        top: "1px",
+                        right: "0px",
+                        width: "6px",
+                        height: "6px",
                         borderRadius: "50%",
                         background: "#16a34a",
-                        border: "1.5px solid #ffffff",
+                        border: "1px solid #ffffff",
                       }}
                       title="Custom key active"
                     />
@@ -1862,7 +1888,7 @@ export default function AdminIntegrations() {
                       type="text"
                       className="wz-form-input"
                       style={{ fontSize: "0.82rem", background: "#ffffff" }}
-                      placeholder="e.g. dfq..."
+                      placeholder={apiKeys.cloudinary?.defaultCloudName ? `Example (Default): ${apiKeys.cloudinary.defaultCloudName}` : "e.g. kimpc"}
                       value={keyInputs.cloudinary.cloudName}
                       onChange={(e) => setKeyInputs((p) => ({ ...p, cloudinary: { ...p.cloudinary, cloudName: e.target.value } }))}
                     />
@@ -1875,7 +1901,7 @@ export default function AdminIntegrations() {
                       type="text"
                       className="wz-form-input"
                       style={{ fontSize: "0.82rem", background: "#ffffff" }}
-                      placeholder="e.g. 52417..."
+                      placeholder={apiKeys.cloudinary?.defaultApiKeyMasked ? `Example (Default): ${apiKeys.cloudinary.defaultApiKeyMasked}` : "e.g. 691365116427346"}
                       value={keyInputs.cloudinary.apiKey}
                       onChange={(e) => setKeyInputs((p) => ({ ...p, cloudinary: { ...p.cloudinary, apiKey: e.target.value } }))}
                     />
@@ -1889,24 +1915,40 @@ export default function AdminIntegrations() {
                         type={revealSecrets.cloudinary ? "text" : "password"}
                         className="wz-form-input"
                         style={{ fontSize: "0.82rem", background: "#ffffff", flex: 1 }}
-                        placeholder="e.g. jU9..."
+                        placeholder={apiKeys.cloudinary?.defaultApiSecretMasked ? `Example (Default): ${apiKeys.cloudinary.defaultApiSecretMasked}` : "e.g. ••••••••••••••••"}
                         value={keyInputs.cloudinary.apiSecret}
                         onChange={(e) => setKeyInputs((p) => ({ ...p, cloudinary: { ...p.cloudinary, apiSecret: e.target.value } }))}
                       />
                       <button
                         type="button"
                         onClick={() => setRevealSecrets((p) => ({ ...p, cloudinary: !p.cloudinary }))}
+                        title={revealSecrets.cloudinary ? "Hide secret" : "Reveal secret"}
                         style={{
-                          padding: "9px 14px",
+                          width: "38px",
+                          height: "38px",
                           background: "#ffffff",
                           border: "1px solid #cbd5e1",
                           borderRadius: "8px",
-                          fontSize: "0.8rem",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
                           cursor: "pointer",
-                          whiteSpace: "nowrap",
+                          color: revealSecrets.cloudinary ? "#166534" : "#64748b",
+                          flexShrink: 0,
+                          transition: "all 0.15s ease",
                         }}
                       >
-                        {revealSecrets.cloudinary ? "🙈 Hide" : "👁️ Reveal"}
+                        {revealSecrets.cloudinary ? (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                            <line x1="1" y1="1" x2="23" y2="23" />
+                          </svg>
+                        ) : (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                            <circle cx="12" cy="12" r="3" />
+                          </svg>
+                        )}
                       </button>
                     </div>
                   </div>
