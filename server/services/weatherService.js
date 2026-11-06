@@ -1,4 +1,5 @@
 const https = require("https");
+const SystemSetting = require("../models/SystemSetting");
 
 // In-memory cache for the 3-day forecast
 let cachedForecast = null;
@@ -62,6 +63,21 @@ function normalizeIcon(iconUrl) {
  * Verifies that the returned location matches Kalilangan, or uses confirmed coordinates.
  */
 async function getKalilanganForecast(forceRefresh = false) {
+  // Check system setting toggle
+  try {
+    const settingDoc = await SystemSetting.findOne({ key: "weatherEnabled" });
+    if (settingDoc && settingDoc.value === false) {
+      cachedForecast = null;
+      return {
+        ok: false,
+        disabled: true,
+        error: "Weather forecast service is currently disabled by administrator.",
+      };
+    }
+  } catch (err) {
+    // Proceed if db check fails
+  }
+
   const now = Date.now();
 
   // Return cached result if valid and not expired
@@ -172,3 +188,4 @@ module.exports = {
   getKalilanganForecast,
   KALILANGAN_COORDS,
 };
+

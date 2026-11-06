@@ -12,6 +12,9 @@ export default function SettingsModal({
   onToggleGoogle = null,
   onToggleFacebook = null,
   onToggleRecaptcha = null,
+  onToggleWeather = null,
+  onToggleOneSignal = null,
+  onToggleCloudinary = null,
 }) {
   const { user, updateProfile } = useAuth();
   const navigate = useNavigate();
@@ -511,23 +514,27 @@ export default function SettingsModal({
           {/* ================= TAB 3: System Auth & Security (Admin Only) ================= */}
           {activeTab === "oauth" && isAdmin && (
             <div>
-              <div>
+              <div style={{ marginBottom: "16px" }}>
                 <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 800, color: "var(--wz-text, #0f172a)" }}>
                   Authentication &amp; Security Settings
                 </h4>
                 <p style={{ margin: "2px 0 0", fontSize: "0.75rem", color: "#64748b" }}>
-                  Configure OAuth providers and bot protection permitted for member and staff authentication.
+                  Configure OAuth providers, bot protection, and external system integrations (Weather, OneSignal, Cloudinary).
                 </p>
               </div>
 
-              <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+              {/* Section 1: Sign-In Gateways & Bot Defense */}
+              <div style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b", margin: "14px 0 8px" }}>
+                Authentication &amp; Bot Defense
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                 {/* Google Sign-In */}
                 <div
                   style={{
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
-                    padding: "14px 16px",
+                    padding: "12px 16px",
                     background: "#f8fafc",
                     borderRadius: "10px",
                     border: "1px solid var(--wz-border, #e2e8f0)",
@@ -539,7 +546,7 @@ export default function SettingsModal({
                     </div>
                     <div>
                       <strong style={{ fontSize: "0.88rem", color: "var(--wz-text, #0f172a)" }}>Google Sign-In</strong>
-                      <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "#64748b" }}>Allow members to authenticate via Google</p>
+                      <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "#64748b" }}>Allow members and staff to authenticate via Google</p>
                     </div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -563,7 +570,7 @@ export default function SettingsModal({
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
-                    padding: "14px 16px",
+                    padding: "12px 16px",
                     background: "#f8fafc",
                     borderRadius: "10px",
                     border: "1px solid var(--wz-border, #e2e8f0)",
@@ -575,7 +582,7 @@ export default function SettingsModal({
                     </div>
                     <div>
                       <strong style={{ fontSize: "0.88rem", color: "var(--wz-text, #0f172a)" }}>Facebook Sign-In</strong>
-                      <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "#64748b" }}>Allow members to authenticate via Facebook</p>
+                      <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "#64748b" }}>Allow members to authenticate via Facebook OAuth</p>
                     </div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -599,7 +606,7 @@ export default function SettingsModal({
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
-                    padding: "14px 16px",
+                    padding: "12px 16px",
                     background: "#f8fafc",
                     borderRadius: "10px",
                     border: "1px solid var(--wz-border, #e2e8f0)",
@@ -614,7 +621,7 @@ export default function SettingsModal({
                     </div>
                     <div>
                       <strong style={{ fontSize: "0.88rem", color: "var(--wz-text, #0f172a)" }}>Google reCAPTCHA v2</strong>
-                      <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "#64748b" }}>Require captcha verification on member login</p>
+                      <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "#64748b" }}>Require captcha verification on member login &amp; registration</p>
                     </div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -626,6 +633,137 @@ export default function SettingsModal({
                         type="checkbox"
                         checked={!!settings?.recaptchaEnabled}
                         onChange={onToggleRecaptcha || (() => {})}
+                      />
+                      <span className="wz-switch-slider" />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2: External System Services & Integrations */}
+              <div style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b", margin: "20px 0 8px" }}>
+                External System Services &amp; Integrations
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                {/* Weather Forecast API (WeatherAPI.com) */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "12px 16px",
+                    background: "#f8fafc",
+                    borderRadius: "10px",
+                    border: "1px solid var(--wz-border, #e2e8f0)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                    <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "#fef3c7", border: "1px solid #fde68a", display: "flex", alignItems: "center", justifyContent: "center", color: "#d97706" }}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="4" />
+                        <path d="M12 2v2" />
+                        <path d="M12 20v2" />
+                        <path d="m4.93 4.93 1.41 1.41" />
+                        <path d="m17.66 17.66 1.41 1.41" />
+                        <path d="M2 12h2" />
+                        <path d="M20 12h2" />
+                        <path d="m6.34 17.66-1.41 1.41" />
+                        <path d="m19.07 4.93-1.41 1.41" />
+                      </svg>
+                    </div>
+                    <div>
+                      <strong style={{ fontSize: "0.88rem", color: "var(--wz-text, #0f172a)" }}>Kalilangan Weather Forecast</strong>
+                      <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "#64748b" }}>WeatherAPI.com 3-day forecast on manager dispatch calendar</p>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: settings?.weatherEnabled !== false ? "#16a34a" : "#64748b" }}>
+                      {settings?.weatherEnabled !== false ? "Enabled" : "Disabled"}
+                    </span>
+                    <label className="wz-switch-toggle">
+                      <input
+                        type="checkbox"
+                        checked={settings?.weatherEnabled !== false}
+                        onChange={onToggleWeather || (() => {})}
+                      />
+                      <span className="wz-switch-slider" />
+                    </label>
+                  </div>
+                </div>
+
+                {/* OneSignal Web Push */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "12px 16px",
+                    background: "#f8fafc",
+                    borderRadius: "10px",
+                    border: "1px solid var(--wz-border, #e2e8f0)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                    <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "#fef2f2", border: "1px solid #fecaca", display: "flex", alignItems: "center", justifyContent: "center", color: "#e11d48" }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+                        <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+                      </svg>
+                    </div>
+                    <div>
+                      <strong style={{ fontSize: "0.88rem", color: "var(--wz-text, #0f172a)" }}>OneSignal Web Push</strong>
+                      <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "#64748b" }}>Push notification delivery for booking status alerts</p>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: settings?.oneSignalEnabled !== false ? "#16a34a" : "#64748b" }}>
+                      {settings?.oneSignalEnabled !== false ? "Enabled" : "Disabled"}
+                    </span>
+                    <label className="wz-switch-toggle">
+                      <input
+                        type="checkbox"
+                        checked={settings?.oneSignalEnabled !== false}
+                        onChange={onToggleOneSignal || (() => {})}
+                      />
+                      <span className="wz-switch-slider" />
+                    </label>
+                  </div>
+                </div>
+
+                {/* Cloudinary Media Storage */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "12px 16px",
+                    background: "#f8fafc",
+                    borderRadius: "10px",
+                    border: "1px solid var(--wz-border, #e2e8f0)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                    <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "#eff6ff", border: "1px solid #bfdbfe", display: "flex", alignItems: "center", justifyContent: "center", color: "#2563eb" }}>
+                      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+                        <path d="M12 13v-5" />
+                        <path d="m9 10 3-3 3 3" />
+                      </svg>
+                    </div>
+                    <div>
+                      <strong style={{ fontSize: "0.88rem", color: "var(--wz-text, #0f172a)" }}>Cloudinary Cloud Storage</strong>
+                      <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "#64748b" }}>Upload machinery &amp; profile photos to cloud (falls back to local disk if disabled)</p>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: settings?.cloudinaryEnabled !== false ? "#16a34a" : "#64748b" }}>
+                      {settings?.cloudinaryEnabled !== false ? "Enabled" : "Disabled"}
+                    </span>
+                    <label className="wz-switch-toggle">
+                      <input
+                        type="checkbox"
+                        checked={settings?.cloudinaryEnabled !== false}
+                        onChange={onToggleCloudinary || (() => {})}
                       />
                       <span className="wz-switch-slider" />
                     </label>

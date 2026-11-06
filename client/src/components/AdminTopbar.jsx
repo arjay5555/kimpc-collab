@@ -15,6 +15,9 @@ export default function AdminTopbar({
   onToggleGoogle: externalToggleGoogle = null,
   onToggleFacebook: externalToggleFacebook = null,
   onToggleRecaptcha: externalToggleRecaptcha = null,
+  onToggleWeather: externalToggleWeather = null,
+  onToggleOneSignal: externalToggleOneSignal = null,
+  onToggleCloudinary: externalToggleCloudinary = null,
 }) {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -32,6 +35,9 @@ export default function AdminTopbar({
     googleLoginEnabled: true,
     facebookLoginEnabled: true,
     recaptchaEnabled: true,
+    weatherEnabled: true,
+    oneSignalEnabled: true,
+    cloudinaryEnabled: true,
   });
 
   // Live notifications list
@@ -70,6 +76,9 @@ export default function AdminTopbar({
             googleLoginEnabled: data.googleLoginEnabled !== false,
             facebookLoginEnabled: data.facebookLoginEnabled !== false,
             recaptchaEnabled: data.recaptchaEnabled !== false,
+            weatherEnabled: data.weatherEnabled !== false,
+            oneSignalEnabled: data.oneSignalEnabled !== false,
+            cloudinaryEnabled: data.cloudinaryEnabled !== false,
           });
         }
       });
@@ -186,6 +195,54 @@ export default function AdminTopbar({
     });
     if (!res.ok) {
       setInternalSettings((prev) => ({ ...prev, recaptchaEnabled: !nextState }));
+    }
+  };
+
+  const handleInternalToggleWeather = async () => {
+    if (externalToggleWeather) {
+      externalToggleWeather();
+      return;
+    }
+    const nextState = activeSettings.weatherEnabled === false ? true : false;
+    setInternalSettings((prev) => ({ ...prev, weatherEnabled: nextState }));
+    const res = await api("/admin/settings/weather", {
+      method: "POST",
+      body: { enabled: nextState },
+    });
+    if (!res.ok) {
+      setInternalSettings((prev) => ({ ...prev, weatherEnabled: !nextState }));
+    }
+  };
+
+  const handleInternalToggleOneSignal = async () => {
+    if (externalToggleOneSignal) {
+      externalToggleOneSignal();
+      return;
+    }
+    const nextState = activeSettings.oneSignalEnabled === false ? true : false;
+    setInternalSettings((prev) => ({ ...prev, oneSignalEnabled: nextState }));
+    const res = await api("/admin/settings/onesignal", {
+      method: "POST",
+      body: { enabled: nextState },
+    });
+    if (!res.ok) {
+      setInternalSettings((prev) => ({ ...prev, oneSignalEnabled: !nextState }));
+    }
+  };
+
+  const handleInternalToggleCloudinary = async () => {
+    if (externalToggleCloudinary) {
+      externalToggleCloudinary();
+      return;
+    }
+    const nextState = activeSettings.cloudinaryEnabled === false ? true : false;
+    setInternalSettings((prev) => ({ ...prev, cloudinaryEnabled: nextState }));
+    const res = await api("/admin/settings/cloudinary", {
+      method: "POST",
+      body: { enabled: nextState },
+    });
+    if (!res.ok) {
+      setInternalSettings((prev) => ({ ...prev, cloudinaryEnabled: !nextState }));
     }
   };
 
@@ -436,6 +493,9 @@ export default function AdminTopbar({
         onToggleGoogle={externalToggleGoogle || handleInternalToggleGoogle}
         onToggleFacebook={externalToggleFacebook || handleInternalToggleFacebook}
         onToggleRecaptcha={externalToggleRecaptcha || handleInternalToggleRecaptcha}
+        onToggleWeather={externalToggleWeather || handleInternalToggleWeather}
+        onToggleOneSignal={externalToggleOneSignal || handleInternalToggleOneSignal}
+        onToggleCloudinary={externalToggleCloudinary || handleInternalToggleCloudinary}
       />
     </>
   );

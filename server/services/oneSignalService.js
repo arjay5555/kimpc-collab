@@ -1,5 +1,6 @@
 const https = require("https");
 const Account = require("../models/Account");
+const SystemSetting = require("../models/SystemSetting");
 
 const ONESIGNAL_APP_ID = process.env.ONESIGNAL_APP_ID || "fc811113-559c-40c3-ba59-e703db896839";
 const ONESIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY || "";
@@ -74,6 +75,17 @@ function makeOneSignalRequest(path, method, payload) {
  * @param {Object} [params.data] - Additional metadata payload
  */
 async function sendPushNotification({ email, title, message, url, data = {} }) {
+  // Check system setting toggle
+  try {
+    const settingDoc = await SystemSetting.findOne({ key: "oneSignalEnabled" });
+    if (settingDoc && settingDoc.value === false) {
+      console.log("[OneSignal] Skipping push: OneSignal service is disabled in System Settings.");
+      return { ok: true, skipped: true, reason: "disabled_by_admin" };
+    }
+  } catch (err) {
+    // Proceed if db check fails
+  }
+
   if (!isConfigured()) {
     console.warn("[OneSignal] Skipping push: OneSignal is not configured.");
     return { ok: false, error: "OneSignal is not configured." };

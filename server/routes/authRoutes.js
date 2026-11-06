@@ -110,6 +110,9 @@ router.get("/config", async (req, res) => {
   const googleLoginEnabled = await getSystemSetting("googleLoginEnabled", true);
   const facebookLoginEnabled = await getSystemSetting("facebookLoginEnabled", true);
   const recaptchaEnabled = await getSystemSetting("recaptchaEnabled", process.env.RECAPTCHA_ENABLED !== "false");
+  const weatherEnabled = await getSystemSetting("weatherEnabled", true);
+  const oneSignalEnabled = await getSystemSetting("oneSignalEnabled", true);
+  const cloudinaryEnabled = await getSystemSetting("cloudinaryEnabled", true);
   res.json({
     recaptchaSiteKey: process.env.RECAPTCHA_SITE_KEY || "6LfrJe0tAAAAAIIeW87yfUlJuzJOokkWT4KM6UG5",
     recaptchaEnabled: Boolean(recaptchaEnabled),
@@ -117,6 +120,9 @@ router.get("/config", async (req, res) => {
     googleLoginEnabled: Boolean(googleLoginEnabled),
     facebookAppId: process.env.FACEBOOK_APP_ID || "4031349940338782",
     facebookLoginEnabled: Boolean(facebookLoginEnabled),
+    weatherEnabled: Boolean(weatherEnabled),
+    oneSignalEnabled: Boolean(oneSignalEnabled),
+    cloudinaryEnabled: Boolean(cloudinaryEnabled),
   });
 });
 
@@ -125,10 +131,16 @@ router.get("/admin/settings", requireAdmin, async (req, res) => {
     const googleLoginEnabled = await getSystemSetting("googleLoginEnabled", true);
     const facebookLoginEnabled = await getSystemSetting("facebookLoginEnabled", true);
     const recaptchaEnabled = await getSystemSetting("recaptchaEnabled", process.env.RECAPTCHA_ENABLED !== "false");
+    const weatherEnabled = await getSystemSetting("weatherEnabled", true);
+    const oneSignalEnabled = await getSystemSetting("oneSignalEnabled", true);
+    const cloudinaryEnabled = await getSystemSetting("cloudinaryEnabled", true);
     res.json({
       googleLoginEnabled: Boolean(googleLoginEnabled),
       facebookLoginEnabled: Boolean(facebookLoginEnabled),
       recaptchaEnabled: Boolean(recaptchaEnabled),
+      weatherEnabled: Boolean(weatherEnabled),
+      oneSignalEnabled: Boolean(oneSignalEnabled),
+      cloudinaryEnabled: Boolean(cloudinaryEnabled),
     });
   } catch (err) {
     console.error("Error retrieving admin settings:", err);
@@ -225,6 +237,99 @@ router.post("/admin/settings/recaptcha", requireAdmin, async (req, res) => {
     });
   } catch (err) {
     console.error("Error saving reCAPTCHA setting:", err);
+    fail(res, 500, "Failed to update setting.");
+  }
+});
+
+router.post("/admin/settings/weather", requireAdmin, async (req, res) => {
+  try {
+    const enabled = Boolean(req.body.enabled);
+    const updatedBy = req.admin?.email || "admin";
+    await setSystemSetting(
+      "weatherEnabled",
+      enabled,
+      "Allow manager calendar to fetch 3-day Kalilangan weather forecast",
+      updatedBy
+    );
+
+    await logAudit({
+      action: "SETTINGS_UPDATED",
+      actorEmail: updatedBy,
+      actorRole: req.admin?.role || "admin",
+      details: `Administrator ${enabled ? "enabled" : "disabled"} Kalilangan Weather Forecast API integration`,
+      status: "Success",
+      req,
+    });
+
+    res.json({
+      ok: true,
+      weatherEnabled: enabled,
+      message: `Weather forecast integration has been ${enabled ? "enabled" : "disabled"} successfully.`,
+    });
+  } catch (err) {
+    console.error("Error saving weather setting:", err);
+    fail(res, 500, "Failed to update setting.");
+  }
+});
+
+router.post("/admin/settings/onesignal", requireAdmin, async (req, res) => {
+  try {
+    const enabled = Boolean(req.body.enabled);
+    const updatedBy = req.admin?.email || "admin";
+    await setSystemSetting(
+      "oneSignalEnabled",
+      enabled,
+      "Allow web push notifications via OneSignal for booking updates",
+      updatedBy
+    );
+
+    await logAudit({
+      action: "SETTINGS_UPDATED",
+      actorEmail: updatedBy,
+      actorRole: req.admin?.role || "admin",
+      details: `Administrator ${enabled ? "enabled" : "disabled"} OneSignal Web Push service`,
+      status: "Success",
+      req,
+    });
+
+    res.json({
+      ok: true,
+      oneSignalEnabled: enabled,
+      message: `OneSignal Web Push has been ${enabled ? "enabled" : "disabled"} successfully.`,
+    });
+  } catch (err) {
+    console.error("Error saving OneSignal setting:", err);
+    fail(res, 500, "Failed to update setting.");
+  }
+});
+
+router.post("/admin/settings/cloudinary", requireAdmin, async (req, res) => {
+  try {
+    const enabled = Boolean(req.body.enabled);
+    const updatedBy = req.admin?.email || "admin";
+    await setSystemSetting(
+      "cloudinaryEnabled",
+      enabled,
+      "Store uploaded profile and machinery photos on Cloudinary cloud storage",
+      updatedBy
+    );
+
+    await logAudit({
+      action: "SETTINGS_UPDATED",
+      actorEmail: updatedBy,
+      actorRole: req.admin?.role || "admin",
+      details: `Administrator ${enabled ? "enabled" : "disabled"} Cloudinary media storage (fallback to local disk when disabled)`,
+      status: "Success",
+      req,
+    });
+
+    res.json({
+      ok: true,
+      cloudinaryEnabled: enabled,
+      message: `Cloudinary media storage has been ${enabled ? "enabled" : "disabled"} successfully.`,
+    });
+  } catch (err) {
+    console.error("Error saving Cloudinary setting:", err);
     fail(res, 500, "Failed to update setting.");
   }
 });

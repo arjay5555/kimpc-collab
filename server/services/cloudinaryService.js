@@ -1,12 +1,13 @@
 const cloudinary = require("cloudinary").v2;
 const fs = require("fs");
 const path = require("path");
+const SystemSetting = require("../models/SystemSetting");
 
 // Configure Cloudinary with environment variables
 function initCloudinary() {
   const cloud_name = process.env.CLOUDINARY_CLOUD_NAME;
-  const api_key = process.env.CLOUDINARY_API_KEY || "691365116427346";
-  const api_secret = process.env.CLOUDINARY_API_SECRET || "0aNAAV2XYUo_0xyuHa6WUfhKKnY";
+  const api_key = process.env.CLOUDINARY_API_KEY;
+  const api_secret = process.env.CLOUDINARY_API_SECRET;
 
   if (cloud_name && api_key && api_secret) {
     cloudinary.config({
@@ -26,8 +27,8 @@ function initCloudinary() {
 function isConfigured() {
   return Boolean(
     process.env.CLOUDINARY_CLOUD_NAME &&
-    (process.env.CLOUDINARY_API_KEY || "691365116427346") &&
-    (process.env.CLOUDINARY_API_SECRET || "0aNAAV2XYUo_0xyuHa6WUfhKKnY")
+    process.env.CLOUDINARY_API_KEY &&
+    process.env.CLOUDINARY_API_SECRET
   );
 }
 
@@ -44,8 +45,19 @@ async function uploadImage(imageInput, options = {}) {
     throw new Error("No image data provided for upload.");
   }
 
+  // Check system setting toggle
+  let cloudinaryEnabled = true;
+  try {
+    const settingDoc = await SystemSetting.findOne({ key: "cloudinaryEnabled" });
+    if (settingDoc && settingDoc.value === false) {
+      cloudinaryEnabled = false;
+    }
+  } catch (err) {
+    // default true
+  }
+
   const folder = options.folder || "kimpc";
-  const canUseCloudinary = initCloudinary();
+  const canUseCloudinary = cloudinaryEnabled && initCloudinary();
 
   if (canUseCloudinary) {
     try {
@@ -81,6 +93,8 @@ async function uploadImage(imageInput, options = {}) {
     } catch (err) {
       console.warn("⚠️ Cloudinary upload encountered an error, falling back to local storage:", err.message);
     }
+  } else if (!cloudinaryEnabled) {
+    console.log("ℹ️ Cloudinary media storage is disabled in System Settings. Storing uploaded file locally in /uploads directory.");
   } else {
     console.warn("⚠️ CLOUDINARY_CLOUD_NAME is not set. Storing uploaded file locally in /uploads directory.");
   }

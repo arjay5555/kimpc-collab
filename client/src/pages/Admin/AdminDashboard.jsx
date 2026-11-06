@@ -11,6 +11,9 @@ export default function AdminDashboard() {
     googleLoginEnabled: true,
     facebookLoginEnabled: true,
     recaptchaEnabled: true,
+    weatherEnabled: true,
+    oneSignalEnabled: true,
+    cloudinaryEnabled: true,
   });
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState({ message: "", isError: false });
@@ -58,6 +61,9 @@ export default function AdminDashboard() {
           googleLoginEnabled: data.googleLoginEnabled !== false,
           facebookLoginEnabled: data.facebookLoginEnabled !== false,
           recaptchaEnabled: data.recaptchaEnabled !== false,
+          weatherEnabled: data.weatherEnabled !== false,
+          oneSignalEnabled: data.oneSignalEnabled !== false,
+          cloudinaryEnabled: data.cloudinaryEnabled !== false,
         });
       }
     });
@@ -137,6 +143,63 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleToggleWeather = async () => {
+    const nextState = settings.weatherEnabled === false ? true : false;
+    setSettings((prev) => ({ ...prev, weatherEnabled: nextState }));
+    const res = await api("/admin/settings/weather", {
+      method: "POST",
+      body: { enabled: nextState },
+    });
+    if (!res.ok) {
+      setFeedback({ message: "Failed to update weather forecast setting.", isError: true });
+      setSettings((prev) => ({ ...prev, weatherEnabled: !nextState }));
+    } else {
+      setFeedback({
+        message: `Kalilangan weather forecast is now ${nextState ? "enabled" : "disabled"}.`,
+        isError: false,
+      });
+      setTimeout(() => setFeedback({ message: "", isError: false }), 4000);
+    }
+  };
+
+  const handleToggleOneSignal = async () => {
+    const nextState = settings.oneSignalEnabled === false ? true : false;
+    setSettings((prev) => ({ ...prev, oneSignalEnabled: nextState }));
+    const res = await api("/admin/settings/onesignal", {
+      method: "POST",
+      body: { enabled: nextState },
+    });
+    if (!res.ok) {
+      setFeedback({ message: "Failed to update OneSignal setting.", isError: true });
+      setSettings((prev) => ({ ...prev, oneSignalEnabled: !nextState }));
+    } else {
+      setFeedback({
+        message: `OneSignal Web Push notifications are now ${nextState ? "enabled" : "disabled"}.`,
+        isError: false,
+      });
+      setTimeout(() => setFeedback({ message: "", isError: false }), 4000);
+    }
+  };
+
+  const handleToggleCloudinary = async () => {
+    const nextState = settings.cloudinaryEnabled === false ? true : false;
+    setSettings((prev) => ({ ...prev, cloudinaryEnabled: nextState }));
+    const res = await api("/admin/settings/cloudinary", {
+      method: "POST",
+      body: { enabled: nextState },
+    });
+    if (!res.ok) {
+      setFeedback({ message: "Failed to update Cloudinary setting.", isError: true });
+      setSettings((prev) => ({ ...prev, cloudinaryEnabled: !nextState }));
+    } else {
+      setFeedback({
+        message: `Cloudinary media storage is now ${nextState ? "enabled" : "disabled (using local storage fallback)"}.`,
+        isError: false,
+      });
+      setTimeout(() => setFeedback({ message: "", isError: false }), 4000);
+    }
+  };
+
   const refreshAll = () => {
     setLoading(true);
     Promise.all([
@@ -175,6 +238,9 @@ export default function AdminDashboard() {
           onToggleGoogle={handleToggleGoogle}
           onToggleFacebook={handleToggleFacebook}
           onToggleRecaptcha={handleToggleRecaptcha}
+          onToggleWeather={handleToggleWeather}
+          onToggleOneSignal={handleToggleOneSignal}
+          onToggleCloudinary={handleToggleCloudinary}
         />
 
         {/* Global Feedback Alert */}
@@ -490,6 +556,194 @@ export default function AdminDashboard() {
                       type="checkbox"
                       checked={settings.recaptchaEnabled}
                       onChange={handleToggleRecaptcha}
+                    />
+                    <span className="wz-switch-slider" />
+                  </label>
+                </div>
+              </div>
+
+              {/* Kalilangan Weather Forecast API */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "16px",
+                  background: "#f8fafc",
+                  borderRadius: "12px",
+                  border: "1px solid #e2e8f0",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                  <div
+                    style={{
+                      width: "40px",
+                      height: "40px",
+                      borderRadius: "10px",
+                      background: "#fef3c7",
+                      border: "1px solid #fde68a",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#d97706",
+                      fontSize: "1.1rem",
+                    }}
+                  >
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="4" />
+                      <path d="M12 2v2" />
+                      <path d="M12 20v2" />
+                      <path d="m4.93 4.93 1.41 1.41" />
+                      <path d="m17.66 17.66 1.41 1.41" />
+                      <path d="M2 12h2" />
+                      <path d="M20 12h2" />
+                      <path d="m6.34 17.66-1.41 1.41" />
+                      <path d="m19.07 4.93-1.41 1.41" />
+                    </svg>
+                  </div>
+                  <div>
+                    <strong style={{ fontSize: "0.95rem", color: "#0f172a" }}>Kalilangan Weather Forecast API</strong>
+                    <p style={{ margin: "2px 0 0", fontSize: "0.8rem", color: "#64748b" }}>
+                      Provide 3-day Kalilangan weather predictions on the manager dispatch calendar (WeatherAPI.com).
+                    </p>
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <span
+                    style={{
+                      fontSize: "0.78rem",
+                      fontWeight: 700,
+                      color: settings.weatherEnabled !== false ? "#16a34a" : "#64748b",
+                    }}
+                  >
+                    {settings.weatherEnabled !== false ? "Enabled" : "Disabled"}
+                  </span>
+                  <label className="wz-switch-toggle">
+                    <input
+                      type="checkbox"
+                      checked={settings.weatherEnabled !== false}
+                      onChange={handleToggleWeather}
+                    />
+                    <span className="wz-switch-slider" />
+                  </label>
+                </div>
+              </div>
+
+              {/* OneSignal Web Push */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "16px",
+                  background: "#f8fafc",
+                  borderRadius: "12px",
+                  border: "1px solid #e2e8f0",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                  <div
+                    style={{
+                      width: "40px",
+                      height: "40px",
+                      borderRadius: "10px",
+                      background: "#fef2f2",
+                      border: "1px solid #fecaca",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#e11d48",
+                      fontSize: "1.1rem",
+                    }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+                      <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+                    </svg>
+                  </div>
+                  <div>
+                    <strong style={{ fontSize: "0.95rem", color: "#0f172a" }}>OneSignal Web Push Notifications</strong>
+                    <p style={{ margin: "2px 0 0", fontSize: "0.8rem", color: "#64748b" }}>
+                      Send browser push updates for booking status, approvals, and machinery schedules.
+                    </p>
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <span
+                    style={{
+                      fontSize: "0.78rem",
+                      fontWeight: 700,
+                      color: settings.oneSignalEnabled !== false ? "#16a34a" : "#64748b",
+                    }}
+                  >
+                    {settings.oneSignalEnabled !== false ? "Enabled" : "Disabled"}
+                  </span>
+                  <label className="wz-switch-toggle">
+                    <input
+                      type="checkbox"
+                      checked={settings.oneSignalEnabled !== false}
+                      onChange={handleToggleOneSignal}
+                    />
+                    <span className="wz-switch-slider" />
+                  </label>
+                </div>
+              </div>
+
+              {/* Cloudinary Media Storage */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "16px",
+                  background: "#f8fafc",
+                  borderRadius: "12px",
+                  border: "1px solid #e2e8f0",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                  <div
+                    style={{
+                      width: "40px",
+                      height: "40px",
+                      borderRadius: "10px",
+                      background: "#eff6ff",
+                      border: "1px solid #bfdbfe",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#2563eb",
+                      fontSize: "1.1rem",
+                    }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+                      <path d="M12 13v-5" />
+                      <path d="m9 10 3-3 3 3" />
+                    </svg>
+                  </div>
+                  <div>
+                    <strong style={{ fontSize: "0.95rem", color: "#0f172a" }}>Cloudinary Cloud Media Storage</strong>
+                    <p style={{ margin: "2px 0 0", fontSize: "0.8rem", color: "#64748b" }}>
+                      Upload machinery images and avatars to Cloudinary (falls back to local disk if disabled).
+                    </p>
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <span
+                    style={{
+                      fontSize: "0.78rem",
+                      fontWeight: 700,
+                      color: settings.cloudinaryEnabled !== false ? "#16a34a" : "#64748b",
+                    }}
+                  >
+                    {settings.cloudinaryEnabled !== false ? "Enabled" : "Disabled"}
+                  </span>
+                  <label className="wz-switch-toggle">
+                    <input
+                      type="checkbox"
+                      checked={settings.cloudinaryEnabled !== false}
+                      onChange={handleToggleCloudinary}
                     />
                     <span className="wz-switch-slider" />
                   </label>

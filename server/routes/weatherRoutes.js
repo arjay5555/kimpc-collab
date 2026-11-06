@@ -21,3 +21,4 @@ router.get("/forecast", authManager, async (req, res) => {
 });
 
 module.exports = router;
+
