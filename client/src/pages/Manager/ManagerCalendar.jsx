@@ -475,6 +475,11 @@ export default function ManagerCalendar() {
           <span className="wz-cal-pending-dot-label">
             {evt.timeExact} • Pending: {evt.equipment}
           </span>
+          {evt.isRescheduled && (
+            <span className="wz-cal-rescheduled-badge" style={{ flexShrink: 0, marginLeft: "auto" }}>
+              Rescheduled
+            </span>
+          )}
         </div>
       );
     }
@@ -493,32 +498,25 @@ export default function ManagerCalendar() {
         }}
         title={`${evt.type === "pickup" ? "Pickup (Yellow)" : "Return (Red)"}: ${evt.equipment} - ${evt.clientName}`}
       >
-        {/* Top Line: Time + Type Tag */}
-        <div className="wz-cal-event-time">
-          <span style={{ fontWeight: 800 }}>{evt.timeExact || "9:00 AM"}</span>
-          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-            <span
-              style={{
-                fontSize: "0.65rem",
-                fontWeight: 700,
-                padding: "1px 5px",
-                borderRadius: "4px",
-                background: evt.type === "pickup" ? "#fef3c7" : "#ffe4e6",
-                color: evt.type === "pickup" ? "#92400e" : "#be123c",
-              }}
-            >
-              {evt.type === "pickup" ? "Pickup" : "Return"}
-            </span>
-            {evt.isRescheduled && (
-              <span className="wz-cal-rescheduled-badge" title="Rescheduled Rental Day">
-                Rescheduled
-              </span>
-            )}
-          </div>
+        {/* Top Row: Time + Pickup/Return Tag */}
+        <div className="wz-cal-event-top-row">
+          <span className="wz-cal-event-time-val">{evt.timeExact || "9:00 AM"}</span>
+          <span className={`wz-cal-type-tag ${evt.type}`}>
+            {evt.type === "pickup" ? "Pickup" : "Return"}
+          </span>
         </div>
 
+        {/* Rescheduled Badge: Placed neatly on its own row to NEVER pass outside dedicated card */}
+        {evt.isRescheduled && (
+          <div className="wz-cal-rescheduled-row">
+            <span className="wz-cal-rescheduled-badge" title="Rescheduled Rental Day">
+              Rescheduled
+            </span>
+          </div>
+        )}
+
         {/* Middle Line: Equipment Name */}
-        <div className="wz-cal-event-model">{evt.equipment}</div>
+        <div className="wz-cal-event-model" title={evt.equipment}>{evt.equipment}</div>
 
         {/* Bottom Line: Avatar + Client Name */}
         <div className="wz-cal-event-client">
@@ -530,7 +528,7 @@ export default function ManagerCalendar() {
               e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(evt.clientName || "M")}&background=fee2e2&color=991b1b&size=32`;
             }}
           />
-          <span className="wz-cal-event-client-name">{evt.clientName}</span>
+          <span className="wz-cal-event-client-name" title={evt.clientName}>{evt.clientName}</span>
         </div>
       </div>
     );

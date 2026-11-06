@@ -2125,11 +2125,74 @@
   flex-direction: column;
   gap: 3px;
   text-align: left;
+  overflow: hidden; /* Strict containment: Never allow tags to pass outside card */
+  box-sizing: border-box;
+  max-width: 100%;
+  width: 100%;
 }
 
 .wz-cal-event-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+}
+
+.wz-cal-event-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  min-width: 0;
+  width: 100%;
+}
+
+.wz-cal-event-time-val {
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.wz-cal-type-tag {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.wz-cal-type-tag.pickup {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.wz-cal-type-tag.return {
+  background: #ffe4e6;
+  color: #be123c;
+}
+
+.wz-cal-rescheduled-row {
+  display: flex;
+  align-items: center;
+  margin: 1px 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.wz-cal-rescheduled-badge {
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background-color: #e0e7ff;
+  color: #4338ca;
+  border: 1px solid #c7d2fe;
+  display: inline-block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 /* Pickup Event Card: YELLOW */
@@ -2144,7 +2207,8 @@
   box-shadow: 0 4px 12px rgba(234, 179, 8, 0.15);
 }
 
-.wz-event-pickup .wz-cal-event-time {
+.wz-event-pickup .wz-cal-event-time,
+.wz-event-pickup .wz-cal-event-time-val {
   color: #b45309 !important; /* Bold amber/yellow */
   font-size: 0.8rem;
   font-weight: 800;
@@ -2162,7 +2226,8 @@
   box-shadow: 0 4px 12px rgba(225, 29, 72, 0.12);
 }
 
-.wz-event-return .wz-cal-event-time {
+.wz-event-return .wz-cal-event-time,
+.wz-event-return .wz-cal-event-time-val {
   color: #e11d48 !important; /* Bold red/magenta */
   font-size: 0.8rem;
   font-weight: 800;
@@ -2181,6 +2246,9 @@
   transition: all 0.15s ease;
   user-select: none;
   text-align: left;
+  overflow: hidden;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .wz-cal-pending-dot-item:hover {
@@ -2207,6 +2275,8 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
 }
 
 /* Checked-Out & Returned Variants */
@@ -2215,7 +2285,8 @@
   border: 1px solid #bbf7d0 !important;
 }
 
-.wz-event-checkedout .wz-cal-event-time {
+.wz-event-checkedout .wz-cal-event-time,
+.wz-event-checkedout .wz-cal-event-time-val {
   color: #16a34a !important;
   font-weight: 800;
 }
@@ -2225,7 +2296,8 @@
   border: 1px solid #e2e8f0 !important;
 }
 
-.wz-event-returned .wz-cal-event-time {
+.wz-event-returned .wz-cal-event-time,
+.wz-event-returned .wz-cal-event-time-val {
   color: #64748b !important;
   font-weight: 800;
 }
@@ -2242,17 +2314,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-}
-
-.wz-cal-rescheduled-badge {
-  font-size: 0.65rem;
-  font-weight: 700;
-  padding: 1px 5px;
-  border-radius: 4px;
-  background-color: #e0e7ff;
-  color: #4338ca;
-  border: 1px solid #c7d2fe;
-  margin-left: auto;
+  width: 100%;
+  min-width: 0;
 }
 
 .wz-cal-event-model {
