@@ -1,21 +1,20 @@
 const https = require("https");
 const Account = require("../models/Account");
 const SystemSetting = require("../models/SystemSetting");
-
-const ONESIGNAL_APP_ID = process.env.ONESIGNAL_APP_ID || "fc811113-559c-40c3-ba59-e703db896839";
-const ONESIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY || "";
+const { getEffectiveOneSignalKeys } = require("./apiKeyManager");
 
 /**
- * Checks if OneSignal credentials are fully configured
+ * Checks if OneSignal credentials are fully configured (custom or code default)
  */
-function isConfigured() {
-  return Boolean(ONESIGNAL_APP_ID && ONESIGNAL_REST_API_KEY);
+async function isConfigured() {
+  const { appId, restApiKey } = await getEffectiveOneSignalKeys();
+  return Boolean(appId && restApiKey);
 }
 
 /**
  * Low-level REST API call to OneSignal
  */
-function makeOneSignalRequest(path, method, payload) {
+function makeOneSignalRequest(path, method, payload, apiKey) {
   return new Promise((resolve, reject) => {
     const postData = payload ? JSON.stringify(payload) : "";
     const options = {
@@ -25,7 +24,7 @@ function makeOneSignalRequest(path, method, payload) {
       method: method || "POST",
       headers: {
         "Content-Type": "application/json; charset=utf-8",
-        Authorization: `Key ${ONESIGNAL_REST_API_KEY}`,
+        Authorization: `Key ${apiKey}`,
       },
     };
 
@@ -86,8 +85,9 @@ async function sendPushNotification({ email, title, message, url, data = {} }) {
     // Proceed if db check fails
   }
 
-  if (!isConfigured()) {
-    console.warn("[OneSignal] Skipping push: OneSignal is not configured.");
+  const { appId, restApiKey } = await getEffectiveOneSignalKeys();
+  if (!appId || !restApiKey) {
+    console.warn("[OneSignal] Skipping push: OneSignal credentials not configured.");
     return { ok: false, error: "OneSignal is not configured." };
   }
 
@@ -115,7 +115,7 @@ async function sendPushNotification({ email, title, message, url, data = {} }) {
   const targetUrl = url || fallbackUrl;
 
   const notificationPayload = {
-    app_id: ONESIGNAL_APP_ID,
+    app_id: appId,
     include_aliases: {
       external_id: [targetEmail],
     },
@@ -132,7 +132,7 @@ async function sendPushNotification({ email, title, message, url, data = {} }) {
   };
 
   try {
-    const result = await makeOneSignalRequest("/notifications", "POST", notificationPayload);
+    const result = await makeOneSignalRequest("/notifications", "POST", notificationPayload, restApiKey);
     if (result.ok) {
       console.log(`[OneSignal] Successfully sent push notification to ${targetEmail} (id: ${result.data?.id || "queued"})`);
     } else {

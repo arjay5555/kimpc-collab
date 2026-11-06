@@ -2,18 +2,15 @@ const cloudinary = require("cloudinary").v2;
 const fs = require("fs");
 const path = require("path");
 const SystemSetting = require("../models/SystemSetting");
+const { getEffectiveCloudinaryKeys } = require("./apiKeyManager");
 
-// Configure Cloudinary with environment variables
-function initCloudinary() {
-  const cloud_name = process.env.CLOUDINARY_CLOUD_NAME;
-  const api_key = process.env.CLOUDINARY_API_KEY;
-  const api_secret = process.env.CLOUDINARY_API_SECRET;
-
-  if (cloud_name && api_key && api_secret) {
+// Configure Cloudinary with effective credentials
+function initCloudinary(creds) {
+  if (creds && creds.cloudName && creds.apiKey && creds.apiSecret) {
     cloudinary.config({
-      cloud_name,
-      api_key,
-      api_secret,
+      cloud_name: creds.cloudName,
+      api_key: creds.apiKey,
+      api_secret: creds.apiSecret,
       secure: true,
     });
     return true;
@@ -56,8 +53,9 @@ async function uploadImage(imageInput, options = {}) {
     // default true
   }
 
+  const creds = await getEffectiveCloudinaryKeys();
   const folder = options.folder || "kimpc";
-  const canUseCloudinary = cloudinaryEnabled && initCloudinary();
+  const canUseCloudinary = cloudinaryEnabled && initCloudinary(creds);
 
   if (canUseCloudinary) {
     try {

@@ -1,5 +1,6 @@
 const https = require("https");
 const SystemSetting = require("../models/SystemSetting");
+const { getEffectiveWeatherKey } = require("./apiKeyManager");
 
 // In-memory cache for the 3-day forecast
 let cachedForecast = null;
@@ -88,11 +89,11 @@ async function getKalilanganForecast(forceRefresh = false) {
     };
   }
 
-  const apiKey = (process.env.WEATHER_API_KEY || "").trim();
+  const { key: apiKey } = await getEffectiveWeatherKey();
   if (!apiKey) {
     return {
       ok: false,
-      error: "Weather API key is not configured in server environment.",
+      error: "Weather API key is not configured.",
     };
   }
 

@@ -2,9 +2,14 @@ const express = require("express");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const Account = require("../models/Account");
+const SystemSetting = require("../models/SystemSetting");
 const authenticate = require("../middleware/authenticate");
 const { logAudit } = require("../services/auditLogger");
 const { sendPasswordResetEmail, sendPasswordChangedNotificationEmail } = require("../services/mailer");
+const {
+  getEffectiveOneSignalKeys,
+  getAdminApiKeysSummary,
+} = require("../services/apiKeyManager");
 const {
   clean,
   cleanEmail,
@@ -113,6 +118,8 @@ router.get("/config", async (req, res) => {
   const weatherEnabled = await getSystemSetting("weatherEnabled", true);
   const oneSignalEnabled = await getSystemSetting("oneSignalEnabled", true);
   const cloudinaryEnabled = await getSystemSetting("cloudinaryEnabled", true);
+  const { appId: oneSignalAppId } = await getEffectiveOneSignalKeys();
+
   res.json({
     recaptchaSiteKey: process.env.RECAPTCHA_SITE_KEY || "6LfrJe0tAAAAAIIeW87yfUlJuzJOokkWT4KM6UG5",
     recaptchaEnabled: Boolean(recaptchaEnabled),
@@ -123,6 +130,7 @@ router.get("/config", async (req, res) => {
     weatherEnabled: Boolean(weatherEnabled),
     oneSignalEnabled: Boolean(oneSignalEnabled),
     cloudinaryEnabled: Boolean(cloudinaryEnabled),
+    oneSignalAppId: oneSignalAppId || "fc811113-559c-40c3-ba59-e703db896839",
   });
 });
 
@@ -331,6 +339,202 @@ router.post("/admin/settings/cloudinary", requireAdmin, async (req, res) => {
   } catch (err) {
     console.error("Error saving Cloudinary setting:", err);
     fail(res, 500, "Failed to update setting.");
+  }
+});
+
+// ---------- Customizable API Keys & Credentials (Admin Only) ----------
+
+router.get("/admin/api-keys", requireAdmin, async (req, res) => {
+  try {
+    const summary = await getAdminApiKeysSummary();
+    res.json(summary);
+  } catch (err) {
+    console.error("Error retrieving API keys summary:", err);
+    fail(res, 500, "Failed to load API keys summary.");
+  }
+});
+
+router.post("/admin/api-keys/weather", requireAdmin, async (req, res) => {
+  try {
+    const key = clean(req.body.apiKey);
+    const isReset = Boolean(req.body.reset) || !key;
+    const updatedBy = req.admin?.email || "admin";
+
+    if (isReset) {
+      await SystemSetting.findOneAndDelete({ key: "customWeatherApiKey" });
+      await logAudit({
+        action: "SETTINGS_UPDATED",
+        actorEmail: updatedBy,
+        actorRole: req.admin?.role || "admin",
+        details: "Administrator reset Kalilangan WeatherAPI key to default code key",
+        status: "Success",
+        req,
+      });
+      return res.json({
+        ok: true,
+        isCustom: false,
+        message: "Weather API key reset to default code key.",
+      });
+    }
+
+    await setSystemSetting(
+      "customWeatherApiKey",
+      key,
+      "Custom WeatherAPI.com API Key",
+      updatedBy
+    );
+
+    await logAudit({
+      action: "SETTINGS_UPDATED",
+      actorEmail: updatedBy,
+      actorRole: req.admin?.role || "admin",
+      details: "Administrator saved custom WeatherAPI key",
+      status: "Success",
+      req,
+    });
+
+    res.json({
+      ok: true,
+      isCustom: true,
+      message: "Custom Weather API key saved successfully.",
+    });
+  } catch (err) {
+    console.error("Error saving custom weather API key:", err);
+    fail(res, 500, "Failed to save Weather API key.");
+  }
+});
+
+router.post("/admin/api-keys/onesignal", requireAdmin, async (req, res) => {
+  try {
+    const appId = clean(req.body.appId);
+    const restApiKey = clean(req.body.restApiKey);
+    const isReset = Boolean(req.body.reset) || (!appId && !restApiKey);
+    const updatedBy = req.admin?.email || "admin";
+
+    if (isReset) {
+      await SystemSetting.findOneAndDelete({ key: "customOneSignalAppId" });
+      await SystemSetting.findOneAndDelete({ key: "customOneSignalRestApiKey" });
+      await logAudit({
+        action: "SETTINGS_UPDATED",
+        actorEmail: updatedBy,
+        actorRole: req.admin?.role || "admin",
+        details: "Administrator reset OneSignal credentials to default code keys",
+        status: "Success",
+        req,
+      });
+      return res.json({
+        ok: true,
+        isCustom: false,
+        message: "OneSignal credentials reset to default code keys.",
+      });
+    }
+
+    if (appId) {
+      await setSystemSetting(
+        "customOneSignalAppId",
+        appId,
+        "Custom OneSignal App ID",
+        updatedBy
+      );
+    }
+    if (restApiKey) {
+      await setSystemSetting(
+        "customOneSignalRestApiKey",
+        restApiKey,
+        "Custom OneSignal REST API Key",
+        updatedBy
+      );
+    }
+
+    await logAudit({
+      action: "SETTINGS_UPDATED",
+      actorEmail: updatedBy,
+      actorRole: req.admin?.role || "admin",
+      details: "Administrator saved custom OneSignal credentials",
+      status: "Success",
+      req,
+    });
+
+    res.json({
+      ok: true,
+      isCustom: true,
+      message: "Custom OneSignal credentials saved successfully.",
+    });
+  } catch (err) {
+    console.error("Error saving custom OneSignal credentials:", err);
+    fail(res, 500, "Failed to save OneSignal credentials.");
+  }
+});
+
+router.post("/admin/api-keys/cloudinary", requireAdmin, async (req, res) => {
+  try {
+    const cloudName = clean(req.body.cloudName);
+    const apiKey = clean(req.body.apiKey);
+    const apiSecret = clean(req.body.apiSecret);
+    const isReset = Boolean(req.body.reset) || (!cloudName && !apiKey && !apiSecret);
+    const updatedBy = req.admin?.email || "admin";
+
+    if (isReset) {
+      await SystemSetting.findOneAndDelete({ key: "customCloudinaryCloudName" });
+      await SystemSetting.findOneAndDelete({ key: "customCloudinaryApiKey" });
+      await SystemSetting.findOneAndDelete({ key: "customCloudinaryApiSecret" });
+      await logAudit({
+        action: "SETTINGS_UPDATED",
+        actorEmail: updatedBy,
+        actorRole: req.admin?.role || "admin",
+        details: "Administrator reset Cloudinary credentials to default code keys",
+        status: "Success",
+        req,
+      });
+      return res.json({
+        ok: true,
+        isCustom: false,
+        message: "Cloudinary credentials reset to default code keys.",
+      });
+    }
+
+    if (cloudName) {
+      await setSystemSetting(
+        "customCloudinaryCloudName",
+        cloudName,
+        "Custom Cloudinary Cloud Name",
+        updatedBy
+      );
+    }
+    if (apiKey) {
+      await setSystemSetting(
+        "customCloudinaryApiKey",
+        apiKey,
+        "Custom Cloudinary API Key",
+        updatedBy
+      );
+    }
+    if (apiSecret) {
+      await setSystemSetting(
+        "customCloudinaryApiSecret",
+        apiSecret,
+        "Custom Cloudinary API Secret",
+        updatedBy
+      );
+    }
+
+    await logAudit({
+      action: "SETTINGS_UPDATED",
+      actorEmail: updatedBy,
+      actorRole: req.admin?.role || "admin",
+      details: "Administrator saved custom Cloudinary credentials",
+      status: "Success",
+      req,
+    });
+
+    res.json({
+      ok: true,
+      isCustom: true,
+      message: "Custom Cloudinary credentials saved successfully.",
+    });
+  } catch (err) {
+    console.error("Error saving custom Cloudinary credentials:", err);
+    fail(res, 500, "Failed to save Cloudinary credentials.");
   }
 });
 

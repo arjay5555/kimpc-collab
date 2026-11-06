@@ -43,7 +43,150 @@ export default function SettingsModal({
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordFeedback, setPasswordFeedback] = useState({ message: "", isError: false });
 
-  // Fetch complete profile on mount
+  // Customizable API Keys State (Admin Only)
+  const [apiKeys, setApiKeys] = useState({
+    weather: { isCustom: false, customKey: "", defaultKeyMasked: "" },
+    oneSignal: { isCustom: false, customAppId: "", customRestApiKey: "", defaultAppIdMasked: "", defaultRestKeyMasked: "" },
+    cloudinary: { isCustom: false, customCloudName: "", customApiKey: "", customApiSecret: "", defaultCloudName: "", defaultApiKeyMasked: "", defaultApiSecretMasked: "" },
+  });
+  const [keyForms, setKeyForms] = useState({
+    weatherApiKey: "",
+    oneSignalAppId: "",
+    oneSignalRestApiKey: "",
+    cloudinaryCloudName: "",
+    cloudinaryApiKey: "",
+    cloudinaryApiSecret: "",
+  });
+  const [expandedKeys, setExpandedKeys] = useState({
+    weather: false,
+    oneSignal: false,
+    cloudinary: false,
+  });
+  const [revealSecrets, setRevealSecrets] = useState({
+    weather: false,
+    oneSignal: false,
+    cloudinary: false,
+  });
+  const [keyFeedback, setKeyFeedback] = useState({});
+  const [keySaving, setKeySaving] = useState({});
+
+  const loadApiKeys = async () => {
+    if (!isAdmin) return;
+    const { ok, data } = await api("/admin/api-keys");
+    if (ok && data) {
+      setApiKeys(data);
+      setKeyForms({
+        weatherApiKey: data.weather?.customKey || "",
+        oneSignalAppId: data.oneSignal?.customAppId || "",
+        oneSignalRestApiKey: data.oneSignal?.customRestApiKey || "",
+        cloudinaryCloudName: data.cloudinary?.customCloudName || "",
+        cloudinaryApiKey: data.cloudinary?.customApiKey || "",
+        cloudinaryApiSecret: data.cloudinary?.customApiSecret || "",
+      });
+    }
+  };
+
+  const handleSaveWeatherKey = async () => {
+    setKeySaving((p) => ({ ...p, weather: true }));
+    const res = await api("/admin/api-keys/weather", {
+      method: "POST",
+      body: { apiKey: keyForms.weatherApiKey.trim() },
+    });
+    setKeySaving((p) => ({ ...p, weather: false }));
+    if (res.ok) {
+      setKeyFeedback((p) => ({ ...p, weather: { message: res.data?.message || "Weather API key saved!", isError: false } }));
+      loadApiKeys();
+      setTimeout(() => setKeyFeedback((p) => ({ ...p, weather: null })), 4000);
+    } else {
+      setKeyFeedback((p) => ({ ...p, weather: { message: res.data?.error || "Failed to save key.", isError: true } }));
+    }
+  };
+
+  const handleResetWeatherKey = async () => {
+    setKeySaving((p) => ({ ...p, weather: true }));
+    const res = await api("/admin/api-keys/weather", {
+      method: "POST",
+      body: { reset: true },
+    });
+    setKeySaving((p) => ({ ...p, weather: false }));
+    if (res.ok) {
+      setKeyForms((p) => ({ ...p, weatherApiKey: "" }));
+      setKeyFeedback((p) => ({ ...p, weather: { message: "Reset to default code key.", isError: false } }));
+      loadApiKeys();
+      setTimeout(() => setKeyFeedback((p) => ({ ...p, weather: null })), 4000);
+    }
+  };
+
+  const handleSaveOneSignalKeys = async () => {
+    setKeySaving((p) => ({ ...p, oneSignal: true }));
+    const res = await api("/admin/api-keys/onesignal", {
+      method: "POST",
+      body: {
+        appId: keyForms.oneSignalAppId.trim(),
+        restApiKey: keyForms.oneSignalRestApiKey.trim(),
+      },
+    });
+    setKeySaving((p) => ({ ...p, oneSignal: false }));
+    if (res.ok) {
+      setKeyFeedback((p) => ({ ...p, oneSignal: { message: res.data?.message || "OneSignal credentials saved!", isError: false } }));
+      loadApiKeys();
+      setTimeout(() => setKeyFeedback((p) => ({ ...p, oneSignal: null })), 4000);
+    } else {
+      setKeyFeedback((p) => ({ ...p, oneSignal: { message: res.data?.error || "Failed to save credentials.", isError: true } }));
+    }
+  };
+
+  const handleResetOneSignalKeys = async () => {
+    setKeySaving((p) => ({ ...p, oneSignal: true }));
+    const res = await api("/admin/api-keys/onesignal", {
+      method: "POST",
+      body: { reset: true },
+    });
+    setKeySaving((p) => ({ ...p, oneSignal: false }));
+    if (res.ok) {
+      setKeyForms((p) => ({ ...p, oneSignalAppId: "", oneSignalRestApiKey: "" }));
+      setKeyFeedback((p) => ({ ...p, oneSignal: { message: "Reset to default code keys.", isError: false } }));
+      loadApiKeys();
+      setTimeout(() => setKeyFeedback((p) => ({ ...p, oneSignal: null })), 4000);
+    }
+  };
+
+  const handleSaveCloudinaryKeys = async () => {
+    setKeySaving((p) => ({ ...p, cloudinary: true }));
+    const res = await api("/admin/api-keys/cloudinary", {
+      method: "POST",
+      body: {
+        cloudName: keyForms.cloudinaryCloudName.trim(),
+        apiKey: keyForms.cloudinaryApiKey.trim(),
+        apiSecret: keyForms.cloudinaryApiSecret.trim(),
+      },
+    });
+    setKeySaving((p) => ({ ...p, cloudinary: false }));
+    if (res.ok) {
+      setKeyFeedback((p) => ({ ...p, cloudinary: { message: res.data?.message || "Cloudinary credentials saved!", isError: false } }));
+      loadApiKeys();
+      setTimeout(() => setKeyFeedback((p) => ({ ...p, cloudinary: null })), 4000);
+    } else {
+      setKeyFeedback((p) => ({ ...p, cloudinary: { message: res.data?.error || "Failed to save credentials.", isError: true } }));
+    }
+  };
+
+  const handleResetCloudinaryKeys = async () => {
+    setKeySaving((p) => ({ ...p, cloudinary: true }));
+    const res = await api("/admin/api-keys/cloudinary", {
+      method: "POST",
+      body: { reset: true },
+    });
+    setKeySaving((p) => ({ ...p, cloudinary: false }));
+    if (res.ok) {
+      setKeyForms((p) => ({ ...p, cloudinaryCloudName: "", cloudinaryApiKey: "", cloudinaryApiSecret: "" }));
+      setKeyFeedback((p) => ({ ...p, cloudinary: { message: "Reset to default code keys.", isError: false } }));
+      loadApiKeys();
+      setTimeout(() => setKeyFeedback((p) => ({ ...p, cloudinary: null })), 4000);
+    }
+  };
+
+  // Fetch complete profile and API keys on mount
   useEffect(() => {
     if (isOpen) {
       api("/auth/me").then(({ ok, data }) => {
@@ -56,12 +199,15 @@ export default function SettingsModal({
           });
         }
       });
+      if (isAdmin) {
+        loadApiKeys();
+      }
       setCurrentTheme(getStoredTheme());
       setActiveTab(initialTab);
       setProfileFeedback({ message: "", isError: false });
       setPasswordFeedback({ message: "", isError: false });
     }
-  }, [isOpen, initialTab, user]);
+  }, [isOpen, initialTab, user, isAdmin]);
 
   if (!isOpen) return null;
 
@@ -642,132 +788,550 @@ export default function SettingsModal({
 
               {/* Section 2: External System Services & Integrations */}
               <div style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b", margin: "20px 0 8px" }}>
-                External System Services &amp; Integrations
+                External System Services &amp; Customizable API Credentials
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 {/* Weather Forecast API (WeatherAPI.com) */}
                 <div
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "12px 16px",
                     background: "#f8fafc",
                     borderRadius: "10px",
                     border: "1px solid var(--wz-border, #e2e8f0)",
+                    overflow: "hidden",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "#fef3c7", border: "1px solid #fde68a", display: "flex", alignItems: "center", justifyContent: "center", color: "#d97706" }}>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="4" />
-                        <path d="M12 2v2" />
-                        <path d="M12 20v2" />
-                        <path d="m4.93 4.93 1.41 1.41" />
-                        <path d="m17.66 17.66 1.41 1.41" />
-                        <path d="M2 12h2" />
-                        <path d="M20 12h2" />
-                        <path d="m6.34 17.66-1.41 1.41" />
-                        <path d="m19.07 4.93-1.41 1.41" />
-                      </svg>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "12px 16px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                      <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "#fef3c7", border: "1px solid #fde68a", display: "flex", alignItems: "center", justifyContent: "center", color: "#d97706" }}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="4" />
+                          <path d="M12 2v2" />
+                          <path d="M12 20v2" />
+                          <path d="m4.93 4.93 1.41 1.41" />
+                          <path d="m17.66 17.66 1.41 1.41" />
+                          <path d="M2 12h2" />
+                          <path d="M20 12h2" />
+                          <path d="m6.34 17.66-1.41 1.41" />
+                          <path d="m19.07 4.93-1.41 1.41" />
+                        </svg>
+                      </div>
+                      <div>
+                        <strong style={{ fontSize: "0.88rem", color: "var(--wz-text, #0f172a)" }}>Kalilangan Weather Forecast</strong>
+                        <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "#64748b" }}>WeatherAPI.com 3-day forecast on manager dispatch calendar</p>
+                      </div>
                     </div>
-                    <div>
-                      <strong style={{ fontSize: "0.88rem", color: "var(--wz-text, #0f172a)" }}>Kalilangan Weather Forecast</strong>
-                      <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "#64748b" }}>WeatherAPI.com 3-day forecast on manager dispatch calendar</p>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedKeys((p) => ({ ...p, weather: !p.weather }))}
+                        style={{
+                          padding: "4px 8px",
+                          background: apiKeys.weather?.isCustom ? "#dcfce7" : "#ffffff",
+                          color: apiKeys.weather?.isCustom ? "#15803d" : "#475569",
+                          border: `1px solid ${apiKeys.weather?.isCustom ? "#86efac" : "#cbd5e1"}`,
+                          borderRadius: "6px",
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                        title="Configure custom API key"
+                      >
+                        <span>{apiKeys.weather?.isCustom ? "● Custom Key" : "⚙️ Default Key"}</span>
+                        <span>{expandedKeys.weather ? "▲" : "▼"}</span>
+                      </button>
+                      <span style={{ fontSize: "0.75rem", fontWeight: 700, color: settings?.weatherEnabled !== false ? "#16a34a" : "#64748b" }}>
+                        {settings?.weatherEnabled !== false ? "Enabled" : "Disabled"}
+                      </span>
+                      <label className="wz-switch-toggle">
+                        <input
+                          type="checkbox"
+                          checked={settings?.weatherEnabled !== false}
+                          onChange={onToggleWeather || (() => {})}
+                        />
+                        <span className="wz-switch-slider" />
+                      </label>
                     </div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: settings?.weatherEnabled !== false ? "#16a34a" : "#64748b" }}>
-                      {settings?.weatherEnabled !== false ? "Enabled" : "Disabled"}
-                    </span>
-                    <label className="wz-switch-toggle">
-                      <input
-                        type="checkbox"
-                        checked={settings?.weatherEnabled !== false}
-                        onChange={onToggleWeather || (() => {})}
-                      />
-                      <span className="wz-switch-slider" />
-                    </label>
-                  </div>
+
+                  {/* Expandable Key Drawer */}
+                  {expandedKeys.weather && (
+                    <div style={{ padding: "14px 16px", background: "#ffffff", borderTop: "1px solid #e2e8f0" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                        <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#334155" }}>
+                          WeatherAPI.com API Key:
+                        </span>
+                        <span style={{ fontSize: "0.72rem", color: apiKeys.weather?.isCustom ? "#16a34a" : "#0284c7", fontWeight: 600 }}>
+                          {apiKeys.weather?.isCustom ? "● Custom Key Active" : `● Using Code Default (${apiKeys.weather?.defaultKeyMasked || "7145••••••••0611"})`}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                        <input
+                          type={revealSecrets.weather ? "text" : "password"}
+                          className="wz-form-input"
+                          style={{ flex: 1, padding: "7px 10px", fontSize: "0.8rem", fontFamily: "monospace" }}
+                          placeholder={`Default in code: ${apiKeys.weather?.defaultKeyMasked || "7145••••••••0611"}`}
+                          value={keyForms.weatherApiKey}
+                          onChange={(e) => setKeyForms((p) => ({ ...p, weatherApiKey: e.target.value }))}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setRevealSecrets((p) => ({ ...p, weather: !p.weather }))}
+                          style={{
+                            padding: "7px 10px",
+                            background: "#f1f5f9",
+                            border: "1px solid #cbd5e1",
+                            borderRadius: "6px",
+                            fontSize: "0.75rem",
+                            cursor: "pointer",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {revealSecrets.weather ? "🙈 Hide" : "👁️ Reveal"}
+                        </button>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "10px" }}>
+                        <span style={{ fontSize: "0.71rem", color: "#64748b" }}>
+                          Leave blank or click Reset to Default to revert to system code key.
+                        </span>
+                        <div style={{ display: "flex", gap: "6px" }}>
+                          {apiKeys.weather?.isCustom && (
+                            <button
+                              type="button"
+                              onClick={handleResetWeatherKey}
+                              disabled={keySaving.weather}
+                              style={{
+                                padding: "5px 10px",
+                                background: "#fff1f2",
+                                color: "#be123c",
+                                border: "1px solid #fecdd3",
+                                borderRadius: "6px",
+                                fontSize: "0.74rem",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                              }}
+                            >
+                              Reset to Default
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={handleSaveWeatherKey}
+                            disabled={keySaving.weather}
+                            style={{
+                              padding: "5px 12px",
+                              background: "#0f172a",
+                              color: "#ffffff",
+                              border: "none",
+                              borderRadius: "6px",
+                              fontSize: "0.74rem",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                            }}
+                          >
+                            {keySaving.weather ? "Saving..." : "Save Key"}
+                          </button>
+                        </div>
+                      </div>
+                      {keyFeedback.weather && (
+                        <div
+                          style={{
+                            marginTop: "8px",
+                            fontSize: "0.74rem",
+                            color: keyFeedback.weather.isError ? "#b91c1c" : "#15803d",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {keyFeedback.weather.message}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* OneSignal Web Push */}
                 <div
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "12px 16px",
                     background: "#f8fafc",
                     borderRadius: "10px",
                     border: "1px solid var(--wz-border, #e2e8f0)",
+                    overflow: "hidden",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "#fef2f2", border: "1px solid #fecaca", display: "flex", alignItems: "center", justifyContent: "center", color: "#e11d48" }}>
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-                        <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-                      </svg>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "12px 16px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                      <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "#fef2f2", border: "1px solid #fecaca", display: "flex", alignItems: "center", justifyContent: "center", color: "#e11d48" }}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+                          <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+                        </svg>
+                      </div>
+                      <div>
+                        <strong style={{ fontSize: "0.88rem", color: "var(--wz-text, #0f172a)" }}>OneSignal Web Push</strong>
+                        <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "#64748b" }}>Push notification delivery for booking status alerts</p>
+                      </div>
                     </div>
-                    <div>
-                      <strong style={{ fontSize: "0.88rem", color: "var(--wz-text, #0f172a)" }}>OneSignal Web Push</strong>
-                      <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "#64748b" }}>Push notification delivery for booking status alerts</p>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedKeys((p) => ({ ...p, oneSignal: !p.oneSignal }))}
+                        style={{
+                          padding: "4px 8px",
+                          background: apiKeys.oneSignal?.isCustom ? "#dcfce7" : "#ffffff",
+                          color: apiKeys.oneSignal?.isCustom ? "#15803d" : "#475569",
+                          border: `1px solid ${apiKeys.oneSignal?.isCustom ? "#86efac" : "#cbd5e1"}`,
+                          borderRadius: "6px",
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                        title="Configure custom credentials"
+                      >
+                        <span>{apiKeys.oneSignal?.isCustom ? "● Custom Keys" : "⚙️ Default Keys"}</span>
+                        <span>{expandedKeys.oneSignal ? "▲" : "▼"}</span>
+                      </button>
+                      <span style={{ fontSize: "0.75rem", fontWeight: 700, color: settings?.oneSignalEnabled !== false ? "#16a34a" : "#64748b" }}>
+                        {settings?.oneSignalEnabled !== false ? "Enabled" : "Disabled"}
+                      </span>
+                      <label className="wz-switch-toggle">
+                        <input
+                          type="checkbox"
+                          checked={settings?.oneSignalEnabled !== false}
+                          onChange={onToggleOneSignal || (() => {})}
+                        />
+                        <span className="wz-switch-slider" />
+                      </label>
                     </div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: settings?.oneSignalEnabled !== false ? "#16a34a" : "#64748b" }}>
-                      {settings?.oneSignalEnabled !== false ? "Enabled" : "Disabled"}
-                    </span>
-                    <label className="wz-switch-toggle">
-                      <input
-                        type="checkbox"
-                        checked={settings?.oneSignalEnabled !== false}
-                        onChange={onToggleOneSignal || (() => {})}
-                      />
-                      <span className="wz-switch-slider" />
-                    </label>
-                  </div>
+
+                  {/* Expandable Key Drawer */}
+                  {expandedKeys.oneSignal && (
+                    <div style={{ padding: "14px 16px", background: "#ffffff", borderTop: "1px solid #e2e8f0" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                        <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#334155" }}>
+                          OneSignal Web Push Credentials:
+                        </span>
+                        <span style={{ fontSize: "0.72rem", color: apiKeys.oneSignal?.isCustom ? "#16a34a" : "#0284c7", fontWeight: 600 }}>
+                          {apiKeys.oneSignal?.isCustom ? "● Custom Keys Active" : `● Using Code Defaults (${apiKeys.oneSignal?.defaultAppIdMasked || "fc81••••896839"})`}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                        <div>
+                          <label style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "3px" }}>
+                            OneSignal App ID
+                          </label>
+                          <input
+                            type="text"
+                            className="wz-form-input"
+                            style={{ width: "100%", padding: "7px 10px", fontSize: "0.8rem", fontFamily: "monospace" }}
+                            placeholder={`Default in code: ${apiKeys.oneSignal?.defaultAppIdMasked || "fc81••••896839"}`}
+                            value={keyForms.oneSignalAppId}
+                            onChange={(e) => setKeyForms((p) => ({ ...p, oneSignalAppId: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "3px" }}>
+                            OneSignal REST API Key
+                          </label>
+                          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                            <input
+                              type={revealSecrets.oneSignal ? "text" : "password"}
+                              className="wz-form-input"
+                              style={{ flex: 1, padding: "7px 10px", fontSize: "0.8rem", fontFamily: "monospace" }}
+                              placeholder={`Default in code: ${apiKeys.oneSignal?.defaultRestKeyMasked || "os_v2_••••••••nbyq"}`}
+                              value={keyForms.oneSignalRestApiKey}
+                              onChange={(e) => setKeyForms((p) => ({ ...p, oneSignalRestApiKey: e.target.value }))}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setRevealSecrets((p) => ({ ...p, oneSignal: !p.oneSignal }))}
+                              style={{
+                                padding: "7px 10px",
+                                background: "#f1f5f9",
+                                border: "1px solid #cbd5e1",
+                                borderRadius: "6px",
+                                fontSize: "0.75rem",
+                                cursor: "pointer",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {revealSecrets.oneSignal ? "🙈 Hide" : "👁️ Reveal"}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "10px" }}>
+                        <span style={{ fontSize: "0.71rem", color: "#64748b" }}>
+                          Leave blank or click Reset to Default to revert to system code keys.
+                        </span>
+                        <div style={{ display: "flex", gap: "6px" }}>
+                          {apiKeys.oneSignal?.isCustom && (
+                            <button
+                              type="button"
+                              onClick={handleResetOneSignalKeys}
+                              disabled={keySaving.oneSignal}
+                              style={{
+                                padding: "5px 10px",
+                                background: "#fff1f2",
+                                color: "#be123c",
+                                border: "1px solid #fecdd3",
+                                borderRadius: "6px",
+                                fontSize: "0.74rem",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                              }}
+                            >
+                              Reset to Default
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={handleSaveOneSignalKeys}
+                            disabled={keySaving.oneSignal}
+                            style={{
+                              padding: "5px 12px",
+                              background: "#0f172a",
+                              color: "#ffffff",
+                              border: "none",
+                              borderRadius: "6px",
+                              fontSize: "0.74rem",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                            }}
+                          >
+                            {keySaving.oneSignal ? "Saving..." : "Save Keys"}
+                          </button>
+                        </div>
+                      </div>
+                      {keyFeedback.oneSignal && (
+                        <div
+                          style={{
+                            marginTop: "8px",
+                            fontSize: "0.74rem",
+                            color: keyFeedback.oneSignal.isError ? "#b91c1c" : "#15803d",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {keyFeedback.oneSignal.message}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Cloudinary Media Storage */}
                 <div
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "12px 16px",
                     background: "#f8fafc",
                     borderRadius: "10px",
                     border: "1px solid var(--wz-border, #e2e8f0)",
+                    overflow: "hidden",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "#eff6ff", border: "1px solid #bfdbfe", display: "flex", alignItems: "center", justifyContent: "center", color: "#2563eb" }}>
-                      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
-                        <path d="M12 13v-5" />
-                        <path d="m9 10 3-3 3 3" />
-                      </svg>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "12px 16px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                      <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "#eff6ff", border: "1px solid #bfdbfe", display: "flex", alignItems: "center", justifyContent: "center", color: "#2563eb" }}>
+                        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+                          <path d="M12 13v-5" />
+                          <path d="m9 10 3-3 3 3" />
+                        </svg>
+                      </div>
+                      <div>
+                        <strong style={{ fontSize: "0.88rem", color: "var(--wz-text, #0f172a)" }}>Cloudinary Cloud Storage</strong>
+                        <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "#64748b" }}>Upload machinery &amp; profile photos to cloud (falls back to local disk if disabled)</p>
+                      </div>
                     </div>
-                    <div>
-                      <strong style={{ fontSize: "0.88rem", color: "var(--wz-text, #0f172a)" }}>Cloudinary Cloud Storage</strong>
-                      <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "#64748b" }}>Upload machinery &amp; profile photos to cloud (falls back to local disk if disabled)</p>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedKeys((p) => ({ ...p, cloudinary: !p.cloudinary }))}
+                        style={{
+                          padding: "4px 8px",
+                          background: apiKeys.cloudinary?.isCustom ? "#dcfce7" : "#ffffff",
+                          color: apiKeys.cloudinary?.isCustom ? "#15803d" : "#475569",
+                          border: `1px solid ${apiKeys.cloudinary?.isCustom ? "#86efac" : "#cbd5e1"}`,
+                          borderRadius: "6px",
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                        title="Configure custom credentials"
+                      >
+                        <span>{apiKeys.cloudinary?.isCustom ? "● Custom Keys" : "⚙️ Default Keys"}</span>
+                        <span>{expandedKeys.cloudinary ? "▲" : "▼"}</span>
+                      </button>
+                      <span style={{ fontSize: "0.75rem", fontWeight: 700, color: settings?.cloudinaryEnabled !== false ? "#16a34a" : "#64748b" }}>
+                        {settings?.cloudinaryEnabled !== false ? "Enabled" : "Disabled"}
+                      </span>
+                      <label className="wz-switch-toggle">
+                        <input
+                          type="checkbox"
+                          checked={settings?.cloudinaryEnabled !== false}
+                          onChange={onToggleCloudinary || (() => {})}
+                        />
+                        <span className="wz-switch-slider" />
+                      </label>
                     </div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: settings?.cloudinaryEnabled !== false ? "#16a34a" : "#64748b" }}>
-                      {settings?.cloudinaryEnabled !== false ? "Enabled" : "Disabled"}
-                    </span>
-                    <label className="wz-switch-toggle">
-                      <input
-                        type="checkbox"
-                        checked={settings?.cloudinaryEnabled !== false}
-                        onChange={onToggleCloudinary || (() => {})}
-                      />
-                      <span className="wz-switch-slider" />
-                    </label>
-                  </div>
+
+                  {/* Expandable Key Drawer */}
+                  {expandedKeys.cloudinary && (
+                    <div style={{ padding: "14px 16px", background: "#ffffff", borderTop: "1px solid #e2e8f0" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                        <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#334155" }}>
+                          Cloudinary Cloud Credentials:
+                        </span>
+                        <span style={{ fontSize: "0.72rem", color: apiKeys.cloudinary?.isCustom ? "#16a34a" : "#0284c7", fontWeight: 600 }}>
+                          {apiKeys.cloudinary?.isCustom ? "● Custom Credentials Active" : `● Using Code Defaults (${apiKeys.cloudinary?.defaultCloudName || "kimpc"})`}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                          <div>
+                            <label style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "3px" }}>
+                              Cloud Name
+                            </label>
+                            <input
+                              type="text"
+                              className="wz-form-input"
+                              style={{ width: "100%", padding: "7px 10px", fontSize: "0.8rem", fontFamily: "monospace" }}
+                              placeholder={`Default in code: ${apiKeys.cloudinary?.defaultCloudName || "kimpc"}`}
+                              value={keyForms.cloudinaryCloudName}
+                              onChange={(e) => setKeyForms((p) => ({ ...p, cloudinaryCloudName: e.target.value }))}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "3px" }}>
+                              API Key
+                            </label>
+                            <input
+                              type="text"
+                              className="wz-form-input"
+                              style={{ width: "100%", padding: "7px 10px", fontSize: "0.8rem", fontFamily: "monospace" }}
+                              placeholder={`Default in code: ${apiKeys.cloudinary?.defaultApiKeyMasked || "6913••••7346"}`}
+                              value={keyForms.cloudinaryApiKey}
+                              onChange={(e) => setKeyForms((p) => ({ ...p, cloudinaryApiKey: e.target.value }))}
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "3px" }}>
+                            API Secret
+                          </label>
+                          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                            <input
+                              type={revealSecrets.cloudinary ? "text" : "password"}
+                              className="wz-form-input"
+                              style={{ flex: 1, padding: "7px 10px", fontSize: "0.8rem", fontFamily: "monospace" }}
+                              placeholder={`Default in code: ${apiKeys.cloudinary?.defaultApiSecretMasked || "0aNA••••••••KnY"}`}
+                              value={keyForms.cloudinaryApiSecret}
+                              onChange={(e) => setKeyForms((p) => ({ ...p, cloudinaryApiSecret: e.target.value }))}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setRevealSecrets((p) => ({ ...p, cloudinary: !p.cloudinary }))}
+                              style={{
+                                padding: "7px 10px",
+                                background: "#f1f5f9",
+                                border: "1px solid #cbd5e1",
+                                borderRadius: "6px",
+                                fontSize: "0.75rem",
+                                cursor: "pointer",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {revealSecrets.cloudinary ? "🙈 Hide" : "👁️ Reveal"}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "10px" }}>
+                        <span style={{ fontSize: "0.71rem", color: "#64748b" }}>
+                          Leave blank or click Reset to Default to revert to system code keys.
+                        </span>
+                        <div style={{ display: "flex", gap: "6px" }}>
+                          {apiKeys.cloudinary?.isCustom && (
+                            <button
+                              type="button"
+                              onClick={handleResetCloudinaryKeys}
+                              disabled={keySaving.cloudinary}
+                              style={{
+                                padding: "5px 10px",
+                                background: "#fff1f2",
+                                color: "#be123c",
+                                border: "1px solid #fecdd3",
+                                borderRadius: "6px",
+                                fontSize: "0.74rem",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                              }}
+                            >
+                              Reset to Default
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={handleSaveCloudinaryKeys}
+                            disabled={keySaving.cloudinary}
+                            style={{
+                              padding: "5px 12px",
+                              background: "#0f172a",
+                              color: "#ffffff",
+                              border: "none",
+                              borderRadius: "6px",
+                              fontSize: "0.74rem",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                            }}
+                          >
+                            {keySaving.cloudinary ? "Saving..." : "Save Credentials"}
+                          </button>
+                        </div>
+                      </div>
+                      {keyFeedback.cloudinary && (
+                        <div
+                          style={{
+                            marginTop: "8px",
+                            fontSize: "0.74rem",
+                            color: keyFeedback.cloudinary.isError ? "#b91c1c" : "#15803d",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {keyFeedback.cloudinary.message}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
