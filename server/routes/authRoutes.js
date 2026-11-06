@@ -127,7 +127,7 @@ router.post("/verify", async (req, res) => {
 
 // ---------- System Settings & Public Config ----------
 
-router.get("/config", async (req, res) => {
+router.get(["/config", "/auth/settings", "/settings/public"], async (req, res) => {
   const googleLoginEnabled = await getSystemSetting("googleLoginEnabled", true);
   const facebookLoginEnabled = await getSystemSetting("facebookLoginEnabled", true);
   const recaptchaEnabled = await getSystemSetting("recaptchaEnabled", process.env.RECAPTCHA_ENABLED !== "false");
@@ -173,6 +173,62 @@ router.get("/admin/settings", requireAdmin, async (req, res) => {
   } catch (err) {
     console.error("Error retrieving admin settings:", err);
     fail(res, 500, "Could not load settings.");
+  }
+});
+
+router.put("/admin/settings", requireAdmin, async (req, res) => {
+  try {
+    const updatedBy = req.admin?.email || "admin";
+    const allowedKeys = [
+      "googleLoginEnabled",
+      "facebookLoginEnabled",
+      "recaptchaEnabled",
+      "weatherEnabled",
+      "oneSignalEnabled",
+      "cloudinaryEnabled",
+    ];
+
+    for (const key of allowedKeys) {
+      if (req.body[key] !== undefined) {
+        const val = Boolean(req.body[key]);
+        await setSystemSetting(
+          key,
+          val,
+          `Administrator updated ${key}`,
+          updatedBy
+        );
+
+        await logAudit({
+          action: "SETTINGS_UPDATED",
+          actorEmail: updatedBy,
+          actorRole: req.admin?.role || "admin",
+          details: `Administrator toggled ${key} to ${val ? "enabled" : "disabled"}`,
+          status: "Success",
+          req,
+        });
+      }
+    }
+
+    const googleLoginEnabled = await getSystemSetting("googleLoginEnabled", true);
+    const facebookLoginEnabled = await getSystemSetting("facebookLoginEnabled", true);
+    const recaptchaEnabled = await getSystemSetting("recaptchaEnabled", process.env.RECAPTCHA_ENABLED !== "false");
+    const weatherEnabled = await getSystemSetting("weatherEnabled", true);
+    const oneSignalEnabled = await getSystemSetting("oneSignalEnabled", true);
+    const cloudinaryEnabled = await getSystemSetting("cloudinaryEnabled", true);
+
+    res.json({
+      ok: true,
+      googleLoginEnabled: Boolean(googleLoginEnabled),
+      facebookLoginEnabled: Boolean(facebookLoginEnabled),
+      recaptchaEnabled: Boolean(recaptchaEnabled),
+      weatherEnabled: Boolean(weatherEnabled),
+      oneSignalEnabled: Boolean(oneSignalEnabled),
+      cloudinaryEnabled: Boolean(cloudinaryEnabled),
+      message: "Integration settings updated successfully.",
+    });
+  } catch (err) {
+    console.error("Error updating admin settings:", err);
+    fail(res, 500, "Failed to update settings.");
   }
 });
 

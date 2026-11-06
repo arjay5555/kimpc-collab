@@ -13,6 +13,7 @@ const {
   syncMaintenanceToGoogleCalendar
 } = require("../services/googleCalendarService");
 const weatherService = require("../services/weatherService");
+const { getSystemSetting } = require("../models/SystemSetting");
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || "minders-secret-jwt-key-cooperative-2026";
@@ -282,6 +283,14 @@ router.post("/sync-now", resolveManager, async (req, res) => {
  */
 router.get("/weather", resolveManager, async (req, res) => {
   try {
+    const weatherEnabled = await getSystemSetting("weatherEnabled", true);
+    if (!weatherEnabled) {
+      return res.status(403).json({
+        ok: false,
+        disabled: true,
+        error: "Kalilangan Weather Forecast API is currently disabled by administrator.",
+      });
+    }
     const forceRefresh = req.query.refresh === "true" || req.query.refresh === "1";
     const data = await weatherService.getKalilanganForecast(forceRefresh);
     if (!data.ok) {

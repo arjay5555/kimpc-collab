@@ -36,7 +36,7 @@ export default function AdminIntegrations() {
     cloudinary: { cloudName: "", apiKey: "", apiSecret: "" },
   });
 
-  // Drawer expansion state
+  // Drawer expansion state (toggled via Edit icon)
   const [expandedKeys, setExpandedKeys] = useState({
     google: false,
     facebook: false,
@@ -127,17 +127,26 @@ export default function AdminIntegrations() {
     fetchSettingsAndKeys();
   }, []);
 
-  // Update a single setting switch
-  const updateSetting = async (key, value, label) => {
+  // Update a single setting switch with dual-route guarantee (dedicated endpoint + fallback PUT)
+  const updateSetting = async (endpoint, key, value, label) => {
     const previous = settings[key];
     setSettings((prev) => ({ ...prev, [key]: value }));
     setFeedback({ message: `Updating ${label}...`, isError: false });
 
     try {
-      const res = await api("/admin/settings", {
-        method: "PUT",
-        body: { [key]: value },
+      // 1. Try dedicated endpoint first (e.g. /admin/settings/google-login)
+      let res = await api(endpoint, {
+        method: "POST",
+        body: { enabled: value },
       });
+
+      // 2. Also try PUT /admin/settings as reliable fallback
+      if (!res.ok) {
+        res = await api("/admin/settings", {
+          method: "PUT",
+          body: { [key]: value },
+        });
+      }
 
       if (!res.ok) {
         setSettings((prev) => ({ ...prev, [key]: previous }));
@@ -149,25 +158,26 @@ export default function AdminIntegrations() {
         });
         setTimeout(() => setFeedback({ message: "", isError: false }), 4000);
       }
-    } catch {
+    } catch (err) {
+      console.error(`Error updating ${label}:`, err);
       setSettings((prev) => ({ ...prev, [key]: previous }));
       setFeedback({ message: `Network error updating ${label}.`, isError: true });
     }
   };
 
-  // Toggle handlers
+  // Toggle handlers mapped to both dedicated routes and PUT
   const handleToggleGoogle = () =>
-    updateSetting("googleLoginEnabled", !settings.googleLoginEnabled, "Google Sign-In");
+    updateSetting("/admin/settings/google-login", "googleLoginEnabled", !settings.googleLoginEnabled, "Google Sign-In");
   const handleToggleFacebook = () =>
-    updateSetting("facebookLoginEnabled", !settings.facebookLoginEnabled, "Facebook Sign-In");
+    updateSetting("/admin/settings/facebook-login", "facebookLoginEnabled", !settings.facebookLoginEnabled, "Facebook Sign-In");
   const handleToggleRecaptcha = () =>
-    updateSetting("recaptchaEnabled", !settings.recaptchaEnabled, "Google reCAPTCHA v2");
+    updateSetting("/admin/settings/recaptcha", "recaptchaEnabled", !settings.recaptchaEnabled, "Google reCAPTCHA v2");
   const handleToggleWeather = () =>
-    updateSetting("weatherEnabled", !settings.weatherEnabled, "Kalilangan Weather Forecast API");
+    updateSetting("/admin/settings/weather", "weatherEnabled", !settings.weatherEnabled, "Kalilangan Weather Forecast API");
   const handleToggleOneSignal = () =>
-    updateSetting("oneSignalEnabled", !settings.oneSignalEnabled, "OneSignal Web Push");
+    updateSetting("/admin/settings/onesignal", "oneSignalEnabled", !settings.oneSignalEnabled, "OneSignal Web Push");
   const handleToggleCloudinary = () =>
-    updateSetting("cloudinaryEnabled", !settings.cloudinaryEnabled, "Cloudinary Media Storage");
+    updateSetting("/admin/settings/cloudinary", "cloudinaryEnabled", !settings.cloudinaryEnabled, "Cloudinary Media Storage");
 
   // Save / Reset Handlers for Customizable Keys
   const handleSaveGoogleKeys = async () => {
@@ -507,26 +517,61 @@ export default function AdminIntegrations() {
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                {/* Edit customizable credentials icon button */}
                 <button
                   type="button"
                   onClick={() => setExpandedKeys((p) => ({ ...p, google: !p.google }))}
                   style={{
-                    padding: "6px 12px",
-                    background: apiKeys.google?.isCustom ? "#dcfce7" : "#f8fafc",
-                    color: apiKeys.google?.isCustom ? "#15803d" : "#475569",
-                    border: `1px solid ${apiKeys.google?.isCustom ? "#86efac" : "#cbd5e1"}`,
+                    width: "36px",
+                    height: "36px",
                     borderRadius: "8px",
-                    fontSize: "0.78rem",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    display: "flex",
+                    border: expandedKeys.google
+                      ? "1.5px solid #166534"
+                      : apiKeys.google?.isCustom
+                      ? "1.5px solid #86efac"
+                      : "1px solid #cbd5e1",
+                    background: expandedKeys.google
+                      ? "#ecfdf5"
+                      : apiKeys.google?.isCustom
+                      ? "#f0fdf4"
+                      : "#ffffff",
+                    color: expandedKeys.google
+                      ? "#166534"
+                      : apiKeys.google?.isCustom
+                      ? "#15803d"
+                      : "#475569",
+                    display: "inline-flex",
                     alignItems: "center",
-                    gap: "6px",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                    position: "relative",
                   }}
-                  title="Configure custom Google credentials"
+                  title={
+                    apiKeys.google?.isCustom
+                      ? "Edit Google custom credentials (Custom .env active)"
+                      : "Edit Google credentials (Click to customize)"
+                  }
                 >
-                  <span>{apiKeys.google?.isCustom ? "● Custom Keys (.env)" : "⚙️ Code Default Keys"}</span>
-                  <span>{expandedKeys.google ? "▲" : "▼"}</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                  {apiKeys.google?.isCustom && (
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: "-3px",
+                        right: "-3px",
+                        width: "8px",
+                        height: "8px",
+                        borderRadius: "50%",
+                        background: "#16a34a",
+                        border: "1.5px solid #ffffff",
+                      }}
+                      title="Custom key active"
+                    />
+                  )}
                 </button>
                 <span
                   style={{
@@ -542,7 +587,7 @@ export default function AdminIntegrations() {
                 <label className="wz-switch-toggle">
                   <input
                     type="checkbox"
-                    checked={settings.googleLoginEnabled}
+                    checked={Boolean(settings.googleLoginEnabled)}
                     onChange={handleToggleGoogle}
                   />
                   <span className="wz-switch-slider" />
@@ -722,26 +767,61 @@ export default function AdminIntegrations() {
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                {/* Edit customizable credentials icon button */}
                 <button
                   type="button"
                   onClick={() => setExpandedKeys((p) => ({ ...p, facebook: !p.facebook }))}
                   style={{
-                    padding: "6px 12px",
-                    background: apiKeys.facebook?.isCustom ? "#dcfce7" : "#f8fafc",
-                    color: apiKeys.facebook?.isCustom ? "#15803d" : "#475569",
-                    border: `1px solid ${apiKeys.facebook?.isCustom ? "#86efac" : "#cbd5e1"}`,
+                    width: "36px",
+                    height: "36px",
                     borderRadius: "8px",
-                    fontSize: "0.78rem",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    display: "flex",
+                    border: expandedKeys.facebook
+                      ? "1.5px solid #166534"
+                      : apiKeys.facebook?.isCustom
+                      ? "1.5px solid #86efac"
+                      : "1px solid #cbd5e1",
+                    background: expandedKeys.facebook
+                      ? "#ecfdf5"
+                      : apiKeys.facebook?.isCustom
+                      ? "#f0fdf4"
+                      : "#ffffff",
+                    color: expandedKeys.facebook
+                      ? "#166534"
+                      : apiKeys.facebook?.isCustom
+                      ? "#15803d"
+                      : "#475569",
+                    display: "inline-flex",
                     alignItems: "center",
-                    gap: "6px",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                    position: "relative",
                   }}
-                  title="Configure custom Facebook credentials"
+                  title={
+                    apiKeys.facebook?.isCustom
+                      ? "Edit Facebook custom credentials (Custom .env active)"
+                      : "Edit Facebook credentials (Click to customize)"
+                  }
                 >
-                  <span>{apiKeys.facebook?.isCustom ? "● Custom Keys (.env)" : "⚙️ Code Default Keys"}</span>
-                  <span>{expandedKeys.facebook ? "▲" : "▼"}</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                  {apiKeys.facebook?.isCustom && (
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: "-3px",
+                        right: "-3px",
+                        width: "8px",
+                        height: "8px",
+                        borderRadius: "50%",
+                        background: "#16a34a",
+                        border: "1.5px solid #ffffff",
+                      }}
+                      title="Custom key active"
+                    />
+                  )}
                 </button>
                 <span
                   style={{
@@ -757,7 +837,7 @@ export default function AdminIntegrations() {
                 <label className="wz-switch-toggle">
                   <input
                     type="checkbox"
-                    checked={settings.facebookLoginEnabled}
+                    checked={Boolean(settings.facebookLoginEnabled)}
                     onChange={handleToggleFacebook}
                   />
                   <span className="wz-switch-slider" />
@@ -937,26 +1017,61 @@ export default function AdminIntegrations() {
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                {/* Edit customizable credentials icon button */}
                 <button
                   type="button"
                   onClick={() => setExpandedKeys((p) => ({ ...p, recaptcha: !p.recaptcha }))}
                   style={{
-                    padding: "6px 12px",
-                    background: apiKeys.recaptcha?.isCustom ? "#dcfce7" : "#f8fafc",
-                    color: apiKeys.recaptcha?.isCustom ? "#15803d" : "#475569",
-                    border: `1px solid ${apiKeys.recaptcha?.isCustom ? "#86efac" : "#cbd5e1"}`,
+                    width: "36px",
+                    height: "36px",
                     borderRadius: "8px",
-                    fontSize: "0.78rem",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    display: "flex",
+                    border: expandedKeys.recaptcha
+                      ? "1.5px solid #166534"
+                      : apiKeys.recaptcha?.isCustom
+                      ? "1.5px solid #86efac"
+                      : "1px solid #cbd5e1",
+                    background: expandedKeys.recaptcha
+                      ? "#ecfdf5"
+                      : apiKeys.recaptcha?.isCustom
+                      ? "#f0fdf4"
+                      : "#ffffff",
+                    color: expandedKeys.recaptcha
+                      ? "#166534"
+                      : apiKeys.recaptcha?.isCustom
+                      ? "#15803d"
+                      : "#475569",
+                    display: "inline-flex",
                     alignItems: "center",
-                    gap: "6px",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                    position: "relative",
                   }}
-                  title="Configure custom reCAPTCHA keys"
+                  title={
+                    apiKeys.recaptcha?.isCustom
+                      ? "Edit reCAPTCHA custom keys (Custom .env active)"
+                      : "Edit reCAPTCHA keys (Click to customize)"
+                  }
                 >
-                  <span>{apiKeys.recaptcha?.isCustom ? "● Custom Keys (.env)" : "⚙️ Code Default Keys"}</span>
-                  <span>{expandedKeys.recaptcha ? "▲" : "▼"}</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                  {apiKeys.recaptcha?.isCustom && (
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: "-3px",
+                        right: "-3px",
+                        width: "8px",
+                        height: "8px",
+                        borderRadius: "50%",
+                        background: "#16a34a",
+                        border: "1.5px solid #ffffff",
+                      }}
+                      title="Custom key active"
+                    />
+                  )}
                 </button>
                 <span
                   style={{
@@ -972,7 +1087,7 @@ export default function AdminIntegrations() {
                 <label className="wz-switch-toggle">
                   <input
                     type="checkbox"
-                    checked={settings.recaptchaEnabled}
+                    checked={Boolean(settings.recaptchaEnabled)}
                     onChange={handleToggleRecaptcha}
                   />
                   <span className="wz-switch-slider" />
@@ -1148,26 +1263,61 @@ export default function AdminIntegrations() {
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                {/* Edit customizable credentials icon button */}
                 <button
                   type="button"
                   onClick={() => setExpandedKeys((p) => ({ ...p, weather: !p.weather }))}
                   style={{
-                    padding: "6px 12px",
-                    background: apiKeys.weather?.isCustom ? "#dcfce7" : "#f8fafc",
-                    color: apiKeys.weather?.isCustom ? "#15803d" : "#475569",
-                    border: `1px solid ${apiKeys.weather?.isCustom ? "#86efac" : "#cbd5e1"}`,
+                    width: "36px",
+                    height: "36px",
                     borderRadius: "8px",
-                    fontSize: "0.78rem",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    display: "flex",
+                    border: expandedKeys.weather
+                      ? "1.5px solid #166534"
+                      : apiKeys.weather?.isCustom
+                      ? "1.5px solid #86efac"
+                      : "1px solid #cbd5e1",
+                    background: expandedKeys.weather
+                      ? "#ecfdf5"
+                      : apiKeys.weather?.isCustom
+                      ? "#f0fdf4"
+                      : "#ffffff",
+                    color: expandedKeys.weather
+                      ? "#166534"
+                      : apiKeys.weather?.isCustom
+                      ? "#15803d"
+                      : "#475569",
+                    display: "inline-flex",
                     alignItems: "center",
-                    gap: "6px",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                    position: "relative",
                   }}
-                  title="Configure custom WeatherAPI key"
+                  title={
+                    apiKeys.weather?.isCustom
+                      ? "Edit Weather API custom key (Custom .env active)"
+                      : "Edit Weather API key (Click to customize)"
+                  }
                 >
-                  <span>{apiKeys.weather?.isCustom ? "● Custom Keys (.env)" : "⚙️ Code Default Keys"}</span>
-                  <span>{expandedKeys.weather ? "▲" : "▼"}</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                  {apiKeys.weather?.isCustom && (
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: "-3px",
+                        right: "-3px",
+                        width: "8px",
+                        height: "8px",
+                        borderRadius: "50%",
+                        background: "#16a34a",
+                        border: "1.5px solid #ffffff",
+                      }}
+                      title="Custom key active"
+                    />
+                  )}
                 </button>
                 <span
                   style={{
@@ -1183,7 +1333,7 @@ export default function AdminIntegrations() {
                 <label className="wz-switch-toggle">
                   <input
                     type="checkbox"
-                    checked={settings.weatherEnabled}
+                    checked={Boolean(settings.weatherEnabled)}
                     onChange={handleToggleWeather}
                   />
                   <span className="wz-switch-slider" />
@@ -1348,26 +1498,61 @@ export default function AdminIntegrations() {
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                {/* Edit customizable credentials icon button */}
                 <button
                   type="button"
                   onClick={() => setExpandedKeys((p) => ({ ...p, oneSignal: !p.oneSignal }))}
                   style={{
-                    padding: "6px 12px",
-                    background: apiKeys.oneSignal?.isCustom ? "#dcfce7" : "#f8fafc",
-                    color: apiKeys.oneSignal?.isCustom ? "#15803d" : "#475569",
-                    border: `1px solid ${apiKeys.oneSignal?.isCustom ? "#86efac" : "#cbd5e1"}`,
+                    width: "36px",
+                    height: "36px",
                     borderRadius: "8px",
-                    fontSize: "0.78rem",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    display: "flex",
+                    border: expandedKeys.oneSignal
+                      ? "1.5px solid #166534"
+                      : apiKeys.oneSignal?.isCustom
+                      ? "1.5px solid #86efac"
+                      : "1px solid #cbd5e1",
+                    background: expandedKeys.oneSignal
+                      ? "#ecfdf5"
+                      : apiKeys.oneSignal?.isCustom
+                      ? "#f0fdf4"
+                      : "#ffffff",
+                    color: expandedKeys.oneSignal
+                      ? "#166534"
+                      : apiKeys.oneSignal?.isCustom
+                      ? "#15803d"
+                      : "#475569",
+                    display: "inline-flex",
                     alignItems: "center",
-                    gap: "6px",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                    position: "relative",
                   }}
-                  title="Configure custom OneSignal credentials"
+                  title={
+                    apiKeys.oneSignal?.isCustom
+                      ? "Edit OneSignal custom credentials (Custom .env active)"
+                      : "Edit OneSignal credentials (Click to customize)"
+                  }
                 >
-                  <span>{apiKeys.oneSignal?.isCustom ? "● Custom Keys (.env)" : "⚙️ Code Default Keys"}</span>
-                  <span>{expandedKeys.oneSignal ? "▲" : "▼"}</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                  {apiKeys.oneSignal?.isCustom && (
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: "-3px",
+                        right: "-3px",
+                        width: "8px",
+                        height: "8px",
+                        borderRadius: "50%",
+                        background: "#16a34a",
+                        border: "1.5px solid #ffffff",
+                      }}
+                      title="Custom key active"
+                    />
+                  )}
                 </button>
                 <span
                   style={{
@@ -1383,7 +1568,7 @@ export default function AdminIntegrations() {
                 <label className="wz-switch-toggle">
                   <input
                     type="checkbox"
-                    checked={settings.oneSignalEnabled}
+                    checked={Boolean(settings.oneSignalEnabled)}
                     onChange={handleToggleOneSignal}
                   />
                   <span className="wz-switch-slider" />
@@ -1563,26 +1748,61 @@ export default function AdminIntegrations() {
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                {/* Edit customizable credentials icon button */}
                 <button
                   type="button"
                   onClick={() => setExpandedKeys((p) => ({ ...p, cloudinary: !p.cloudinary }))}
                   style={{
-                    padding: "6px 12px",
-                    background: apiKeys.cloudinary?.isCustom ? "#dcfce7" : "#f8fafc",
-                    color: apiKeys.cloudinary?.isCustom ? "#15803d" : "#475569",
-                    border: `1px solid ${apiKeys.cloudinary?.isCustom ? "#86efac" : "#cbd5e1"}`,
+                    width: "36px",
+                    height: "36px",
                     borderRadius: "8px",
-                    fontSize: "0.78rem",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    display: "flex",
+                    border: expandedKeys.cloudinary
+                      ? "1.5px solid #166534"
+                      : apiKeys.cloudinary?.isCustom
+                      ? "1.5px solid #86efac"
+                      : "1px solid #cbd5e1",
+                    background: expandedKeys.cloudinary
+                      ? "#ecfdf5"
+                      : apiKeys.cloudinary?.isCustom
+                      ? "#f0fdf4"
+                      : "#ffffff",
+                    color: expandedKeys.cloudinary
+                      ? "#166534"
+                      : apiKeys.cloudinary?.isCustom
+                      ? "#15803d"
+                      : "#475569",
+                    display: "inline-flex",
                     alignItems: "center",
-                    gap: "6px",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                    position: "relative",
                   }}
-                  title="Configure custom Cloudinary credentials"
+                  title={
+                    apiKeys.cloudinary?.isCustom
+                      ? "Edit Cloudinary custom credentials (Custom .env active)"
+                      : "Edit Cloudinary credentials (Click to customize)"
+                  }
                 >
-                  <span>{apiKeys.cloudinary?.isCustom ? "● Custom Keys (.env)" : "⚙️ Code Default Keys"}</span>
-                  <span>{expandedKeys.cloudinary ? "▲" : "▼"}</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                  {apiKeys.cloudinary?.isCustom && (
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: "-3px",
+                        right: "-3px",
+                        width: "8px",
+                        height: "8px",
+                        borderRadius: "50%",
+                        background: "#16a34a",
+                        border: "1.5px solid #ffffff",
+                      }}
+                      title="Custom key active"
+                    />
+                  )}
                 </button>
                 <span
                   style={{
@@ -1598,7 +1818,7 @@ export default function AdminIntegrations() {
                 <label className="wz-switch-toggle">
                   <input
                     type="checkbox"
-                    checked={settings.cloudinaryEnabled}
+                    checked={Boolean(settings.cloudinaryEnabled)}
                     onChange={handleToggleCloudinary}
                   />
                   <span className="wz-switch-slider" />

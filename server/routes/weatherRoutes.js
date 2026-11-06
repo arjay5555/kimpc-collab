@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const authManager = require("../middleware/authManager");
 const weatherService = require("../services/weatherService");
+const { getSystemSetting } = require("../models/SystemSetting");
 
 /**
  * GET /api/weather/forecast
@@ -9,6 +10,14 @@ const weatherService = require("../services/weatherService");
  */
 router.get("/forecast", authManager, async (req, res) => {
   try {
+    const weatherEnabled = await getSystemSetting("weatherEnabled", true);
+    if (!weatherEnabled) {
+      return res.status(403).json({
+        ok: false,
+        disabled: true,
+        error: "Kalilangan Weather Forecast API is currently disabled by administrator.",
+      });
+    }
     const forceRefresh = req.query.refresh === "true" || req.query.refresh === "1";
     const data = await weatherService.getKalilanganForecast(forceRefresh);
     if (!data.ok) {
