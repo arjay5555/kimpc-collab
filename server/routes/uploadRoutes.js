@@ -10,8 +10,8 @@ router.get("/status", (req, res) => {
   return res.json({
     ok: true,
     configured: cloudinaryService.isConfigured(),
-    cloudName: process.env.CLOUDINARY_CLOUD_NAME || "",
-    apiKeyConfigured: Boolean(process.env.CLOUDINARY_API_KEY || "691365116427346"),
+    cloudName: process.env.CUSTOM_CLOUDINARY_CLOUD_NAME || process.env.DEFAULT_CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_CLOUD_NAME || "kimpc",
+    apiKeyConfigured: Boolean(process.env.CUSTOM_CLOUDINARY_API_KEY || process.env.DEFAULT_CLOUDINARY_API_KEY || process.env.CLOUDINARY_API_KEY || "691365116427346"),
   });
 });
 

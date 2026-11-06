@@ -22,11 +22,10 @@ function initCloudinary(creds) {
  * Checks if Cloudinary credentials are fully configured
  */
 function isConfigured() {
-  return Boolean(
-    process.env.CLOUDINARY_CLOUD_NAME &&
-    process.env.CLOUDINARY_API_KEY &&
-    process.env.CLOUDINARY_API_SECRET
-  );
+  const name = process.env.CUSTOM_CLOUDINARY_CLOUD_NAME || process.env.DEFAULT_CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_CLOUD_NAME;
+  const key = process.env.CUSTOM_CLOUDINARY_API_KEY || process.env.DEFAULT_CLOUDINARY_API_KEY || process.env.CLOUDINARY_API_KEY;
+  const sec = process.env.CUSTOM_CLOUDINARY_API_SECRET || process.env.DEFAULT_CLOUDINARY_API_SECRET || process.env.CLOUDINARY_API_SECRET;
+  return Boolean(name && key && sec);
 }
 
 /**

@@ -99,6 +99,29 @@ const DEFAULT_CLOUDINARY_API_SECRET =
   Buffer.from("MGFOQUFWMlhZVW9fMHh5dUhhNldVZmhLS25Z", "base64").toString("utf-8");
 
 /**
+ * Initializes process.env with effective keys (custom value takes precedence over default)
+ * so legacy library references and external integrations function seamlessly without
+ * requiring plain key duplicates in .env.
+ */
+function initEffectiveEnv() {
+  process.env.GOOGLE_CLIENT_ID = (process.env.CUSTOM_GOOGLE_CLIENT_ID || process.env.DEFAULT_GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID || "").trim();
+  process.env.GOOGLE_CLIENT_SECRET = (process.env.CUSTOM_GOOGLE_CLIENT_SECRET || process.env.DEFAULT_GOOGLE_CLIENT_SECRET || DEFAULT_GOOGLE_CLIENT_SECRET || "").trim();
+  process.env.FACEBOOK_APP_ID = (process.env.CUSTOM_FACEBOOK_APP_ID || process.env.DEFAULT_FACEBOOK_APP_ID || DEFAULT_FACEBOOK_APP_ID || "").trim();
+  process.env.FACEBOOK_APP_SECRET = (process.env.CUSTOM_FACEBOOK_APP_SECRET || process.env.DEFAULT_FACEBOOK_APP_SECRET || DEFAULT_FACEBOOK_APP_SECRET || "").trim();
+  process.env.RECAPTCHA_SITE_KEY = (process.env.CUSTOM_RECAPTCHA_SITE_KEY || process.env.DEFAULT_RECAPTCHA_SITE_KEY || DEFAULT_RECAPTCHA_SITE_KEY || "").trim();
+  process.env.RECAPTCHA_SECRET_KEY = (process.env.CUSTOM_RECAPTCHA_SECRET_KEY || process.env.DEFAULT_RECAPTCHA_SECRET_KEY || DEFAULT_RECAPTCHA_SECRET_KEY || "").trim();
+  process.env.WEATHER_API_KEY = (process.env.CUSTOM_WEATHER_API_KEY || process.env.DEFAULT_WEATHER_API_KEY || DEFAULT_WEATHER_API_KEY || "").trim();
+  process.env.ONESIGNAL_APP_ID = (process.env.CUSTOM_ONESIGNAL_APP_ID || process.env.DEFAULT_ONESIGNAL_APP_ID || DEFAULT_ONESIGNAL_APP_ID || "").trim();
+  process.env.ONESIGNAL_REST_API_KEY = (process.env.CUSTOM_ONESIGNAL_REST_KEY || process.env.DEFAULT_ONESIGNAL_REST_KEY || DEFAULT_ONESIGNAL_REST_KEY || "").trim();
+  process.env.CLOUDINARY_CLOUD_NAME = (process.env.CUSTOM_CLOUDINARY_CLOUD_NAME || process.env.DEFAULT_CLOUDINARY_CLOUD_NAME || DEFAULT_CLOUDINARY_CLOUD_NAME || "").trim();
+  process.env.CLOUDINARY_API_KEY = (process.env.CUSTOM_CLOUDINARY_API_KEY || process.env.DEFAULT_CLOUDINARY_API_KEY || DEFAULT_CLOUDINARY_API_KEY || "").trim();
+  process.env.CLOUDINARY_API_SECRET = (process.env.CUSTOM_CLOUDINARY_API_SECRET || process.env.DEFAULT_CLOUDINARY_API_SECRET || DEFAULT_CLOUDINARY_API_SECRET || "").trim();
+}
+
+// Auto-run on module load
+initEffectiveEnv();
+
+/**
  * Mask string helper for UI display (e.g. "7145••••••••260611")
  */
 function maskValue(val) {
@@ -379,4 +402,5 @@ module.exports = {
   getEffectiveOneSignalKeys,
   getEffectiveCloudinaryKeys,
   getAdminApiKeysSummary,
+  initEffectiveEnv,
 };

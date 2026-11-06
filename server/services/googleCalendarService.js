@@ -11,8 +11,8 @@ const SCOPES = ["https://www.googleapis.com/auth/calendar.events"];
  * @param {string} [redirectUri] - Optional custom redirect URI.
  */
 function createOAuth2Client(redirectUri) {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const clientId = (process.env.CUSTOM_GOOGLE_CLIENT_ID || process.env.DEFAULT_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || "").trim();
+  const clientSecret = (process.env.CUSTOM_GOOGLE_CLIENT_SECRET || process.env.DEFAULT_GOOGLE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || "").trim();
   const callbackUrl =
     redirectUri ||
     process.env.GOOGLE_REDIRECT_URI ||

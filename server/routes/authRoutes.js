@@ -881,15 +881,6 @@ router.post(["/admin/api-keys/cloudinary", "/admin/integrations/keys/cloudinary"
     fail(res, 500, "Failed to save Cloudinary credentials.");
   }
 });
-      ok: true,
-      isCustom: true,
-      message: "Custom Cloudinary credentials saved successfully.",
-    });
-  } catch (err) {
-    console.error("Error saving custom Cloudinary credentials:", err);
-    fail(res, 500, "Failed to save Cloudinary credentials.");
-  }
-});
 
 // ---------- Core Login & Password Recovery ----------
 

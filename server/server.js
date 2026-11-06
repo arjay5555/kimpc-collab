@@ -6,6 +6,9 @@ if (!process.env.MONGODB_URI) {
   require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 }
 
+// Initialize effective environment variables from DEFAULT and CUSTOM keys
+require("./services/apiKeyManager");
+
 const app = require("./app");
 const { connectDB, disconnectDB } = require("./config/database");
 const { startAuditArchiveWorker } = require("./workers/archiveAuditLogs");
