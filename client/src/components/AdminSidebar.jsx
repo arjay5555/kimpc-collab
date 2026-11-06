@@ -1,17 +1,9 @@
 import React from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { Link, useLocation } from "react-router-dom";
 
 export default function AdminSidebar() {
-  const { user, logout } = useAuth();
   const location = useLocation();
-  const navigate = useNavigate();
   const currentPath = location.pathname;
-
-  const handleLogout = () => {
-    logout();
-    navigate("/login");
-  };
 
   const isDashboardActive = currentPath === "/admin";
   const isAccountsActive = currentPath === "/account-management";
@@ -115,33 +107,6 @@ export default function AdminSidebar() {
           <span>Audit Logs</span>
         </Link>
       </nav>
-
-      {/* Sidebar Footer: Admin Profile & Log Out */}
-      <div className="wz-sidebar-footer">
-        <div className="wz-sidebar-user">
-          <div className="wz-sidebar-avatar" style={{ background: "#0f172a" }}>
-            {user?.fullName ? user.fullName[0].toUpperCase() : "A"}
-          </div>
-          <div className="wz-sidebar-user-details">
-            <span className="wz-sidebar-user-name">{user?.fullName || "Administrator"}</span>
-            <span className="wz-sidebar-user-role">{user?.email || "Admin Portal"}</span>
-          </div>
-        </div>
-        <button
-          type="button"
-          className="wz-sidebar-logout-btn"
-          onClick={handleLogout}
-          title="Log Out of Admin Portal"
-          aria-label="Log Out"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-            <polyline points="16 17 21 12 16 7" />
-            <line x1="21" y1="12" x2="9" y2="12" />
-          </svg>
-          <span>Log Out</span>
-        </button>
-      </div>
     </aside>
   );
 }
