@@ -12,6 +12,8 @@ export default function AdminIntegrations() {
     weatherEnabled: true,
     oneSignalEnabled: true,
     cloudinaryEnabled: true,
+    emailResetEnabled: true,
+    googleCalendarEnabled: true,
   });
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState({ message: "", isError: false });
@@ -24,6 +26,8 @@ export default function AdminIntegrations() {
     weather: { apiKey: "", isCustom: false, source: "default" },
     oneSignal: { appId: "", restApiKey: "", isCustom: false, source: "default" },
     cloudinary: { cloudName: "", apiKey: "", apiSecret: "", isCustom: false, source: "default" },
+    email: { user: "", pass: "", from: "", isCustom: false, source: "default" },
+    calendar: { clientId: "", clientSecret: "", redirectUri: "", isCustom: false, source: "default" },
   });
 
   // Key form inputs
@@ -34,6 +38,8 @@ export default function AdminIntegrations() {
     weather: { apiKey: "" },
     oneSignal: { appId: "", restApiKey: "" },
     cloudinary: { cloudName: "", apiKey: "", apiSecret: "" },
+    email: { user: "", pass: "", from: "" },
+    calendar: { clientId: "", clientSecret: "", redirectUri: "" },
   });
 
   // Drawer expansion state (toggled via Edit icon)
@@ -44,6 +50,8 @@ export default function AdminIntegrations() {
     weather: false,
     oneSignal: false,
     cloudinary: false,
+    email: false,
+    calendar: false,
   });
 
   // Reveal / Hide secrets toggle
@@ -54,6 +62,8 @@ export default function AdminIntegrations() {
     weather: false,
     oneSignal: false,
     cloudinary: false,
+    email: false,
+    calendar: false,
   });
 
   // Individual saving state & feedback
@@ -73,6 +83,8 @@ export default function AdminIntegrations() {
           weatherEnabled: res.data.weatherEnabled ?? true,
           oneSignalEnabled: res.data.oneSignalEnabled ?? true,
           cloudinaryEnabled: res.data.cloudinaryEnabled ?? true,
+          emailResetEnabled: res.data.emailResetEnabled ?? true,
+          googleCalendarEnabled: res.data.googleCalendarEnabled ?? true,
         });
       }
 
@@ -86,6 +98,8 @@ export default function AdminIntegrations() {
           weather: d.weather || {},
           oneSignal: d.oneSignal || {},
           cloudinary: d.cloudinary || {},
+          email: d.email || {},
+          calendar: d.calendar || {},
         });
 
         setKeyInputs({
@@ -112,6 +126,16 @@ export default function AdminIntegrations() {
             cloudName: d.cloudinary?.customCloudName || "",
             apiKey: d.cloudinary?.customApiKey || "",
             apiSecret: d.cloudinary?.customApiSecret || "",
+          },
+          email: {
+            user: d.email?.customUser || "",
+            pass: d.email?.customPass || "",
+            from: d.email?.customFrom || "",
+          },
+          calendar: {
+            clientId: d.calendar?.customClientId || "",
+            clientSecret: d.calendar?.customClientSecret || "",
+            redirectUri: d.calendar?.customRedirectUri || "",
           },
         });
       }
@@ -178,6 +202,10 @@ export default function AdminIntegrations() {
     updateSetting("/admin/settings/onesignal", "oneSignalEnabled", !settings.oneSignalEnabled, "OneSignal Web Push");
   const handleToggleCloudinary = () =>
     updateSetting("/admin/settings/cloudinary", "cloudinaryEnabled", !settings.cloudinaryEnabled, "Cloudinary Media Storage");
+  const handleToggleEmailReset = () =>
+    updateSetting("/admin/settings/email-reset", "emailResetEnabled", !settings.emailResetEnabled, "Gmail Password Reset Service");
+  const handleToggleGoogleCalendar = () =>
+    updateSetting("/admin/settings/google-calendar", "googleCalendarEnabled", !settings.googleCalendarEnabled, "Google Calendar Integration");
 
   // Save / Reset Handlers for Customizable Keys
   const handleSaveGoogleKeys = async () => {
@@ -423,6 +451,90 @@ export default function AdminIntegrations() {
       }
     } finally {
       setKeySaving((p) => ({ ...p, cloudinary: false }));
+    }
+  };
+
+  const handleSaveEmailKeys = async () => {
+    setKeySaving((p) => ({ ...p, email: true }));
+    setKeyFeedback((p) => ({ ...p, email: null }));
+    try {
+      const res = await api("/admin/integrations/keys/email", {
+        method: "POST",
+        body: {
+          user: keyInputs.email.user.trim(),
+          pass: keyInputs.email.pass.trim(),
+          from: keyInputs.email.from.trim(),
+        },
+      });
+      if (!res.ok) {
+        setKeyFeedback((p) => ({ ...p, email: { isError: true, message: res.data?.error || "Failed to update Gmail SMTP credentials." } }));
+      } else {
+        setKeyFeedback((p) => ({ ...p, email: { isError: false, message: "Gmail SMTP credentials saved & written to server/.env successfully!" } }));
+        fetchSettingsAndKeys();
+        setTimeout(() => setKeyFeedback((p) => ({ ...p, email: null })), 4000);
+      }
+    } catch {
+      setKeyFeedback((p) => ({ ...p, email: { isError: true, message: "Network error saving Gmail SMTP credentials." } }));
+    } finally {
+      setKeySaving((p) => ({ ...p, email: false }));
+    }
+  };
+
+  const handleResetEmailKeys = async () => {
+    if (!window.confirm("Reset Gmail SMTP credentials to default system code keys?")) return;
+    setKeySaving((p) => ({ ...p, email: true }));
+    try {
+      const res = await api("/admin/integrations/keys/email/reset", { method: "POST" });
+      if (res.ok) {
+        setKeyInputs((p) => ({ ...p, email: { user: "", pass: "", from: "" } }));
+        setKeyFeedback((p) => ({ ...p, email: { isError: false, message: "Reset to default system credentials." } }));
+        fetchSettingsAndKeys();
+        setTimeout(() => setKeyFeedback((p) => ({ ...p, email: null })), 4000);
+      }
+    } finally {
+      setKeySaving((p) => ({ ...p, email: false }));
+    }
+  };
+
+  const handleSaveCalendarKeys = async () => {
+    setKeySaving((p) => ({ ...p, calendar: true }));
+    setKeyFeedback((p) => ({ ...p, calendar: null }));
+    try {
+      const res = await api("/admin/integrations/keys/calendar", {
+        method: "POST",
+        body: {
+          clientId: keyInputs.calendar.clientId.trim(),
+          clientSecret: keyInputs.calendar.clientSecret.trim(),
+          redirectUri: keyInputs.calendar.redirectUri.trim(),
+        },
+      });
+      if (!res.ok) {
+        setKeyFeedback((p) => ({ ...p, calendar: { isError: true, message: res.data?.error || "Failed to update Google Calendar credentials." } }));
+      } else {
+        setKeyFeedback((p) => ({ ...p, calendar: { isError: false, message: "Google Calendar credentials saved & written to server/.env successfully!" } }));
+        fetchSettingsAndKeys();
+        setTimeout(() => setKeyFeedback((p) => ({ ...p, calendar: null })), 4000);
+      }
+    } catch {
+      setKeyFeedback((p) => ({ ...p, calendar: { isError: true, message: "Network error saving Google Calendar credentials." } }));
+    } finally {
+      setKeySaving((p) => ({ ...p, calendar: false }));
+    }
+  };
+
+  const handleResetCalendarKeys = async () => {
+    if (!window.confirm("Reset Google Calendar credentials to default system code keys?")) return;
+    setKeySaving((p) => ({ ...p, calendar: true }));
+    try {
+      const res = await api("/admin/integrations/keys/calendar/reset", { method: "POST" });
+      if (res.ok) {
+        setKeyInputs((p) => ({ ...p, calendar: { clientId: "", clientSecret: "", redirectUri: "" } }));
+        setKeyFeedback((p) => ({ ...p, calendar: { isError: false, message: "Reset to default system credentials." } }));
+        fetchSettingsAndKeys();
+        setTimeout(() => setKeyFeedback((p) => ({ ...p, calendar: null })), 4000);
+      }
+    } finally {
+      setKeySaving((p) => ({ ...p, calendar: false }));
     }
   };
 
@@ -2143,6 +2255,599 @@ export default function AdminIntegrations() {
                     }}
                   >
                     {keyFeedback.cloudinary.message}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ================= 7. Gmail SMTP Service (Password Reset & OTP) ================= */}
+          <div style={{ borderBottom: "1px solid #f1f5f9" }}>
+            <div
+              className="wz-integration-row"
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "16px 24px",
+                background: "#ffffff",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                <div
+                  style={{
+                    width: "42px",
+                    height: "42px",
+                    borderRadius: "10px",
+                    background: "#ffffff",
+                    border: "1px solid #edf2f7",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "6px",
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+                    flexShrink: 0,
+                    overflow: "hidden",
+                  }}
+                >
+                  <img
+                    src="/images/gmail logo.png"
+                    alt="Gmail"
+                    style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                  />
+                </div>
+                <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Gmail SMTP Service (Password Reset & OTP)</strong>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                {/* Edit customizable credentials icon button */}
+                <button
+                  type="button"
+                  onClick={() => setExpandedKeys((p) => ({ ...p, email: !p.email }))}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: "4px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    color: expandedKeys.email
+                      ? "#166534"
+                      : apiKeys.email?.isCustom
+                      ? "#15803d"
+                      : "#64748b",
+                    position: "relative",
+                    transition: "color 0.15s ease",
+                  }}
+                  title={
+                    apiKeys.email?.isCustom
+                      ? "Custom Gmail SMTP credentials active (Click to edit)"
+                      : "Edit Gmail SMTP credentials"
+                  }
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                  {apiKeys.email?.isCustom && (
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: "1px",
+                        right: "0px",
+                        width: "6px",
+                        height: "6px",
+                        borderRadius: "50%",
+                        background: "#16a34a",
+                        border: "1px solid #ffffff",
+                      }}
+                      title="Custom key active"
+                    />
+                  )}
+                </button>
+                <span
+                  style={{
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    color: settings.emailResetEnabled ? "#16a34a" : "#64748b",
+                    minWidth: "55px",
+                    textAlign: "right",
+                  }}
+                >
+                  {settings.emailResetEnabled ? "Enabled" : "Disabled"}
+                </span>
+                <label className="wz-switch-toggle">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(settings.emailResetEnabled)}
+                    onChange={handleToggleEmailReset}
+                  />
+                  <span className="wz-switch-slider" />
+                </label>
+              </div>
+            </div>
+
+            {/* Custom Gmail SMTP Keys Expandable Drawer */}
+            {expandedKeys.email && (
+              <div
+                style={{
+                  background: "#f8fafc",
+                  padding: "18px 24px",
+                  borderTop: "1px solid #f1f5f9",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                  <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#334155" }}>
+                    Configure Custom Gmail SMTP Credentials (.env)
+                  </div>
+                  <span
+                    style={{
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      background: apiKeys.email?.isCustom ? "#dcfce7" : "#e2e8f0",
+                      color: apiKeys.email?.isCustom ? "#15803d" : "#475569",
+                    }}
+                  >
+                    Active Source: {apiKeys.email?.isCustom ? "Custom .env Key" : "Default Hardcoded Code"}
+                  </span>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
+                  <div>
+                    <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
+                      SMTP_USER (Gmail Address)
+                    </label>
+                    <input
+                      type="text"
+                      name="kimpc_custom_smtp_user"
+                      id="kimpc_custom_smtp_user"
+                      autoComplete="one-time-code"
+                      autoCorrect="off"
+                      spellCheck="false"
+                      data-lpignore="true"
+                      data-1p-ignore="true"
+                      data-bwignore="true"
+                      data-form-type="other"
+                      className="wz-form-input"
+                      style={{ fontSize: "0.82rem", background: "#ffffff" }}
+                      placeholder={apiKeys.email?.defaultUserMasked ? `Example (Default): ${apiKeys.email.defaultUserMasked}` : "e.g. kimpc.system@gmail.com"}
+                      value={keyInputs.email.user}
+                      onChange={(e) => setKeyInputs((p) => ({ ...p, email: { ...p.email, user: e.target.value } }))}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
+                      SMTP_PASS (App Password)
+                    </label>
+                    <div style={{ display: "flex", gap: "6px" }}>
+                      <input
+                        type={revealSecrets.email ? "text" : "password"}
+                        name="kimpc_custom_smtp_pass"
+                        id="kimpc_custom_smtp_pass"
+                        autoComplete="new-password"
+                        autoCorrect="off"
+                        spellCheck="false"
+                        data-lpignore="true"
+                        data-1p-ignore="true"
+                        data-bwignore="true"
+                        data-form-type="other"
+                        className="wz-form-input"
+                        style={{ fontSize: "0.82rem", background: "#ffffff", flex: 1 }}
+                        placeholder={apiKeys.email?.defaultPassMasked ? `Example (Default): ${apiKeys.email.defaultPassMasked}` : "e.g. ••••••••••••••••"}
+                        value={keyInputs.email.pass}
+                        onChange={(e) => setKeyInputs((p) => ({ ...p, email: { ...p.email, pass: e.target.value } }))}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setRevealSecrets((p) => ({ ...p, email: !p.email }))}
+                        title={revealSecrets.email ? "Hide secret" : "Reveal secret"}
+                        style={{
+                          width: "38px",
+                          height: "38px",
+                          background: "#ffffff",
+                          border: "1px solid #cbd5e1",
+                          borderRadius: "8px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          cursor: "pointer",
+                          color: revealSecrets.email ? "#166534" : "#64748b",
+                          flexShrink: 0,
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        {revealSecrets.email ? (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                            <line x1="1" y1="1" x2="23" y2="23" />
+                          </svg>
+                        ) : (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                            <circle cx="12" cy="12" r="3" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
+                      SMTP_FROM (Sender Header)
+                    </label>
+                    <input
+                      type="text"
+                      name="kimpc_custom_smtp_from"
+                      id="kimpc_custom_smtp_from"
+                      autoComplete="one-time-code"
+                      autoCorrect="off"
+                      spellCheck="false"
+                      data-lpignore="true"
+                      data-1p-ignore="true"
+                      data-bwignore="true"
+                      data-form-type="other"
+                      className="wz-form-input"
+                      style={{ fontSize: "0.82rem", background: "#ffffff" }}
+                      placeholder={apiKeys.email?.defaultFrom ? `Example (Default): ${apiKeys.email.defaultFrom}` : 'e.g. "KIMPC Security" <kimpc.system@gmail.com>'}
+                      value={keyInputs.email.from}
+                      onChange={(e) => setKeyInputs((p) => ({ ...p, email: { ...p.email, from: e.target.value } }))}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "14px", flexWrap: "wrap", gap: "10px" }}>
+                  <span style={{ fontSize: "0.76rem", color: "#64748b" }}>
+                    Leave blank or click Reset to Default to revert back to system code keys.
+                  </span>
+                  <div style={{ display: "flex", gap: "10px" }}>
+                    {apiKeys.email?.isCustom && (
+                      <button
+                        type="button"
+                        onClick={handleResetEmailKeys}
+                        disabled={keySaving.email}
+                        style={{
+                          padding: "7px 14px",
+                          background: "#fff1f2",
+                          color: "#be123c",
+                          border: "1px solid #fecdd3",
+                          borderRadius: "8px",
+                          fontSize: "0.8rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Reset to Default
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleSaveEmailKeys}
+                      disabled={keySaving.email}
+                      style={{
+                        padding: "7px 16px",
+                        background: "#0f172a",
+                        color: "#ffffff",
+                        border: "none",
+                        borderRadius: "8px",
+                        fontSize: "0.8rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {keySaving.email ? "Saving to .env..." : "Save Credentials"}
+                    </button>
+                  </div>
+                </div>
+
+                {keyFeedback.email && (
+                  <div
+                    style={{
+                      marginTop: "10px",
+                      fontSize: "0.8rem",
+                      color: keyFeedback.email.isError ? "#b91c1c" : "#15803d",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {keyFeedback.email.message}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ================= 8. Google Calendar Integration ================= */}
+          <div>
+            <div
+              className="wz-integration-row"
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "16px 24px",
+                background: "#ffffff",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                <div
+                  style={{
+                    width: "42px",
+                    height: "42px",
+                    borderRadius: "10px",
+                    background: "#ffffff",
+                    border: "1px solid #edf2f7",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "4px",
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+                    flexShrink: 0,
+                    overflow: "hidden",
+                  }}
+                >
+                  <img
+                    src="/images/google logo.png"
+                    alt="Google Calendar"
+                    style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                  />
+                </div>
+                <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Google Calendar Integration</strong>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                {/* Edit customizable credentials icon button */}
+                <button
+                  type="button"
+                  onClick={() => setExpandedKeys((p) => ({ ...p, calendar: !p.calendar }))}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: "4px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    color: expandedKeys.calendar
+                      ? "#166534"
+                      : apiKeys.calendar?.isCustom
+                      ? "#15803d"
+                      : "#64748b",
+                    position: "relative",
+                    transition: "color 0.15s ease",
+                  }}
+                  title={
+                    apiKeys.calendar?.isCustom
+                      ? "Custom Google Calendar credentials active (Click to edit)"
+                      : "Edit Google Calendar credentials"
+                  }
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                  {apiKeys.calendar?.isCustom && (
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: "1px",
+                        right: "0px",
+                        width: "6px",
+                        height: "6px",
+                        borderRadius: "50%",
+                        background: "#16a34a",
+                        border: "1px solid #ffffff",
+                      }}
+                      title="Custom key active"
+                    />
+                  )}
+                </button>
+                <span
+                  style={{
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    color: settings.googleCalendarEnabled ? "#16a34a" : "#64748b",
+                    minWidth: "55px",
+                    textAlign: "right",
+                  }}
+                >
+                  {settings.googleCalendarEnabled ? "Enabled" : "Disabled"}
+                </span>
+                <label className="wz-switch-toggle">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(settings.googleCalendarEnabled)}
+                    onChange={handleToggleGoogleCalendar}
+                  />
+                  <span className="wz-switch-slider" />
+                </label>
+              </div>
+            </div>
+
+            {/* Custom Google Calendar Keys Expandable Drawer */}
+            {expandedKeys.calendar && (
+              <div
+                style={{
+                  background: "#f8fafc",
+                  padding: "18px 24px",
+                  borderTop: "1px solid #f1f5f9",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                  <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#334155" }}>
+                    Configure Custom Google Calendar OAuth Credentials (.env)
+                  </div>
+                  <span
+                    style={{
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      background: apiKeys.calendar?.isCustom ? "#dcfce7" : "#e2e8f0",
+                      color: apiKeys.calendar?.isCustom ? "#15803d" : "#475569",
+                    }}
+                  >
+                    Active Source: {apiKeys.calendar?.isCustom ? "Custom .env Key" : "Default Hardcoded Code"}
+                  </span>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+                  <div>
+                    <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
+                      GOOGLE_CALENDAR_CLIENT_ID
+                    </label>
+                    <input
+                      type="text"
+                      name="kimpc_custom_calendar_client_id"
+                      id="kimpc_custom_calendar_client_id"
+                      autoComplete="one-time-code"
+                      autoCorrect="off"
+                      spellCheck="false"
+                      data-lpignore="true"
+                      data-1p-ignore="true"
+                      data-bwignore="true"
+                      data-form-type="other"
+                      className="wz-form-input"
+                      style={{ fontSize: "0.82rem", background: "#ffffff" }}
+                      placeholder={apiKeys.calendar?.defaultClientIdMasked ? `Example (Default): ${apiKeys.calendar.defaultClientIdMasked}` : "e.g. 1047648325603-...apps.googleusercontent.com"}
+                      value={keyInputs.calendar.clientId}
+                      onChange={(e) => setKeyInputs((p) => ({ ...p, calendar: { ...p.calendar, clientId: e.target.value } }))}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
+                      GOOGLE_CALENDAR_CLIENT_SECRET
+                    </label>
+                    <div style={{ display: "flex", gap: "6px" }}>
+                      <input
+                        type={revealSecrets.calendar ? "text" : "password"}
+                        name="kimpc_custom_calendar_client_secret"
+                        id="kimpc_custom_calendar_client_secret"
+                        autoComplete="new-password"
+                        autoCorrect="off"
+                        spellCheck="false"
+                        data-lpignore="true"
+                        data-1p-ignore="true"
+                        data-bwignore="true"
+                        data-form-type="other"
+                        className="wz-form-input"
+                        style={{ fontSize: "0.82rem", background: "#ffffff", flex: 1 }}
+                        placeholder={apiKeys.calendar?.defaultClientSecretMasked ? `Example (Default): ${apiKeys.calendar.defaultClientSecretMasked}` : "e.g. GOCSPX-..."}
+                        value={keyInputs.calendar.clientSecret}
+                        onChange={(e) => setKeyInputs((p) => ({ ...p, calendar: { ...p.calendar, clientSecret: e.target.value } }))}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setRevealSecrets((p) => ({ ...p, calendar: !p.calendar }))}
+                        title={revealSecrets.calendar ? "Hide secret" : "Reveal secret"}
+                        style={{
+                          width: "38px",
+                          height: "38px",
+                          background: "#ffffff",
+                          border: "1px solid #cbd5e1",
+                          borderRadius: "8px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          cursor: "pointer",
+                          color: revealSecrets.calendar ? "#166534" : "#64748b",
+                          flexShrink: 0,
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        {revealSecrets.calendar ? (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                            <line x1="1" y1="1" x2="23" y2="23" />
+                          </svg>
+                        ) : (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                            <circle cx="12" cy="12" r="3" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
+                    GOOGLE_CALENDAR_REDIRECT_URI
+                  </label>
+                  <input
+                    type="text"
+                    name="kimpc_custom_calendar_redirect_uri"
+                    id="kimpc_custom_calendar_redirect_uri"
+                    autoComplete="one-time-code"
+                    autoCorrect="off"
+                    spellCheck="false"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    data-bwignore="true"
+                    data-form-type="other"
+                    className="wz-form-input"
+                    style={{ fontSize: "0.82rem", background: "#ffffff" }}
+                    placeholder={apiKeys.calendar?.defaultRedirectUri ? `Example (Default): ${apiKeys.calendar.defaultRedirectUri}` : "e.g. http://localhost:3000/api/calendar/callback"}
+                    value={keyInputs.calendar.redirectUri}
+                    onChange={(e) => setKeyInputs((p) => ({ ...p, calendar: { ...p.calendar, redirectUri: e.target.value } }))}
+                  />
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "14px", flexWrap: "wrap", gap: "10px" }}>
+                  <span style={{ fontSize: "0.76rem", color: "#64748b" }}>
+                    Leave blank or click Reset to Default to revert back to system code keys.
+                  </span>
+                  <div style={{ display: "flex", gap: "10px" }}>
+                    {apiKeys.calendar?.isCustom && (
+                      <button
+                        type="button"
+                        onClick={handleResetCalendarKeys}
+                        disabled={keySaving.calendar}
+                        style={{
+                          padding: "7px 14px",
+                          background: "#fff1f2",
+                          color: "#be123c",
+                          border: "1px solid #fecdd3",
+                          borderRadius: "8px",
+                          fontSize: "0.8rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Reset to Default
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleSaveCalendarKeys}
+                      disabled={keySaving.calendar}
+                      style={{
+                        padding: "7px 16px",
+                        background: "#0f172a",
+                        color: "#ffffff",
+                        border: "none",
+                        borderRadius: "8px",
+                        fontSize: "0.8rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {keySaving.calendar ? "Saving to .env..." : "Save Credentials"}
+                    </button>
+                  </div>
+                </div>
+
+                {keyFeedback.calendar && (
+                  <div
+                    style={{
+                      marginTop: "10px",
+                      fontSize: "0.8rem",
+                      color: keyFeedback.calendar.isError ? "#b91c1c" : "#15803d",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {keyFeedback.calendar.message}
                   </div>
                 )}
               </div>

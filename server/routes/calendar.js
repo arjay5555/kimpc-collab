@@ -78,6 +78,14 @@ async function resolveManager(req, res, next) {
  */
 router.get("/connect", async (req, res) => {
   try {
+    const calendarEnabled = await getSystemSetting("googleCalendarEnabled", true);
+    if (calendarEnabled === false) {
+      return res.status(403).json({
+        error: "Google Calendar integration is currently disabled by administrator.",
+        disabled: true,
+      });
+    }
+
     let managerId = "";
     let managerEmail = "";
 
@@ -222,6 +230,11 @@ router.post("/webhook", async (req, res) => {
  */
 router.get("/status", resolveManager, async (req, res) => {
   try {
+    const calendarEnabled = await getSystemSetting("googleCalendarEnabled", true);
+    if (calendarEnabled === false) {
+      return res.json({ connected: false, disabled: true, message: "Google Calendar integration is currently disabled." });
+    }
+
     const status = await getManagerSyncStatus(req.user);
     return res.json(status);
   } catch (err) {

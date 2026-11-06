@@ -98,6 +98,22 @@ const DEFAULT_CLOUDINARY_API_SECRET =
   (process.env.DEFAULT_CLOUDINARY_API_SECRET || process.env.CLOUDINARY_API_SECRET || "").trim() ||
   Buffer.from("MGFOQUFWMlhZVW9fMHh5dUhhNldVZmhLS25Z", "base64").toString("utf-8");
 
+// 7. Gmail SMTP Service Credentials
+const DEFAULT_SMTP_USER =
+  (process.env.DEFAULT_SMTP_USER || process.env.SMTP_USER || "").trim() || "kimpc.system@gmail.com";
+const DEFAULT_SMTP_PASS =
+  (process.env.DEFAULT_SMTP_PASS || process.env.SMTP_PASS || "").trim() || "dluhpzevpbwbjcyc";
+const DEFAULT_SMTP_FROM =
+  (process.env.DEFAULT_SMTP_FROM || process.env.SMTP_FROM || "").trim() || `"KIMPC Security" <kimpc.system@gmail.com>`;
+
+// 8. Google Calendar Integration Credentials
+const DEFAULT_GOOGLE_CALENDAR_CLIENT_ID =
+  (process.env.DEFAULT_GOOGLE_CALENDAR_CLIENT_ID || process.env.DEFAULT_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID || "").trim();
+const DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET =
+  (process.env.DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET || process.env.DEFAULT_GOOGLE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || DEFAULT_GOOGLE_CLIENT_SECRET || "").trim();
+const DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI =
+  (process.env.DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI || process.env.GOOGLE_REDIRECT_URI || "http://localhost:3000/api/calendar/callback").trim();
+
 /**
  * Initializes process.env with effective keys (custom value takes precedence over default)
  * so legacy library references and external integrations function seamlessly without
@@ -116,6 +132,12 @@ function initEffectiveEnv() {
   process.env.CLOUDINARY_CLOUD_NAME = (process.env.CUSTOM_CLOUDINARY_CLOUD_NAME || process.env.DEFAULT_CLOUDINARY_CLOUD_NAME || DEFAULT_CLOUDINARY_CLOUD_NAME || "").trim();
   process.env.CLOUDINARY_API_KEY = (process.env.CUSTOM_CLOUDINARY_API_KEY || process.env.DEFAULT_CLOUDINARY_API_KEY || DEFAULT_CLOUDINARY_API_KEY || "").trim();
   process.env.CLOUDINARY_API_SECRET = (process.env.CUSTOM_CLOUDINARY_API_SECRET || process.env.DEFAULT_CLOUDINARY_API_SECRET || DEFAULT_CLOUDINARY_API_SECRET || "").trim();
+  process.env.SMTP_USER = (process.env.CUSTOM_SMTP_USER || process.env.DEFAULT_SMTP_USER || DEFAULT_SMTP_USER || "").trim();
+  process.env.SMTP_PASS = (process.env.CUSTOM_SMTP_PASS || process.env.DEFAULT_SMTP_PASS || DEFAULT_SMTP_PASS || "").trim();
+  process.env.SMTP_FROM = (process.env.CUSTOM_SMTP_FROM || process.env.DEFAULT_SMTP_FROM || DEFAULT_SMTP_FROM || "").trim();
+  process.env.GOOGLE_CALENDAR_CLIENT_ID = (process.env.CUSTOM_GOOGLE_CALENDAR_CLIENT_ID || process.env.DEFAULT_GOOGLE_CALENDAR_CLIENT_ID || DEFAULT_GOOGLE_CALENDAR_CLIENT_ID || "").trim();
+  process.env.GOOGLE_CALENDAR_CLIENT_SECRET = (process.env.CUSTOM_GOOGLE_CALENDAR_CLIENT_SECRET || process.env.DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET || DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET || "").trim();
+  process.env.GOOGLE_CALENDAR_REDIRECT_URI = (process.env.CUSTOM_GOOGLE_CALENDAR_REDIRECT_URI || process.env.DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI || DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI || "").trim();
 }
 
 // Auto-run on module load
@@ -324,6 +346,74 @@ async function getEffectiveCloudinaryKeys() {
 }
 
 /**
+ * Gmail SMTP Effective Credentials
+ */
+async function getEffectiveEmailKeys() {
+  let customUser = "";
+  let customPass = "";
+  let customFrom = "";
+  try {
+    const userDoc = await SystemSetting.findOne({ key: "customSmtpUser" });
+    const passDoc = await SystemSetting.findOne({ key: "customSmtpPass" });
+    const fromDoc = await SystemSetting.findOne({ key: "customSmtpFrom" });
+    if (userDoc?.value) customUser = String(userDoc.value).trim();
+    if (passDoc?.value) customPass = String(passDoc.value).trim();
+    if (fromDoc?.value) customFrom = String(fromDoc.value).trim();
+  } catch (err) {
+    console.warn("[apiKeyManager] Error reading customEmailKeys:", err.message);
+  }
+
+  if (!customUser && process.env.CUSTOM_SMTP_USER) customUser = process.env.CUSTOM_SMTP_USER.trim();
+  if (!customPass && process.env.CUSTOM_SMTP_PASS) customPass = process.env.CUSTOM_SMTP_PASS.trim();
+  if (!customFrom && process.env.CUSTOM_SMTP_FROM) customFrom = process.env.CUSTOM_SMTP_FROM.trim();
+
+  const defaultUser = (process.env.DEFAULT_SMTP_USER || process.env.SMTP_USER || DEFAULT_SMTP_USER).trim();
+  const defaultPass = (process.env.DEFAULT_SMTP_PASS || process.env.SMTP_PASS || DEFAULT_SMTP_PASS).trim();
+  const defaultFrom = (process.env.DEFAULT_SMTP_FROM || process.env.SMTP_FROM || DEFAULT_SMTP_FROM).trim();
+
+  const user = customUser || defaultUser;
+  const pass = customPass || defaultPass;
+  const from = customFrom || defaultFrom;
+  const isCustom = Boolean(customUser || customPass || customFrom);
+
+  return { user, pass, from, isCustom, customUser, customPass, customFrom, defaultUser, defaultPass, defaultFrom };
+}
+
+/**
+ * Google Calendar Effective Credentials
+ */
+async function getEffectiveCalendarKeys() {
+  let customClientId = "";
+  let customClientSecret = "";
+  let customRedirectUri = "";
+  try {
+    const idDoc = await SystemSetting.findOne({ key: "customCalendarClientId" });
+    const secDoc = await SystemSetting.findOne({ key: "customCalendarClientSecret" });
+    const uriDoc = await SystemSetting.findOne({ key: "customCalendarRedirectUri" });
+    if (idDoc?.value) customClientId = String(idDoc.value).trim();
+    if (secDoc?.value) customClientSecret = String(secDoc.value).trim();
+    if (uriDoc?.value) customRedirectUri = String(uriDoc.value).trim();
+  } catch (err) {
+    console.warn("[apiKeyManager] Error reading customCalendarKeys:", err.message);
+  }
+
+  if (!customClientId && process.env.CUSTOM_GOOGLE_CALENDAR_CLIENT_ID) customClientId = process.env.CUSTOM_GOOGLE_CALENDAR_CLIENT_ID.trim();
+  if (!customClientSecret && process.env.CUSTOM_GOOGLE_CALENDAR_CLIENT_SECRET) customClientSecret = process.env.CUSTOM_GOOGLE_CALENDAR_CLIENT_SECRET.trim();
+  if (!customRedirectUri && process.env.CUSTOM_GOOGLE_CALENDAR_REDIRECT_URI) customRedirectUri = process.env.CUSTOM_GOOGLE_CALENDAR_REDIRECT_URI.trim();
+
+  const defaultClientId = (process.env.DEFAULT_GOOGLE_CALENDAR_CLIENT_ID || process.env.DEFAULT_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CALENDAR_CLIENT_ID).trim();
+  const defaultClientSecret = (process.env.DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET || process.env.DEFAULT_GOOGLE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET).trim();
+  const defaultRedirectUri = (process.env.DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI || process.env.GOOGLE_REDIRECT_URI || DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI).trim();
+
+  const clientId = customClientId || defaultClientId;
+  const clientSecret = customClientSecret || defaultClientSecret;
+  const redirectUri = customRedirectUri || defaultRedirectUri;
+  const isCustom = Boolean(customClientId || customClientSecret || customRedirectUri);
+
+  return { clientId, clientSecret, redirectUri, isCustom, customClientId, customClientSecret, customRedirectUri, defaultClientId, defaultClientSecret, defaultRedirectUri };
+}
+
+/**
  * Summarizes all API keys for Admin Settings UI
  */
 async function getAdminApiKeysSummary() {
@@ -333,6 +423,8 @@ async function getAdminApiKeysSummary() {
   const weather = await getEffectiveWeatherKey();
   const oneSignal = await getEffectiveOneSignalKeys();
   const cloudinary = await getEffectiveCloudinaryKeys();
+  const email = await getEffectiveEmailKeys();
+  const calendar = await getEffectiveCalendarKeys();
 
   return {
     google: {
@@ -377,6 +469,24 @@ async function getAdminApiKeysSummary() {
       defaultApiKeyMasked: maskValue(process.env.DEFAULT_CLOUDINARY_API_KEY || process.env.CLOUDINARY_API_KEY || DEFAULT_CLOUDINARY_API_KEY),
       defaultApiSecretMasked: maskValue(process.env.DEFAULT_CLOUDINARY_API_SECRET || process.env.CLOUDINARY_API_SECRET || DEFAULT_CLOUDINARY_API_SECRET),
     },
+    email: {
+      isCustom: email.isCustom,
+      customUser: email.customUser || "",
+      customPass: email.customPass || "",
+      customFrom: email.customFrom || "",
+      defaultUserMasked: maskValue(email.defaultUser),
+      defaultPassMasked: maskValue(email.defaultPass),
+      defaultFrom: email.defaultFrom,
+    },
+    calendar: {
+      isCustom: calendar.isCustom,
+      customClientId: calendar.customClientId || "",
+      customClientSecret: calendar.customClientSecret || "",
+      customRedirectUri: calendar.customRedirectUri || "",
+      defaultClientIdMasked: maskValue(calendar.defaultClientId),
+      defaultClientSecretMasked: maskValue(calendar.defaultClientSecret),
+      defaultRedirectUri: calendar.defaultRedirectUri,
+    },
   };
 }
 
@@ -394,6 +504,12 @@ module.exports = {
   DEFAULT_CLOUDINARY_CLOUD_NAME,
   DEFAULT_CLOUDINARY_API_KEY,
   DEFAULT_CLOUDINARY_API_SECRET,
+  DEFAULT_SMTP_USER,
+  DEFAULT_SMTP_PASS,
+  DEFAULT_SMTP_FROM,
+  DEFAULT_GOOGLE_CALENDAR_CLIENT_ID,
+  DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET,
+  DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI,
   maskValue,
   getEffectiveGoogleKeys,
   getEffectiveFacebookKeys,
@@ -401,6 +517,8 @@ module.exports = {
   getEffectiveWeatherKey,
   getEffectiveOneSignalKeys,
   getEffectiveCloudinaryKeys,
+  getEffectiveEmailKeys,
+  getEffectiveCalendarKeys,
   getAdminApiKeysSummary,
   initEffectiveEnv,
 };

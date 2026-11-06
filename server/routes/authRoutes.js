@@ -20,6 +20,12 @@ const {
   DEFAULT_CLOUDINARY_CLOUD_NAME,
   DEFAULT_CLOUDINARY_API_KEY,
   DEFAULT_CLOUDINARY_API_SECRET,
+  DEFAULT_SMTP_USER,
+  DEFAULT_SMTP_PASS,
+  DEFAULT_SMTP_FROM,
+  DEFAULT_GOOGLE_CALENDAR_CLIENT_ID,
+  DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET,
+  DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI,
   getEffectiveGoogleKeys,
   getEffectiveFacebookKeys,
   getEffectiveRecaptchaKeys,
@@ -134,6 +140,8 @@ router.get(["/config", "/auth/settings", "/settings/public"], async (req, res) =
   const weatherEnabled = await getSystemSetting("weatherEnabled", true);
   const oneSignalEnabled = await getSystemSetting("oneSignalEnabled", true);
   const cloudinaryEnabled = await getSystemSetting("cloudinaryEnabled", true);
+  const emailResetEnabled = await getSystemSetting("emailResetEnabled", true);
+  const googleCalendarEnabled = await getSystemSetting("googleCalendarEnabled", true);
 
   const { clientId: googleClientId } = await getEffectiveGoogleKeys();
   const { appId: facebookAppId } = await getEffectiveFacebookKeys();
@@ -150,6 +158,8 @@ router.get(["/config", "/auth/settings", "/settings/public"], async (req, res) =
     weatherEnabled: Boolean(weatherEnabled),
     oneSignalEnabled: Boolean(oneSignalEnabled),
     cloudinaryEnabled: Boolean(cloudinaryEnabled),
+    emailResetEnabled: Boolean(emailResetEnabled),
+    googleCalendarEnabled: Boolean(googleCalendarEnabled),
     oneSignalAppId: oneSignalAppId || "fc811113-559c-40c3-ba59-e703db896839",
   });
 });
@@ -162,6 +172,8 @@ router.get("/admin/settings", requireAdmin, async (req, res) => {
     const weatherEnabled = await getSystemSetting("weatherEnabled", true);
     const oneSignalEnabled = await getSystemSetting("oneSignalEnabled", true);
     const cloudinaryEnabled = await getSystemSetting("cloudinaryEnabled", true);
+    const emailResetEnabled = await getSystemSetting("emailResetEnabled", true);
+    const googleCalendarEnabled = await getSystemSetting("googleCalendarEnabled", true);
     res.json({
       googleLoginEnabled: Boolean(googleLoginEnabled),
       facebookLoginEnabled: Boolean(facebookLoginEnabled),
@@ -169,6 +181,8 @@ router.get("/admin/settings", requireAdmin, async (req, res) => {
       weatherEnabled: Boolean(weatherEnabled),
       oneSignalEnabled: Boolean(oneSignalEnabled),
       cloudinaryEnabled: Boolean(cloudinaryEnabled),
+      emailResetEnabled: Boolean(emailResetEnabled),
+      googleCalendarEnabled: Boolean(googleCalendarEnabled),
     });
   } catch (err) {
     console.error("Error retrieving admin settings:", err);
@@ -186,6 +200,8 @@ router.put("/admin/settings", requireAdmin, async (req, res) => {
       "weatherEnabled",
       "oneSignalEnabled",
       "cloudinaryEnabled",
+      "emailResetEnabled",
+      "googleCalendarEnabled",
     ];
 
     for (const key of allowedKeys) {
@@ -215,6 +231,8 @@ router.put("/admin/settings", requireAdmin, async (req, res) => {
     const weatherEnabled = await getSystemSetting("weatherEnabled", true);
     const oneSignalEnabled = await getSystemSetting("oneSignalEnabled", true);
     const cloudinaryEnabled = await getSystemSetting("cloudinaryEnabled", true);
+    const emailResetEnabled = await getSystemSetting("emailResetEnabled", true);
+    const googleCalendarEnabled = await getSystemSetting("googleCalendarEnabled", true);
 
     res.json({
       ok: true,
@@ -224,6 +242,8 @@ router.put("/admin/settings", requireAdmin, async (req, res) => {
       weatherEnabled: Boolean(weatherEnabled),
       oneSignalEnabled: Boolean(oneSignalEnabled),
       cloudinaryEnabled: Boolean(cloudinaryEnabled),
+      emailResetEnabled: Boolean(emailResetEnabled),
+      googleCalendarEnabled: Boolean(googleCalendarEnabled),
       message: "Integration settings updated successfully.",
     });
   } catch (err) {
@@ -414,6 +434,68 @@ router.post("/admin/settings/cloudinary", requireAdmin, async (req, res) => {
     });
   } catch (err) {
     console.error("Error saving Cloudinary setting:", err);
+    fail(res, 500, "Failed to update setting.");
+  }
+});
+
+router.post("/admin/settings/email-reset", requireAdmin, async (req, res) => {
+  try {
+    const enabled = Boolean(req.body.enabled);
+    const updatedBy = req.admin?.email || "admin";
+    await setSystemSetting(
+      "emailResetEnabled",
+      enabled,
+      "Allow members and staff to receive password reset and verification emails",
+      updatedBy
+    );
+
+    await logAudit({
+      action: "SETTINGS_UPDATED",
+      actorEmail: updatedBy,
+      actorRole: req.admin?.role || "admin",
+      details: `Administrator ${enabled ? "enabled" : "disabled"} Gmail SMTP Password Reset email service`,
+      status: "Success",
+      req,
+    });
+
+    res.json({
+      ok: true,
+      emailResetEnabled: enabled,
+      message: `Gmail password reset service has been ${enabled ? "enabled" : "disabled"} successfully.`,
+    });
+  } catch (err) {
+    console.error("Error saving email reset setting:", err);
+    fail(res, 500, "Failed to update setting.");
+  }
+});
+
+router.post("/admin/settings/google-calendar", requireAdmin, async (req, res) => {
+  try {
+    const enabled = Boolean(req.body.enabled);
+    const updatedBy = req.admin?.email || "admin";
+    await setSystemSetting(
+      "googleCalendarEnabled",
+      enabled,
+      "Allow managers to connect and sync bookings to Google Calendar",
+      updatedBy
+    );
+
+    await logAudit({
+      action: "SETTINGS_UPDATED",
+      actorEmail: updatedBy,
+      actorRole: req.admin?.role || "admin",
+      details: `Administrator ${enabled ? "enabled" : "disabled"} Google Calendar integration`,
+      status: "Success",
+      req,
+    });
+
+    res.json({
+      ok: true,
+      googleCalendarEnabled: enabled,
+      message: `Google Calendar integration has been ${enabled ? "enabled" : "disabled"} successfully.`,
+    });
+  } catch (err) {
+    console.error("Error saving Google Calendar setting:", err);
     fail(res, 500, "Failed to update setting.");
   }
 });
@@ -882,6 +964,186 @@ router.post(["/admin/api-keys/cloudinary", "/admin/integrations/keys/cloudinary"
   }
 });
 
+router.post(["/admin/api-keys/email", "/admin/integrations/keys/email", "/admin/integrations/keys/email/reset"], requireAdmin, async (req, res) => {
+  try {
+    const body = req.body || {};
+    const user = clean(body.user || body.smtpUser);
+    const pass = clean(body.pass || body.smtpPass);
+    const from = clean(body.from || body.smtpFrom);
+    const isReset = req.path.endsWith("/reset") || Boolean(body.reset) || (!user && !pass && !from);
+    const updatedBy = req.admin?.email || "admin";
+
+    if (isReset) {
+      await SystemSetting.findOneAndDelete({ key: "customSmtpUser" });
+      await SystemSetting.findOneAndDelete({ key: "customSmtpPass" });
+      await SystemSetting.findOneAndDelete({ key: "customSmtpFrom" });
+      updateEnvFile({
+        CUSTOM_SMTP_USER: "",
+        CUSTOM_SMTP_PASS: "",
+        CUSTOM_SMTP_FROM: "",
+      });
+      process.env.SMTP_USER = process.env.DEFAULT_SMTP_USER || DEFAULT_SMTP_USER;
+      process.env.SMTP_PASS = process.env.DEFAULT_SMTP_PASS || DEFAULT_SMTP_PASS;
+      process.env.SMTP_FROM = process.env.DEFAULT_SMTP_FROM || DEFAULT_SMTP_FROM;
+      await logAudit({
+        action: "SETTINGS_UPDATED",
+        actorEmail: updatedBy,
+        actorRole: req.admin?.role || "admin",
+        details: "Administrator reset Gmail SMTP credentials to default code keys",
+        status: "Success",
+        req,
+      });
+      return res.json({
+        ok: true,
+        isCustom: false,
+        message: "Gmail SMTP credentials reset to default code keys.",
+      });
+    }
+
+    if (user) {
+      await setSystemSetting(
+        "customSmtpUser",
+        user,
+        "Custom Gmail SMTP Username / Email",
+        updatedBy
+      );
+    }
+    if (pass) {
+      await setSystemSetting(
+        "customSmtpPass",
+        pass,
+        "Custom Gmail SMTP App Password",
+        updatedBy
+      );
+    }
+    if (from) {
+      await setSystemSetting(
+        "customSmtpFrom",
+        from,
+        "Custom SMTP Sender From Address",
+        updatedBy
+      );
+    }
+
+    updateEnvFile({
+      CUSTOM_SMTP_USER: user || "",
+      CUSTOM_SMTP_PASS: pass || "",
+      CUSTOM_SMTP_FROM: from || "",
+    });
+    process.env.SMTP_USER = user || process.env.DEFAULT_SMTP_USER || DEFAULT_SMTP_USER;
+    process.env.SMTP_PASS = pass || process.env.DEFAULT_SMTP_PASS || DEFAULT_SMTP_PASS;
+    process.env.SMTP_FROM = from || process.env.DEFAULT_SMTP_FROM || DEFAULT_SMTP_FROM;
+
+    await logAudit({
+      action: "SETTINGS_UPDATED",
+      actorEmail: updatedBy,
+      actorRole: req.admin?.role || "admin",
+      details: "Administrator saved custom Gmail SMTP credentials",
+      status: "Success",
+      req,
+    });
+
+    res.json({
+      ok: true,
+      isCustom: true,
+      message: "Custom Gmail SMTP credentials saved successfully.",
+    });
+  } catch (err) {
+    console.error("Error saving custom Gmail SMTP credentials:", err);
+    fail(res, 500, "Failed to save Gmail SMTP credentials.");
+  }
+});
+
+router.post(["/admin/api-keys/calendar", "/admin/integrations/keys/calendar", "/admin/integrations/keys/calendar/reset"], requireAdmin, async (req, res) => {
+  try {
+    const body = req.body || {};
+    const clientId = clean(body.clientId);
+    const clientSecret = clean(body.clientSecret);
+    const redirectUri = clean(body.redirectUri);
+    const isReset = req.path.endsWith("/reset") || Boolean(body.reset) || (!clientId && !clientSecret && !redirectUri);
+    const updatedBy = req.admin?.email || "admin";
+
+    if (isReset) {
+      await SystemSetting.findOneAndDelete({ key: "customCalendarClientId" });
+      await SystemSetting.findOneAndDelete({ key: "customCalendarClientSecret" });
+      await SystemSetting.findOneAndDelete({ key: "customCalendarRedirectUri" });
+      updateEnvFile({
+        CUSTOM_GOOGLE_CALENDAR_CLIENT_ID: "",
+        CUSTOM_GOOGLE_CALENDAR_CLIENT_SECRET: "",
+        CUSTOM_GOOGLE_CALENDAR_REDIRECT_URI: "",
+      });
+      process.env.GOOGLE_CALENDAR_CLIENT_ID = process.env.DEFAULT_GOOGLE_CALENDAR_CLIENT_ID || DEFAULT_GOOGLE_CALENDAR_CLIENT_ID;
+      process.env.GOOGLE_CALENDAR_CLIENT_SECRET = process.env.DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET || DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET;
+      process.env.GOOGLE_CALENDAR_REDIRECT_URI = process.env.DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI || DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI;
+      await logAudit({
+        action: "SETTINGS_UPDATED",
+        actorEmail: updatedBy,
+        actorRole: req.admin?.role || "admin",
+        details: "Administrator reset Google Calendar credentials to default code keys",
+        status: "Success",
+        req,
+      });
+      return res.json({
+        ok: true,
+        isCustom: false,
+        message: "Google Calendar credentials reset to default code keys.",
+      });
+    }
+
+    if (clientId) {
+      await setSystemSetting(
+        "customCalendarClientId",
+        clientId,
+        "Custom Google Calendar OAuth Client ID",
+        updatedBy
+      );
+    }
+    if (clientSecret) {
+      await setSystemSetting(
+        "customCalendarClientSecret",
+        clientSecret,
+        "Custom Google Calendar OAuth Client Secret",
+        updatedBy
+      );
+    }
+    if (redirectUri) {
+      await setSystemSetting(
+        "customCalendarRedirectUri",
+        redirectUri,
+        "Custom Google Calendar OAuth Redirect URI",
+        updatedBy
+      );
+    }
+
+    updateEnvFile({
+      CUSTOM_GOOGLE_CALENDAR_CLIENT_ID: clientId || "",
+      CUSTOM_GOOGLE_CALENDAR_CLIENT_SECRET: clientSecret || "",
+      CUSTOM_GOOGLE_CALENDAR_REDIRECT_URI: redirectUri || "",
+    });
+    process.env.GOOGLE_CALENDAR_CLIENT_ID = clientId || process.env.DEFAULT_GOOGLE_CALENDAR_CLIENT_ID || DEFAULT_GOOGLE_CALENDAR_CLIENT_ID;
+    process.env.GOOGLE_CALENDAR_CLIENT_SECRET = clientSecret || process.env.DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET || DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET;
+    process.env.GOOGLE_CALENDAR_REDIRECT_URI = redirectUri || process.env.DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI || DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI;
+
+    await logAudit({
+      action: "SETTINGS_UPDATED",
+      actorEmail: updatedBy,
+      actorRole: req.admin?.role || "admin",
+      details: "Administrator saved custom Google Calendar credentials",
+      status: "Success",
+      req,
+    });
+
+    res.json({
+      ok: true,
+      isCustom: true,
+      message: "Custom Google Calendar credentials saved successfully.",
+    });
+  } catch (err) {
+    console.error("Error saving custom Google Calendar credentials:", err);
+    fail(res, 500, "Failed to save Google Calendar credentials.");
+  }
+});
+
 // ---------- Core Login & Password Recovery ----------
 
 router.post("/login", async (req, res) => {
@@ -1035,6 +1297,11 @@ router.post(
 
     if (!rawIdentifier) {
       return fail(res, 400, "Please enter your Cooperative No. ID or registered email.");
+    }
+
+    const emailResetEnabled = await getSystemSetting("emailResetEnabled", true);
+    if (emailResetEnabled === false) {
+      return fail(res, 403, "Password reset email delivery is currently disabled by administrator. Please contact your cooperative manager.");
     }
 
     // Rate limiting checks by IP and Identifier

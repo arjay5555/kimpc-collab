@@ -3,6 +3,7 @@ const { google } = require("googleapis");
 const Account = require("../models/Account");
 const Application = require("../models/Application");
 const MachineryMaintenance = require("../models/MachineryMaintenance");
+const SystemSetting = require("../models/SystemSetting");
 
 const SCOPES = ["https://www.googleapis.com/auth/calendar.events"];
 
@@ -11,10 +12,29 @@ const SCOPES = ["https://www.googleapis.com/auth/calendar.events"];
  * @param {string} [redirectUri] - Optional custom redirect URI.
  */
 function createOAuth2Client(redirectUri) {
-  const clientId = (process.env.CUSTOM_GOOGLE_CLIENT_ID || process.env.DEFAULT_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || "").trim();
-  const clientSecret = (process.env.CUSTOM_GOOGLE_CLIENT_SECRET || process.env.DEFAULT_GOOGLE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || "").trim();
+  const clientId = (
+    process.env.CUSTOM_GOOGLE_CALENDAR_CLIENT_ID ||
+    process.env.DEFAULT_GOOGLE_CALENDAR_CLIENT_ID ||
+    process.env.GOOGLE_CALENDAR_CLIENT_ID ||
+    process.env.CUSTOM_GOOGLE_CLIENT_ID ||
+    process.env.DEFAULT_GOOGLE_CLIENT_ID ||
+    process.env.GOOGLE_CLIENT_ID ||
+    ""
+  ).trim();
+  const clientSecret = (
+    process.env.CUSTOM_GOOGLE_CALENDAR_CLIENT_SECRET ||
+    process.env.DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET ||
+    process.env.GOOGLE_CALENDAR_CLIENT_SECRET ||
+    process.env.CUSTOM_GOOGLE_CLIENT_SECRET ||
+    process.env.DEFAULT_GOOGLE_CLIENT_SECRET ||
+    process.env.GOOGLE_CLIENT_SECRET ||
+    ""
+  ).trim();
   const callbackUrl =
     redirectUri ||
+    process.env.CUSTOM_GOOGLE_CALENDAR_REDIRECT_URI ||
+    process.env.DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI ||
+    process.env.GOOGLE_CALENDAR_REDIRECT_URI ||
     process.env.GOOGLE_REDIRECT_URI ||
     "http://localhost:3000/api/calendar/callback";
 
@@ -270,6 +290,12 @@ async function exchangeCodeAndSave(code, managerId, redirectUri) {
  */
 async function syncBookingToGoogleCalendar(booking, preferredManager) {
   try {
+    const setting = await SystemSetting.findOne({ key: "googleCalendarEnabled" });
+    if (setting && setting.value === false) {
+      console.log("[GoogleCalendar] Google Calendar integration is disabled by administrator. Skipping calendar sync.");
+      return null;
+    }
+
     const manager = await getConnectedManager(preferredManager);
     if (!manager) {
       console.log("[GoogleCalendar] No connected manager found. Skipping calendar push.");
@@ -363,6 +389,12 @@ async function syncBookingToGoogleCalendar(booking, preferredManager) {
  */
 async function syncMaintenanceToGoogleCalendar(maintenance, preferredManager) {
   try {
+    const setting = await SystemSetting.findOne({ key: "googleCalendarEnabled" });
+    if (setting && setting.value === false) {
+      console.log("[GoogleCalendar] Google Calendar integration is disabled by administrator. Skipping maintenance calendar sync.");
+      return null;
+    }
+
     const manager = await getConnectedManager(preferredManager);
     if (!manager) return null;
 

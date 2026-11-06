@@ -1,5 +1,6 @@
 const nodemailer = require("nodemailer");
 const { Resend } = require("resend");
+const SystemSetting = require("../models/SystemSetting");
 
 /**
  * Configure SMTP email transporter.
@@ -127,6 +128,20 @@ async function dispatchEmail({ to, subject, html, text, replyTo }) {
  * Send password reset link to user.
  */
 async function sendPasswordResetEmail({ toEmail, resetLink, fullName, expiryMinutes = 5 }) {
+  try {
+    const setting = await SystemSetting.findOne({ key: "emailResetEnabled" });
+    if (setting && setting.value === false) {
+      console.warn(`[EMAIL DISPATCH BLOCKED] Password reset email dispatch is disabled by administrator.`);
+      return {
+        sent: false,
+        disabled: true,
+        error: "Password reset emails are currently disabled by administrator.",
+      };
+    }
+  } catch (err) {
+    console.warn("[mailer] Error checking emailResetEnabled:", err.message);
+  }
+
   const name = fullName ? fullName.trim() : "KIMPC Member";
   const subject = "[KIMPC Security] Reset Your Password";
 
