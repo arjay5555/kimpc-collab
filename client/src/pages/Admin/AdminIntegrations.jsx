@@ -473,6 +473,33 @@ export default function AdminIntegrations() {
           </div>
         )}
 
+        {/* Component-level override to disable browser inner reveal eye and clear buttons */}
+        <style>{`
+          input::-ms-reveal,
+          input::-ms-clear,
+          .wz-form-input::-ms-reveal,
+          .wz-form-input::-ms-clear {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
+          }
+          input::-webkit-credentials-auto-fill-button,
+          input::-webkit-contacts-auto-fill-button {
+            visibility: hidden !important;
+            display: none !important;
+            pointer-events: none !important;
+            height: 0 !important;
+            width: 0 !important;
+            margin: 0 !important;
+          }
+        `}</style>
+
+        {/* Decoy hidden inputs to divert aggressive browser password autofill away from integration keys */}
+        <div style={{ position: "absolute", top: "-9999px", left: "-9999px", opacity: 0, pointerEvents: "none" }} aria-hidden="true">
+          <input type="text" name="decoy_username" tabIndex="-1" autoComplete="off" />
+          <input type="password" name="decoy_password" tabIndex="-1" autoComplete="off" />
+        </div>
+
         {/* ================= Single Seamless Container for All Integrations ================= */}
         <div
           style={{
@@ -625,6 +652,15 @@ export default function AdminIntegrations() {
                     </label>
                     <input
                       type="text"
+                      name="kimpc_custom_google_client_id"
+                      id="kimpc_custom_google_client_id"
+                      autoComplete="one-time-code"
+                      autoCorrect="off"
+                      spellCheck="false"
+                      data-lpignore="true"
+                      data-1p-ignore="true"
+                      data-bwignore="true"
+                      data-form-type="other"
                       className="wz-form-input"
                       style={{ fontSize: "0.82rem", background: "#ffffff" }}
                       placeholder={apiKeys.google?.defaultClientIdMasked ? `Example (Default): ${apiKeys.google.defaultClientIdMasked}` : "e.g. 1047648325603-...apps.googleusercontent.com"}
@@ -639,6 +675,15 @@ export default function AdminIntegrations() {
                     <div style={{ display: "flex", gap: "6px" }}>
                       <input
                         type={revealSecrets.google ? "text" : "password"}
+                        name="kimpc_custom_google_client_secret"
+                        id="kimpc_custom_google_client_secret"
+                        autoComplete="new-password"
+                        autoCorrect="off"
+                        spellCheck="false"
+                        data-lpignore="true"
+                        data-1p-ignore="true"
+                        data-bwignore="true"
+                        data-form-type="other"
                         className="wz-form-input"
                         style={{ fontSize: "0.82rem", background: "#ffffff", flex: 1 }}
                         placeholder={apiKeys.google?.defaultClientSecretMasked ? `Example (Default): ${apiKeys.google.defaultClientSecretMasked}` : "e.g. GOCSPX-..."}
@@ -881,6 +926,15 @@ export default function AdminIntegrations() {
                     </label>
                     <input
                       type="text"
+                      name="kimpc_custom_facebook_app_id"
+                      id="kimpc_custom_facebook_app_id"
+                      autoComplete="one-time-code"
+                      autoCorrect="off"
+                      spellCheck="false"
+                      data-lpignore="true"
+                      data-1p-ignore="true"
+                      data-bwignore="true"
+                      data-form-type="other"
                       className="wz-form-input"
                       style={{ fontSize: "0.82rem", background: "#ffffff" }}
                       placeholder={apiKeys.facebook?.defaultAppIdMasked ? `Example (Default): ${apiKeys.facebook.defaultAppIdMasked}` : "e.g. 19582..."}
@@ -895,6 +949,15 @@ export default function AdminIntegrations() {
                     <div style={{ display: "flex", gap: "6px" }}>
                       <input
                         type={revealSecrets.facebook ? "text" : "password"}
+                        name="kimpc_custom_facebook_app_secret"
+                        id="kimpc_custom_facebook_app_secret"
+                        autoComplete="new-password"
+                        autoCorrect="off"
+                        spellCheck="false"
+                        data-lpignore="true"
+                        data-1p-ignore="true"
+                        data-bwignore="true"
+                        data-form-type="other"
                         className="wz-form-input"
                         style={{ fontSize: "0.82rem", background: "#ffffff", flex: 1 }}
                         placeholder={apiKeys.facebook?.defaultAppSecretMasked ? `Example (Default): ${apiKeys.facebook.defaultAppSecretMasked}` : "e.g. 38d9f..."}
@@ -1137,6 +1200,15 @@ export default function AdminIntegrations() {
                     </label>
                     <input
                       type="text"
+                      name="kimpc_custom_recaptcha_site_key"
+                      id="kimpc_custom_recaptcha_site_key"
+                      autoComplete="one-time-code"
+                      autoCorrect="off"
+                      spellCheck="false"
+                      data-lpignore="true"
+                      data-1p-ignore="true"
+                      data-bwignore="true"
+                      data-form-type="other"
                       className="wz-form-input"
                       style={{ fontSize: "0.82rem", background: "#ffffff" }}
                       placeholder={apiKeys.recaptcha?.defaultSiteKeyMasked ? `Example (Default): ${apiKeys.recaptcha.defaultSiteKeyMasked}` : "e.g. 6Ldxq..."}
@@ -1151,6 +1223,15 @@ export default function AdminIntegrations() {
                     <div style={{ display: "flex", gap: "6px" }}>
                       <input
                         type={revealSecrets.recaptcha ? "text" : "password"}
+                        name="kimpc_custom_recaptcha_secret_key"
+                        id="kimpc_custom_recaptcha_secret_key"
+                        autoComplete="new-password"
+                        autoCorrect="off"
+                        spellCheck="false"
+                        data-lpignore="true"
+                        data-1p-ignore="true"
+                        data-bwignore="true"
+                        data-form-type="other"
                         className="wz-form-input"
                         style={{ fontSize: "0.82rem", background: "#ffffff", flex: 1 }}
                         placeholder={apiKeys.recaptcha?.defaultSecretKeyMasked ? `Example (Default): ${apiKeys.recaptcha.defaultSecretKeyMasked}` : "e.g. 6Ldxq..."}
@@ -1389,6 +1470,15 @@ export default function AdminIntegrations() {
                   <div style={{ display: "flex", gap: "6px" }}>
                     <input
                       type={revealSecrets.weather ? "text" : "password"}
+                      name="kimpc_custom_weather_api_key"
+                      id="kimpc_custom_weather_api_key"
+                      autoComplete="new-password"
+                      autoCorrect="off"
+                      spellCheck="false"
+                      data-lpignore="true"
+                      data-1p-ignore="true"
+                      data-bwignore="true"
+                      data-form-type="other"
                       className="wz-form-input"
                       style={{ fontSize: "0.82rem", background: "#ffffff", flex: 1 }}
                       placeholder={apiKeys.weather?.defaultKeyMasked ? `Example (Default): ${apiKeys.weather.defaultKeyMasked}` : "e.g. 7145472cabdc45fe8f414215260611"}
@@ -1630,6 +1720,15 @@ export default function AdminIntegrations() {
                     </label>
                     <input
                       type="text"
+                      name="kimpc_custom_onesignal_app_id"
+                      id="kimpc_custom_onesignal_app_id"
+                      autoComplete="one-time-code"
+                      autoCorrect="off"
+                      spellCheck="false"
+                      data-lpignore="true"
+                      data-1p-ignore="true"
+                      data-bwignore="true"
+                      data-form-type="other"
                       className="wz-form-input"
                       style={{ fontSize: "0.82rem", background: "#ffffff" }}
                       placeholder={apiKeys.oneSignal?.defaultAppIdMasked ? `Example (Default): ${apiKeys.oneSignal.defaultAppIdMasked}` : "e.g. fc811113-559c-40c3-ba59-e703db896839"}
@@ -1644,6 +1743,15 @@ export default function AdminIntegrations() {
                     <div style={{ display: "flex", gap: "6px" }}>
                       <input
                         type={revealSecrets.oneSignal ? "text" : "password"}
+                        name="kimpc_custom_onesignal_rest_key"
+                        id="kimpc_custom_onesignal_rest_key"
+                        autoComplete="new-password"
+                        autoCorrect="off"
+                        spellCheck="false"
+                        data-lpignore="true"
+                        data-1p-ignore="true"
+                        data-bwignore="true"
+                        data-form-type="other"
                         className="wz-form-input"
                         style={{ fontSize: "0.82rem", background: "#ffffff", flex: 1 }}
                         placeholder={apiKeys.oneSignal?.defaultRestKeyMasked ? `Example (Default): ${apiKeys.oneSignal.defaultRestKeyMasked}` : "e.g. os_v2_app_..."}
@@ -1886,6 +1994,15 @@ export default function AdminIntegrations() {
                     </label>
                     <input
                       type="text"
+                      name="kimpc_custom_cloudinary_cloud_name"
+                      id="kimpc_custom_cloudinary_cloud_name"
+                      autoComplete="one-time-code"
+                      autoCorrect="off"
+                      spellCheck="false"
+                      data-lpignore="true"
+                      data-1p-ignore="true"
+                      data-bwignore="true"
+                      data-form-type="other"
                       className="wz-form-input"
                       style={{ fontSize: "0.82rem", background: "#ffffff" }}
                       placeholder={apiKeys.cloudinary?.defaultCloudName ? `Example (Default): ${apiKeys.cloudinary.defaultCloudName}` : "e.g. kimpc"}
@@ -1899,6 +2016,15 @@ export default function AdminIntegrations() {
                     </label>
                     <input
                       type="text"
+                      name="kimpc_custom_cloudinary_api_key"
+                      id="kimpc_custom_cloudinary_api_key"
+                      autoComplete="one-time-code"
+                      autoCorrect="off"
+                      spellCheck="false"
+                      data-lpignore="true"
+                      data-1p-ignore="true"
+                      data-bwignore="true"
+                      data-form-type="other"
                       className="wz-form-input"
                       style={{ fontSize: "0.82rem", background: "#ffffff" }}
                       placeholder={apiKeys.cloudinary?.defaultApiKeyMasked ? `Example (Default): ${apiKeys.cloudinary.defaultApiKeyMasked}` : "e.g. 691365116427346"}
@@ -1913,6 +2039,15 @@ export default function AdminIntegrations() {
                     <div style={{ display: "flex", gap: "6px" }}>
                       <input
                         type={revealSecrets.cloudinary ? "text" : "password"}
+                        name="kimpc_custom_cloudinary_api_secret"
+                        id="kimpc_custom_cloudinary_api_secret"
+                        autoComplete="new-password"
+                        autoCorrect="off"
+                        spellCheck="false"
+                        data-lpignore="true"
+                        data-1p-ignore="true"
+                        data-bwignore="true"
+                        data-form-type="other"
                         className="wz-form-input"
                         style={{ fontSize: "0.82rem", background: "#ffffff", flex: 1 }}
                         placeholder={apiKeys.cloudinary?.defaultApiSecretMasked ? `Example (Default): ${apiKeys.cloudinary.defaultApiSecretMasked}` : "e.g. ••••••••••••••••"}

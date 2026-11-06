@@ -5796,6 +5796,27 @@
   cursor: not-allowed;
 }
 
+/* Hide native Edge / Windows password reveal and clear icons inside input bar */
+input::-ms-reveal,
+input::-ms-clear,
+.wz-form-input::-ms-reveal,
+.wz-form-input::-ms-clear {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* Hide webkit/chromium autofill & inner credentials buttons */
+input::-webkit-credentials-auto-fill-button,
+input::-webkit-contacts-auto-fill-button {
+  visibility: hidden !important;
+  display: none !important;
+  pointer-events: none !important;
+  height: 0 !important;
+  width: 0 !important;
+  margin: 0 !important;
+}
+
 .wz-btn-submit {
   padding: 9px 18px;
   background: #166534;
