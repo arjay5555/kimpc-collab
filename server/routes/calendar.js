@@ -35,8 +35,9 @@ async function resolveManager(req, res, next) {
   if (token) {
     try {
       const payload = jwt.verify(token, JWT_SECRET);
-      if (payload.id) {
-        const account = await Account.findById(payload.id);
+      const accId = payload?.id || payload?._id || payload?.userId;
+      if (accId) {
+        const account = await Account.findById(accId);
         if (account && !account.isSuspended && !account.isArchived && ["manager", "admin"].includes(account.role)) {
           req.user = account;
           return next();
@@ -101,13 +102,25 @@ router.get("/connect", async (req, res) => {
     if (token) {
       try {
         const payload = jwt.verify(token, JWT_SECRET);
-        if (payload?.id) {
-          managerId = String(payload.id);
+        const accId = payload?.id || payload?._id || payload?.userId;
+        if (accId) {
+          managerId = String(accId);
           const acct = await Account.findById(managerId);
           if (acct?.email) managerEmail = acct.email;
         }
       } catch {
         // Fall back to first available manager if token invalid
+      }
+    }
+
+    if (!managerId) {
+      const emailQuery = (req.query.email || req.headers["x-admin-email"] || "").trim().toLowerCase();
+      if (emailQuery) {
+        const acct = await Account.findOne({ email: emailQuery, role: { $in: ["manager", "admin"] } });
+        if (acct) {
+          managerId = String(acct._id);
+          managerEmail = acct.email;
+        }
       }
     }
 
@@ -119,15 +132,29 @@ router.get("/connect", async (req, res) => {
       }
     }
 
-    // Embed manager ID and anti-CSRF random token into state parameter
+    // Determine return frontend URL so manager returns to their origin (e.g. http://localhost:5173)
+    const returnBaseUrl = (
+      req.query.returnUrl ||
+      req.get("referer") ||
+      req.get("origin") ||
+      process.env.APP_BASE_URL ||
+      ""
+    ).trim().replace(/\/+$/, "");
+
+    // Embed manager ID, timestamp, and return origin into state parameter
     const statePayload = Buffer.from(
-      JSON.stringify({ managerId, ts: Date.now() })
+      JSON.stringify({ managerId, ts: Date.now(), returnBaseUrl })
     ).toString("base64url");
 
-    // Dynamic redirect URI fallback (honors GOOGLE_REDIRECT_URI from .env if defined)
+    // Dynamic redirect URI fallback (honors GOOGLE_CALENDAR_REDIRECT_URI from .env if defined)
     const host = req.get("host") || "localhost:3000";
     const protocol = req.protocol || "http";
-    const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${protocol}://${host}/api/calendar/callback`;
+    const redirectUri =
+      process.env.CUSTOM_GOOGLE_CALENDAR_REDIRECT_URI ||
+      process.env.DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI ||
+      process.env.GOOGLE_CALENDAR_REDIRECT_URI ||
+      process.env.GOOGLE_REDIRECT_URI ||
+      `${protocol}://${host}/api/calendar/callback`;
 
     // Passing loginHint tells Google to directly pick the manager's registered account
     const authUrl = generateAuthUrl({ state: statePayload, redirectUri, loginHint: managerEmail });
@@ -151,9 +178,26 @@ router.get("/connect", async (req, res) => {
 router.get("/callback", async (req, res) => {
   const { code, state, error: oauthError } = req.query;
 
+  let returnBaseUrl = "";
+  let managerId = "";
+  if (state) {
+    try {
+      const decoded = JSON.parse(Buffer.from(String(state), "base64url").toString());
+      managerId = decoded.managerId;
+      returnBaseUrl = decoded.returnBaseUrl;
+    } catch (e) {
+      console.warn("[GoogleCalendar /callback] Could not decode state:", e.message);
+    }
+  }
+
+  const clientOrigin = (returnBaseUrl || process.env.APP_BASE_URL || "").replace(/\/+$/, "");
+  const buildRedirect = (pathWithQuery) => {
+    return clientOrigin ? `${clientOrigin}${pathWithQuery}` : pathWithQuery;
+  };
+
   if (oauthError) {
     console.warn("[GoogleCalendar /callback] OAuth error:", oauthError);
-    return res.redirect(`/manager/calendar?google=denied&error=${encodeURIComponent(oauthError)}`);
+    return res.redirect(buildRedirect(`/manager/calendar?google=denied&error=${encodeURIComponent(oauthError)}`));
   }
 
   if (!code) {
@@ -161,16 +205,6 @@ router.get("/callback", async (req, res) => {
   }
 
   try {
-    let managerId = "";
-    if (state) {
-      try {
-        const decoded = JSON.parse(Buffer.from(String(state), "base64url").toString());
-        managerId = decoded.managerId;
-      } catch (e) {
-        console.warn("[GoogleCalendar /callback] Could not decode state:", e.message);
-      }
-    }
-
     if (!managerId) {
       const fallbackManager = await Account.findOne({ role: "manager" });
       if (fallbackManager) managerId = String(fallbackManager._id);
@@ -182,7 +216,12 @@ router.get("/callback", async (req, res) => {
 
     const host = req.get("host") || "localhost:3000";
     const protocol = req.protocol || "http";
-    const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${protocol}://${host}/api/calendar/callback`;
+    const redirectUri =
+      process.env.CUSTOM_GOOGLE_CALENDAR_REDIRECT_URI ||
+      process.env.DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI ||
+      process.env.GOOGLE_CALENDAR_REDIRECT_URI ||
+      process.env.GOOGLE_REDIRECT_URI ||
+      `${protocol}://${host}/api/calendar/callback`;
 
     const updatedManager = await exchangeCodeAndSave(String(code), managerId, redirectUri);
 
@@ -202,10 +241,10 @@ router.get("/callback", async (req, res) => {
       }
     });
 
-    return res.redirect("/manager/calendar?google=connected");
+    return res.redirect(buildRedirect("/manager/calendar?google=connected"));
   } catch (err) {
     console.error("[GoogleCalendar /callback] Failed to exchange tokens:", err.message);
-    return res.redirect(`/manager/calendar?google=error&msg=${encodeURIComponent(err.message)}`);
+    return res.redirect(buildRedirect(`/manager/calendar?google=error&msg=${encodeURIComponent(err.message)}`));
   }
 });
 

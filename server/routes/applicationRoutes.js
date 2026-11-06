@@ -546,6 +546,11 @@ const handleApplicationUpdate = async (req, res) => {
         oneSignalService.sendBookingStatusPush(existing, "Rescheduled").catch((err) => {
           console.warn("[OneSignal] Background booking reschedule push error:", err.message);
         });
+        if (["Approved", "Checked-Out"].includes(existing.status)) {
+          syncBookingToGoogleCalendar(existing, req.user).catch((err) => {
+            console.warn("[GoogleCalendar] Rescheduled booking sync error:", err.message);
+          });
+        }
       }
 
       return res.json({ ok: true, message: "Booking updated successfully.", application: existing });

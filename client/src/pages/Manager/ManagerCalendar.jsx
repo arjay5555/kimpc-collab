@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { api } from "../../services/api";
+import { api, getAuthToken, getSignedInEmail } from "../../services/api";
 import ManagerSidebar from "../../components/ManagerSidebar";
 import ManagerTopbar from "../../components/ManagerTopbar";
 import "../../styles/admin-kimpc.css";
@@ -233,10 +233,29 @@ export default function ManagerCalendar() {
   }, [weatherData]);
 
   const handleConnectCalendar = () => {
-    const token = localStorage.getItem("token") || "";
-    window.location.href = token
-      ? `/api/calendar/connect?token=${encodeURIComponent(token)}`
-      : "/api/calendar/connect";
+    const token = getAuthToken();
+    const email = getSignedInEmail();
+    const params = new URLSearchParams();
+    if (token) params.set("token", token);
+    if (email) params.set("email", email);
+    params.set("returnUrl", window.location.origin);
+    const qs = params.toString();
+    window.location.href = qs ? `/api/calendar/connect?${qs}` : "/api/calendar/connect";
+  };
+
+  const handleDisconnectCalendar = async () => {
+    if (!window.confirm("Disconnect your Google Calendar from KIMPC? Automatic sync will stop.")) return;
+    try {
+      const res = await api("/calendar/disconnect", { method: "POST" });
+      if (res.ok) {
+        setGoogleCalendarStatus({ connected: false });
+        setCalendarNotice("Google Calendar disconnected successfully.");
+      } else {
+        setCalendarNotice(res.data?.error || "Could not disconnect Google Calendar.");
+      }
+    } catch {
+      setCalendarNotice("Error disconnecting Google Calendar.");
+    }
   };
 
   const handleSyncNow = async () => {
@@ -653,7 +672,26 @@ export default function ManagerCalendar() {
           {/* Right: Google Calendar + Pickup/Return Toggle + View Mode Dropdown */}
           <div className="wz-cal-controls-right" style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
             {/* Google Calendar Connection Status */}
-            {googleCalendarStatus.connected ? (
+            {googleCalendarStatus.disabled ? (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "6px 10px",
+                  borderRadius: "6px",
+                  background: "#f1f5f9",
+                  color: "#64748b",
+                  fontSize: "0.76rem",
+                  fontWeight: 600,
+                  border: "1px solid #e2e8f0",
+                }}
+                title="Google Calendar integration is currently disabled in Admin Settings"
+              >
+                <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#94a3b8", display: "inline-block" }} />
+                Calendar Sync Disabled
+              </span>
+            ) : googleCalendarStatus.connected ? (
               <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
                 <span
                   style={{
@@ -687,8 +725,26 @@ export default function ManagerCalendar() {
                     fontWeight: 600,
                     cursor: syncingCalendar ? "not-allowed" : "pointer",
                   }}
+                  title="Push latest approved bookings and maintenance schedules to Google Calendar"
                 >
                   {syncingCalendar ? "Syncing..." : "Sync Now"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDisconnectCalendar}
+                  style={{
+                    padding: "6px 9px",
+                    borderRadius: "6px",
+                    border: "1px solid #fecdd3",
+                    background: "#fff1f2",
+                    color: "#be123c",
+                    fontSize: "0.74rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                  title="Disconnect Google Calendar sync"
+                >
+                  Disconnect
                 </button>
               </div>
             ) : (
