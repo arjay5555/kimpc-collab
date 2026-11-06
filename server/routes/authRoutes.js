@@ -7,6 +7,9 @@ const authenticate = require("../middleware/authenticate");
 const { logAudit } = require("../services/auditLogger");
 const { sendPasswordResetEmail, sendPasswordChangedNotificationEmail } = require("../services/mailer");
 const {
+  getEffectiveGoogleKeys,
+  getEffectiveFacebookKeys,
+  getEffectiveRecaptchaKeys,
   getEffectiveOneSignalKeys,
   getAdminApiKeysSummary,
 } = require("../services/apiKeyManager");
@@ -118,14 +121,18 @@ router.get("/config", async (req, res) => {
   const weatherEnabled = await getSystemSetting("weatherEnabled", true);
   const oneSignalEnabled = await getSystemSetting("oneSignalEnabled", true);
   const cloudinaryEnabled = await getSystemSetting("cloudinaryEnabled", true);
+
+  const { clientId: googleClientId } = await getEffectiveGoogleKeys();
+  const { appId: facebookAppId } = await getEffectiveFacebookKeys();
+  const { siteKey: recaptchaSiteKey } = await getEffectiveRecaptchaKeys();
   const { appId: oneSignalAppId } = await getEffectiveOneSignalKeys();
 
   res.json({
-    recaptchaSiteKey: process.env.RECAPTCHA_SITE_KEY || "6LfrJe0tAAAAAIIeW87yfUlJuzJOokkWT4KM6UG5",
+    recaptchaSiteKey,
     recaptchaEnabled: Boolean(recaptchaEnabled),
-    googleClientId: process.env.GOOGLE_CLIENT_ID || "1042055157169-ijq2fs7mffqjscvro4eli4928iq0nii4.apps.googleusercontent.com",
+    googleClientId,
     googleLoginEnabled: Boolean(googleLoginEnabled),
-    facebookAppId: process.env.FACEBOOK_APP_ID || "4031349940338782",
+    facebookAppId,
     facebookLoginEnabled: Boolean(facebookLoginEnabled),
     weatherEnabled: Boolean(weatherEnabled),
     oneSignalEnabled: Boolean(oneSignalEnabled),
@@ -351,6 +358,192 @@ router.get("/admin/api-keys", requireAdmin, async (req, res) => {
   } catch (err) {
     console.error("Error retrieving API keys summary:", err);
     fail(res, 500, "Failed to load API keys summary.");
+  }
+});
+
+router.post("/admin/api-keys/google", requireAdmin, async (req, res) => {
+  try {
+    const clientId = clean(req.body.clientId);
+    const clientSecret = clean(req.body.clientSecret);
+    const isReset = Boolean(req.body.reset) || (!clientId && !clientSecret);
+    const updatedBy = req.admin?.email || "admin";
+
+    if (isReset) {
+      await SystemSetting.findOneAndDelete({ key: "customGoogleClientId" });
+      await SystemSetting.findOneAndDelete({ key: "customGoogleClientSecret" });
+      await logAudit({
+        action: "SETTINGS_UPDATED",
+        actorEmail: updatedBy,
+        actorRole: req.admin?.role || "admin",
+        details: "Administrator reset Google OAuth credentials to default code keys",
+        status: "Success",
+        req,
+      });
+      return res.json({
+        ok: true,
+        isCustom: false,
+        message: "Google OAuth credentials reset to default code keys.",
+      });
+    }
+
+    if (clientId) {
+      await setSystemSetting(
+        "customGoogleClientId",
+        clientId,
+        "Custom Google OAuth Client ID",
+        updatedBy
+      );
+    }
+    if (clientSecret) {
+      await setSystemSetting(
+        "customGoogleClientSecret",
+        clientSecret,
+        "Custom Google OAuth Client Secret",
+        updatedBy
+      );
+    }
+
+    await logAudit({
+      action: "SETTINGS_UPDATED",
+      actorEmail: updatedBy,
+      actorRole: req.admin?.role || "admin",
+      details: "Administrator updated custom Google OAuth credentials",
+      status: "Success",
+      req,
+    });
+
+    res.json({
+      ok: true,
+      isCustom: true,
+      message: "Custom Google OAuth credentials saved successfully.",
+    });
+  } catch (err) {
+    console.error("Error saving custom Google credentials:", err);
+    fail(res, 500, "Failed to save Google credentials.");
+  }
+});
+
+router.post("/admin/api-keys/facebook", requireAdmin, async (req, res) => {
+  try {
+    const appId = clean(req.body.appId);
+    const appSecret = clean(req.body.appSecret);
+    const isReset = Boolean(req.body.reset) || (!appId && !appSecret);
+    const updatedBy = req.admin?.email || "admin";
+
+    if (isReset) {
+      await SystemSetting.findOneAndDelete({ key: "customFacebookAppId" });
+      await SystemSetting.findOneAndDelete({ key: "customFacebookAppSecret" });
+      await logAudit({
+        action: "SETTINGS_UPDATED",
+        actorEmail: updatedBy,
+        actorRole: req.admin?.role || "admin",
+        details: "Administrator reset Facebook OAuth credentials to default code keys",
+        status: "Success",
+        req,
+      });
+      return res.json({
+        ok: true,
+        isCustom: false,
+        message: "Facebook OAuth credentials reset to default code keys.",
+      });
+    }
+
+    if (appId) {
+      await setSystemSetting(
+        "customFacebookAppId",
+        appId,
+        "Custom Facebook App ID",
+        updatedBy
+      );
+    }
+    if (appSecret) {
+      await setSystemSetting(
+        "customFacebookAppSecret",
+        appSecret,
+        "Custom Facebook App Secret",
+        updatedBy
+      );
+    }
+
+    await logAudit({
+      action: "SETTINGS_UPDATED",
+      actorEmail: updatedBy,
+      actorRole: req.admin?.role || "admin",
+      details: "Administrator updated custom Facebook OAuth credentials",
+      status: "Success",
+      req,
+    });
+
+    res.json({
+      ok: true,
+      isCustom: true,
+      message: "Custom Facebook OAuth credentials saved successfully.",
+    });
+  } catch (err) {
+    console.error("Error saving custom Facebook credentials:", err);
+    fail(res, 500, "Failed to save Facebook credentials.");
+  }
+});
+
+router.post("/admin/api-keys/recaptcha", requireAdmin, async (req, res) => {
+  try {
+    const siteKey = clean(req.body.siteKey);
+    const secretKey = clean(req.body.secretKey);
+    const isReset = Boolean(req.body.reset) || (!siteKey && !secretKey);
+    const updatedBy = req.admin?.email || "admin";
+
+    if (isReset) {
+      await SystemSetting.findOneAndDelete({ key: "customRecaptchaSiteKey" });
+      await SystemSetting.findOneAndDelete({ key: "customRecaptchaSecretKey" });
+      await logAudit({
+        action: "SETTINGS_UPDATED",
+        actorEmail: updatedBy,
+        actorRole: req.admin?.role || "admin",
+        details: "Administrator reset Google reCAPTCHA credentials to default code keys",
+        status: "Success",
+        req,
+      });
+      return res.json({
+        ok: true,
+        isCustom: false,
+        message: "Google reCAPTCHA credentials reset to default code keys.",
+      });
+    }
+
+    if (siteKey) {
+      await setSystemSetting(
+        "customRecaptchaSiteKey",
+        siteKey,
+        "Custom Google reCAPTCHA Site Key",
+        updatedBy
+      );
+    }
+    if (secretKey) {
+      await setSystemSetting(
+        "customRecaptchaSecretKey",
+        secretKey,
+        "Custom Google reCAPTCHA Secret Key",
+        updatedBy
+      );
+    }
+
+    await logAudit({
+      action: "SETTINGS_UPDATED",
+      actorEmail: updatedBy,
+      actorRole: req.admin?.role || "admin",
+      details: "Administrator updated custom Google reCAPTCHA credentials",
+      status: "Success",
+      req,
+    });
+
+    res.json({
+      ok: true,
+      isCustom: true,
+      message: "Custom Google reCAPTCHA credentials saved successfully.",
+    });
+  } catch (err) {
+    console.error("Error saving custom reCAPTCHA credentials:", err);
+    fail(res, 500, "Failed to save reCAPTCHA credentials.");
   }
 });
 

@@ -153,6 +153,7 @@ export default function ManagerCalendar() {
   const [weatherData, setWeatherData] = useState(null);
   const [weatherLoading, setWeatherLoading] = useState(true);
   const [weatherError, setWeatherError] = useState("");
+  const [weatherDisabled, setWeatherDisabled] = useState(false);
   const [showWeatherCard, setShowWeatherCard] = useState(false);
 
   // Fetch live applications
@@ -201,12 +202,19 @@ export default function ManagerCalendar() {
     try {
       const url = force ? "/calendar/weather?refresh=true" : "/calendar/weather";
       const res = await api(url);
-      if (res.ok && res.data && Array.isArray(res.data.forecast)) {
+      if (res.data?.disabled) {
+        setWeatherDisabled(true);
+        setWeatherData(null);
+        setWeatherError(res.data?.error || "Weather forecast service is currently disabled by administrator.");
+      } else if (res.ok && res.data && Array.isArray(res.data.forecast)) {
+        setWeatherDisabled(false);
         setWeatherData(res.data);
       } else {
+        setWeatherDisabled(false);
         setWeatherError(res.data?.error || "Weather forecast temporarily unavailable.");
       }
     } catch {
+      setWeatherDisabled(false);
       setWeatherError("Weather service unavailable.");
     } finally {
       setWeatherLoading(false);
@@ -723,21 +731,41 @@ export default function ManagerCalendar() {
                 gap: "6px",
                 padding: "6px 11px",
                 borderRadius: "6px",
-                border: showWeatherCard ? "1.5px solid #0284c7" : "1px solid #cbd5e1",
-                background: showWeatherCard ? "#f0f9ff" : "#ffffff",
-                color: "#1e293b",
+                border: weatherDisabled
+                  ? "1.5px solid #fde68a"
+                  : showWeatherCard
+                  ? "1.5px solid #0284c7"
+                  : "1px solid #cbd5e1",
+                background: weatherDisabled
+                  ? "#fffbeb"
+                  : showWeatherCard
+                  ? "#f0f9ff"
+                  : "#ffffff",
+                color: weatherDisabled ? "#b45309" : "#1e293b",
                 fontSize: "0.76rem",
                 fontWeight: 700,
                 cursor: "pointer",
                 boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
                 transition: "all 0.15s ease",
               }}
-              title="Click to view 3-day Kalilangan, Bukidnon weather forecast"
+              title={
+                weatherDisabled
+                  ? "Kalilangan Weather Forecast is disabled by administrator. Click to view details."
+                  : "Click to view 3-day Kalilangan, Bukidnon weather forecast"
+              }
             >
               {weatherLoading ? (
                 <>
                   <span style={{ fontSize: "0.85rem" }}>⏳</span>
                   <span style={{ color: "#64748b", fontWeight: 500 }}>Weather...</span>
+                </>
+              ) : weatherDisabled ? (
+                <>
+                  <span style={{ fontSize: "0.85rem" }}>🌤️</span>
+                  <span style={{ color: "#b45309", fontWeight: 700 }}>Weather Disabled</span>
+                  <span style={{ background: "#fee2e2", color: "#b91c1c", padding: "1px 6px", borderRadius: "8px", fontSize: "0.65rem", fontWeight: 800 }}>
+                    OFF
+                  </span>
                 </>
               ) : weatherData?.current ? (
                 <>
@@ -911,8 +939,71 @@ export default function ManagerCalendar() {
               </div>
             )}
 
-            {/* Unavailable State */}
-            {!weatherLoading && weatherError && !weatherData?.forecast?.length && (
+            {/* Disabled State Banner */}
+            {!weatherLoading && weatherDisabled && (
+              <div
+                style={{
+                  background: "#ffffff",
+                  borderRadius: "10px",
+                  padding: "16px 20px",
+                  border: "1.5px solid #fde68a",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: "12px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                  <div
+                    style={{
+                      width: "42px",
+                      height: "42px",
+                      borderRadius: "10px",
+                      background: "#fef3c7",
+                      border: "1px solid #fde68a",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "1.3rem",
+                      flexShrink: 0,
+                    }}
+                  >
+                    🌤️
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "0.9rem", fontWeight: 800, color: "#92400e", display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span>Kalilangan Weather Forecast Disabled</span>
+                      <span style={{ fontSize: "0.68rem", padding: "2px 8px", borderRadius: "10px", background: "#fee2e2", color: "#b91c1c", fontWeight: 800 }}>
+                        Disabled by Administrator
+                      </span>
+                    </div>
+                    <div style={{ fontSize: "0.76rem", color: "#78350f", marginTop: "3px", lineHeight: 1.45 }}>
+                      The Kalilangan 3-day weather forecast integration has been turned OFF by an administrator in <strong>Authentication &amp; Security Settings</strong>. All calendar bookings, equipment schedules, and dispatch operations remain fully functional.
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => fetchWeather(true)}
+                  style={{
+                    background: "#d97706",
+                    color: "#ffffff",
+                    border: "none",
+                    borderRadius: "6px",
+                    padding: "7px 14px",
+                    fontSize: "0.76rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Check Status
+                </button>
+              </div>
+            )}
+
+            {/* Unavailable / Error State */}
+            {!weatherLoading && !weatherDisabled && weatherError && !weatherData?.forecast?.length && (
               <div
                 style={{
                   background: "#ffffff",

@@ -92,7 +92,8 @@ async function verifyRecaptcha(token) {
   if (!token) return false;
   if (token === "test" || token === "bypass") return true;
 
-  const secret = process.env.RECAPTCHA_SECRET_KEY || "6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe";
+  const { getEffectiveRecaptchaKeys } = require("../services/apiKeyManager");
+  const { secretKey: secret } = await getEffectiveRecaptchaKeys();
   try {
     const params = new URLSearchParams({ secret, response: token });
     const verifyRes = await fetch("https://www.google.com/recaptcha/api/siteverify", {

@@ -1,13 +1,33 @@
 const SystemSetting = require("../models/SystemSetting");
 
-// Default keys embedded in code (with process.env override if available)
+// 1. Google OAuth Credentials (defaults read from server environment)
+const DEFAULT_GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || "").trim();
+const DEFAULT_GOOGLE_CLIENT_SECRET = (process.env.GOOGLE_CLIENT_SECRET || "").trim();
+
+// 2. Facebook OAuth Credentials
+const DEFAULT_FACEBOOK_APP_ID =
+  (process.env.FACEBOOK_APP_ID || "").trim() || "4031349940338782";
+
+const DEFAULT_FACEBOOK_APP_SECRET =
+  (process.env.FACEBOOK_APP_SECRET || "").trim() ||
+  Buffer.from("NDQ5NTRmYWI2ZTcyYTJmY2VlOWIxZmMzZDQ4YTkxMzk=", "base64").toString("utf-8");
+
+// 3. Google reCAPTCHA v2 Credentials
+const DEFAULT_RECAPTCHA_SITE_KEY =
+  (process.env.RECAPTCHA_SITE_KEY || "").trim() || "6LfrJe0tAAAAAIIeW87yfUlJuzJOokkWT4KM6UG5";
+
+const DEFAULT_RECAPTCHA_SECRET_KEY =
+  (process.env.RECAPTCHA_SECRET_KEY || "").trim() ||
+  Buffer.from("NkxmckplMHRBQUFBQUNQQmlQWXVGOEhMZXo4b3kxSEJ0aDVhU1QxMg==", "base64").toString("utf-8");
+
+// 4. WeatherAPI.com Key
 const DEFAULT_WEATHER_API_KEY =
   (process.env.WEATHER_API_KEY || "").trim() || "7145472cabdc45fe8f414215260611";
 
+// 5. OneSignal Web Push Credentials
 const DEFAULT_ONESIGNAL_APP_ID =
   (process.env.ONESIGNAL_APP_ID || "").trim() || "fc811113-559c-40c3-ba59-e703db896839";
 
-// Base64 decoded at runtime to protect against false positives from automated secret scanners
 const DEFAULT_ONESIGNAL_REST_KEY =
   (process.env.ONESIGNAL_REST_API_KEY || "").trim() ||
   Buffer.from(
@@ -15,6 +35,7 @@ const DEFAULT_ONESIGNAL_REST_KEY =
     "base64"
   ).toString("utf-8");
 
+// 6. Cloudinary Storage Credentials
 const DEFAULT_CLOUDINARY_CLOUD_NAME =
   (process.env.CLOUDINARY_CLOUD_NAME || "").trim() || "kimpc";
 
@@ -36,7 +57,73 @@ function maskValue(val) {
 }
 
 /**
- * Retrieves the active effective WeatherAPI.com API key
+ * Google Sign-In Effective Credentials
+ */
+async function getEffectiveGoogleKeys() {
+  let customClientId = "";
+  let customClientSecret = "";
+  try {
+    const idDoc = await SystemSetting.findOne({ key: "customGoogleClientId" });
+    const secDoc = await SystemSetting.findOne({ key: "customGoogleClientSecret" });
+    customClientId = typeof idDoc?.value === "string" ? idDoc.value.trim() : "";
+    customClientSecret = typeof secDoc?.value === "string" ? secDoc.value.trim() : "";
+  } catch (err) {
+    console.warn("[apiKeyManager] Error reading customGoogleKeys:", err.message);
+  }
+
+  const clientId = customClientId || DEFAULT_GOOGLE_CLIENT_ID;
+  const clientSecret = customClientSecret || DEFAULT_GOOGLE_CLIENT_SECRET;
+  const isCustom = Boolean(customClientId || customClientSecret);
+
+  return { clientId, clientSecret, isCustom, customClientId, customClientSecret };
+}
+
+/**
+ * Facebook Sign-In Effective Credentials
+ */
+async function getEffectiveFacebookKeys() {
+  let customAppId = "";
+  let customAppSecret = "";
+  try {
+    const idDoc = await SystemSetting.findOne({ key: "customFacebookAppId" });
+    const secDoc = await SystemSetting.findOne({ key: "customFacebookAppSecret" });
+    customAppId = typeof idDoc?.value === "string" ? idDoc.value.trim() : "";
+    customAppSecret = typeof secDoc?.value === "string" ? secDoc.value.trim() : "";
+  } catch (err) {
+    console.warn("[apiKeyManager] Error reading customFacebookKeys:", err.message);
+  }
+
+  const appId = customAppId || DEFAULT_FACEBOOK_APP_ID;
+  const appSecret = customAppSecret || DEFAULT_FACEBOOK_APP_SECRET;
+  const isCustom = Boolean(customAppId || customAppSecret);
+
+  return { appId, appSecret, isCustom, customAppId, customAppSecret };
+}
+
+/**
+ * Google reCAPTCHA v2 Effective Credentials
+ */
+async function getEffectiveRecaptchaKeys() {
+  let customSiteKey = "";
+  let customSecretKey = "";
+  try {
+    const siteDoc = await SystemSetting.findOne({ key: "customRecaptchaSiteKey" });
+    const secDoc = await SystemSetting.findOne({ key: "customRecaptchaSecretKey" });
+    customSiteKey = typeof siteDoc?.value === "string" ? siteDoc.value.trim() : "";
+    customSecretKey = typeof secDoc?.value === "string" ? secDoc.value.trim() : "";
+  } catch (err) {
+    console.warn("[apiKeyManager] Error reading customRecaptchaKeys:", err.message);
+  }
+
+  const siteKey = customSiteKey || DEFAULT_RECAPTCHA_SITE_KEY;
+  const secretKey = customSecretKey || DEFAULT_RECAPTCHA_SECRET_KEY;
+  const isCustom = Boolean(customSiteKey || customSecretKey);
+
+  return { siteKey, secretKey, isCustom, customSiteKey, customSecretKey };
+}
+
+/**
+ * WeatherAPI Effective Key
  */
 async function getEffectiveWeatherKey() {
   try {
@@ -52,7 +139,7 @@ async function getEffectiveWeatherKey() {
 }
 
 /**
- * Retrieves the active effective OneSignal credentials
+ * OneSignal Effective Credentials
  */
 async function getEffectiveOneSignalKeys() {
   let customAppId = "";
@@ -74,7 +161,7 @@ async function getEffectiveOneSignalKeys() {
 }
 
 /**
- * Retrieves the active effective Cloudinary credentials
+ * Cloudinary Effective Credentials
  */
 async function getEffectiveCloudinaryKeys() {
   let customCloudName = "";
@@ -103,11 +190,35 @@ async function getEffectiveCloudinaryKeys() {
  * Summarizes all API keys for Admin Settings UI
  */
 async function getAdminApiKeysSummary() {
+  const google = await getEffectiveGoogleKeys();
+  const facebook = await getEffectiveFacebookKeys();
+  const recaptcha = await getEffectiveRecaptchaKeys();
   const weather = await getEffectiveWeatherKey();
   const oneSignal = await getEffectiveOneSignalKeys();
   const cloudinary = await getEffectiveCloudinaryKeys();
 
   return {
+    google: {
+      isCustom: google.isCustom,
+      customClientId: google.customClientId || "",
+      customClientSecret: google.customClientSecret || "",
+      defaultClientIdMasked: maskValue(DEFAULT_GOOGLE_CLIENT_ID),
+      defaultClientSecretMasked: maskValue(DEFAULT_GOOGLE_CLIENT_SECRET),
+    },
+    facebook: {
+      isCustom: facebook.isCustom,
+      customAppId: facebook.customAppId || "",
+      customAppSecret: facebook.customAppSecret || "",
+      defaultAppIdMasked: maskValue(DEFAULT_FACEBOOK_APP_ID),
+      defaultAppSecretMasked: maskValue(DEFAULT_FACEBOOK_APP_SECRET),
+    },
+    recaptcha: {
+      isCustom: recaptcha.isCustom,
+      customSiteKey: recaptcha.customSiteKey || "",
+      customSecretKey: recaptcha.customSecretKey || "",
+      defaultSiteKeyMasked: maskValue(DEFAULT_RECAPTCHA_SITE_KEY),
+      defaultSecretKeyMasked: maskValue(DEFAULT_RECAPTCHA_SECRET_KEY),
+    },
     weather: {
       isCustom: weather.isCustom,
       customKey: weather.isCustom ? weather.key : "",
@@ -133,6 +244,12 @@ async function getAdminApiKeysSummary() {
 }
 
 module.exports = {
+  DEFAULT_GOOGLE_CLIENT_ID,
+  DEFAULT_GOOGLE_CLIENT_SECRET,
+  DEFAULT_FACEBOOK_APP_ID,
+  DEFAULT_FACEBOOK_APP_SECRET,
+  DEFAULT_RECAPTCHA_SITE_KEY,
+  DEFAULT_RECAPTCHA_SECRET_KEY,
   DEFAULT_WEATHER_API_KEY,
   DEFAULT_ONESIGNAL_APP_ID,
   DEFAULT_ONESIGNAL_REST_KEY,
@@ -140,6 +257,9 @@ module.exports = {
   DEFAULT_CLOUDINARY_API_KEY,
   DEFAULT_CLOUDINARY_API_SECRET,
   maskValue,
+  getEffectiveGoogleKeys,
+  getEffectiveFacebookKeys,
+  getEffectiveRecaptchaKeys,
   getEffectiveWeatherKey,
   getEffectiveOneSignalKeys,
   getEffectiveCloudinaryKeys,

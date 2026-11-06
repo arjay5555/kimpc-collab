@@ -45,11 +45,20 @@ export default function SettingsModal({
 
   // Customizable API Keys State (Admin Only)
   const [apiKeys, setApiKeys] = useState({
+    google: { isCustom: false, customClientId: "", customClientSecret: "", defaultClientIdMasked: "", defaultClientSecretMasked: "" },
+    facebook: { isCustom: false, customAppId: "", customAppSecret: "", defaultAppIdMasked: "", defaultAppSecretMasked: "" },
+    recaptcha: { isCustom: false, customSiteKey: "", customSecretKey: "", defaultSiteKeyMasked: "", defaultSecretKeyMasked: "" },
     weather: { isCustom: false, customKey: "", defaultKeyMasked: "" },
     oneSignal: { isCustom: false, customAppId: "", customRestApiKey: "", defaultAppIdMasked: "", defaultRestKeyMasked: "" },
     cloudinary: { isCustom: false, customCloudName: "", customApiKey: "", customApiSecret: "", defaultCloudName: "", defaultApiKeyMasked: "", defaultApiSecretMasked: "" },
   });
   const [keyForms, setKeyForms] = useState({
+    googleClientId: "",
+    googleClientSecret: "",
+    facebookAppId: "",
+    facebookAppSecret: "",
+    recaptchaSiteKey: "",
+    recaptchaSecretKey: "",
     weatherApiKey: "",
     oneSignalAppId: "",
     oneSignalRestApiKey: "",
@@ -58,11 +67,17 @@ export default function SettingsModal({
     cloudinaryApiSecret: "",
   });
   const [expandedKeys, setExpandedKeys] = useState({
+    google: false,
+    facebook: false,
+    recaptcha: false,
     weather: false,
     oneSignal: false,
     cloudinary: false,
   });
   const [revealSecrets, setRevealSecrets] = useState({
+    google: false,
+    facebook: false,
+    recaptcha: false,
     weather: false,
     oneSignal: false,
     cloudinary: false,
@@ -76,6 +91,12 @@ export default function SettingsModal({
     if (ok && data) {
       setApiKeys(data);
       setKeyForms({
+        googleClientId: data.google?.customClientId || "",
+        googleClientSecret: data.google?.customClientSecret || "",
+        facebookAppId: data.facebook?.customAppId || "",
+        facebookAppSecret: data.facebook?.customAppSecret || "",
+        recaptchaSiteKey: data.recaptcha?.customSiteKey || "",
+        recaptchaSecretKey: data.recaptcha?.customSecretKey || "",
         weatherApiKey: data.weather?.customKey || "",
         oneSignalAppId: data.oneSignal?.customAppId || "",
         oneSignalRestApiKey: data.oneSignal?.customRestApiKey || "",
@@ -83,6 +104,108 @@ export default function SettingsModal({
         cloudinaryApiKey: data.cloudinary?.customApiKey || "",
         cloudinaryApiSecret: data.cloudinary?.customApiSecret || "",
       });
+    }
+  };
+
+  const handleSaveGoogleKeys = async () => {
+    setKeySaving((p) => ({ ...p, google: true }));
+    const res = await api("/admin/api-keys/google", {
+      method: "POST",
+      body: {
+        clientId: keyForms.googleClientId.trim(),
+        clientSecret: keyForms.googleClientSecret.trim(),
+      },
+    });
+    setKeySaving((p) => ({ ...p, google: false }));
+    if (res.ok) {
+      setKeyFeedback((p) => ({ ...p, google: { message: res.data?.message || "Google OAuth credentials saved!", isError: false } }));
+      loadApiKeys();
+      setTimeout(() => setKeyFeedback((p) => ({ ...p, google: null })), 4000);
+    } else {
+      setKeyFeedback((p) => ({ ...p, google: { message: res.data?.error || "Failed to save credentials.", isError: true } }));
+    }
+  };
+
+  const handleResetGoogleKeys = async () => {
+    setKeySaving((p) => ({ ...p, google: true }));
+    const res = await api("/admin/api-keys/google", {
+      method: "POST",
+      body: { reset: true },
+    });
+    setKeySaving((p) => ({ ...p, google: false }));
+    if (res.ok) {
+      setKeyForms((p) => ({ ...p, googleClientId: "", googleClientSecret: "" }));
+      setKeyFeedback((p) => ({ ...p, google: { message: "Reset to default code keys.", isError: false } }));
+      loadApiKeys();
+      setTimeout(() => setKeyFeedback((p) => ({ ...p, google: null })), 4000);
+    }
+  };
+
+  const handleSaveFacebookKeys = async () => {
+    setKeySaving((p) => ({ ...p, facebook: true }));
+    const res = await api("/admin/api-keys/facebook", {
+      method: "POST",
+      body: {
+        appId: keyForms.facebookAppId.trim(),
+        appSecret: keyForms.facebookAppSecret.trim(),
+      },
+    });
+    setKeySaving((p) => ({ ...p, facebook: false }));
+    if (res.ok) {
+      setKeyFeedback((p) => ({ ...p, facebook: { message: res.data?.message || "Facebook OAuth credentials saved!", isError: false } }));
+      loadApiKeys();
+      setTimeout(() => setKeyFeedback((p) => ({ ...p, facebook: null })), 4000);
+    } else {
+      setKeyFeedback((p) => ({ ...p, facebook: { message: res.data?.error || "Failed to save credentials.", isError: true } }));
+    }
+  };
+
+  const handleResetFacebookKeys = async () => {
+    setKeySaving((p) => ({ ...p, facebook: true }));
+    const res = await api("/admin/api-keys/facebook", {
+      method: "POST",
+      body: { reset: true },
+    });
+    setKeySaving((p) => ({ ...p, facebook: false }));
+    if (res.ok) {
+      setKeyForms((p) => ({ ...p, facebookAppId: "", facebookAppSecret: "" }));
+      setKeyFeedback((p) => ({ ...p, facebook: { message: "Reset to default code keys.", isError: false } }));
+      loadApiKeys();
+      setTimeout(() => setKeyFeedback((p) => ({ ...p, facebook: null })), 4000);
+    }
+  };
+
+  const handleSaveRecaptchaKeys = async () => {
+    setKeySaving((p) => ({ ...p, recaptcha: true }));
+    const res = await api("/admin/api-keys/recaptcha", {
+      method: "POST",
+      body: {
+        siteKey: keyForms.recaptchaSiteKey.trim(),
+        secretKey: keyForms.recaptchaSecretKey.trim(),
+      },
+    });
+    setKeySaving((p) => ({ ...p, recaptcha: false }));
+    if (res.ok) {
+      setKeyFeedback((p) => ({ ...p, recaptcha: { message: res.data?.message || "Google reCAPTCHA keys saved!", isError: false } }));
+      loadApiKeys();
+      setTimeout(() => setKeyFeedback((p) => ({ ...p, recaptcha: null })), 4000);
+    } else {
+      setKeyFeedback((p) => ({ ...p, recaptcha: { message: res.data?.error || "Failed to save keys.", isError: true } }));
+    }
+  };
+
+  const handleResetRecaptchaKeys = async () => {
+    setKeySaving((p) => ({ ...p, recaptcha: true }));
+    const res = await api("/admin/api-keys/recaptcha", {
+      method: "POST",
+      body: { reset: true },
+    });
+    setKeySaving((p) => ({ ...p, recaptcha: false }));
+    if (res.ok) {
+      setKeyForms((p) => ({ ...p, recaptchaSiteKey: "", recaptchaSecretKey: "" }));
+      setKeyFeedback((p) => ({ ...p, recaptcha: { message: "Reset to default code keys.", isError: false } }));
+      loadApiKeys();
+      setTimeout(() => setKeyFeedback((p) => ({ ...p, recaptcha: null })), 4000);
     }
   };
 
@@ -671,118 +794,541 @@ export default function SettingsModal({
 
               {/* Section 1: Sign-In Gateways & Bot Defense */}
               <div style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b", margin: "14px 0 8px" }}>
-                Authentication &amp; Bot Defense
+                Authentication, Bot Defense &amp; Customizable Credentials
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 {/* Google Sign-In */}
                 <div
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "12px 16px",
                     background: "#f8fafc",
                     borderRadius: "10px",
                     border: "1px solid var(--wz-border, #e2e8f0)",
+                    overflow: "hidden",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "#ffffff", border: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, color: "#ea4335" }}>
-                      G
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "12px 16px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                      <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "#ffffff", border: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, color: "#ea4335" }}>
+                        G
+                      </div>
+                      <div>
+                        <strong style={{ fontSize: "0.88rem", color: "var(--wz-text, #0f172a)" }}>Google Sign-In</strong>
+                        <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "#64748b" }}>Allow members and staff to authenticate via Google</p>
+                      </div>
                     </div>
-                    <div>
-                      <strong style={{ fontSize: "0.88rem", color: "var(--wz-text, #0f172a)" }}>Google Sign-In</strong>
-                      <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "#64748b" }}>Allow members and staff to authenticate via Google</p>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedKeys((p) => ({ ...p, google: !p.google }))}
+                        style={{
+                          padding: "4px 8px",
+                          background: apiKeys.google?.isCustom ? "#dcfce7" : "#ffffff",
+                          color: apiKeys.google?.isCustom ? "#15803d" : "#475569",
+                          border: `1px solid ${apiKeys.google?.isCustom ? "#86efac" : "#cbd5e1"}`,
+                          borderRadius: "6px",
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                        title="Configure custom Google credentials"
+                      >
+                        <span>{apiKeys.google?.isCustom ? "● Custom Keys" : "⚙️ Default Keys"}</span>
+                        <span>{expandedKeys.google ? "▲" : "▼"}</span>
+                      </button>
+                      <span style={{ fontSize: "0.75rem", fontWeight: 700, color: settings?.googleLoginEnabled ? "#16a34a" : "#64748b" }}>
+                        {settings?.googleLoginEnabled ? "Enabled" : "Disabled"}
+                      </span>
+                      <label className="wz-switch-toggle">
+                        <input
+                          type="checkbox"
+                          checked={!!settings?.googleLoginEnabled}
+                          onChange={onToggleGoogle || (() => {})}
+                        />
+                        <span className="wz-switch-slider" />
+                      </label>
                     </div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: settings?.googleLoginEnabled ? "#16a34a" : "#64748b" }}>
-                      {settings?.googleLoginEnabled ? "Enabled" : "Disabled"}
-                    </span>
-                    <label className="wz-switch-toggle">
-                      <input
-                        type="checkbox"
-                        checked={!!settings?.googleLoginEnabled}
-                        onChange={onToggleGoogle || (() => {})}
-                      />
-                      <span className="wz-switch-slider" />
-                    </label>
-                  </div>
+
+                  {/* Expandable Google Key Drawer */}
+                  {expandedKeys.google && (
+                    <div style={{ padding: "14px 16px", background: "#ffffff", borderTop: "1px solid #e2e8f0" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                        <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#334155" }}>
+                          Google OAuth 2.0 Credentials:
+                        </span>
+                        <span style={{ fontSize: "0.72rem", color: apiKeys.google?.isCustom ? "#16a34a" : "#0284c7", fontWeight: 600 }}>
+                          {apiKeys.google?.isCustom ? "● Custom Keys Active" : `● Using Code Defaults (${apiKeys.google?.defaultClientIdMasked || "1042••••0nii4"})`}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                        <div>
+                          <label style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "3px" }}>
+                            Google Client ID
+                          </label>
+                          <input
+                            type="text"
+                            className="wz-form-input"
+                            style={{ width: "100%", padding: "7px 10px", fontSize: "0.8rem", fontFamily: "monospace" }}
+                            placeholder={`Default in code: ${apiKeys.google?.defaultClientIdMasked || "1042••••0nii4"}`}
+                            value={keyForms.googleClientId}
+                            onChange={(e) => setKeyForms((p) => ({ ...p, googleClientId: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "3px" }}>
+                            Google Client Secret
+                          </label>
+                          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                            <input
+                              type={revealSecrets.google ? "text" : "password"}
+                              className="wz-form-input"
+                              style={{ flex: 1, padding: "7px 10px", fontSize: "0.8rem", fontFamily: "monospace" }}
+                              placeholder={`Default in code: ${apiKeys.google?.defaultClientSecretMasked || "GOCS••••wnVd"}`}
+                              value={keyForms.googleClientSecret}
+                              onChange={(e) => setKeyForms((p) => ({ ...p, googleClientSecret: e.target.value }))}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setRevealSecrets((p) => ({ ...p, google: !p.google }))}
+                              style={{
+                                padding: "7px 10px",
+                                background: "#f1f5f9",
+                                border: "1px solid #cbd5e1",
+                                borderRadius: "6px",
+                                fontSize: "0.75rem",
+                                cursor: "pointer",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {revealSecrets.google ? "🙈 Hide" : "👁️ Reveal"}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "10px" }}>
+                        <span style={{ fontSize: "0.71rem", color: "#64748b" }}>
+                          Leave blank or click Reset to Default to revert to system code keys.
+                        </span>
+                        <div style={{ display: "flex", gap: "6px" }}>
+                          {apiKeys.google?.isCustom && (
+                            <button
+                              type="button"
+                              onClick={handleResetGoogleKeys}
+                              disabled={keySaving.google}
+                              style={{
+                                padding: "5px 10px",
+                                background: "#fff1f2",
+                                color: "#be123c",
+                                border: "1px solid #fecdd3",
+                                borderRadius: "6px",
+                                fontSize: "0.74rem",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                              }}
+                            >
+                              Reset to Default
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={handleSaveGoogleKeys}
+                            disabled={keySaving.google}
+                            style={{
+                              padding: "5px 12px",
+                              background: "#0f172a",
+                              color: "#ffffff",
+                              border: "none",
+                              borderRadius: "6px",
+                              fontSize: "0.74rem",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                            }}
+                          >
+                            {keySaving.google ? "Saving..." : "Save Credentials"}
+                          </button>
+                        </div>
+                      </div>
+                      {keyFeedback.google && (
+                        <div
+                          style={{
+                            marginTop: "8px",
+                            fontSize: "0.74rem",
+                            color: keyFeedback.google.isError ? "#b91c1c" : "#15803d",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {keyFeedback.google.message}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Facebook Sign-In */}
                 <div
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "12px 16px",
                     background: "#f8fafc",
                     borderRadius: "10px",
                     border: "1px solid var(--wz-border, #e2e8f0)",
+                    overflow: "hidden",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "#ffffff", border: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, color: "#1877f2" }}>
-                      f
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "12px 16px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                      <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "#ffffff", border: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, color: "#1877f2" }}>
+                        f
+                      </div>
+                      <div>
+                        <strong style={{ fontSize: "0.88rem", color: "var(--wz-text, #0f172a)" }}>Facebook Sign-In</strong>
+                        <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "#64748b" }}>Allow members to authenticate via Facebook OAuth</p>
+                      </div>
                     </div>
-                    <div>
-                      <strong style={{ fontSize: "0.88rem", color: "var(--wz-text, #0f172a)" }}>Facebook Sign-In</strong>
-                      <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "#64748b" }}>Allow members to authenticate via Facebook OAuth</p>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedKeys((p) => ({ ...p, facebook: !p.facebook }))}
+                        style={{
+                          padding: "4px 8px",
+                          background: apiKeys.facebook?.isCustom ? "#dcfce7" : "#ffffff",
+                          color: apiKeys.facebook?.isCustom ? "#15803d" : "#475569",
+                          border: `1px solid ${apiKeys.facebook?.isCustom ? "#86efac" : "#cbd5e1"}`,
+                          borderRadius: "6px",
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                        title="Configure custom Facebook credentials"
+                      >
+                        <span>{apiKeys.facebook?.isCustom ? "● Custom Keys" : "⚙️ Default Keys"}</span>
+                        <span>{expandedKeys.facebook ? "▲" : "▼"}</span>
+                      </button>
+                      <span style={{ fontSize: "0.75rem", fontWeight: 700, color: settings?.facebookLoginEnabled ? "#16a34a" : "#64748b" }}>
+                        {settings?.facebookLoginEnabled ? "Enabled" : "Disabled"}
+                      </span>
+                      <label className="wz-switch-toggle">
+                        <input
+                          type="checkbox"
+                          checked={!!settings?.facebookLoginEnabled}
+                          onChange={onToggleFacebook || (() => {})}
+                        />
+                        <span className="wz-switch-slider" />
+                      </label>
                     </div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: settings?.facebookLoginEnabled ? "#16a34a" : "#64748b" }}>
-                      {settings?.facebookLoginEnabled ? "Enabled" : "Disabled"}
-                    </span>
-                    <label className="wz-switch-toggle">
-                      <input
-                        type="checkbox"
-                        checked={!!settings?.facebookLoginEnabled}
-                        onChange={onToggleFacebook || (() => {})}
-                      />
-                      <span className="wz-switch-slider" />
-                    </label>
-                  </div>
+
+                  {/* Expandable Facebook Key Drawer */}
+                  {expandedKeys.facebook && (
+                    <div style={{ padding: "14px 16px", background: "#ffffff", borderTop: "1px solid #e2e8f0" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                        <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#334155" }}>
+                          Facebook Graph API Credentials:
+                        </span>
+                        <span style={{ fontSize: "0.72rem", color: apiKeys.facebook?.isCustom ? "#16a34a" : "#0284c7", fontWeight: 600 }}>
+                          {apiKeys.facebook?.isCustom ? "● Custom Keys Active" : `● Using Code Defaults (${apiKeys.facebook?.defaultAppIdMasked || "4031••••3782"})`}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                        <div>
+                          <label style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "3px" }}>
+                            Facebook App ID
+                          </label>
+                          <input
+                            type="text"
+                            className="wz-form-input"
+                            style={{ width: "100%", padding: "7px 10px", fontSize: "0.8rem", fontFamily: "monospace" }}
+                            placeholder={`Default in code: ${apiKeys.facebook?.defaultAppIdMasked || "4031••••3782"}`}
+                            value={keyForms.facebookAppId}
+                            onChange={(e) => setKeyForms((p) => ({ ...p, facebookAppId: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "3px" }}>
+                            Facebook App Secret
+                          </label>
+                          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                            <input
+                              type={revealSecrets.facebook ? "text" : "password"}
+                              className="wz-form-input"
+                              style={{ flex: 1, padding: "7px 10px", fontSize: "0.8rem", fontFamily: "monospace" }}
+                              placeholder={`Default in code: ${apiKeys.facebook?.defaultAppSecretMasked || "4495••••139"}`}
+                              value={keyForms.facebookAppSecret}
+                              onChange={(e) => setKeyForms((p) => ({ ...p, facebookAppSecret: e.target.value }))}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setRevealSecrets((p) => ({ ...p, facebook: !p.facebook }))}
+                              style={{
+                                padding: "7px 10px",
+                                background: "#f1f5f9",
+                                border: "1px solid #cbd5e1",
+                                borderRadius: "6px",
+                                fontSize: "0.75rem",
+                                cursor: "pointer",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {revealSecrets.facebook ? "🙈 Hide" : "👁️ Reveal"}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "10px" }}>
+                        <span style={{ fontSize: "0.71rem", color: "#64748b" }}>
+                          Leave blank or click Reset to Default to revert to system code keys.
+                        </span>
+                        <div style={{ display: "flex", gap: "6px" }}>
+                          {apiKeys.facebook?.isCustom && (
+                            <button
+                              type="button"
+                              onClick={handleResetFacebookKeys}
+                              disabled={keySaving.facebook}
+                              style={{
+                                padding: "5px 10px",
+                                background: "#fff1f2",
+                                color: "#be123c",
+                                border: "1px solid #fecdd3",
+                                borderRadius: "6px",
+                                fontSize: "0.74rem",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                              }}
+                            >
+                              Reset to Default
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={handleSaveFacebookKeys}
+                            disabled={keySaving.facebook}
+                            style={{
+                              padding: "5px 12px",
+                              background: "#0f172a",
+                              color: "#ffffff",
+                              border: "none",
+                              borderRadius: "6px",
+                              fontSize: "0.74rem",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                            }}
+                          >
+                            {keySaving.facebook ? "Saving..." : "Save Credentials"}
+                          </button>
+                        </div>
+                      </div>
+                      {keyFeedback.facebook && (
+                        <div
+                          style={{
+                            marginTop: "8px",
+                            fontSize: "0.74rem",
+                            color: keyFeedback.facebook.isError ? "#b91c1c" : "#15803d",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {keyFeedback.facebook.message}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Google reCAPTCHA v2 */}
                 <div
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "12px 16px",
                     background: "#f8fafc",
                     borderRadius: "10px",
                     border: "1px solid var(--wz-border, #e2e8f0)",
+                    overflow: "hidden",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "#ffffff", border: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, color: "#0284c7" }}>
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                        <path d="m9 12 2 2 4-4" />
-                      </svg>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "12px 16px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                      <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "#ffffff", border: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, color: "#0284c7" }}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                          <path d="m9 12 2 2 4-4" />
+                        </svg>
+                      </div>
+                      <div>
+                        <strong style={{ fontSize: "0.88rem", color: "var(--wz-text, #0f172a)" }}>Google reCAPTCHA v2</strong>
+                        <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "#64748b" }}>Require captcha verification on member login &amp; registration</p>
+                      </div>
                     </div>
-                    <div>
-                      <strong style={{ fontSize: "0.88rem", color: "var(--wz-text, #0f172a)" }}>Google reCAPTCHA v2</strong>
-                      <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "#64748b" }}>Require captcha verification on member login &amp; registration</p>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedKeys((p) => ({ ...p, recaptcha: !p.recaptcha }))}
+                        style={{
+                          padding: "4px 8px",
+                          background: apiKeys.recaptcha?.isCustom ? "#dcfce7" : "#ffffff",
+                          color: apiKeys.recaptcha?.isCustom ? "#15803d" : "#475569",
+                          border: `1px solid ${apiKeys.recaptcha?.isCustom ? "#86efac" : "#cbd5e1"}`,
+                          borderRadius: "6px",
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                        title="Configure custom reCAPTCHA keys"
+                      >
+                        <span>{apiKeys.recaptcha?.isCustom ? "● Custom Keys" : "⚙️ Default Keys"}</span>
+                        <span>{expandedKeys.recaptcha ? "▲" : "▼"}</span>
+                      </button>
+                      <span style={{ fontSize: "0.75rem", fontWeight: 700, color: settings?.recaptchaEnabled ? "#16a34a" : "#64748b" }}>
+                        {settings?.recaptchaEnabled ? "Enabled" : "Disabled"}
+                      </span>
+                      <label className="wz-switch-toggle">
+                        <input
+                          type="checkbox"
+                          checked={!!settings?.recaptchaEnabled}
+                          onChange={onToggleRecaptcha || (() => {})}
+                        />
+                        <span className="wz-switch-slider" />
+                      </label>
                     </div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: settings?.recaptchaEnabled ? "#16a34a" : "#64748b" }}>
-                      {settings?.recaptchaEnabled ? "Enabled" : "Disabled"}
-                    </span>
-                    <label className="wz-switch-toggle">
-                      <input
-                        type="checkbox"
-                        checked={!!settings?.recaptchaEnabled}
-                        onChange={onToggleRecaptcha || (() => {})}
-                      />
-                      <span className="wz-switch-slider" />
-                    </label>
-                  </div>
+
+                  {/* Expandable reCAPTCHA Key Drawer */}
+                  {expandedKeys.recaptcha && (
+                    <div style={{ padding: "14px 16px", background: "#ffffff", borderTop: "1px solid #e2e8f0" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                        <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#334155" }}>
+                          Google reCAPTCHA v2 Keys:
+                        </span>
+                        <span style={{ fontSize: "0.72rem", color: apiKeys.recaptcha?.isCustom ? "#16a34a" : "#0284c7", fontWeight: 600 }}>
+                          {apiKeys.recaptcha?.isCustom ? "● Custom Keys Active" : `● Using Code Defaults (${apiKeys.recaptcha?.defaultSiteKeyMasked || "6Lfr••••6UG5"})`}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                        <div>
+                          <label style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "3px" }}>
+                            Site Key (Client-side)
+                          </label>
+                          <input
+                            type="text"
+                            className="wz-form-input"
+                            style={{ width: "100%", padding: "7px 10px", fontSize: "0.8rem", fontFamily: "monospace" }}
+                            placeholder={`Default in code: ${apiKeys.recaptcha?.defaultSiteKeyMasked || "6Lfr••••6UG5"}`}
+                            value={keyForms.recaptchaSiteKey}
+                            onChange={(e) => setKeyForms((p) => ({ ...p, recaptchaSiteKey: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "3px" }}>
+                            Secret Key (Server-side)
+                          </label>
+                          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                            <input
+                              type={revealSecrets.recaptcha ? "text" : "password"}
+                              className="wz-form-input"
+                              style={{ flex: 1, padding: "7px 10px", fontSize: "0.8rem", fontFamily: "monospace" }}
+                              placeholder={`Default in code: ${apiKeys.recaptcha?.defaultSecretKeyMasked || "6Lfr••••ST12"}`}
+                              value={keyForms.recaptchaSecretKey}
+                              onChange={(e) => setKeyForms((p) => ({ ...p, recaptchaSecretKey: e.target.value }))}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setRevealSecrets((p) => ({ ...p, recaptcha: !p.recaptcha }))}
+                              style={{
+                                padding: "7px 10px",
+                                background: "#f1f5f9",
+                                border: "1px solid #cbd5e1",
+                                borderRadius: "6px",
+                                fontSize: "0.75rem",
+                                cursor: "pointer",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {revealSecrets.recaptcha ? "🙈 Hide" : "👁️ Reveal"}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "10px" }}>
+                        <span style={{ fontSize: "0.71rem", color: "#64748b" }}>
+                          Leave blank or click Reset to Default to revert to system code keys.
+                        </span>
+                        <div style={{ display: "flex", gap: "6px" }}>
+                          {apiKeys.recaptcha?.isCustom && (
+                            <button
+                              type="button"
+                              onClick={handleResetRecaptchaKeys}
+                              disabled={keySaving.recaptcha}
+                              style={{
+                                padding: "5px 10px",
+                                background: "#fff1f2",
+                                color: "#be123c",
+                                border: "1px solid #fecdd3",
+                                borderRadius: "6px",
+                                fontSize: "0.74rem",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                              }}
+                            >
+                              Reset to Default
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={handleSaveRecaptchaKeys}
+                            disabled={keySaving.recaptcha}
+                            style={{
+                              padding: "5px 12px",
+                              background: "#0f172a",
+                              color: "#ffffff",
+                              border: "none",
+                              borderRadius: "6px",
+                              fontSize: "0.74rem",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                            }}
+                          >
+                            {keySaving.recaptcha ? "Saving..." : "Save Keys"}
+                          </button>
+                        </div>
+                      </div>
+                      {keyFeedback.recaptcha && (
+                        <div
+                          style={{
+                            marginTop: "8px",
+                            fontSize: "0.74rem",
+                            color: keyFeedback.recaptcha.isError ? "#b91c1c" : "#15803d",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {keyFeedback.recaptcha.message}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
