@@ -36,6 +36,7 @@ import AdminFinancialPolicies from "./pages/Admin/AdminFinancialPolicies";
 import AdminReports from "./pages/Admin/AdminReports";
 import AdminBackups from "./pages/Admin/AdminBackups";
 import AuditLogs from "./pages/Admin/AuditLogs";
+import AdminIntegrations from "./pages/Admin/AdminIntegrations";
 
 function RootRedirect() {
   const { user, isAuthenticated } = useAuth();
@@ -347,6 +348,14 @@ export default function App() {
         element={
           <ProtectedRoute allowedRoles={["admin"]}>
             <AuditLogs />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/integrations"
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AdminIntegrations />
           </ProtectedRoute>
         }
       />

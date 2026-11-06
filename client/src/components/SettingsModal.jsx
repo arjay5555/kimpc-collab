@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../services/api";
 import { getStoredTheme, applyTheme } from "../services/theme";
@@ -481,10 +481,12 @@ export default function SettingsModal({
               onClick={() => setActiveTab("oauth")}
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                <path d="M12 22v-5" />
+                <path d="M9 8V2" />
+                <path d="M15 2v6" />
+                <path d="M18 8v5a6 6 0 0 1-12 0V8z" />
               </svg>
-              <span>Auth &amp; Security Gateways</span>
+              <span>Integrations &amp; Auth</span>
             </button>
           )}
         </div>
@@ -783,13 +785,34 @@ export default function SettingsModal({
           {/* ================= TAB 3: System Auth & Security (Admin Only) ================= */}
           {activeTab === "oauth" && isAdmin && (
             <div>
-              <div style={{ marginBottom: "16px" }}>
-                <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 800, color: "var(--wz-text, #0f172a)" }}>
-                  Authentication &amp; Security Settings
-                </h4>
-                <p style={{ margin: "2px 0 0", fontSize: "0.75rem", color: "#64748b" }}>
-                  Configure OAuth providers, bot protection, and external system integrations (Weather, OneSignal, Cloudinary).
-                </p>
+              <div style={{ marginBottom: "16px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px" }}>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 800, color: "var(--wz-text, #0f172a)" }}>
+                    Authentication &amp; Security Settings
+                  </h4>
+                  <p style={{ margin: "2px 0 0", fontSize: "0.75rem", color: "#64748b" }}>
+                    Configure OAuth providers, bot protection, and external system integrations (Weather, OneSignal, Cloudinary).
+                  </p>
+                </div>
+                <Link
+                  to="/admin/integrations"
+                  onClick={onClose}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "6px 12px",
+                    background: "#0f172a",
+                    color: "#ffffff",
+                    borderRadius: "8px",
+                    fontSize: "0.76rem",
+                    fontWeight: 700,
+                    textDecoration: "none",
+                  }}
+                >
+                  <span>Open Full Integrations Page</span>
+                  <span>→</span>
+                </Link>
               </div>
 
               {/* Section 1: Sign-In Gateways & Bot Defense */}

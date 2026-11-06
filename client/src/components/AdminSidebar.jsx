@@ -8,6 +8,7 @@ export default function AdminSidebar() {
   const isDashboardActive = currentPath === "/admin";
   const isAccountsActive = currentPath === "/account-management";
   const isPoliciesActive = currentPath === "/admin/financial-policies";
+  const isIntegrationsActive = currentPath === "/admin/integrations";
   const isReportsActive = currentPath === "/admin/reports";
   const isBackupsActive = currentPath === "/admin/backups";
   const isAuditActive = currentPath === "/audit-logs";
@@ -67,6 +68,20 @@ export default function AdminSidebar() {
             <line x1="2" y1="10" x2="22" y2="10" />
           </svg>
           <span>Financial Policies</span>
+        </Link>
+
+        {/* Integrations & API Keys */}
+        <Link
+          to="/admin/integrations"
+          className={`wz-nav-item ${isIntegrationsActive ? "active" : ""}`}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 22v-5" />
+            <path d="M9 8V2" />
+            <path d="M15 2v6" />
+            <path d="M18 8v5a6 6 0 0 1-12 0V8z" />
+          </svg>
+          <span>Integrations</span>
         </Link>
 
         {/* Reports & Exports */}
