@@ -12,6 +12,7 @@ const {
   syncBookingToGoogleCalendar,
   syncMaintenanceToGoogleCalendar
 } = require("../services/googleCalendarService");
+const weatherService = require("../services/weatherService");
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || "minders-secret-jwt-key-cooperative-2026";
@@ -272,6 +273,23 @@ router.post("/sync-now", resolveManager, async (req, res) => {
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/calendar/weather
+ * Manager-only endpoint: returns 3-day Kalilangan, Bukidnon weather forecast (briefly cached)
+ */
+router.get("/weather", resolveManager, async (req, res) => {
+  try {
+    const forceRefresh = req.query.refresh === "true" || req.query.refresh === "1";
+    const data = await weatherService.getKalilanganForecast(forceRefresh);
+    if (!data.ok) {
+      return res.status(503).json(data);
+    }
+    return res.json(data);
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: "Failed to load weather forecast." });
   }
 });
 

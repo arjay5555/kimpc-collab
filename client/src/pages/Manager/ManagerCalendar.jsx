@@ -149,6 +149,12 @@ export default function ManagerCalendar() {
   const [syncingCalendar, setSyncingCalendar] = useState(false);
   const [calendarNotice, setCalendarNotice] = useState("");
 
+  // 3-Day Weather Forecast State for Kalilangan, Bukidnon (WeatherAPI.com)
+  const [weatherData, setWeatherData] = useState(null);
+  const [weatherLoading, setWeatherLoading] = useState(true);
+  const [weatherError, setWeatherError] = useState("");
+  const [showWeatherCard, setShowWeatherCard] = useState(false);
+
   // Fetch live applications
   const fetchApplications = async () => {
     setLoading(true);
@@ -183,7 +189,40 @@ export default function ManagerCalendar() {
         setGoogleCalendarStatus(res.data);
       }
     });
+
+    // Fetch 3-day weather forecast for Kalilangan, Bukidnon
+    fetchWeather();
   }, []);
+
+  // Fetch 3-Day Forecast for Kalilangan from Manager-only Express endpoint
+  const fetchWeather = async (force = false) => {
+    setWeatherLoading(true);
+    setWeatherError("");
+    try {
+      const url = force ? "/calendar/weather?refresh=true" : "/calendar/weather";
+      const res = await api(url);
+      if (res.ok && res.data && Array.isArray(res.data.forecast)) {
+        setWeatherData(res.data);
+      } else {
+        setWeatherError(res.data?.error || "Weather forecast temporarily unavailable.");
+      }
+    } catch {
+      setWeatherError("Weather service unavailable.");
+    } finally {
+      setWeatherLoading(false);
+    }
+  };
+
+  // Fast map to find forecast data by "YYYY-MM-DD"
+  const weatherByDate = useMemo(() => {
+    const map = {};
+    if (weatherData?.forecast && Array.isArray(weatherData.forecast)) {
+      weatherData.forecast.forEach((day) => {
+        if (day.date) map[day.date] = day;
+      });
+    }
+    return map;
+  }, [weatherData]);
 
   const handleConnectCalendar = () => {
     const token = localStorage.getItem("token") || "";
@@ -674,6 +713,71 @@ export default function ManagerCalendar() {
               </button>
             )}
 
+            {/* Weather Forecast Toggle Button */}
+            <button
+              type="button"
+              onClick={() => setShowWeatherCard((prev) => !prev)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "6px 11px",
+                borderRadius: "6px",
+                border: showWeatherCard ? "1.5px solid #0284c7" : "1px solid #cbd5e1",
+                background: showWeatherCard ? "#f0f9ff" : "#ffffff",
+                color: "#1e293b",
+                fontSize: "0.76rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+                transition: "all 0.15s ease",
+              }}
+              title="Click to view 3-day Kalilangan, Bukidnon weather forecast"
+            >
+              {weatherLoading ? (
+                <>
+                  <span style={{ fontSize: "0.85rem" }}>⏳</span>
+                  <span style={{ color: "#64748b", fontWeight: 500 }}>Weather...</span>
+                </>
+              ) : weatherData?.current ? (
+                <>
+                  {weatherData.current.icon ? (
+                    <img
+                      src={weatherData.current.icon}
+                      alt={weatherData.current.condition}
+                      style={{ width: "18px", height: "18px", objectFit: "contain" }}
+                    />
+                  ) : (
+                    <span>⛅</span>
+                  )}
+                  <span>{Math.round(weatherData.current.temp_c)}°C</span>
+                  <span style={{ color: "#64748b", fontWeight: 600, fontSize: "0.72rem" }}>
+                    Kalilangan
+                  </span>
+                  {weatherData.forecast?.[0]?.chance_of_rain > 0 && (
+                    <span
+                      style={{
+                        background: weatherData.forecast[0].chance_of_rain >= 50 ? "#fee2e2" : "#e0f2fe",
+                        color: weatherData.forecast[0].chance_of_rain >= 50 ? "#b91c1c" : "#0369a1",
+                        padding: "1px 5px",
+                        borderRadius: "4px",
+                        fontSize: "0.68rem",
+                        fontWeight: 700,
+                      }}
+                    >
+                      💧 {weatherData.forecast[0].chance_of_rain}%
+                    </span>
+                  )}
+                </>
+              ) : (
+                <>
+                  <span>☁️</span>
+                  <span style={{ color: "#64748b", fontWeight: 500 }}>Weather</span>
+                  {weatherError && <span style={{ color: "#ef4444", fontSize: "0.65rem" }} title={weatherError}>●</span>}
+                </>
+              )}
+            </button>
+
             {/* All / Pickup / Return Type Buttons */}
             <div className="wz-cal-filter-group">
               <button
@@ -708,6 +812,245 @@ export default function ManagerCalendar() {
             </select>
           </div>
         </div>
+
+        {/* 3-Day Weather Forecast Details Panel for Kalilangan, Bukidnon */}
+        {showWeatherCard && (
+          <div
+            className="wz-cal-weather-card"
+            style={{
+              margin: "12px 24px 0",
+              padding: "16px 20px",
+              background: "linear-gradient(135deg, #f0fdf4 0%, #f0f9ff 100%)",
+              border: "1px solid #bae6fd",
+              borderRadius: "14px",
+              boxShadow: "0 4px 14px rgba(14, 165, 233, 0.08)",
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ fontSize: "1.2rem" }}>🌤️</span>
+                  <span style={{ fontSize: "0.92rem", fontWeight: 800, color: "#0369a1" }}>
+                    Kalilangan, Bukidnon • 3-Day Weather Forecast
+                  </span>
+                  {weatherData?.location && (
+                    <span style={{ fontSize: "0.72rem", background: "#e0f2fe", color: "#0284c7", padding: "2px 8px", borderRadius: "12px", fontWeight: 600 }}>
+                      Lat: {weatherData.location.lat}° | Lon: {weatherData.location.lon}°
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: "0.76rem", color: "#475569", marginTop: "3px" }}>
+                  Real-time agricultural conditions from WeatherAPI.com to assist heavy machinery scheduling and rainfall planning.
+                </div>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <button
+                  type="button"
+                  onClick={() => fetchWeather(true)}
+                  disabled={weatherLoading}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    background: "#ffffff",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "6px",
+                    padding: "4px 9px",
+                    fontSize: "0.72rem",
+                    fontWeight: 600,
+                    color: "#334155",
+                    cursor: weatherLoading ? "wait" : "pointer",
+                  }}
+                  title="Refresh weather from WeatherAPI.com"
+                >
+                  <span style={{ display: "inline-block" }}>🔄</span>
+                  {weatherLoading ? "Refreshing..." : "Refresh"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowWeatherCard(false)}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: "#64748b",
+                    fontSize: "1.2rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    padding: "0 4px",
+                    lineHeight: 1,
+                  }}
+                  title="Close weather forecast"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            {/* Loading State */}
+            {weatherLoading && !weatherData && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+                {[1, 2, 3].map((idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      background: "#ffffff",
+                      borderRadius: "10px",
+                      padding: "16px",
+                      border: "1px solid #e2e8f0",
+                      textAlign: "center",
+                      opacity: 0.7,
+                    }}
+                  >
+                    <div style={{ fontSize: "1.5rem", marginBottom: "8px" }}>⏳</div>
+                    <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#64748b" }}>Loading Day {idx}...</div>
+                    <div style={{ fontSize: "0.72rem", color: "#94a3b8", marginTop: "4px" }}>Fetching Kalilangan data</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Unavailable State */}
+            {!weatherLoading && weatherError && !weatherData?.forecast?.length && (
+              <div
+                style={{
+                  background: "#ffffff",
+                  borderRadius: "10px",
+                  padding: "16px 20px",
+                  border: "1px solid #fecaca",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: "10px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <span style={{ fontSize: "1.5rem" }}>⚠️</span>
+                  <div>
+                    <div style={{ fontSize: "0.84rem", fontWeight: 700, color: "#991b1b" }}>
+                      Weather Service Currently Unavailable
+                    </div>
+                    <div style={{ fontSize: "0.74rem", color: "#64748b", marginTop: "2px" }}>
+                      {weatherError} • Calendar bookings, schedules, and machinery dispatch remain fully functional.
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => fetchWeather(true)}
+                  style={{
+                    background: "#0284c7",
+                    color: "#ffffff",
+                    border: "none",
+                    borderRadius: "6px",
+                    padding: "6px 12px",
+                    fontSize: "0.74rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Retry Connection
+                </button>
+              </div>
+            )}
+
+            {/* Weather 3-Day Forecast Cards */}
+            {weatherData?.forecast && weatherData.forecast.length > 0 && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+                {weatherData.forecast.map((day, idx) => {
+                  const isToday = idx === 0;
+                  const rainChance = Number(day.chance_of_rain) || 0;
+                  const isHighRain = rainChance >= 60;
+                  const isMediumRain = rainChance >= 35 && rainChance < 60;
+
+                  return (
+                    <div
+                      key={day.date}
+                      style={{
+                        background: "#ffffff",
+                        borderRadius: "12px",
+                        padding: "14px 16px",
+                        border: isToday ? "1.5px solid #38bdf8" : "1px solid #e2e8f0",
+                        boxShadow: isToday ? "0 2px 8px rgba(56, 189, 248, 0.15)" : "0 1px 3px rgba(0,0,0,0.03)",
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      {/* Day Label & Badge */}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                        <div>
+                          <div style={{ fontSize: "0.86rem", fontWeight: 800, color: "#0f172a" }}>
+                            {isToday ? "Today" : idx === 1 ? "Tomorrow" : day.dayName}
+                          </div>
+                          <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 500 }}>
+                            {day.date}
+                          </div>
+                        </div>
+                        {isToday && (
+                          <span style={{ fontSize: "0.68rem", fontWeight: 700, background: "#dbeafe", color: "#1d4ed8", padding: "2px 7px", borderRadius: "10px" }}>
+                            Current
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Condition & Icon */}
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px", margin: "6px 0" }}>
+                        {day.icon ? (
+                          <img
+                            src={day.icon}
+                            alt={day.condition}
+                            style={{ width: "38px", height: "38px", objectFit: "contain" }}
+                          />
+                        ) : (
+                          <span style={{ fontSize: "1.8rem" }}>⛅</span>
+                        )}
+                        <div>
+                          <div style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a", lineHeight: 1.1 }}>
+                            {Math.round(day.temp_c)}°C
+                          </div>
+                          <div style={{ fontSize: "0.76rem", color: "#334155", fontWeight: 600 }}>
+                            {day.condition}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Temperature Range */}
+                      <div style={{ fontSize: "0.72rem", color: "#64748b", margin: "4px 0", display: "flex", justifyContent: "space-between" }}>
+                        <span>Range: <strong>{Math.round(day.min_temp_c)}°C</strong> – <strong>{Math.round(day.max_temp_c)}°C</strong></span>
+                        <span>Humidity: <strong>{day.humidity}%</strong></span>
+                      </div>
+
+                      {/* Chance of Rain */}
+                      <div
+                        style={{
+                          marginTop: "8px",
+                          padding: "6px 10px",
+                          borderRadius: "8px",
+                          background: isHighRain ? "#fee2e2" : isMediumRain ? "#fef3c7" : "#f0fdf4",
+                          border: `1px solid ${isHighRain ? "#fca5a5" : isMediumRain ? "#fde68a" : "#bbf7d0"}`,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          fontSize: "0.74rem",
+                        }}
+                      >
+                        <span style={{ fontWeight: 700, color: isHighRain ? "#991b1b" : isMediumRain ? "#92400e" : "#166534" }}>
+                          💧 Chance of Rain: {rainChance}%
+                        </span>
+                        <span style={{ fontSize: "0.68rem", fontWeight: 600, color: isHighRain ? "#dc2626" : isMediumRain ? "#b45309" : "#15803d" }}>
+                          {isHighRain ? "Rain Likely" : isMediumRain ? "Showers Possible" : "Dry / Good"}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Filter Toolbar: Search, Status, Machinery (Cleaned line without badges) */}
         <div className="wz-cal-filter-bar">
@@ -796,6 +1139,34 @@ export default function ManagerCalendar() {
                     >
                       <div className="wz-cal-day-num">{day.dayNum}</div>
                       <div className="wz-cal-day-name">{day.dayName}</div>
+                      {weatherByDate[day.dateKey] && (
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "2px",
+                            fontSize: "0.68rem",
+                            marginTop: "2px",
+                            padding: "1px 4px",
+                            borderRadius: "4px",
+                            background: "rgba(255,255,255,0.9)",
+                            boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
+                          }}
+                          title={`Forecast for ${day.dateKey}: ${weatherByDate[day.dateKey].condition}, ${Math.round(weatherByDate[day.dateKey].temp_c)}°C, ${weatherByDate[day.dateKey].chance_of_rain}% Rain`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowWeatherCard(true);
+                          }}
+                        >
+                          {weatherByDate[day.dateKey].icon && (
+                            <img src={weatherByDate[day.dateKey].icon} alt="" style={{ width: "14px", height: "14px" }} />
+                          )}
+                          <span style={{ fontWeight: 700 }}>{Math.round(weatherByDate[day.dateKey].temp_c)}°</span>
+                          <span style={{ color: weatherByDate[day.dateKey].chance_of_rain >= 50 ? "#dc2626" : "#0284c7", fontWeight: 700 }}>
+                            {weatherByDate[day.dateKey].chance_of_rain}%💧
+                          </span>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -859,6 +1230,35 @@ export default function ManagerCalendar() {
                       >
                         <div className="wz-cal-month-cell-header">
                           <span className="wz-cal-month-day-num">{cell.dayNum}</span>
+                          {weatherByDate[cell.dateKey] && (
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "2px",
+                                fontSize: "0.68rem",
+                                color: "#334155",
+                                background: "#f8fafc",
+                                border: "1px solid #e2e8f0",
+                                borderRadius: "4px",
+                                padding: "1px 4px",
+                                cursor: "pointer",
+                              }}
+                              title={`Kalilangan Forecast: ${weatherByDate[cell.dateKey].condition}, ${Math.round(weatherByDate[cell.dateKey].temp_c)}°C, ${weatherByDate[cell.dateKey].chance_of_rain}% rain`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowWeatherCard(true);
+                              }}
+                            >
+                              {weatherByDate[cell.dateKey].icon && (
+                                <img src={weatherByDate[cell.dateKey].icon} alt="" style={{ width: "13px", height: "13px" }} />
+                              )}
+                              <span style={{ fontWeight: 700 }}>{Math.round(weatherByDate[cell.dateKey].temp_c)}°</span>
+                              <span style={{ color: weatherByDate[cell.dateKey].chance_of_rain >= 50 ? "#dc2626" : "#0284c7", fontWeight: 700 }}>
+                                {weatherByDate[cell.dateKey].chance_of_rain}%💧
+                              </span>
+                            </span>
+                          )}
                           {cellEvents.length > 0 && (
                             <span className="wz-cal-month-cell-count">
                               {cellEvents.length} {cellEvents.length === 1 ? "event" : "events"}

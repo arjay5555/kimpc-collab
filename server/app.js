@@ -11,6 +11,7 @@ const calendarRoutes = require("./routes/calendar");
 const managerRoutes = require("./routes/manager");
 const apiRoutes = require("./routes/api");
 const uploadRoutes = require("./routes/uploadRoutes");
+const weatherRoutes = require("./routes/weatherRoutes");
 
 const app = express();
 
@@ -37,6 +38,7 @@ app.use((req, res, next) => {
 
 // 4. API Routes
 app.use("/api/upload", uploadRoutes);
+app.use("/api/weather", weatherRoutes);
 app.use("/api/calendar", calendarRoutes);
 app.use("/api/manager", authManager);
 app.use("/api/manager", managerRoutes);
