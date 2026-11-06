@@ -455,6 +455,7 @@ export default function ManagerCalendar() {
   // - Pending: ONLY A YELLOW DOT with title
   // - Pickup: YELLOW card
   // - Return: RED card (like uploaded picture)
+  // - Rescheduled: Clean icon '🔄' on card so machinery name is fully visible
   const renderEventItem = (evt, isCompact = false) => {
     const isSelected = selectedEvent?.id === evt.id;
 
@@ -476,8 +477,8 @@ export default function ManagerCalendar() {
             {evt.timeExact} • Pending: {evt.equipment}
           </span>
           {evt.isRescheduled && (
-            <span className="wz-cal-rescheduled-badge" style={{ flexShrink: 0, marginLeft: "auto" }}>
-              Rescheduled
+            <span className="wz-cal-reschedule-icon" title="Rescheduled" style={{ flexShrink: 0, marginLeft: "auto" }}>
+              🔄
             </span>
           )}
         </div>
@@ -498,25 +499,25 @@ export default function ManagerCalendar() {
         }}
         title={`${evt.type === "pickup" ? "Pickup (Yellow)" : "Return (Red)"}: ${evt.equipment} - ${evt.clientName}`}
       >
-        {/* Top Row: Time + Pickup/Return Tag */}
+        {/* Top Row: Time + Pickup/Return Tag + Reschedule Icon */}
         <div className="wz-cal-event-top-row">
           <span className="wz-cal-event-time-val">{evt.timeExact || "9:00 AM"}</span>
-          <span className={`wz-cal-type-tag ${evt.type}`}>
-            {evt.type === "pickup" ? "Pickup" : "Return"}
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            <span className={`wz-cal-type-tag ${evt.type}`}>
+              {evt.type === "pickup" ? "Pickup" : "Return"}
+            </span>
+            {evt.isRescheduled && (
+              <span className="wz-cal-reschedule-icon" title="Rescheduled">
+                🔄
+              </span>
+            )}
+          </div>
         </div>
 
-        {/* Rescheduled Badge: Placed neatly on its own row to NEVER pass outside dedicated card */}
-        {evt.isRescheduled && (
-          <div className="wz-cal-rescheduled-row">
-            <span className="wz-cal-rescheduled-badge" title="Rescheduled Rental Day">
-              Rescheduled
-            </span>
-          </div>
-        )}
-
-        {/* Middle Line: Equipment Name */}
-        <div className="wz-cal-event-model" title={evt.equipment}>{evt.equipment}</div>
+        {/* Middle Line: Equipment Name (fully visible, no extra row squishing it!) */}
+        <div className="wz-cal-event-model" title={evt.equipment}>
+          {evt.equipment}
+        </div>
 
         {/* Bottom Line: Avatar + Client Name */}
         <div className="wz-cal-event-client">
@@ -528,7 +529,9 @@ export default function ManagerCalendar() {
               e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(evt.clientName || "M")}&background=fee2e2&color=991b1b&size=32`;
             }}
           />
-          <span className="wz-cal-event-client-name" title={evt.clientName}>{evt.clientName}</span>
+          <span className="wz-cal-event-client-name" title={evt.clientName}>
+            {evt.clientName}
+          </span>
         </div>
       </div>
     );
@@ -1077,69 +1080,29 @@ export default function ManagerCalendar() {
                 </button>
               </div>
 
-              {/* Status Banner */}
-              <div
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: "8px",
-                  marginBottom: "16px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  background: selectedEvent.isPending
-                    ? "#fefce8"
-                    : selectedEvent.type === "pickup"
-                    ? "#fef3c7"
-                    : "#fef2f2",
-                  border: `1px solid ${
-                    selectedEvent.isPending
-                      ? "#fde047"
-                      : selectedEvent.type === "pickup"
-                      ? "#fde68a"
-                      : "#fecdd3"
-                  }`,
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  {selectedEvent.isPending ? (
-                    <span className="wz-cal-yellow-dot" />
-                  ) : selectedEvent.type === "pickup" ? (
-                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#d97706" }} />
-                  ) : (
-                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#e11d48" }} />
-                  )}
-                  <span
-                    style={{
-                      fontWeight: 800,
-                      fontSize: "0.8rem",
-                      color: selectedEvent.isPending
-                        ? "#92400e"
-                        : selectedEvent.type === "pickup"
-                        ? "#b45309"
-                        : "#be123c",
-                    }}
-                  >
-                    {selectedEvent.isPending
-                      ? "Pending Approval (Schedule Not Final)"
-                      : selectedEvent.type === "pickup"
-                      ? "Approved Pickup (Yellow)"
-                      : "Approved Return (Red)"}
-                  </span>
+              {/* Rescheduled Notice in Details */}
+              {selectedEvent.isRescheduled && (
+                <div
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: "8px",
+                    marginBottom: "16px",
+                    background: "#e0e7ff",
+                    border: "1px solid #c7d2fe",
+                    color: "#3730a3",
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  <span>🔄</span>
+                  <span>Rescheduled</span>
                 </div>
-                {selectedEvent.isRescheduled && (
-                  <span className="wz-cal-rescheduled-badge">Adjusted Date</span>
-                )}
-              </div>
+              )}
 
-              {/* 1. Agenda */}
-              <div className="wz-cal-detail-section">
-                <span className="wz-cal-section-label">Agenda</span>
-                <div className="wz-cal-agenda-text">
-                  {selectedEvent.agenda || `${selectedEvent.type === "pickup" ? "Equipment Pickup" : "Equipment Return"} at ${selectedEvent.timeExact}`}
-                </div>
-              </div>
-
-              {/* 2. Client Info */}
+              {/* 1. Client Info */}
               <div className="wz-cal-detail-section">
                 <span className="wz-cal-section-label">Member Info</span>
 
@@ -1234,7 +1197,7 @@ export default function ManagerCalendar() {
               {/* Quick Actions Footer */}
               <div style={{ marginTop: "auto", paddingTop: "14px", borderTop: "1px solid #f1f5f9", display: "flex", flexDirection: "column", gap: "8px" }}>
                 <Link
-                  to="/manager/reservations"
+                  to="/manager/bookings"
                   style={{
                     display: "block",
                     textAlign: "center",
@@ -1247,7 +1210,7 @@ export default function ManagerCalendar() {
                     textDecoration: "none",
                   }}
                 >
-                  Manage in Reservations
+                  Manage in Booking
                 </Link>
                 <button
                   type="button"

@@ -2117,15 +2117,14 @@
 /* Event Card in Calendar Slot */
 .wz-cal-event-card {
   border-radius: 12px;
-  padding: 7px 9px;
+  padding: 8px 10px;
   cursor: pointer;
   transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
   user-select: none;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   text-align: left;
-  overflow: hidden; /* Strict containment: Never allow tags to pass outside card */
   box-sizing: border-box;
   max-width: 100%;
   width: 100%;
@@ -2171,12 +2170,18 @@
   color: #be123c;
 }
 
-.wz-cal-rescheduled-row {
-  display: flex;
+.wz-cal-reschedule-icon {
+  font-size: 0.72rem;
+  line-height: 1;
+  display: inline-flex;
   align-items: center;
-  margin: 1px 0;
-  max-width: 100%;
-  overflow: hidden;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #e0e7ff;
+  color: #4338ca;
+  flex-shrink: 0;
 }
 
 .wz-cal-rescheduled-badge {
