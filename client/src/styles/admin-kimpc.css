@@ -710,23 +710,118 @@
 
 .wz-booking-kpi-card {
   background: #ffffff;
-  border: 1px solid var(--wz-border);
-  border-radius: 14px;
-  padding: 12px 14px;
+  border: 1px solid #edf2f7;
+  border-radius: 16px;
+  padding: 16px 18px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
-  min-height: 82px;
-  overflow: hidden;
-  position: relative;
-  gap: 8px;
+  min-height: 86px;
+  gap: 12px;
 }
 
 .wz-booking-kpi-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.wz-kpi-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.wz-kpi-circle-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: #f0f7ff;
+  color: #334155;
+  border: 1px solid #e0f2fe;
+}
+
+.wz-kpi-circle-icon.pending {
+  background: #fffbeb;
+  color: #b45309;
+  border-color: #fde68a;
+}
+
+.wz-kpi-circle-icon.ongoing {
+  background: #eff6ff;
+  color: #2563eb;
+  border-color: #dbeafe;
+}
+
+.wz-kpi-circle-icon.canceled {
+  background: #fef2f2;
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+.wz-kpi-circle-icon.completed {
+  background: #f0fdf4;
+  color: #16a34a;
+  border-color: #bbf7d0;
+}
+
+.wz-kpi-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.wz-kpi-label {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #64748b;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.wz-kpi-value {
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.4px;
+  line-height: 1.2;
+}
+
+.wz-kpi-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.wz-kpi-trend-plain {
+  font-size: 0.76rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  line-height: 1;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+.wz-kpi-subtext {
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: #94a3b8;
+  white-space: nowrap;
+  line-height: 1;
 }
 
 .wz-kpi-info {
@@ -786,19 +881,6 @@
   max-height: 26px;
   display: block;
   overflow: hidden;
-}
-
-.wz-kpi-trend-plain {
-  font-size: 0.68rem;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  line-height: 1;
-  background: transparent !important;
-  border: none !important;
-  padding: 0 !important;
-  box-shadow: none !important;
 }
 
 /* Bookings Overview Chart Card */

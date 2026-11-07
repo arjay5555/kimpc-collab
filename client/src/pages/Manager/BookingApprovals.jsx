@@ -1085,113 +1085,88 @@ export default function BookingApprovals() {
         <section className="wz-bookings-top-section">
           {/* Left Column: 2x2 KPI Cards */}
           <div className="wz-bookings-kpi-grid">
-            {/* Card 1: Pending Bookings (Switched to First Position) */}
+            {/* Card 1: Pending Bookings */}
             <div className="wz-booking-kpi-card">
-              <div className="wz-kpi-info">
-                <div className="wz-kpi-header-row">
-                  <div className="wz-kpi-small-icon">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <circle cx="12" cy="12" r="10" />
-                      <path d="M12 8v4l3 3" />
-                    </svg>
-                  </div>
-                  <span className="wz-kpi-title">Pending Bookings</span>
+              <div className="wz-kpi-left">
+                <div className="wz-kpi-circle-icon pending">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
                 </div>
-                <div className="wz-kpi-big-num">{pendingCount}</div>
-                <div>
-                  {renderTrend(kpiTrends.pending, "#b45309", "#16a34a")}
+                <div className="wz-kpi-meta">
+                  <span className="wz-kpi-label">Pending Bookings</span>
+                  <span className="wz-kpi-value">{pendingCount.toLocaleString()}</span>
                 </div>
               </div>
-
-              {/* Data-driven Sparkline Graph (Increase, Decrease, or As Is) */}
-              {renderSparkline(
-                kpiTrends.pending.direction,
-                kpiTrends.pending.direction === "increase"
-                  ? "#f59e0b"
-                  : kpiTrends.pending.direction === "decrease"
-                  ? "#10b981"
-                  : "#94a3b8",
-                "pending"
-              )}
+              <div className="wz-kpi-right">
+                {renderTrend(kpiTrends.pending, "#b45309", "#16a34a")}
+                <span className="wz-kpi-subtext">from last week</span>
+              </div>
             </div>
 
-            {/* Card 2: Ongoing Bookings (Switched to Second Position) */}
+            {/* Card 2: Ongoing Bookings */}
             <div className="wz-booking-kpi-card">
-              <div className="wz-kpi-info">
-                <div className="wz-kpi-header-row">
-                  <div className="wz-kpi-small-icon">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <circle cx="12" cy="12" r="10" />
-                      <polyline points="12 6 12 12 16 14" />
-                    </svg>
-                  </div>
-                  <span className="wz-kpi-title">Ongoing Bookings</span>
+              <div className="wz-kpi-left">
+                <div className="wz-kpi-circle-icon ongoing">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                    <line x1="16" y1="2" x2="16" y2="6" />
+                    <line x1="8" y1="2" x2="8" y2="6" />
+                    <line x1="3" y1="10" x2="21" y2="10" />
+                    <path d="M9 16l2 2 4-4" />
+                  </svg>
                 </div>
-                <div className="wz-kpi-big-num">{ongoingCount}</div>
-                <div>
-                  {renderTrend(kpiTrends.ongoing, "#16a34a", "#dc2626")}
+                <div className="wz-kpi-meta">
+                  <span className="wz-kpi-label">Ongoing Bookings</span>
+                  <span className="wz-kpi-value">{ongoingCount.toLocaleString()}</span>
                 </div>
               </div>
-
-              {/* Data-driven Sparkline Graph (Increase, Decrease, or As Is) */}
-              {renderSparkline(
-                kpiTrends.ongoing.direction,
-                kpiTrends.ongoing.direction === "decrease" ? "#ef4444" : "#38bdf8",
-                "ongoing"
-              )}
+              <div className="wz-kpi-right">
+                {renderTrend(kpiTrends.ongoing, "#16a34a", "#dc2626")}
+                <span className="wz-kpi-subtext">from last week</span>
+              </div>
             </div>
 
-            {/* Card 3: Canceled Bookings (Includes Rejected, Strictly Excludes Void) */}
+            {/* Card 3: Canceled Bookings */}
             <div className="wz-booking-kpi-card">
-              <div className="wz-kpi-info">
-                <div className="wz-kpi-header-row">
-                  <div className="wz-kpi-small-icon">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <circle cx="12" cy="12" r="10" />
-                      <line x1="15" y1="9" x2="9" y2="15" />
-                      <line x1="9" y1="9" x2="15" y2="15" />
-                    </svg>
-                  </div>
-                  <span className="wz-kpi-title">Canceled Bookings</span>
+              <div className="wz-kpi-left">
+                <div className="wz-kpi-circle-icon canceled">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="15" y1="9" x2="9" y2="15" />
+                    <line x1="9" y1="9" x2="15" y2="15" />
+                  </svg>
                 </div>
-                <div className="wz-kpi-big-num">{canceledCount}</div>
-                <div>
-                  {renderTrend(kpiTrends.canceled, "#dc2626", "#16a34a")}
+                <div className="wz-kpi-meta">
+                  <span className="wz-kpi-label">Canceled Bookings</span>
+                  <span className="wz-kpi-value">{canceledCount.toLocaleString()}</span>
                 </div>
               </div>
-
-              {/* Data-driven Sparkline Graph (Increase, Decrease, or As Is) */}
-              {renderSparkline(
-                kpiTrends.canceled.direction,
-                kpiTrends.canceled.direction === "decrease" ? "#10b981" : "#ff3b5c",
-                "canceled"
-              )}
+              <div className="wz-kpi-right">
+                {renderTrend(kpiTrends.canceled, "#dc2626", "#16a34a")}
+                <span className="wz-kpi-subtext">from last week</span>
+              </div>
             </div>
 
             {/* Card 4: Completed Bookings */}
             <div className="wz-booking-kpi-card">
-              <div className="wz-kpi-info">
-                <div className="wz-kpi-header-row">
-                  <div className="wz-kpi-small-icon">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <circle cx="12" cy="12" r="10" />
-                      <polyline points="9 12 12 15 16 10" />
-                    </svg>
-                  </div>
-                  <span className="wz-kpi-title">Completed Bookings</span>
+              <div className="wz-kpi-left">
+                <div className="wz-kpi-circle-icon completed">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                    <polyline points="22 4 12 14.01 9 11.01" />
+                  </svg>
                 </div>
-                <div className="wz-kpi-big-num">{completedCount}</div>
-                <div>
-                  {renderTrend(kpiTrends.completed, "#16a34a", "#dc2626")}
+                <div className="wz-kpi-meta">
+                  <span className="wz-kpi-label">Completed Bookings</span>
+                  <span className="wz-kpi-value">{completedCount.toLocaleString()}</span>
                 </div>
               </div>
-
-              {/* Data-driven Sparkline Graph (Increase, Decrease, or As Is) */}
-              {renderSparkline(
-                kpiTrends.completed.direction,
-                kpiTrends.completed.direction === "decrease" ? "#ef4444" : "#10b981",
-                "completed"
-              )}
+              <div className="wz-kpi-right">
+                {renderTrend(kpiTrends.completed, "#16a34a", "#dc2626")}
+                <span className="wz-kpi-subtext">from last week</span>
+              </div>
             </div>
           </div>
 
