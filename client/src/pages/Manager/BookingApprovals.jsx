@@ -7,11 +7,13 @@ import ManagerSearchBar from "../../components/ManagerSearchBar";
 import ManagerTopbar from "../../components/ManagerTopbar";
 import "../../styles/admin-kimpc.css";
 
+const CURRENT_MOCK_YEAR = new Date().getFullYear();
+
 // Initial seed mock bookings that match the KIMPC design perfectly
 const INITIAL_MOCK_BOOKINGS = [
   {
     id: "BK-WZ1001",
-    bookingDate: "Aug 1, 2028",
+    bookingDate: `Aug 1, ${CURRENT_MOCK_YEAR}`,
     clientName: "Alice Johnson",
     clientEmail: "alice.johnson@example.com",
     clientPhone: "+63 917 123 4567",
@@ -23,10 +25,10 @@ const INITIAL_MOCK_BOOKINGS = [
     plan: "2 Days",
     daysCount: 2,
     dailyRate: 2800,
-    dateRange: "Aug 1, 2028 to Aug 2, 2028",
+    dateRange: `Aug 1, ${CURRENT_MOCK_YEAR} to Aug 2, ${CURRENT_MOCK_YEAR}`,
     hasDriver: false,
     assignedDriver: "Self-Operated",
-    receiptNo: "REC-2028-0001",
+    receiptNo: `REC-${CURRENT_MOCK_YEAR}-0001`,
     paymentMethod: "Cash",
     paymentAmount: "₱5,600",
     paymentStatus: "Paid",
@@ -34,7 +36,7 @@ const INITIAL_MOCK_BOOKINGS = [
   },
   {
     id: "BK-WZ1002",
-    bookingDate: "Aug 1, 2028",
+    bookingDate: `Aug 1, ${CURRENT_MOCK_YEAR}`,
     clientName: "Bob Smith",
     clientEmail: "bob.smith@example.com",
     clientPhone: "+63 928 234 5678",
@@ -46,10 +48,10 @@ const INITIAL_MOCK_BOOKINGS = [
     plan: "7 Days",
     daysCount: 7,
     dailyRate: 5500,
-    dateRange: "Aug 1, 2028 to Aug 8, 2028",
+    dateRange: `Aug 1, ${CURRENT_MOCK_YEAR} to Aug 8, ${CURRENT_MOCK_YEAR}`,
     hasDriver: true,
     assignedDriver: "Daniel Jackson",
-    receiptNo: "REC-2028-0002",
+    receiptNo: `REC-${CURRENT_MOCK_YEAR}-0002`,
     paymentMethod: "GCash",
     paymentAmount: "₱38,500",
     paymentStatus: "Pending",
@@ -57,7 +59,7 @@ const INITIAL_MOCK_BOOKINGS = [
   },
   {
     id: "BK-WZ1003",
-    bookingDate: "Aug 2, 2028",
+    bookingDate: `Sep 2, ${CURRENT_MOCK_YEAR}`,
     clientName: "Charlie Davis",
     clientEmail: "charlie.davis@example.com",
     clientPhone: "+63 939 345 6789",
@@ -69,10 +71,10 @@ const INITIAL_MOCK_BOOKINGS = [
     plan: "31 Days",
     daysCount: 31,
     dailyRate: 3200,
-    dateRange: "Aug 2, 2028 to Sep 2, 2028",
+    dateRange: `Sep 2, ${CURRENT_MOCK_YEAR} to Oct 2, ${CURRENT_MOCK_YEAR}`,
     hasDriver: false,
     assignedDriver: "Self-Operated",
-    receiptNo: "REC-2028-0003",
+    receiptNo: `REC-${CURRENT_MOCK_YEAR}-0003`,
     paymentMethod: "Bank Transfer",
     paymentAmount: "₱99,200",
     paymentStatus: "Paid",
@@ -80,7 +82,7 @@ const INITIAL_MOCK_BOOKINGS = [
   },
   {
     id: "BK-WZ1004",
-    bookingDate: "Aug 2, 2028",
+    bookingDate: `Aug 2, ${CURRENT_MOCK_YEAR}`,
     clientName: "Diana White",
     clientEmail: "diana.white@example.com",
     clientPhone: "+63 915 456 7890",
@@ -92,10 +94,10 @@ const INITIAL_MOCK_BOOKINGS = [
     plan: "1 Day",
     daysCount: 1,
     dailyRate: 3600,
-    dateRange: "Aug 2, 2028 to Aug 3, 2028",
+    dateRange: `Aug 2, ${CURRENT_MOCK_YEAR} to Aug 3, ${CURRENT_MOCK_YEAR}`,
     hasDriver: true,
     assignedDriver: "James Evans",
-    receiptNo: "REC-2028-0004",
+    receiptNo: `REC-${CURRENT_MOCK_YEAR}-0004`,
     paymentMethod: "Cash",
     paymentAmount: "₱3,600",
     paymentStatus: "Paid",
@@ -103,7 +105,7 @@ const INITIAL_MOCK_BOOKINGS = [
   },
   {
     id: "BK-WZ1005",
-    bookingDate: "Aug 3, 2028",
+    bookingDate: `Aug 3, ${CURRENT_MOCK_YEAR}`,
     clientName: "Edward Green",
     clientEmail: "edward.green@example.com",
     clientPhone: "+63 920 567 8901",
@@ -115,10 +117,10 @@ const INITIAL_MOCK_BOOKINGS = [
     plan: "8 Days",
     daysCount: 8,
     dailyRate: 1900,
-    dateRange: "Aug 3, 2028 to Aug 10, 2028",
+    dateRange: `Aug 3, ${CURRENT_MOCK_YEAR} to Aug 10, ${CURRENT_MOCK_YEAR}`,
     hasDriver: false,
     assignedDriver: "Self-Operated",
-    receiptNo: "REC-2028-0005",
+    receiptNo: `REC-${CURRENT_MOCK_YEAR}-0005`,
     paymentMethod: "GCash",
     paymentAmount: "₱15,200",
     paymentStatus: "Pending",
@@ -126,7 +128,7 @@ const INITIAL_MOCK_BOOKINGS = [
   },
   {
     id: "BK-WZ1006",
-    bookingDate: "Aug 3, 2028",
+    bookingDate: `Sep 3, ${CURRENT_MOCK_YEAR}`,
     clientName: "Fiona Brown",
     clientEmail: "fiona.brown@example.com",
     clientPhone: "+63 916 678 9012",
@@ -138,10 +140,10 @@ const INITIAL_MOCK_BOOKINGS = [
     plan: "32 Days",
     daysCount: 32,
     dailyRate: 2100,
-    dateRange: "Aug 3, 2028 to Sep 3, 2028",
+    dateRange: `Sep 3, ${CURRENT_MOCK_YEAR} to Oct 3, ${CURRENT_MOCK_YEAR}`,
     hasDriver: true,
     assignedDriver: "John Adams",
-    receiptNo: "REC-2028-0006",
+    receiptNo: `REC-${CURRENT_MOCK_YEAR}-0006`,
     paymentMethod: "Bank Transfer",
     paymentAmount: "₱67,200",
     paymentStatus: "Paid",
@@ -149,7 +151,7 @@ const INITIAL_MOCK_BOOKINGS = [
   },
   {
     id: "BK-WZ1007",
-    bookingDate: "Aug 4, 2028",
+    bookingDate: `Oct 4, ${CURRENT_MOCK_YEAR}`,
     clientName: "George Clark",
     clientEmail: "george.clark@example.com",
     clientPhone: "+63 927 789 0123",
@@ -161,10 +163,10 @@ const INITIAL_MOCK_BOOKINGS = [
     plan: "2 Days",
     daysCount: 2,
     dailyRate: 4200,
-    dateRange: "Aug 4, 2028 to Aug 5, 2028",
+    dateRange: `Oct 4, ${CURRENT_MOCK_YEAR} to Oct 5, ${CURRENT_MOCK_YEAR}`,
     hasDriver: false,
     assignedDriver: "Self-Operated",
-    receiptNo: "REC-2028-0007",
+    receiptNo: `REC-${CURRENT_MOCK_YEAR}-0007`,
     paymentMethod: "Cash",
     paymentAmount: "₱8,400",
     paymentStatus: "Paid",
@@ -172,7 +174,7 @@ const INITIAL_MOCK_BOOKINGS = [
   },
   {
     id: "BK-WZ1008",
-    bookingDate: "Aug 4, 2028",
+    bookingDate: `Aug 4, ${CURRENT_MOCK_YEAR}`,
     clientName: "Helen Martinez",
     clientEmail: "helen.martinez@example.com",
     clientPhone: "+63 918 890 1234",
@@ -184,10 +186,10 @@ const INITIAL_MOCK_BOOKINGS = [
     plan: "7 Days",
     daysCount: 7,
     dailyRate: 2800,
-    dateRange: "Aug 4, 2028 to Aug 11, 2028",
+    dateRange: `Aug 4, ${CURRENT_MOCK_YEAR} to Aug 11, ${CURRENT_MOCK_YEAR}`,
     hasDriver: true,
     assignedDriver: "Michael Clark",
-    receiptNo: "REC-2028-0008",
+    receiptNo: `REC-${CURRENT_MOCK_YEAR}-0008`,
     paymentMethod: "GCash",
     paymentAmount: "₱19,600",
     paymentStatus: "Pending",
@@ -195,7 +197,7 @@ const INITIAL_MOCK_BOOKINGS = [
   },
   {
     id: "BK-WZ1009",
-    bookingDate: "Aug 5, 2028",
+    bookingDate: `Oct 5, ${CURRENT_MOCK_YEAR}`,
     clientName: "Ivan Rodriguez",
     clientEmail: "ivan.rodriguez@example.com",
     clientPhone: "+63 929 901 2345",
@@ -207,10 +209,10 @@ const INITIAL_MOCK_BOOKINGS = [
     plan: "31 Days",
     daysCount: 31,
     dailyRate: 5500,
-    dateRange: "Aug 5, 2028 to Sep 5, 2028",
+    dateRange: `Oct 5, ${CURRENT_MOCK_YEAR} to Nov 5, ${CURRENT_MOCK_YEAR}`,
     hasDriver: false,
     assignedDriver: "Self-Operated",
-    receiptNo: "REC-2028-0009",
+    receiptNo: `REC-${CURRENT_MOCK_YEAR}-0009`,
     paymentMethod: "Bank Transfer",
     paymentAmount: "₱170,500",
     paymentStatus: "Paid",
@@ -248,7 +250,7 @@ export default function BookingApprovals() {
   const [filterType, setFilterType] = useState("All");
   const [filterStatus, setFilterStatus] = useState("All");
   const [sortBy, setSortBy] = useState("date_desc");
-  const [chartPeriod, setChartPeriod] = useState("By Year");
+  const [chartPeriod, setChartPeriod] = useState("This Year");
 
   // Selected item (year/month) for interactive click tooltip in Overview chart (null until clicked)
   const [clickedItemIndex, setClickedItemIndex] = useState(null);
@@ -875,51 +877,91 @@ export default function BookingApprovals() {
     );
   };
 
-  // ================= Bookings Overview Chart Data (By Year [5 Years] or By Month) =================
+  // ================= Bookings Overview Chart Data (This Year [Active Months] or All Years) =================
   const chartData = useMemo(() => {
-    const currentDone = completedCount + ongoingCount;
-    const currentCanceled = canceledCount;
+    const currentYear = new Date().getFullYear();
 
-    if (chartPeriod === "By Month") {
-      return [
-        { label: "Jan", done: 65, canceled: 50, doneCount: 65, canceledCount: 50 },
-        { label: "Feb", done: 70, canceled: 55, doneCount: 70, canceledCount: 55 },
-        { label: "Mar", done: 85, canceled: 70, doneCount: 85, canceledCount: 70 },
-        { label: "Apr", done: 80, canceled: 65, doneCount: 80, canceledCount: 65 },
-        { label: "May", done: 75, canceled: 60, doneCount: 75, canceledCount: 60 },
-        { label: "Jun", done: 95, canceled: 72, doneCount: 95, canceledCount: 72 },
-        { label: "Jul", done: 82, canceled: 68, doneCount: 82, canceledCount: 68 },
-        {
-          label: "Aug",
-          done: 70 + currentDone * 4,
-          canceled: 50 + currentCanceled * 4,
-          doneCount: currentDone,
-          canceledCount: currentCanceled,
-          highlighted: true,
-        },
-        { label: "Sep", done: 84, canceled: 70, doneCount: 84, canceledCount: 70 },
-        { label: "Oct", done: 88, canceled: 75, doneCount: 88, canceledCount: 75 },
-        { label: "Nov", done: 76, canceled: 62, doneCount: 76, canceledCount: 62 },
-        { label: "Dec", done: 90, canceled: 78, doneCount: 90, canceledCount: 78 },
+    if (chartPeriod === "This Year") {
+      const monthNames = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
       ];
+
+      // Check if bookings exist for currentYear, otherwise fallback to primary year in data
+      const hasCurrentYearBookings = mergedBookings.some((b) => {
+        const dStr = b.bookingDate || b.startDate || b.submittedAt || b.createdAt;
+        if (!dStr) return false;
+        const d = new Date(dStr);
+        return !isNaN(d.getTime()) && d.getFullYear() === currentYear;
+      });
+
+      const targetYear = hasCurrentYearBookings
+        ? currentYear
+        : (mergedBookings.length > 0
+            ? new Date(mergedBookings[0].bookingDate || mergedBookings[0].startDate || 0).getFullYear() || currentYear
+            : currentYear);
+
+      const monthTallies = {};
+
+      mergedBookings.forEach((b) => {
+        const dStr = b.bookingDate || b.startDate || b.submittedAt || b.createdAt;
+        if (!dStr) return;
+        const d = new Date(dStr);
+        if (isNaN(d.getTime())) return;
+
+        if (d.getFullYear() === targetYear) {
+          const mIdx = d.getMonth();
+          if (!monthTallies[mIdx]) {
+            monthTallies[mIdx] = {
+              monthIndex: mIdx,
+              label: monthNames[mIdx],
+              doneCount: 0,
+              canceledCount: 0,
+            };
+          }
+          const s = (b.status || "").toLowerCase();
+          if (s === "returned" || s === "completed" || s === "ongoing" || s === "approved") {
+            monthTallies[mIdx].doneCount += 1;
+          } else if (s === "cancelled" || s === "canceled" || s === "rejected") {
+            monthTallies[mIdx].canceledCount += 1;
+          }
+        }
+      });
+
+      // Filter: if that month has no data then don't put!
+      return Object.values(monthTallies)
+        .filter((item) => item.doneCount > 0 || item.canceledCount > 0)
+        .sort((a, b) => a.monthIndex - b.monthIndex);
     }
 
-    // Default: By Year (5 Years: 2024 to 2028)
-    return [
-      { label: "2024", done: 420, canceled: 45, doneCount: 420, canceledCount: 45 },
-      { label: "2025", done: 580, canceled: 62, doneCount: 580, canceledCount: 62 },
-      { label: "2026", done: 710, canceled: 70, doneCount: 710, canceledCount: 70 },
-      { label: "2027", done: 840, canceled: 85, doneCount: 840, canceledCount: 85 },
-      {
-        label: "2028",
-        done: 920 + currentDone * 5,
-        canceled: 80 + currentCanceled * 5,
-        doneCount: 920 + currentDone * 5,
-        canceledCount: 80 + currentCanceled * 5,
-        highlighted: true,
-      },
-    ];
-  }, [chartPeriod, completedCount, ongoingCount, canceledCount]);
+    // "By Year" / "All Years"
+    const yearTallies = {};
+    mergedBookings.forEach((b) => {
+      const dStr = b.bookingDate || b.startDate || b.submittedAt || b.createdAt;
+      if (!dStr) return;
+      const d = new Date(dStr);
+      if (isNaN(d.getTime())) return;
+      const yr = d.getFullYear();
+      if (!yearTallies[yr]) {
+        yearTallies[yr] = {
+          label: String(yr),
+          year: yr,
+          doneCount: 0,
+          canceledCount: 0,
+        };
+      }
+      const s = (b.status || "").toLowerCase();
+      if (s === "returned" || s === "completed" || s === "ongoing" || s === "approved") {
+        yearTallies[yr].doneCount += 1;
+      } else if (s === "cancelled" || s === "canceled" || s === "rejected") {
+        yearTallies[yr].canceledCount += 1;
+      }
+    });
+
+    return Object.values(yearTallies)
+      .filter((y) => y.doneCount > 0 || y.canceledCount > 0)
+      .sort((a, b) => a.year - b.year);
+  }, [chartPeriod, mergedBookings]);
 
   // Handle status update (Approve / Reject / Change status)
   const handleUpdateStatus = async (bookingId, rawId, newStatus) => {
@@ -1088,8 +1130,8 @@ export default function BookingApprovals() {
             {/* Card 1: Pending Bookings */}
             <div className="wz-booking-kpi-card">
               <div className="wz-kpi-left">
-                <div className="wz-kpi-circle-icon pending">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <div className="wz-kpi-circle-icon">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="12" cy="12" r="10" />
                     <polyline points="12 6 12 12 16 14" />
                   </svg>
@@ -1108,8 +1150,8 @@ export default function BookingApprovals() {
             {/* Card 2: Ongoing Bookings */}
             <div className="wz-booking-kpi-card">
               <div className="wz-kpi-left">
-                <div className="wz-kpi-circle-icon ongoing">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <div className="wz-kpi-circle-icon">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
                     <line x1="16" y1="2" x2="16" y2="6" />
                     <line x1="8" y1="2" x2="8" y2="6" />
@@ -1131,8 +1173,8 @@ export default function BookingApprovals() {
             {/* Card 3: Canceled Bookings */}
             <div className="wz-booking-kpi-card">
               <div className="wz-kpi-left">
-                <div className="wz-kpi-circle-icon canceled">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <div className="wz-kpi-circle-icon">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="12" cy="12" r="10" />
                     <line x1="15" y1="9" x2="9" y2="15" />
                     <line x1="9" y1="9" x2="15" y2="15" />
@@ -1152,8 +1194,8 @@ export default function BookingApprovals() {
             {/* Card 4: Completed Bookings */}
             <div className="wz-booking-kpi-card">
               <div className="wz-kpi-left">
-                <div className="wz-kpi-circle-icon completed">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <div className="wz-kpi-circle-icon">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
                     <polyline points="22 4 12 14.01 9 11.01" />
                   </svg>
@@ -1170,7 +1212,7 @@ export default function BookingApprovals() {
             </div>
           </div>
 
-          {/* Right Column: Bookings Overview Bidirectional Chart */}
+          {/* Right Column: Bookings Overview Chart */}
           <div className="wz-overview-card">
             <div className="wz-overview-header">
               <div style={{ display: "flex", alignItems: "center", gap: "14px", flexWrap: "wrap" }}>
@@ -1185,12 +1227,12 @@ export default function BookingApprovals() {
                 </div>
 
                 {/* Clicked year/month stat pill */}
-                {clickedItemIndex !== null && chartData[clickedItemIndex] ? (
+                {clickedItemIndex !== null && chartData[clickedItemIndex] && (
                   <div className="wz-overview-clicked-pill">
                     <span style={{ color: "#475569", fontWeight: 600 }}>
-                      {chartPeriod === "By Year"
-                        ? `Year ${chartData[clickedItemIndex].label}: `
-                        : `${chartData[clickedItemIndex].label}: `}
+                      {chartPeriod === "This Year"
+                        ? `${chartData[clickedItemIndex].label}: `
+                        : `Year ${chartData[clickedItemIndex].label}: `}
                     </span>
                     <span style={{ color: "var(--wz-primary-red)", fontWeight: 700 }}>
                       {chartData[clickedItemIndex].doneCount} done
@@ -1211,10 +1253,6 @@ export default function BookingApprovals() {
                       ✕
                     </button>
                   </div>
-                ) : (
-                  <span style={{ fontSize: "0.74rem", color: "#94a3b8" }}>
-                    (Click a column to view done &amp; cancel)
-                  </span>
                 )}
               </div>
 
@@ -1227,75 +1265,88 @@ export default function BookingApprovals() {
                   setClickedItemIndex(null); // Clear selection on period change
                 }}
               >
-                <option value="By Year">By Year (5 Years)</option>
-                <option value="By Month">By Month</option>
+                <option value="This Year">This Year</option>
+                <option value="By Year">All Years</option>
               </select>
             </div>
 
-            {/* Bidirectional Bars Chart */}
+            {/* Bars Chart */}
             <div className="wz-bidi-chart">
-              {/* Y Axis Guide */}
+              {/* Y Axis Guide: strictly 100, 60, 30, 0 */}
               <div className="wz-chart-y-axis">
-                <span>{chartPeriod === "By Month" ? "120" : "1,200"}</span>
-                <span>{chartPeriod === "By Month" ? "60" : "600"}</span>
-                <span style={{ color: "#475569" }}>0</span>
-                <span>{chartPeriod === "By Month" ? "40" : "400"}</span>
-                <span>{chartPeriod === "By Month" ? "80" : "800"}</span>
+                <span>100</span>
+                <span>60</span>
+                <span>30</span>
+                <span>0</span>
               </div>
 
               {/* Bars Grid */}
               <div
                 className="wz-chart-bars-wrap"
-                style={{ gridTemplateColumns: `repeat(${chartData.length}, 1fr)` }}
+                style={{
+                  gridTemplateColumns: chartData.length > 0 ? `repeat(${chartData.length}, 1fr)` : "1fr",
+                }}
               >
+                {/* Horizontal Guide Lines */}
+                <div className="wz-chart-grid-line" style={{ top: 0 }} />
+                <div className="wz-chart-grid-line" style={{ bottom: "60%" }} />
+                <div className="wz-chart-grid-line" style={{ bottom: "30%" }} />
                 <div className="wz-chart-baseline" />
 
-                {chartData.map((item, idx) => {
-                  const isClicked = clickedItemIndex === idx;
-                  const maxDone = Math.max(...chartData.map((d) => d.done || 1));
-                  const maxCanceled = Math.max(...chartData.map((d) => d.canceled || 1));
-                  const upperHeight = `${Math.min(((item.done || 10) / maxDone) * 44, 44)}px`;
-                  const lowerHeight = `${Math.min(((item.canceled || 5) / maxCanceled) * 38, 38)}px`;
-                  const barWidth = chartData.length <= 6 ? "22px" : "14px";
+                {chartData.length === 0 ? (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#94a3b8", fontSize: "0.8rem", gridColumn: "1 / -1" }}>
+                    No booking data for this period
+                  </div>
+                ) : (
+                  chartData.map((item, idx) => {
+                    const isClicked = clickedItemIndex === idx;
+                    // Max is 100
+                    const doneHeight = `${Math.min(Math.max((item.doneCount / 100) * 100, item.doneCount > 0 ? 8 : 0), 100)}%`;
+                    const cancelHeight = `${Math.min(Math.max((item.canceledCount / 100) * 100, item.canceledCount > 0 ? 8 : 0), 100)}%`;
 
-                  return (
-                    <div
-                      key={item.label}
-                      className={`wz-month-col ${isClicked ? "active-month clicked-month" : ""}`}
-                      onClick={() => setClickedItemIndex(clickedItemIndex === idx ? null : idx)}
-                      style={{ cursor: "pointer" }}
-                      title={`Click to view ${item.label} details`}
-                    >
-                      {/* Floating tooltip ONLY shown when clicked */}
-                      {isClicked && (
-                        <div className="wz-chart-tooltip wz-chart-tooltip-clicked" style={{ top: "-54px" }}>
-                          <div className="wz-chart-tooltip-title">
-                            {chartPeriod === "By Year" ? `Year ${item.label}` : `${item.label} Bookings`}
+                    return (
+                      <div
+                        key={item.label}
+                        className={`wz-month-col ${isClicked ? "active-month clicked-month" : ""}`}
+                        onClick={() => setClickedItemIndex(clickedItemIndex === idx ? null : idx)}
+                        style={{ cursor: "pointer" }}
+                        title={`Click to view ${item.label} details`}
+                      >
+                        {/* Floating tooltip ONLY shown when clicked */}
+                        {isClicked && (
+                          <div className="wz-chart-tooltip wz-chart-tooltip-clicked" style={{ top: "-54px" }}>
+                            <div className="wz-chart-tooltip-title">
+                              {chartPeriod === "This Year" ? `${item.label} Bookings` : `Year ${item.label}`}
+                            </div>
+                            <div className="wz-chart-tooltip-summary" style={{ whiteSpace: "nowrap" }}>
+                              <span style={{ color: "var(--wz-primary-red)" }}>{item.doneCount} done</span>,{" "}
+                              <span style={{ color: "var(--wz-primary-navy)" }}>{item.canceledCount} cancel</span>
+                            </div>
                           </div>
-                          <div className="wz-chart-tooltip-summary" style={{ whiteSpace: "nowrap" }}>
-                            <span style={{ color: "var(--wz-primary-red)" }}>{item.doneCount} done</span>,{" "}
-                            <span style={{ color: "var(--wz-primary-navy)" }}>{item.canceledCount} cancel</span>
-                          </div>
+                        )}
+
+                        {/* Side-by-side Bars Container */}
+                        <div className="wz-month-bars-group">
+                          {/* Done Bar (Red) */}
+                          <div
+                            className="wz-bar-done"
+                            style={{ height: doneHeight }}
+                            title={`${item.doneCount} done`}
+                          />
+                          {/* Canceled Bar (Navy) */}
+                          <div
+                            className="wz-bar-canceled"
+                            style={{ height: cancelHeight }}
+                            title={`${item.canceledCount} canceled`}
+                          />
                         </div>
-                      )}
 
-                      {/* Upper Red Bar (Done) */}
-                      <div
-                        className="wz-bar-upper"
-                        style={{ height: upperHeight, width: barWidth }}
-                      />
-
-                      {/* Lower Navy Bar (Canceled) */}
-                      <div
-                        className="wz-bar-lower"
-                        style={{ height: lowerHeight, width: barWidth }}
-                      />
-
-                      {/* Label (e.g. 2024, 2025, 2026, 2027, 2028) */}
-                      <span className="wz-month-label">{item.label}</span>
-                    </div>
-                  );
-                })}
+                        {/* Label (e.g. Aug, Sep, Oct) */}
+                        <span className="wz-month-label">{item.label}</span>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
           </div>

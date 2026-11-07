@@ -711,15 +711,15 @@
 .wz-booking-kpi-card {
   background: #ffffff;
   border: 1px solid #edf2f7;
-  border-radius: 16px;
-  padding: 16px 18px;
+  border-radius: 12px;
+  padding: 10px 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
-  min-height: 86px;
-  gap: 12px;
+  min-height: 64px;
+  gap: 10px;
 }
 
 .wz-booking-kpi-card:hover {
@@ -730,13 +730,13 @@
 .wz-kpi-left {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   min-width: 0;
 }
 
 .wz-kpi-circle-icon {
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -747,51 +747,27 @@
   border: 1px solid #e0f2fe;
 }
 
-.wz-kpi-circle-icon.pending {
-  background: #fffbeb;
-  color: #b45309;
-  border-color: #fde68a;
-}
-
-.wz-kpi-circle-icon.ongoing {
-  background: #eff6ff;
-  color: #2563eb;
-  border-color: #dbeafe;
-}
-
-.wz-kpi-circle-icon.canceled {
-  background: #fef2f2;
-  color: #dc2626;
-  border-color: #fecaca;
-}
-
-.wz-kpi-circle-icon.completed {
-  background: #f0fdf4;
-  color: #16a34a;
-  border-color: #bbf7d0;
-}
-
 .wz-kpi-meta {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
 }
 
 .wz-kpi-label {
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   font-weight: 500;
   color: #64748b;
-  line-height: 1.2;
+  line-height: 1.15;
   white-space: nowrap;
 }
 
 .wz-kpi-value {
-  font-size: 1.45rem;
+  font-size: 1.25rem;
   font-weight: 800;
   color: #0f172a;
-  letter-spacing: -0.4px;
-  line-height: 1.2;
+  letter-spacing: -0.3px;
+  line-height: 1.15;
 }
 
 .wz-kpi-right {
@@ -799,12 +775,12 @@
   flex-direction: column;
   align-items: flex-end;
   justify-content: center;
-  gap: 4px;
+  gap: 2px;
   flex-shrink: 0;
 }
 
 .wz-kpi-trend-plain {
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   font-weight: 700;
   display: inline-flex;
   align-items: center;
@@ -817,7 +793,7 @@
 }
 
 .wz-kpi-subtext {
-  font-size: 0.68rem;
+  font-size: 0.64rem;
   font-weight: 500;
   color: #94a3b8;
   white-space: nowrap;
@@ -957,19 +933,27 @@
 .wz-chart-bars-wrap {
   flex: 1;
   display: grid;
-  grid-template-columns: repeat(12, 1fr);
   height: 105px;
   position: relative;
-  border-bottom: 1px dashed #e2e8f0;
+  border-bottom: 1px solid #cbd5e1;
+}
+
+.wz-chart-grid-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  border-top: 1px dashed #e2e8f0;
+  pointer-events: none;
 }
 
 .wz-chart-baseline {
   position: absolute;
-  top: 50%;
   left: 0;
   right: 0;
+  bottom: 0;
   height: 1px;
-  background: #e2e8f0;
+  background: #cbd5e1;
   z-index: 1;
 }
 
@@ -977,7 +961,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
   position: relative;
   height: 100%;
   cursor: pointer;
@@ -992,6 +976,33 @@
   background: rgba(226, 232, 240, 0.85);
   border-radius: 8px;
   box-shadow: 0 0 0 1.5px var(--wz-primary-navy);
+}
+
+.wz-month-bars-group {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 5px;
+  height: 100%;
+  width: 100%;
+  position: relative;
+  z-index: 2;
+}
+
+.wz-bar-done {
+  width: 14px;
+  max-width: 20px;
+  background-color: var(--wz-primary-red);
+  border-radius: 3px 3px 0 0;
+  transition: height 0.3s ease;
+}
+
+.wz-bar-canceled {
+  width: 14px;
+  max-width: 20px;
+  background-color: var(--wz-primary-navy);
+  border-radius: 3px 3px 0 0;
+  transition: height 0.3s ease;
 }
 
 .wz-overview-clicked-pill {
@@ -1019,26 +1030,6 @@
 
 .wz-pill-close-btn:hover {
   color: #0f172a;
-}
-
-.wz-bar-upper {
-  position: absolute;
-  bottom: 50%;
-  width: 14px;
-  background-color: var(--wz-primary-red);
-  border-radius: 3px 3px 0 0;
-  transition: height 0.3s ease;
-  z-index: 2;
-}
-
-.wz-bar-lower {
-  position: absolute;
-  top: 50%;
-  width: 14px;
-  background-color: var(--wz-primary-navy);
-  border-radius: 0 0 3px 3px;
-  transition: height 0.3s ease;
-  z-index: 2;
 }
 
 .wz-month-label {
