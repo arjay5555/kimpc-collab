@@ -16,15 +16,15 @@ export default function AdminSidebar() {
   return (
     <aside className="wz-sidebar">
       {/* Brand Header */}
-      <Link to="/admin" className="wz-brand" style={{ display: "flex", alignItems: "center", gap: "10px", textDecoration: "none" }}>
+      <Link to="/admin" className="wz-brand" style={{ display: "flex", alignItems: "center", gap: "8px", textDecoration: "none" }}>
         <img
           src="/images/kimpc logo.png"
           alt="KIMPC Logo"
-          style={{ width: "32px", height: "32px", objectFit: "contain", borderRadius: "6px" }}
+          style={{ width: "28px", height: "28px", objectFit: "contain", borderRadius: "6px" }}
         />
         <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
-          <span style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--wz-text, #0f172a)", letterSpacing: "0.02em" }}>KIMPC</span>
-          <span style={{ fontSize: "0.68rem", fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>Administrator</span>
+          <span style={{ fontSize: "0.98rem", fontWeight: 800, color: "var(--wz-text, #0f172a)", letterSpacing: "0.02em" }}>KIMPC</span>
+          <span style={{ fontSize: "0.62rem", fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>Administrator</span>
         </div>
       </Link>
 
