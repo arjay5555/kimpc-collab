@@ -639,24 +639,21 @@ export default function Drivers() {
             address: driverForm.address.trim(),
           },
         });
-        const saved = res && res.ok && res.data ? res.data : null;
-        const updated = drivers.map((d) =>
-          d._id === targetId || d.id === targetId
-            ? saved || {
-                ...d,
-                name: driverForm.name.trim(),
-                email: driverForm.email.trim(),
-                phone: driverForm.phone.trim(),
-                status: driverForm.status,
-                address: driverForm.address.trim(),
-              }
-            : d
-        );
-        setDrivers(updated);
-        setSelectedDriver(updated.find((d) => d._id === targetId || d.id === targetId));
-        setEditingDriver(null);
+        const saved = res && res.ok ? (res.data?.data || res.data) : null;
+        if (saved) {
+          const updated = drivers.map((d) =>
+            d._id === targetId || d.id === targetId ? { ...d, ...saved } : d
+          );
+          setDrivers(updated);
+          setSelectedDriver(updated.find((d) => d._id === targetId || d.id === targetId) || saved);
+          setEditingDriver(null);
+          setShowAddModal(false);
+        } else {
+          alert(res?.data?.error || "Failed to update driver in database.");
+        }
       } catch (err) {
         console.error("Error updating driver:", err);
+        alert(err.message || "Network error updating driver.");
       }
     } else {
       const newD = {
@@ -665,27 +662,56 @@ export default function Drivers() {
         phone: driverForm.phone.trim() || "555-000-1234",
         status: driverForm.status,
         avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80",
-        address: driverForm.address.trim() || "123 Elm Street",
+        address: driverForm.address.trim() || "Kalilangan, Bukidnon",
         workHours: 160,
         performance: 4.5,
         performanceLabel: "Excellent",
         dutyDays: [1, 2, 6, 8, 9, 13, 14, 18, 20, 21, 28],
-        schedule: [
-          { date: "Tue, 1 Aug", client: "Alice Johnson", time: "10:00 AM", vehicle: "Toyota Corolla" },
-        ],
+        schedule: [],
       };
       try {
         const res = await api("/drivers", {
           method: "POST",
           body: newD,
         });
-        const saved = res && res.ok && res.data ? res.data : { ...newD, id: `d-${Date.now()}` };
-        setDrivers([saved, ...drivers]);
-        setSelectedDriver(saved);
-        setShowAddModal(false);
+        if (res && res.ok) {
+          const saved = res.data?.data || res.data;
+          setDrivers([saved, ...drivers]);
+          setSelectedDriver(saved);
+          setShowAddModal(false);
+          setDriverForm({
+            name: "",
+            email: "",
+            phone: "",
+            status: "On Duty",
+            address: "123 Elm Street",
+          });
+        } else {
+          alert(res?.data?.error || "Failed to save driver to the database. Please try again.");
+        }
       } catch (err) {
         console.error("Error creating driver:", err);
+        alert(err.message || "Network error saving driver to database.");
       }
+    }
+  };
+
+  const handleDeleteDriver = async (driver) => {
+    if (!driver) return;
+    const targetId = driver._id || driver.id;
+    if (!window.confirm(`Are you sure you want to delete driver "${driver.name}" from the database?`)) return;
+    try {
+      const res = await api(`/drivers/${targetId}`, { method: "DELETE" });
+      if (res && res.ok) {
+        setDrivers((prev) => prev.filter((d) => d._id !== targetId && d.id !== targetId));
+        if (selectedDriver && (selectedDriver._id === targetId || selectedDriver.id === targetId)) {
+          setSelectedDriver(null);
+        }
+      } else {
+        alert(res?.data?.error || "Failed to delete driver.");
+      }
+    } catch (err) {
+      console.error("Error deleting driver:", err);
     }
   };
 
@@ -861,8 +887,12 @@ export default function Drivers() {
                 </div>
 
                 <div className="wz-driver-profile-actions">
-                  <button className="wz-btn-driver-ban" title="Restrict / Block Driver">
-                    ⊘
+                  <button
+                    className="wz-btn-driver-ban"
+                    title="Delete Driver"
+                    onClick={() => handleDeleteDriver(selectedDriver)}
+                  >
+                    🗑
                   </button>
                   <button
                     className="wz-btn-driver-edit"
