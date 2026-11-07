@@ -653,15 +653,40 @@ export default function BookingApprovals() {
     return base
       .filter((b) => !deletedIds.includes(b.id))
       .map((b) => {
+        let paymentRecord = null;
+        try {
+          const stored = JSON.parse(localStorage.getItem("kimpc_booking_payments") || "{}");
+          paymentRecord = stored[b.id] || (b.rawId && stored[b.rawId]) || null;
+        } catch (e) {}
+
         const extra = bookingOverrides[b.id] || (b.rawId && bookingOverrides[b.rawId]) || {};
         const st = statusOverrides[b.id] || (b.rawId && statusOverrides[b.rawId]) || extra.status || b.status;
+        const paymentStatus = paymentRecord?.status || extra.paymentStatus || b.paymentStatus;
+        const paymentAmount = paymentRecord?.amount ? `₱${Number(paymentRecord.amount).toLocaleString()}` : (extra.paymentAmount || b.paymentAmount);
+        const paymentMethod = paymentRecord?.paymentMethod || extra.paymentMethod || b.paymentMethod;
+        const paymentType = paymentRecord?.paymentType || extra.paymentType || b.paymentType || "Full Rental Payment";
+        const dateReceived = paymentRecord?.dateReceived || extra.dateReceived || b.dateReceived || (paymentStatus === "Paid" ? b.bookingDate : "");
+        const receiptNo = paymentRecord?.receiptNo || extra.receiptNo || b.receiptNo || `REC-2026-${String(b.id).replace(/\D/g, "")}`;
+        const proofOfPayment = paymentRecord?.proofOfPayment || extra.proofOfPayment || b.proofOfPayment || b.gcashProof || null;
+        const notes = paymentRecord?.notes || extra.notes || b.notes || "";
+        const recordedBy = paymentRecord?.recordedBy || extra.recordedBy || b.recordedBy || user?.fullName || user?.email || "Manager";
+
         return {
           ...b,
           ...extra,
           status: st,
+          paymentStatus,
+          paymentAmount,
+          paymentMethod,
+          paymentType,
+          dateReceived,
+          receiptNo,
+          proofOfPayment,
+          notes,
+          recordedBy,
         };
       });
-  }, [liveBookings, statusOverrides, bookingOverrides, deletedIds]);
+  }, [liveBookings, statusOverrides, bookingOverrides, deletedIds, user]);
 
   // Filtered bookings based on search & dropdowns
   const filteredBookings = useMemo(() => {
@@ -1446,7 +1471,7 @@ export default function BookingApprovals() {
                   <th>Machinery Model <span className="wz-sort-arrow">↕</span></th>
                   <th>Date <span className="wz-sort-arrow">↕</span></th>
                   <th>Payment <span className="wz-sort-arrow">↕</span></th>
-                  <th style={{ textAlign: "center" }}>Actions</th>
+                  <th style={{ textAlign: "center" }}>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -1540,57 +1565,47 @@ export default function BookingApprovals() {
                             {b.paymentStatus}
                           </span>
                         </div>
-                        <div style={{ fontSize: "0.72rem", color: "#64748b", marginTop: "3px", display: "flex", alignItems: "center", gap: "4px", flexWrap: "wrap" }}>
+                        <div style={{ fontSize: "0.72rem", color: "#64748b", marginTop: "3px" }}>
                           <span style={{ fontWeight: 600, color: "#334155" }}>{b.paymentMethod || "Cash"}</span>
-                          {b.paymentMethod === "Cash" && b.cashPaymentOption && (
-                            <span style={{ color: "#0284c7", fontWeight: 600 }}>• {b.cashPaymentOption}</span>
-                          )}
-                          {b.paymentMethod === "GCash" && (
-                            b.gcashProof ? (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setPreviewGcashImage(b.gcashProof);
-                                }}
-                                style={{
-                                  background: "#ecfdf5",
-                                  border: "1px solid #a7f3d0",
-                                  borderRadius: "4px",
-                                  padding: "1px 6px",
-                                  color: "#047857",
-                                  fontSize: "0.7rem",
-                                  fontWeight: 700,
-                                  cursor: "pointer",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: "3px",
-                                }}
-                                title="Click to view member's uploaded GCash receipt screenshot"
-                              >
-                                📷 Proof Attached
-                              </button>
-                            ) : (
-                              <span style={{ color: "#f59e0b", fontSize: "0.7rem" }}>• No proof yet</span>
-                            )
-                          )}
                         </div>
                       </td>
 
-                      {/* Actions: ONLY 1 ICON ACTION BUTTON */}
+                      {/* Action: 1 action only -> View Details */}
                       <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
-                        <div className="wz-actions-cell" style={{ justifyContent: "center" }}>
-                          <button
-                            className="wz-action-icon-btn view"
-                            onClick={() => handleOpenViewModal(b)}
-                            title="Manage booking & view receipt"
-                          >
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                              <circle cx="12" cy="12" r="3" />
-                            </svg>
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenViewModal(b)}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            background: "#ffffff",
+                            color: "#0f172a",
+                            border: "1px solid #cbd5e1",
+                            borderRadius: "8px",
+                            padding: "6px 12px",
+                            fontSize: "0.75rem",
+                            fontWeight: "700",
+                            cursor: "pointer",
+                            boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+                            transition: "all 0.15s ease",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = "#f1f5f9";
+                            e.currentTarget.style.borderColor = "#94a3b8";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = "#ffffff";
+                            e.currentTarget.style.borderColor = "#cbd5e1";
+                          }}
+                          title="View Details"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                            <circle cx="12" cy="10" r="3" />
+                          </svg>
+                          View Details
+                        </button>
                       </td>
                     </tr>
                   ))
@@ -2186,33 +2201,25 @@ export default function BookingApprovals() {
                 </div>
               </div>
 
-              {/* 4. Payment Verification & Proof Card */}
+              {/* 4. Payment & Transaction Details Card */}
               <div
                 style={{
-                  background: viewingBooking.paymentStatus === "Paid" ? "#f0fdf4" : "#fffbeb",
-                  border: `1px solid ${viewingBooking.paymentStatus === "Paid" ? "#bbf7d0" : "#fef3c7"}`,
+                  background: "#ffffff",
+                  border: `1px solid ${viewingBooking.paymentStatus === "Paid" ? "#bbf7d0" : "#e2e8f0"}`,
                   borderRadius: "12px",
-                  padding: "16px",
+                  padding: "18px 20px",
                   marginBottom: "16px",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px", marginBottom: "10px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px", marginBottom: "14px", borderBottom: "1px solid #f1f5f9", paddingBottom: "10px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <span style={{ fontSize: "1.2rem" }}>
-                      {viewingBooking.paymentMethod === "GCash" ? "📱" : "💵"}
-                    </span>
+                    <span style={{ fontSize: "1.1rem" }}>💳</span>
                     <div>
-                      <strong style={{ fontSize: "0.92rem", color: "#0f172a" }}>
-                        Payment Method: {viewingBooking.paymentMethod || "Cash"}
-                      </strong>
-                      <div style={{ fontSize: "0.76rem", color: "#475569" }}>
-                        {viewingBooking.paymentMethod === "Cash" && (
-                          <span>Option: <strong>{viewingBooking.cashPaymentOption === "Upon Return" ? "Pay upon returning machinery" : "Pay upon pickup / dispatch"}</strong></span>
-                        )}
-                        {viewingBooking.paymentMethod === "GCash" && (
-                          <span>KIMPC GCash: <strong>0926 463 8983</strong> (Kalilangan Irrigators MPC)</span>
-                        )}
-                      </div>
+                      <h5 style={{ margin: 0, fontSize: "0.96rem", fontWeight: 800, color: "#0f172a" }}>
+                        Payment &amp; Settlement Details
+                      </h5>
+                      <span style={{ fontSize: "0.74rem", color: "#64748b" }}>Official transaction audit record</span>
                     </div>
                   </div>
 
@@ -2253,58 +2260,136 @@ export default function BookingApprovals() {
                   </div>
                 </div>
 
-                {/* GCash Screenshot Preview */}
-                {viewingBooking.paymentMethod === "GCash" && (
-                  <div style={{ marginTop: "12px", borderTop: "1px dashed #e2e8f0", paddingTop: "12px" }}>
-                    <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#334155", display: "block", marginBottom: "6px" }}>
-                      GCash Payment Screenshot Proof:
+                {/* Grid of Key Payment Information */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px", marginBottom: "14px" }}>
+                  {/* Payment Amount */}
+                  <div style={{ background: "#f8fafc", padding: "10px 14px", borderRadius: "8px", border: "1px solid #f1f5f9" }}>
+                    <span style={{ fontSize: "0.70rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, display: "block", marginBottom: "2px" }}>
+                      Payment Amount
                     </span>
-                    {viewingBooking.gcashProof ? (
-                      <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                    <strong style={{ fontSize: "1.15rem", color: "#0f172a", fontWeight: 900 }}>
+                      {viewingBooking.paymentAmount || "₱0.00"}
+                    </strong>
+                  </div>
+
+                  {/* Payment Type */}
+                  <div style={{ background: "#f8fafc", padding: "10px 14px", borderRadius: "8px", border: "1px solid #f1f5f9" }}>
+                    <span style={{ fontSize: "0.70rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, display: "block", marginBottom: "2px" }}>
+                      Payment Type
+                    </span>
+                    <strong style={{ fontSize: "0.85rem", color: "#334155" }}>
+                      {viewingBooking.paymentType || "Full Rental Payment"}
+                    </strong>
+                  </div>
+
+                  {/* Payment Method */}
+                  <div style={{ background: "#f8fafc", padding: "10px 14px", borderRadius: "8px", border: "1px solid #f1f5f9" }}>
+                    <span style={{ fontSize: "0.70rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, display: "block", marginBottom: "2px" }}>
+                      Payment Method
+                    </span>
+                    <strong style={{ fontSize: "0.85rem", color: "#0284c7" }}>
+                      {viewingBooking.paymentMethod || "Cash"}
+                    </strong>
+                    {viewingBooking.cashPaymentOption && (
+                      <span style={{ fontSize: "0.70rem", color: "#64748b", display: "block" }}>
+                        ({viewingBooking.cashPaymentOption})
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Date Received */}
+                  <div style={{ background: "#f8fafc", padding: "10px 14px", borderRadius: "8px", border: "1px solid #f1f5f9" }}>
+                    <span style={{ fontSize: "0.70rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, display: "block", marginBottom: "2px" }}>
+                      Date Received
+                    </span>
+                    <strong style={{ fontSize: "0.85rem", color: "#334155" }}>
+                      {viewingBooking.dateReceived || (viewingBooking.paymentStatus === "Paid" ? viewingBooking.bookingDate : "Pending Settlement")}
+                    </strong>
+                  </div>
+
+                  {/* Receipt or Reference Number */}
+                  <div style={{ background: "#f8fafc", padding: "10px 14px", borderRadius: "8px", border: "1px solid #f1f5f9" }}>
+                    <span style={{ fontSize: "0.70rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, display: "block", marginBottom: "2px" }}>
+                      Receipt / Reference No.
+                    </span>
+                    <strong style={{ fontSize: "0.85rem", color: "#0f172a", fontFamily: "monospace" }}>
+                      {viewingBooking.receiptNo || viewingBooking.referenceNumber || viewingBooking.id}
+                    </strong>
+                  </div>
+
+                  {/* Recorded By (Filled automatically from manager account) */}
+                  <div style={{ background: "#f8fafc", padding: "10px 14px", borderRadius: "8px", border: "1px solid #f1f5f9" }}>
+                    <span style={{ fontSize: "0.70rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, display: "block", marginBottom: "2px" }}>
+                      Recorded By
+                    </span>
+                    <span style={{ fontSize: "0.80rem", fontWeight: 700, color: "#166534", background: "#dcfce7", padding: "2px 8px", borderRadius: "6px", display: "inline-block" }}>
+                      👤 {viewingBooking.recordedBy || user?.fullName || user?.email || "Manager (KIMPC)"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Proof of Payment & Notes */}
+                <div style={{ display: "grid", gridTemplateColumns: (viewingBooking.proofOfPayment || viewingBooking.gcashProof) ? "1.2fr 1fr" : "1fr", gap: "14px", borderTop: "1px dashed #e2e8f0", paddingTop: "12px" }}>
+                  {/* Notes */}
+                  <div>
+                    <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
+                      📝 Proof of Payment / Notes:
+                    </span>
+                    <div style={{ fontSize: "0.80rem", color: "#334155", background: "#f8fafc", padding: "8px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", minHeight: "44px" }}>
+                      {viewingBooking.notes || viewingBooking.remarks || "Standard payment record for KIMPC machinery rental."}
+                    </div>
+                  </div>
+
+                  {/* Proof of Payment View */}
+                  {(viewingBooking.proofOfPayment || viewingBooking.gcashProof) && (
+                    <div>
+                      <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
+                        📷 Attached Payment Proof:
+                      </span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                         <img
-                          src={viewingBooking.gcashProof}
-                          alt="GCash Payment Proof"
-                          onClick={() => setPreviewGcashImage(viewingBooking.gcashProof)}
+                          src={viewingBooking.proofOfPayment || viewingBooking.gcashProof}
+                          alt="Proof of Payment"
+                          onClick={() => setPreviewGcashImage(viewingBooking.proofOfPayment || viewingBooking.gcashProof)}
                           style={{
-                            width: "80px",
-                            height: "80px",
+                            width: "50px",
+                            height: "50px",
                             objectFit: "cover",
-                            borderRadius: "8px",
+                            borderRadius: "6px",
                             border: "2px solid #059669",
                             cursor: "pointer",
-                            boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
+                            boxShadow: "0 2px 4px rgba(0,0,0,0.08)",
                           }}
-                          title="Click to zoom in on proof screenshot"
+                          title="Click to view full image"
                         />
                         <div>
-                          <p style={{ margin: "0 0 4px", fontSize: "0.8rem", color: "#065f46", fontWeight: 600 }}>
-                            ✓ Screenshot uploaded by member
-                          </p>
+                          <div style={{ fontSize: "0.75rem", color: "#065f46", fontWeight: 600, marginBottom: "4px" }}>
+                            ✓ Proof attached
+                          </div>
                           <button
                             type="button"
-                            onClick={() => setPreviewGcashImage(viewingBooking.gcashProof)}
+                            onClick={() => setPreviewGcashImage(viewingBooking.proofOfPayment || viewingBooking.gcashProof)}
                             style={{
-                              background: "#ffffff",
-                              border: "1px solid #cbd5e1",
+                              background: "#0284c7",
+                              color: "#ffffff",
+                              border: "none",
                               borderRadius: "6px",
                               padding: "4px 10px",
-                              fontSize: "0.75rem",
-                              fontWeight: 600,
-                              color: "#334155",
+                              fontSize: "0.74rem",
+                              fontWeight: 700,
                               cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
                             }}
                           >
-                            🔍 Click to Enlarge Screenshot
+                            🔍 View Proof
                           </button>
                         </div>
                       </div>
-                    ) : (
-                      <div style={{ fontSize: "0.78rem", color: "#b45309", background: "#fef3c7", padding: "8px 12px", borderRadius: "6px" }}>
-                        ⚠️ Member has not uploaded a GCash transaction screenshot yet.
-                      </div>
-                    )}
-                  </div>
-                )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* 5. Official Machine Rental Receipt / Voucher */}
