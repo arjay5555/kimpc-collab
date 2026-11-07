@@ -618,7 +618,7 @@ export default function Payments() {
               <table className="wz-fin-table">
                 <thead>
                   <tr>
-                    <th style={{ width: "40px", textAlign: "center" }}>
+                    <th style={{ width: "32px", textAlign: "center", padding: "10px 4px" }}>
                       <input
                         type="checkbox"
                         checked={
@@ -629,16 +629,16 @@ export default function Payments() {
                         style={{ cursor: "pointer" }}
                       />
                     </th>
-                    <th>Invoice ID ↕</th>
-                    <th>Client Name ↕</th>
-                    <th>Machinery Model ↕</th>
-                    <th>Payment Method ↕</th>
-                    <th>Rate / Unit ↕</th>
-                    <th>Rental Period ↕</th>
+                    <th>Invoice ↕</th>
+                    <th>Client ↕</th>
+                    <th>Machinery ↕</th>
+                    <th>Payment ↕</th>
+                    <th>Rate ↕</th>
+                    <th>Period ↕</th>
                     <th>Amount ↕</th>
                     <th>Due Date ↕</th>
                     <th>Status ↕</th>
-                    <th style={{ textAlign: "center" }}>Action ↕</th>
+                    <th style={{ textAlign: "center" }}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -658,7 +658,7 @@ export default function Payments() {
                             backgroundColor: isChecked ? "#f0f9ff" : undefined,
                           }}
                         >
-                          <td style={{ textAlign: "center" }}>
+                          <td style={{ textAlign: "center", padding: "10px 4px" }}>
                             <input
                               type="checkbox"
                               checked={isChecked}
@@ -669,23 +669,23 @@ export default function Payments() {
                           <td style={{ fontWeight: "700", color: "#0f172a", whiteSpace: "nowrap" }}>
                             {inv.id}
                             {inv.isLive && (
-                              <span style={{ marginLeft: "5px", fontSize: "0.68rem", background: "#ecfdf5", color: "#059669", padding: "1px 5px", borderRadius: "4px", fontWeight: 700 }}>
+                              <span style={{ marginLeft: "4px", fontSize: "0.65rem", background: "#ecfdf5", color: "#059669", padding: "1px 4px", borderRadius: "3px", fontWeight: 700 }}>
                                 LIVE
                               </span>
                             )}
                           </td>
                           <td>
-                            <div style={{ fontWeight: "600", color: "#0f172a" }}>{inv.clientName}</div>
+                            <div style={{ fontWeight: "600", color: "#0f172a", lineHeight: 1.25 }}>{inv.clientName}</div>
                             {inv.clientPhone && inv.clientPhone !== "—" && (
-                              <div style={{ fontSize: "0.74rem", color: "#64748b" }}>📞 {inv.clientPhone}</div>
+                              <div style={{ fontSize: "0.70rem", color: "#64748b" }}>📞 {inv.clientPhone}</div>
                             )}
                           </td>
-                          <td style={{ color: "#334155", fontWeight: 500 }}>{inv.machineryModel}</td>
+                          <td style={{ color: "#334155", fontWeight: 500, fontSize: "0.76rem" }}>{inv.machineryModel}</td>
                           <td>
-                            <div style={{ fontSize: "0.78rem", display: "flex", alignItems: "center", gap: "4px", flexWrap: "wrap" }}>
+                            <div style={{ fontSize: "0.75rem", display: "flex", alignItems: "center", gap: "3px", flexWrap: "wrap" }}>
                               <strong style={{ color: "#0f172a" }}>{inv.paymentMethod || "Cash"}</strong>
                               {inv.paymentMethod === "Cash" && inv.cashPaymentOption && (
-                                <span style={{ color: "#0284c7", fontSize: "0.72rem" }}>• {inv.cashPaymentOption}</span>
+                                <span style={{ color: "#0284c7", fontSize: "0.70rem" }}>• {inv.cashPaymentOption}</span>
                               )}
                               {inv.paymentMethod === "GCash" && (
                                 inv.gcashProof ? (
@@ -696,9 +696,9 @@ export default function Payments() {
                                       background: "#ecfdf5",
                                       border: "1px solid #a7f3d0",
                                       borderRadius: "4px",
-                                      padding: "1px 5px",
+                                      padding: "1px 4px",
                                       color: "#047857",
-                                      fontSize: "0.7rem",
+                                      fontSize: "0.68rem",
                                       fontWeight: 700,
                                       cursor: "pointer",
                                     }}
@@ -706,18 +706,18 @@ export default function Payments() {
                                     📷 Proof
                                   </button>
                                 ) : (
-                                  <span style={{ color: "#f59e0b", fontSize: "0.7rem" }}>• Pending</span>
+                                  <span style={{ color: "#f59e0b", fontSize: "0.68rem" }}>• Pending</span>
                                 )
                               )}
                             </div>
                           </td>
-                          <td>₱{Number(inv.ratePerDay).toLocaleString()}</td>
-                          <td>{inv.rentalPeriod}</td>
-                          <td style={{ fontWeight: "800", color: "#0f172a" }}>
+                          <td style={{ whiteSpace: "nowrap" }}>₱{Number(inv.ratePerDay).toLocaleString()}</td>
+                          <td style={{ whiteSpace: "nowrap", fontSize: "0.74rem" }}>{inv.rentalPeriod}</td>
+                          <td style={{ fontWeight: "800", color: "#0f172a", whiteSpace: "nowrap" }}>
                             ₱{Number(inv.amount).toLocaleString()}
                           </td>
-                          <td style={{ color: "#64748b" }}>{inv.dueDate}</td>
-                          <td>
+                          <td style={{ color: "#64748b", whiteSpace: "nowrap", fontSize: "0.74rem" }}>{inv.dueDate}</td>
+                          <td style={{ whiteSpace: "nowrap" }}>
                             {inv.status === "Completed" && (
                               <span className="wz-status-completed">Completed</span>
                             )}
@@ -729,7 +729,7 @@ export default function Payments() {
                             )}
                           </td>
                           <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
-                            <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                            <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
                               {inv.status !== "Completed" && (
                                 <button
                                   className="wz-fin-action-btn"

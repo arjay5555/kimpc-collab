@@ -4015,8 +4015,8 @@
 
 .wz-fin-table th {
   background: #f8fafc;
-  padding: 14px 18px;
-  font-size: 0.78rem;
+  padding: 10px 8px;
+  font-size: 0.73rem;
   font-weight: 700;
   color: #64748b;
   border-bottom: 1px solid var(--wz-border);
@@ -4024,8 +4024,8 @@
 }
 
 .wz-fin-table td {
-  padding: 15px 18px;
-  font-size: 0.84rem;
+  padding: 10px 8px;
+  font-size: 0.77rem;
   color: #1e293b;
   border-bottom: 1px solid #f1f5f9;
   vertical-align: middle;
@@ -4037,45 +4037,49 @@
 
 .wz-status-completed {
   display: inline-block;
-  padding: 4px 12px;
-  border-radius: 20px;
+  padding: 3px 8px;
+  border-radius: 12px;
   background: #182538;
   color: #ffffff;
-  font-size: 0.74rem;
+  font-size: 0.70rem;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .wz-status-awaiting {
   display: inline-block;
-  padding: 4px 12px;
-  border-radius: 20px;
+  padding: 3px 8px;
+  border-radius: 12px;
   background: #e0f2fe;
   color: #0284c7;
-  font-size: 0.74rem;
+  font-size: 0.70rem;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .wz-status-overdue {
   display: inline-block;
-  padding: 4px 12px;
-  border-radius: 20px;
+  padding: 3px 8px;
+  border-radius: 12px;
   background: #ffe4e6;
   color: #e11d48;
-  font-size: 0.74rem;
+  font-size: 0.70rem;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .wz-fin-action-btn {
-  padding: 4px 10px;
-  border-radius: 6px;
+  padding: 3px 7px;
+  border-radius: 5px;
   border: 1px solid #e2e8f0;
   background: transparent;
   color: #64748b;
-  font-size: 0.75rem;
+  font-size: 0.71rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
-  margin-right: 6px;
+  margin-right: 4px;
+  white-space: nowrap;
 }
 
 .wz-fin-action-btn:hover {
