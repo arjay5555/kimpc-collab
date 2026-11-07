@@ -291,18 +291,18 @@ export default function Expenses() {
 
   // SVG dimensions for cashflow chart
   const svgWidth = 650;
-  const svgHeight = 220;
+  const svgHeight = 155;
   const maxVal = 24000;
 
   const pointsIncome = MONTHS_DATA.map((d, i) => {
     const x = 50 + i * ((svgWidth - 70) / (MONTHS_DATA.length - 1));
-    const y = svgHeight - 35 - (d.income / maxVal) * (svgHeight - 65);
+    const y = svgHeight - 26 - (d.income / maxVal) * (svgHeight - 48);
     return { x, y, ...d };
   });
 
   const pointsExpense = MONTHS_DATA.map((d, i) => {
     const x = 50 + i * ((svgWidth - 70) / (MONTHS_DATA.length - 1));
-    const y = svgHeight - 35 - (d.expense / maxVal) * (svgHeight - 65);
+    const y = svgHeight - 26 - (d.expense / maxVal) * (svgHeight - 48);
     return { x, y, ...d };
   });
 
@@ -326,7 +326,7 @@ export default function Expenses() {
 
   const incomePath = buildSmoothPath(pointsIncome);
   const expensePath = buildSmoothPath(pointsExpense);
-  const expenseAreaPath = `${expensePath} L ${pointsExpense[pointsExpense.length - 1].x} ${svgHeight - 35} L ${pointsExpense[0].x} ${svgHeight - 35} Z`;
+  const expenseAreaPath = `${expensePath} L ${pointsExpense[pointsExpense.length - 1].x} ${svgHeight - 26} L ${pointsExpense[0].x} ${svgHeight - 26} Z`;
 
   const activeIncomePt = pointsIncome[hoveredMonthIndex];
   const activeExpensePt = pointsExpense[hoveredMonthIndex];
@@ -353,7 +353,7 @@ export default function Expenses() {
                 <div className="wz-exp-kpi-card">
                   <div className="wz-exp-kpi-header">
                     <div className="wz-exp-kpi-icon">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                         <rect x="2" y="5" width="20" height="14" rx="2" />
                         <line x1="2" y1="10" x2="22" y2="10" />
                       </svg>
@@ -377,7 +377,7 @@ export default function Expenses() {
                 <div className="wz-exp-kpi-card">
                   <div className="wz-exp-kpi-header">
                     <div className="wz-exp-kpi-icon">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                         <circle cx="12" cy="12" r="10" />
                         <line x1="12" y1="8" x2="12" y2="16" />
                         <line x1="8" y1="12" x2="16" y2="12" />
@@ -402,7 +402,7 @@ export default function Expenses() {
                 <div className="wz-exp-kpi-card">
                   <div className="wz-exp-kpi-header">
                     <div className="wz-exp-kpi-icon">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                         <circle cx="12" cy="12" r="10" />
                         <line x1="8" y1="12" x2="16" y2="12" />
                       </svg>
@@ -467,7 +467,7 @@ export default function Expenses() {
 
                     {/* Y-axis grid lines & labels */}
                     {[24000, 18000, 12000, 6000, 0].map((val) => {
-                      const y = svgHeight - 35 - (val / maxVal) * (svgHeight - 65);
+                      const y = svgHeight - 26 - (val / maxVal) * (svgHeight - 48);
                       return (
                         <g key={val}>
                           <line
@@ -484,7 +484,7 @@ export default function Expenses() {
                             y={y + 4}
                             textAnchor="end"
                             fill="#94a3b8"
-                            fontSize="10"
+                            fontSize="9"
                             fontWeight="500"
                           >
                             ₱{val === 0 ? "0" : `${val / 1000}K`}
@@ -500,10 +500,10 @@ export default function Expenses() {
                         <text
                           key={d.month}
                           x={x}
-                          y={svgHeight - 14}
+                          y={svgHeight - 8}
                           textAnchor="middle"
                           fill="#94a3b8"
-                          fontSize="10"
+                          fontSize="9"
                           fontWeight="500"
                         >
                           {d.month}
@@ -536,7 +536,7 @@ export default function Expenses() {
                         x1={activeIncomePt.x}
                         y1={activeIncomePt.y}
                         x2={activeIncomePt.x}
-                        y2={svgHeight - 35}
+                        y2={svgHeight - 26}
                         stroke="#cbd5e1"
                         strokeWidth="1.5"
                         strokeDasharray="4,4"
@@ -571,7 +571,7 @@ export default function Expenses() {
                         transform={`translate(${Math.min(
                           Math.max(activeIncomePt.x - 65, 45),
                           svgWidth - 145
-                        )}, ${Math.max(activeIncomePt.y - 68, 10)})`}
+                        )}, ${Math.max(activeIncomePt.y - 58, 4)})`}
                       >
                         <rect
                           width="130"
@@ -611,7 +611,7 @@ export default function Expenses() {
             {/* Right Column: Expense Breakdown Card */}
             <div className="wz-expense-breakdown-card">
               <div className="wz-breakdown-header">
-                <span style={{ fontSize: "1rem", fontWeight: "800", color: "#0f172a" }}>
+                <span style={{ fontSize: "0.95rem", fontWeight: "800", color: "#0f172a" }}>
                   Expense Breakdown
                 </span>
                 <button style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: "1rem" }}>
