@@ -3156,13 +3156,15 @@
 }
 
 .wz-btn-driver-edit {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--wz-border);
   background: #ffffff;
-  border: 1px solid #cbd5e1;
-  color: #334155;
-  border-radius: 6px;
-  padding: 5px 12px;
-  font-size: 0.76rem;
-  font-weight: 700;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -3170,6 +3172,7 @@
 .wz-btn-driver-edit:hover {
   background: #f1f5f9;
   color: #0f172a;
+  border-color: #cbd5e1;
 }
 
 /* Contact Information Block */
@@ -3179,10 +3182,11 @@
   gap: 8px;
   font-size: 0.82rem;
   color: #475569;
-  background: #f8fafc;
+  background: #ffffff;
   padding: 12px 14px;
   border-radius: 12px;
   border: 1px solid var(--wz-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 
 .wz-driver-contact-item {
@@ -3471,7 +3475,7 @@
 }
 
 .wz-driver-sched-card {
-  background: #f8fafc;
+  background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
   padding: 11px 13px;
@@ -3479,12 +3483,13 @@
   flex-direction: column;
   gap: 7px;
   transition: all 0.15s ease;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
 }
 
 .wz-driver-sched-card:hover {
   background: #ffffff;
   border-color: #cbd5e1;
-  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.06);
 }
 
 .wz-driver-sched-card-top {

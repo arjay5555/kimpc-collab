@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { api } from "../../services/api";
@@ -585,13 +585,53 @@ export default function Drivers() {
   // Add / Edit Modal State
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingDriver, setEditingDriver] = useState(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef(null);
   const [driverForm, setDriverForm] = useState({
     name: "",
     email: "",
     phone: "",
     status: "On Duty",
-    address: "123 Elm Street",
+    address: "Kalilangan, Bukidnon",
+    avatar: "",
   });
+
+  const handleAvatarFileChange = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      alert("Invalid image type. Please select a JPG, PNG, or WebP photo.");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert("Image size should be less than 5MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64Data = event.target.result;
+      setUploadingAvatar(true);
+      try {
+        const res = await api("/machinery-units/upload-photo", {
+          method: "POST",
+          body: { image: base64Data, filename: `driver-${Date.now()}` },
+        });
+        if (res && res.ok && res.data?.imageUrl) {
+          setDriverForm((prev) => ({ ...prev, avatar: res.data.imageUrl }));
+        } else {
+          setDriverForm((prev) => ({ ...prev, avatar: base64Data }));
+        }
+      } catch {
+        setDriverForm((prev) => ({ ...prev, avatar: base64Data }));
+      } finally {
+        setUploadingAvatar(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Filtered list
   const filteredDrivers = useMemo(() => {
@@ -637,6 +677,7 @@ export default function Drivers() {
             phone: driverForm.phone.trim(),
             status: driverForm.status,
             address: driverForm.address.trim(),
+            avatar: driverForm.avatar.trim() || editingDriver.avatar || "",
           },
         });
         const saved = res && res.ok ? (res.data?.data || res.data) : null;
@@ -661,7 +702,7 @@ export default function Drivers() {
         email: driverForm.email.trim(),
         phone: driverForm.phone.trim() || "555-000-1234",
         status: driverForm.status,
-        avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80",
+        avatar: driverForm.avatar.trim() || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80",
         address: driverForm.address.trim() || "Kalilangan, Bukidnon",
         workHours: 160,
         performance: 4.5,
@@ -684,7 +725,8 @@ export default function Drivers() {
             email: "",
             phone: "",
             status: "On Duty",
-            address: "123 Elm Street",
+            address: "Kalilangan, Bukidnon",
+            avatar: "",
           });
         } else {
           alert(res?.data?.error || "Failed to save driver to the database. Please try again.");
@@ -774,7 +816,8 @@ export default function Drivers() {
                 email: "",
                 phone: "",
                 status: "On Duty",
-                address: "123 Elm Street",
+                address: "Kalilangan, Bukidnon",
+                avatar: "",
               });
               setShowAddModal(true);
             }}
@@ -896,6 +939,7 @@ export default function Drivers() {
                   </button>
                   <button
                     className="wz-btn-driver-edit"
+                    title="Edit Driver Profile"
                     onClick={() => {
                       setEditingDriver(selectedDriver);
                       setDriverForm({
@@ -903,12 +947,25 @@ export default function Drivers() {
                         email: selectedDriver.email,
                         phone: selectedDriver.phone,
                         status: selectedDriver.status,
-                        address: selectedDriver.address,
+                        address: selectedDriver.address || "Kalilangan, Bukidnon",
+                        avatar: selectedDriver.avatar || "",
                       });
                       setShowAddModal(true);
                     }}
                   >
-                    Edit
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
                   </button>
                   <button
                     className="wz-cal-btn-close"
@@ -1124,6 +1181,123 @@ export default function Drivers() {
             </div>
 
             <form onSubmit={handleSaveDriver}>
+              {/* Profile Photo Upload / Edit */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "14px",
+                  padding: "12px 14px",
+                  background: "#ffffff",
+                  border: "1px dashed #cbd5e1",
+                  borderRadius: "10px",
+                  marginBottom: "14px",
+                }}
+              >
+                <div style={{ position: "relative", width: "56px", height: "56px", flexShrink: 0 }}>
+                  {driverForm.avatar ? (
+                    <img
+                      src={driverForm.avatar}
+                      alt="Driver Avatar"
+                      style={{
+                        width: "56px",
+                        height: "56px",
+                        borderRadius: "50%",
+                        objectFit: "cover",
+                        border: "2px solid #e2e8f0",
+                        boxShadow: "0 2px 5px rgba(0,0,0,0.08)",
+                      }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        width: "56px",
+                        height: "56px",
+                        borderRadius: "50%",
+                        background: "#0f172a",
+                        color: "#ffffff",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: "1.2rem",
+                        fontWeight: "700",
+                      }}
+                    >
+                      {driverForm.name ? driverForm.name.charAt(0).toUpperCase() : "👤"}
+                    </div>
+                  )}
+                  {driverForm.avatar && (
+                    <button
+                      type="button"
+                      title="Clear photo"
+                      onClick={() => setDriverForm((p) => ({ ...p, avatar: "" }))}
+                      style={{
+                        position: "absolute",
+                        top: "-4px",
+                        right: "-4px",
+                        width: "18px",
+                        height: "18px",
+                        borderRadius: "50%",
+                        background: "#ef4444",
+                        color: "#ffffff",
+                        border: "none",
+                        fontSize: "10px",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        lineHeight: 1,
+                      }}
+                    >
+                      &times;
+                    </button>
+                  )}
+                </div>
+
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap", marginBottom: "6px" }}>
+                    <input
+                      type="file"
+                      ref={avatarInputRef}
+                      onChange={handleAvatarFileChange}
+                      accept="image/jpeg,image/png,image/webp"
+                      style={{ display: "none" }}
+                    />
+                    <button
+                      type="button"
+                      disabled={uploadingAvatar}
+                      onClick={() => avatarInputRef.current && avatarInputRef.current.click()}
+                      style={{
+                        padding: "6px 12px",
+                        background: "#0284c7",
+                        color: "#ffffff",
+                        border: "none",
+                        borderRadius: "6px",
+                        fontSize: "0.78rem",
+                        fontWeight: "600",
+                        cursor: uploadingAvatar ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      {uploadingAvatar ? "Uploading..." : driverForm.avatar ? "Change Photo" : "Upload Photo"}
+                    </button>
+                    <span style={{ fontSize: "0.72rem", color: "#64748b" }}>JPG, PNG, WebP (Max 5MB)</span>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Or paste direct image URL (https://...)"
+                    value={driverForm.avatar}
+                    onChange={(e) => setDriverForm({ ...driverForm, avatar: e.target.value })}
+                    style={{
+                      width: "100%",
+                      padding: "6px 10px",
+                      border: "1px solid #cbd5e1",
+                      borderRadius: "6px",
+                      fontSize: "0.78rem",
+                    }}
+                  />
+                </div>
+              </div>
+
               <div style={{ marginBottom: "12px" }}>
                 <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", color: "#475569", marginBottom: "5px" }}>
                   Driver Full Name
