@@ -996,83 +996,23 @@ export default function Units() {
                           )}
                         </td>
 
-                        {/* 5. Assigned Driver (Interactive Click-to-Change, Normal Black Styling) */}
+                        {/* 5. Assigned Driver */}
                         <td>
                           {u.assignedDriver && u.assignedDriver !== "Unassigned" ? (
-                            <button
-                              type="button"
-                              onClick={() => openChangeDriverModal(u)}
-                              title="Click to change or reassign driver"
-                              style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "8px",
-                                padding: "5px 12px",
-                                background: "#ffffff",
-                                border: "1px solid #cbd5e1",
-                                borderRadius: "20px",
-                                color: "#0f172a",
-                                fontWeight: "600",
-                                fontSize: "0.8rem",
-                                cursor: "pointer",
-                                textAlign: "left",
-                                transition: "all 0.15s ease",
-                                boxShadow: "0 1px 2px rgba(0,0,0,0.04)"
-                              }}
-                            >
-                              <span style={{
-                                width: "22px",
-                                height: "22px",
-                                borderRadius: "50%",
-                                background: "#0f172a",
-                                color: "#ffffff",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                fontSize: "0.7rem",
-                                fontWeight: "700"
-                              }}>
-                                {u.assignedDriver.charAt(0).toUpperCase()}
-                              </span>
-                              <div>
-                                <div style={{ lineHeight: "1.2", fontWeight: "700", color: "#0f172a" }}>{u.assignedDriver}</div>
-                                {u.driverPhone && (
-                                  <div style={{ fontSize: "0.68rem", color: "#64748b", fontWeight: "400" }}>{u.driverPhone}</div>
-                                )}
+                            <div>
+                              <div style={{ fontWeight: "700", color: "#0f172a", fontSize: "0.86rem" }}>
+                                {u.assignedDriver}
                               </div>
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: "2px" }}>
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                              </svg>
-                            </button>
+                              {u.driverPhone && (
+                                <div style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                                  {u.driverPhone}
+                                </div>
+                              )}
+                            </div>
                           ) : (
-                            <button
-                              type="button"
-                              onClick={() => openChangeDriverModal(u)}
-                              title="Click to assign a registered driver"
-                              style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "6px",
-                                padding: "5px 12px",
-                                background: "#ffffff",
-                                border: "1px dashed #cbd5e1",
-                                borderRadius: "20px",
-                                color: "#0f172a",
-                                fontWeight: "500",
-                                fontSize: "0.78rem",
-                                cursor: "pointer",
-                                transition: "all 0.15s ease",
-                              }}
-                            >
-                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0f172a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                                <circle cx="9" cy="7" r="4" />
-                                <line x1="19" y1="8" x2="19" y2="14" />
-                                <line x1="22" y1="11" x2="16" y2="11" />
-                              </svg>
-                              <span>+ Assign Driver</span>
-                            </button>
+                            <span style={{ color: "#94a3b8", fontStyle: "italic", fontSize: "0.82rem" }}>
+                              Unassigned
+                            </span>
                           )}
                         </td>
 
@@ -1202,71 +1142,18 @@ export default function Units() {
                   </div>
 
                   {/* Assigned Driver */}
-                  <div className="wz-unit-col-spec" style={{ minWidth: "150px" }}>
+                  <div className="wz-unit-col-spec" style={{ minWidth: "130px" }}>
                     <span className="wz-unit-spec-label">Assigned Driver</span>
-                    {u.assignedDriver && u.assignedDriver !== "Unassigned" ? (
-                      <button
-                        type="button"
-                        onClick={() => openChangeDriverModal(u)}
-                        title="Click to change driver"
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "6px",
-                          padding: "4px 10px",
-                          background: "#ffffff",
-                          border: "1px solid #cbd5e1",
-                          borderRadius: "16px",
-                          color: "#0f172a",
-                          fontWeight: "700",
-                          fontSize: "0.78rem",
-                          cursor: "pointer",
-                          marginTop: "3px"
-                        }}
-                      >
-                        <span style={{
-                          width: "18px",
-                          height: "18px",
-                          borderRadius: "50%",
-                          background: "#0f172a",
-                          color: "#ffffff",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontSize: "0.68rem",
-                          fontWeight: "700"
-                        }}>
-                          {u.assignedDriver.charAt(0).toUpperCase()}
-                        </span>
-                        <span style={{ color: "#0f172a" }}>{u.assignedDriver}</span>
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.4" style={{ opacity: 0.75 }}>
-                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                        </svg>
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => openChangeDriverModal(u)}
-                        title="Click to assign driver"
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "4px",
-                          padding: "4px 10px",
-                          background: "#ffffff",
-                          border: "1px dashed #cbd5e1",
-                          borderRadius: "16px",
-                          color: "#0f172a",
-                          fontWeight: "500",
-                          fontSize: "0.75rem",
-                          cursor: "pointer",
-                          marginTop: "3px"
-                        }}
-                      >
-                        + Assign Driver
-                      </button>
-                    )}
+                    <div
+                      className="wz-unit-spec-val"
+                      style={{
+                        fontWeight: "700",
+                        color: u.assignedDriver && u.assignedDriver !== "Unassigned" ? "#0f172a" : "#94a3b8",
+                        fontStyle: u.assignedDriver && u.assignedDriver !== "Unassigned" ? "normal" : "italic",
+                      }}
+                    >
+                      {u.assignedDriver && u.assignedDriver !== "Unassigned" ? u.assignedDriver : "Unassigned"}
+                    </div>
                   </div>
 
                   {/* Actions: ONLY Icon Buttons */}
@@ -1571,7 +1458,7 @@ export default function Units() {
                       ))}
                     </select>
                     <span style={{ fontSize: "0.72rem", color: "#64748b" }}>
-                      Choose from registered KIMPC Drivers. Can also be reassigned on the fly in the Units list.
+                      Choose from registered KIMPC Drivers.
                     </span>
                   </div>
 
