@@ -367,6 +367,45 @@ const DEFAULT_DRIVER_BOOKINGS = [
   },
 ];
 
+// Helper to format concise, readable date ranges for driver schedule
+function formatScheduleDate(item) {
+  if (item.startDate) {
+    const s = new Date(item.startDate);
+    if (!isNaN(s.getTime())) {
+      const sMonth = s.toLocaleDateString("en-US", { month: "short" });
+      const sDay = s.getDate();
+      const sYear = s.getFullYear();
+
+      if (item.endDate) {
+        const e = new Date(item.endDate);
+        if (!isNaN(e.getTime())) {
+          const eMonth = e.toLocaleDateString("en-US", { month: "short" });
+          const eDay = e.getDate();
+          const eYear = e.getFullYear();
+
+          if (sMonth === eMonth && sYear === eYear) {
+            if (sDay === eDay) {
+              return `${sMonth} ${sDay}, ${sYear}`;
+            }
+            return `${sMonth} ${sDay} – ${eDay}, ${sYear}`;
+          }
+          if (sYear === eYear) {
+            return `${sMonth} ${sDay} – ${eMonth} ${eDay}, ${sYear}`;
+          }
+          return `${sMonth} ${sDay}, ${sYear} – ${eMonth} ${eDay}, ${sYear}`;
+        }
+      }
+      return `${sMonth} ${sDay}, ${sYear}`;
+    }
+  }
+
+  if (item.dateRange) {
+    return item.dateRange.replace(/\s+to\s+/i, " – ");
+  }
+
+  return item.date || item.bookingDate || "Scheduled";
+}
+
 export default function Drivers() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -853,63 +892,7 @@ export default function Drivers() {
               </div>
             </div>
 
-            {/* 3. Driver Bookings Card (Replaces Work Performance & Work Hours) */}
-            <div className="wz-driver-bookings-card">
-              <div className="wz-driver-bookings-header">
-                <h4 className="wz-driver-bookings-title">All Assigned Bookings</h4>
-                <span className="wz-driver-bookings-count">
-                  {selectedDriverBookings.length} {selectedDriverBookings.length === 1 ? "Booking" : "Bookings"}
-                </span>
-              </div>
-
-              <div className="wz-driver-bookings-list">
-                {selectedDriverBookings.length === 0 ? (
-                  <div className="wz-driver-no-bookings">
-                    No bookings assigned to this driver yet.
-                  </div>
-                ) : (
-                  selectedDriverBookings.map((b) => {
-                    const bId = b.bookingId || (b.id ? `#BK-${String(b.id).slice(-4)}` : `#BK-${String(b._id || "").slice(-4)}`);
-                    const unitName = b.machineryModel || b.unitName || b.vehicle || "Heavy Machinery";
-                    const category = b.category || b.equipmentType || "Equipment";
-                    const dateDisplay = b.dateRange || (b.startDate && b.endDate ? `${b.startDate} to ${b.endDate}` : (b.bookingDate || "Scheduled"));
-                    const statusText = b.status || "Assigned";
-                    const isPending = /pending/i.test(statusText);
-                    const isCompleted = /complete|done|returned/i.test(statusText);
-                    const isCanceled = /cancel|reject/i.test(statusText);
-
-                    return (
-                      <div key={b._id || b.id || bId} className="wz-driver-booking-item">
-                        <div className="wz-driver-booking-top">
-                          <span className="wz-driver-booking-id">{bId}</span>
-                          <span
-                            className="wz-status-pill"
-                            style={{
-                              fontSize: "0.68rem",
-                              padding: "2px 8px",
-                              backgroundColor: isPending ? "#fef3c7" : isCompleted ? "#dcfce7" : isCanceled ? "#fee2e2" : "#e0f2fe",
-                              color: isPending ? "#b45309" : isCompleted ? "#15803d" : isCanceled ? "#b91c1c" : "#0369a1",
-                            }}
-                          >
-                            {statusText}
-                          </span>
-                        </div>
-                        <div className="wz-driver-booking-unit">
-                          <span className="wz-driver-booking-model">{unitName}</span>
-                          <span className="wz-cat-badge" style={{ fontSize: "0.65rem", padding: "1px 6px" }}>{category}</span>
-                        </div>
-                        <div className="wz-driver-booking-meta">
-                          <span>📅 {dateDisplay}</span>
-                          {b.location && <span>📍 {b.location}</span>}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-
-            {/* 4. Mini Attendance / Duty Calendar */}
+            {/* 3. Mini Attendance / Duty Calendar */}
             <div className="wz-driver-calendar-card">
               <div className="wz-driver-cal-header">
                 <span className="wz-driver-cal-title">
@@ -967,57 +950,103 @@ export default function Drivers() {
               </div>
             </div>
 
-            {/* 5. Schedule Section (Reflects Assigned Machinery Units) */}
+            {/* 4. Schedule Section (Reflects Assigned Machinery Units) */}
             <div className="wz-driver-schedule-card">
               <div className="wz-driver-schedule-header">
-                <h4 className="wz-driver-schedule-title">Assigned Schedule</h4>
-                <span style={{ color: "#94a3b8", fontSize: "0.75rem", fontWeight: "600" }}>
-                  {selectedDriverBookings.length} Assigned
+                <h4 className="wz-driver-schedule-title">Schedule</h4>
+                <span className="wz-driver-schedule-count">
+                  {selectedDriverBookings.length} {selectedDriverBookings.length === 1 ? "Duty" : "Duties"}
                 </span>
               </div>
 
               {selectedDriverBookings.length === 0 ? (
-                <div className="wz-driver-no-bookings" style={{ padding: "12px 4px" }}>
-                  No machinery schedule assigned for this driver.
+                <div className="wz-driver-schedule-empty">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                    <line x1="16" y1="2" x2="16" y2="6" />
+                    <line x1="8" y1="2" x2="8" y2="6" />
+                    <line x1="3" y1="10" x2="21" y2="10" />
+                  </svg>
+                  <span>No machinery schedule assigned for this driver.</span>
                 </div>
               ) : (
-                selectedDriverBookings.map((item, idx) => {
-                  const unitName = item.machineryModel || item.unitName || item.vehicle || "Heavy Machinery";
-                  const scheduleDate = item.dateRange || (item.startDate && item.endDate ? `${item.startDate} to ${item.endDate}` : (item.bookingDate || "Upcoming"));
-                  const timeOrHours = item.usageHours ? `${item.usageHours} hrs` : (item.time || "Full Day Duty");
-                  const location = item.farmLocation || item.location || "On Site";
-                  const statusText = item.status || "Assigned";
-                  const isPending = /pending/i.test(statusText);
-                  const isCompleted = /complete|done|returned/i.test(statusText);
+                <div className="wz-driver-schedule-list">
+                  {selectedDriverBookings.map((item, idx) => {
+                    const unitName = item.machineryModel || item.unitName || item.vehicle || "Heavy Machinery";
+                    const category = item.category || "Machinery";
+                    const bId = item.id ? (String(item.id).startsWith("#") ? item.id : `#${item.id}`) : `#BK-${String(item._id || "").slice(-4)}`;
+                    const location = item.farmLocation || item.location || "Bukidnon";
+                    const statusText = item.status || "Assigned";
 
-                  return (
-                    <div key={item._id || item.id || idx} className="wz-driver-schedule-item">
-                      <span className="wz-driver-schedule-date">{scheduleDate}</span>
-                      <div className="wz-driver-schedule-info">
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "6px" }}>
-                          <span className="wz-driver-schedule-client" style={{ fontWeight: 700, color: "#0f172a" }}>
-                            🚜 {unitName}
-                          </span>
+                    const sLower = statusText.toLowerCase();
+                    const isPending = sLower.includes("pending");
+                    const isCompleted = sLower.includes("complete") || sLower.includes("returned") || sLower.includes("done");
+                    const isCancelled = sLower.includes("cancel") || sLower.includes("reject");
+                    const isOngoing = sLower.includes("ongoing") || sLower.includes("checked-out");
+
+                    return (
+                      <div key={item._id || item.id || idx} className="wz-driver-sched-card">
+                        {/* Top: Date Range & Status Pill */}
+                        <div className="wz-driver-sched-card-top">
+                          <div className="wz-driver-sched-date-badge">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                              <line x1="16" y1="2" x2="16" y2="6" />
+                              <line x1="8" y1="2" x2="8" y2="6" />
+                              <line x1="3" y1="10" x2="21" y2="10" />
+                            </svg>
+                            <span>{formatScheduleDate(item)}</span>
+                          </div>
+
                           <span
-                            className="wz-status-pill"
+                            className="wz-driver-sched-status"
                             style={{
-                              fontSize: "0.65rem",
-                              padding: "1px 6px",
-                              backgroundColor: isPending ? "#fef3c7" : isCompleted ? "#dcfce7" : "#e0f2fe",
-                              color: isPending ? "#b45309" : isCompleted ? "#15803d" : "#0369a1",
+                              backgroundColor: isOngoing
+                                ? "#e0f2fe"
+                                : isCompleted
+                                ? "#dcfce7"
+                                : isCancelled
+                                ? "#fee2e2"
+                                : isPending
+                                ? "#fef3c7"
+                                : "#f1f5f9",
+                              color: isOngoing
+                                ? "#0284c7"
+                                : isCompleted
+                                ? "#16a34a"
+                                : isCancelled
+                                ? "#dc2626"
+                                : isPending
+                                ? "#d97706"
+                                : "#475569",
                             }}
                           >
                             {statusText}
                           </span>
                         </div>
-                        <div className="wz-driver-schedule-meta">
-                          <span>⏱ {timeOrHours}</span>
-                          <span>📍 {location}</span>
+
+                        {/* Middle: Machinery Unit Name & Category */}
+                        <div className="wz-driver-sched-unit-row">
+                          <div className="wz-driver-sched-unit-name">{unitName}</div>
+                          <span className="wz-driver-sched-cat-tag">{category}</span>
+                        </div>
+
+                        {/* Bottom: Location & Booking ID */}
+                        <div className="wz-driver-sched-bottom-row">
+                          <div className="wz-driver-sched-loc" title={location}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                              <circle cx="12" cy="10" r="3" />
+                            </svg>
+                            <span>{location}</span>
+                          </div>
+
+                          <span className="wz-driver-sched-id">{bId}</span>
                         </div>
                       </div>
-                    </div>
-                  );
-                })
+                    );
+                  })}
+                </div>
               )}
             </div>
           </aside>

@@ -3453,51 +3453,133 @@
   margin: 0;
 }
 
-.wz-driver-schedule-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #f1f5f9;
-}
-
-.wz-driver-schedule-item:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
-}
-
-.wz-driver-schedule-date {
-  font-size: 0.76rem;
+.wz-driver-schedule-count {
+  font-size: 0.72rem;
   font-weight: 700;
-  color: #64748b;
-  min-width: 72px;
+  color: #0284c7;
+  background: #e0f2fe;
+  padding: 2px 8px;
+  border-radius: 999px;
 }
 
-.wz-driver-schedule-info {
+.wz-driver-schedule-list {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 10px;
+  max-height: 380px;
+  overflow-y: auto;
 }
 
-.wz-driver-schedule-client {
-  font-size: 0.84rem;
-  font-weight: 800;
-  color: #0f172a;
+.wz-driver-sched-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 11px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  transition: all 0.15s ease;
 }
 
-.wz-driver-schedule-meta {
+.wz-driver-sched-card:hover {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.05);
+}
+
+.wz-driver-sched-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.wz-driver-sched-date-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #0369a1;
+  background: #e0f2fe;
+  padding: 3px 8px;
+  border-radius: 6px;
+  line-height: 1;
+}
+
+.wz-driver-sched-status {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.wz-driver-sched-unit-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 0.72rem;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.wz-driver-sched-unit-name {
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.25;
+}
+
+.wz-driver-sched-cat-tag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #475569;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  padding: 2px 7px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.wz-driver-sched-bottom-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.74rem;
   color: #64748b;
   font-weight: 500;
 }
 
-.wz-driver-schedule-meta span {
-  display: flex;
+.wz-driver-sched-loc {
+  display: inline-flex;
   align-items: center;
   gap: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.wz-driver-sched-id {
+  font-weight: 700;
+  color: #94a3b8;
+  font-size: 0.70rem;
+  white-space: nowrap;
+}
+
+.wz-driver-schedule-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 20px 12px;
+  color: #94a3b8;
+  font-size: 0.78rem;
+  text-align: center;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
 }
 
 /* ==========================================================================
