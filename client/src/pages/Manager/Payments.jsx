@@ -863,34 +863,31 @@ export default function Payments() {
                               type="button"
                               onClick={() => setViewingPayment(inv)}
                               style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "6px",
-                                background: "#f8fafc",
-                                color: "#0f172a",
-                                border: "1px solid #cbd5e1",
-                                borderRadius: "8px",
-                                padding: "6px 12px",
-                                fontSize: "0.75rem",
+                                background: "none",
+                                border: "none",
+                                padding: "4px 6px",
+                                color: "#059669",
+                                fontSize: "0.78rem",
                                 fontWeight: "700",
                                 cursor: "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                textDecoration: "none",
                                 transition: "all 0.15s ease",
                               }}
                               onMouseEnter={(e) => {
-                                e.currentTarget.style.background = "#e2e8f0";
-                                e.currentTarget.style.borderColor = "#94a3b8";
+                                e.currentTarget.style.color = "#047857";
+                                e.currentTarget.style.textDecoration = "underline";
                               }}
                               onMouseLeave={(e) => {
-                                e.currentTarget.style.background = "#f8fafc";
-                                e.currentTarget.style.borderColor = "#cbd5e1";
+                                e.currentTarget.style.color = "#059669";
+                                e.currentTarget.style.textDecoration = "none";
                               }}
-                              title="View payment record audit and details"
+                              title="View Details"
                             >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                                <circle cx="12" cy="10" r="3" />
-                              </svg>
-                              View Details
+                              <span>View Details</span>
+                              <span style={{ fontSize: "0.85rem", fontWeight: "800", lineHeight: 1 }}>&gt;</span>
                             </button>
                           </td>
                         </tr>
