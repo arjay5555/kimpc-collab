@@ -1359,7 +1359,7 @@ export default function BookingApprovals() {
               <ManagerSearchBar
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
-                placeholder="Search client, machinery, ID..."
+                placeholder="Search machinery, ID, phone..."
                 filters={[
                   {
                     id: "machineryType",
@@ -1403,8 +1403,6 @@ export default function BookingApprovals() {
                   options: [
                     { value: "date_desc", label: "Newest Date" },
                     { value: "date_asc", label: "Oldest Date" },
-                    { value: "client_asc", label: "Client Name (A-Z)" },
-                    { value: "client_desc", label: "Client Name (Z-A)" },
                     { value: "id_asc", label: "Booking ID" },
                   ],
                 }}
@@ -1430,7 +1428,6 @@ export default function BookingApprovals() {
                   <th>Status <span className="wz-sort-arrow">↕</span></th>
                   <th>Booking ID <span className="wz-sort-arrow">↕</span></th>
                   <th>Booking Date <span className="wz-sort-arrow">↕</span></th>
-                  <th>Client Name <span className="wz-sort-arrow">↕</span></th>
                   <th>Phone Number <span className="wz-sort-arrow">↕</span></th>
                   <th>Machinery Model <span className="wz-sort-arrow">↕</span></th>
                   <th>Date <span className="wz-sort-arrow">↕</span></th>
@@ -1441,7 +1438,7 @@ export default function BookingApprovals() {
               <tbody>
                 {filteredBookings.length === 0 ? (
                   <tr>
-                    <td colSpan="9" style={{ padding: "36px", textAlign: "center", color: "#64748b" }}>
+                    <td colSpan="8" style={{ padding: "36px", textAlign: "center", color: "#64748b" }}>
                       No machinery bookings found matching your search.
                     </td>
                   </tr>
@@ -1462,9 +1459,6 @@ export default function BookingApprovals() {
 
                       {/* Booking Date */}
                       <td style={{ color: "#64748b" }}>{b.bookingDate}</td>
-
-                      {/* Client Name */}
-                      <td className="wz-client-name">{b.clientName}</td>
 
                       {/* Client Phone Number */}
                       <td style={{ fontSize: "0.78rem", color: "#334155", fontWeight: 600 }}>

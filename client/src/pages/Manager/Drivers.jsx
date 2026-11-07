@@ -193,43 +193,178 @@ const INITIAL_DRIVERS = [
   },
 ];
 
-// Days of August 2028: starts on Tuesday (Aug 1) and has 31 days
-const CALENDAR_DAYS_AUG_2028 = [
-  { day: 30, isCurrentMonth: false },
-  { day: 31, isCurrentMonth: false },
-  { day: 1, isCurrentMonth: true },
-  { day: 2, isCurrentMonth: true },
-  { day: 3, isCurrentMonth: true },
-  { day: 4, isCurrentMonth: true },
-  { day: 5, isCurrentMonth: true },
-  { day: 6, isCurrentMonth: true },
-  { day: 7, isCurrentMonth: true },
-  { day: 8, isCurrentMonth: true },
-  { day: 9, isCurrentMonth: true },
-  { day: 10, isCurrentMonth: true },
-  { day: 11, isCurrentMonth: true },
-  { day: 12, isCurrentMonth: true },
-  { day: 13, isCurrentMonth: true },
-  { day: 14, isCurrentMonth: true },
-  { day: 15, isCurrentMonth: true },
-  { day: 16, isCurrentMonth: true },
-  { day: 17, isCurrentMonth: true },
-  { day: 18, isCurrentMonth: true },
-  { day: 19, isCurrentMonth: true },
-  { day: 20, isCurrentMonth: true },
-  { day: 21, isCurrentMonth: true },
-  { day: 22, isCurrentMonth: true },
-  { day: 23, isCurrentMonth: true },
-  { day: 24, isCurrentMonth: true },
-  { day: 25, isCurrentMonth: true },
-  { day: 26, isCurrentMonth: true },
-  { day: 27, isCurrentMonth: true },
-  { day: 28, isCurrentMonth: true },
-  { day: 29, isCurrentMonth: true },
-  { day: 30, isCurrentMonth: true },
-  { day: 31, isCurrentMonth: true },
-  { day: 1, isCurrentMonth: false },
-  { day: 2, isCurrentMonth: false },
+const CURRENT_YEAR = new Date().getFullYear();
+
+// Initial machinery bookings assigned to drivers in KIMPC
+const DEFAULT_DRIVER_BOOKINGS = [
+  {
+    id: "BK-WZ1001",
+    assignedDriver: "John Adams",
+    machineryModel: "John Deere 5075E",
+    category: "Tractor",
+    startDate: `${CURRENT_YEAR}-08-01`,
+    endDate: `${CURRENT_YEAR}-08-05`,
+    dateRange: `Aug 1, ${CURRENT_YEAR} to Aug 5, ${CURRENT_YEAR}`,
+    status: "Ongoing",
+    clientName: "Alice Johnson",
+    farmLocation: "Malaybalay City, Bukidnon",
+  },
+  {
+    id: "BK-WZ1002",
+    assignedDriver: "Daniel Jackson",
+    machineryModel: "Kubota DC-70 Plus",
+    category: "Harvester",
+    startDate: `${CURRENT_YEAR}-08-01`,
+    endDate: `${CURRENT_YEAR}-08-08`,
+    dateRange: `Aug 1, ${CURRENT_YEAR} to Aug 8, ${CURRENT_YEAR}`,
+    status: "Ongoing",
+    clientName: "Bob Smith",
+    farmLocation: "Maramag, Bukidnon",
+  },
+  {
+    id: "BK-WZ1003",
+    assignedDriver: "Michael Clark",
+    machineryModel: "New Holland Roll-Belt 450",
+    category: "Baler",
+    startDate: `${CURRENT_YEAR}-08-02`,
+    endDate: `${CURRENT_YEAR}-08-10`,
+    dateRange: `Aug 2, ${CURRENT_YEAR} to Aug 10, ${CURRENT_YEAR}`,
+    status: "Ongoing",
+    clientName: "Charlie Davis",
+    farmLocation: "Valencia City, Bukidnon",
+  },
+  {
+    id: "BK-WZ1004",
+    assignedDriver: "James Evans",
+    machineryModel: "Case IH Farmall 90JX",
+    category: "Tractor",
+    startDate: `${CURRENT_YEAR}-08-02`,
+    endDate: `${CURRENT_YEAR}-08-06`,
+    dateRange: `Aug 2, ${CURRENT_YEAR} to Aug 6, ${CURRENT_YEAR}`,
+    status: "Returned",
+    clientName: "Diana White",
+    farmLocation: "Manolo Fortich, Bukidnon",
+  },
+  {
+    id: "BK-WZ1005",
+    assignedDriver: "Sarah Davis",
+    machineryModel: "Kuhn GA 4121 GM",
+    category: "Mower / Rake",
+    startDate: `${CURRENT_YEAR}-08-03`,
+    endDate: `${CURRENT_YEAR}-08-07`,
+    dateRange: `Aug 3, ${CURRENT_YEAR} to Aug 7, ${CURRENT_YEAR}`,
+    status: "Cancelled",
+    clientName: "Edward Green",
+    farmLocation: "Quezon, Bukidnon",
+  },
+  {
+    id: "BK-WZ1006",
+    assignedDriver: "John Adams",
+    machineryModel: "Ag Leader Precision Boom Sprayer",
+    category: "Sprayer",
+    startDate: `${CURRENT_YEAR}-09-03`,
+    endDate: `${CURRENT_YEAR}-09-18`,
+    dateRange: `Sep 3, ${CURRENT_YEAR} to Sep 18, ${CURRENT_YEAR}`,
+    status: "Ongoing",
+    clientName: "Fiona Brown",
+    farmLocation: "Don Carlos, Bukidnon",
+  },
+  {
+    id: "BK-WZ1007",
+    assignedDriver: "Daniel Jackson",
+    machineryModel: "Isuzu Forward Flatbed Hauler",
+    category: "Transport",
+    startDate: `${CURRENT_YEAR}-08-14`,
+    endDate: `${CURRENT_YEAR}-08-18`,
+    dateRange: `Aug 14, ${CURRENT_YEAR} to Aug 18, ${CURRENT_YEAR}`,
+    status: "Ongoing",
+    clientName: "George Clark",
+    farmLocation: "Impasug-ong, Bukidnon",
+  },
+  {
+    id: "BK-WZ1008",
+    assignedDriver: "Michael Clark",
+    machineryModel: "John Deere 5075E",
+    category: "Tractor",
+    startDate: `${CURRENT_YEAR}-08-20`,
+    endDate: `${CURRENT_YEAR}-08-25`,
+    dateRange: `Aug 20, ${CURRENT_YEAR} to Aug 25, ${CURRENT_YEAR}`,
+    status: "Approved",
+    clientName: "Helen Martinez",
+    farmLocation: "San Fernando, Bukidnon",
+  },
+  {
+    id: "BK-WZ1009",
+    assignedDriver: "Emily Brown",
+    machineryModel: "Kubota DC-70 Plus",
+    category: "Harvester",
+    startDate: `${CURRENT_YEAR}-08-10`,
+    endDate: `${CURRENT_YEAR}-08-15`,
+    dateRange: `Aug 10, ${CURRENT_YEAR} to Aug 15, ${CURRENT_YEAR}`,
+    status: "Ongoing",
+    clientName: "Ivan Rodriguez",
+    farmLocation: "Kibawe, Bukidnon",
+  },
+  {
+    id: "BK-WZ1010",
+    assignedDriver: "Laura Fisher",
+    machineryModel: "Ag Leader Precision Boom Sprayer",
+    category: "Sprayer",
+    startDate: `${CURRENT_YEAR}-08-08`,
+    endDate: `${CURRENT_YEAR}-08-14`,
+    dateRange: `Aug 8, ${CURRENT_YEAR} to Aug 14, ${CURRENT_YEAR}`,
+    status: "Ongoing",
+    clientName: "Helen Martinez",
+    farmLocation: "Malaybalay, Bukidnon",
+  },
+  {
+    id: "BK-WZ1011",
+    assignedDriver: "Robert Gray",
+    machineryModel: "John Deere 5075E",
+    category: "Tractor",
+    startDate: `${CURRENT_YEAR}-08-15`,
+    endDate: `${CURRENT_YEAR}-08-22`,
+    dateRange: `Aug 15, ${CURRENT_YEAR} to Aug 22, ${CURRENT_YEAR}`,
+    status: "Ongoing",
+    clientName: "Kyle Thompson",
+    farmLocation: "Valencia, Bukidnon",
+  },
+  {
+    id: "BK-WZ1012",
+    assignedDriver: "Jessica Harris",
+    machineryModel: "New Holland Roll-Belt 450",
+    category: "Baler",
+    startDate: `${CURRENT_YEAR}-08-18`,
+    endDate: `${CURRENT_YEAR}-08-24`,
+    dateRange: `Aug 18, ${CURRENT_YEAR} to Aug 24, ${CURRENT_YEAR}`,
+    status: "Ongoing",
+    clientName: "Nancy Davis",
+    farmLocation: "Maramag, Bukidnon",
+  },
+  {
+    id: "BK-WZ1013",
+    assignedDriver: "Olivia King",
+    machineryModel: "Case IH Farmall 90JX",
+    category: "Tractor",
+    startDate: `${CURRENT_YEAR}-08-12`,
+    endDate: `${CURRENT_YEAR}-08-17`,
+    dateRange: `Aug 12, ${CURRENT_YEAR} to Aug 17, ${CURRENT_YEAR}`,
+    status: "Returned",
+    clientName: "Michael Brown",
+    farmLocation: "Quezon, Bukidnon",
+  },
+  {
+    id: "BK-WZ1014",
+    assignedDriver: "David Lee",
+    machineryModel: "Isuzu Forward Flatbed Hauler",
+    category: "Transport",
+    startDate: `${CURRENT_YEAR}-08-16`,
+    endDate: `${CURRENT_YEAR}-08-20`,
+    dateRange: `Aug 16, ${CURRENT_YEAR} to Aug 20, ${CURRENT_YEAR}`,
+    status: "Ongoing",
+    clientName: "Oliver Scott",
+    farmLocation: "Don Carlos, Bukidnon",
+  },
 ];
 
 export default function Drivers() {
@@ -240,21 +375,153 @@ export default function Drivers() {
   const [drivers, setDrivers] = useState(INITIAL_DRIVERS);
   // Selected driver detail panel (Default: null until selected/clicked)
   const [selectedDriver, setSelectedDriver] = useState(null);
+  // Live applications / bookings
+  const [liveBookings, setLiveBookings] = useState([]);
 
-  // Fetch drivers from MongoDB API
+  // Dynamic calendar navigation state for the driver's schedule
+  const [calDate, setCalDate] = useState(() => {
+    return new Date(CURRENT_YEAR, 7, 1); // Default to August of current year
+  });
+
+  // Fetch drivers & live bookings from backend API
   useEffect(() => {
-    const fetchDrivers = async () => {
+    const fetchData = async () => {
       try {
-        const res = await api("/drivers");
-        if (res && res.ok && Array.isArray(res.data) && res.data.length > 0) {
-          setDrivers(res.data);
+        const [driverRes, appRes] = await Promise.all([
+          api("/drivers"),
+          api("/applications"),
+        ]);
+        if (driverRes && driverRes.ok && Array.isArray(driverRes.data) && driverRes.data.length > 0) {
+          setDrivers(driverRes.data);
+        }
+        if (appRes && appRes.ok && Array.isArray(appRes.data)) {
+          setLiveBookings(appRes.data);
         }
       } catch (err) {
-        console.error("Failed to load drivers from API:", err);
+        console.error("Failed to load driver/booking data:", err);
       }
     };
-    fetchDrivers();
+    fetchData();
   }, []);
+
+  // Merge live applications with default mock machinery bookings
+  const allBookings = useMemo(() => {
+    const formattedLive = liveBookings.map((item, idx) => {
+      let days = 1;
+      if (item.startDate && item.endDate) {
+        const diffTime = Math.abs(new Date(item.endDate) - new Date(item.startDate));
+        days = Math.max(Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1, 1);
+      }
+      const s = (item.status || "").toLowerCase();
+      let displayStatus = "Pending";
+      if (s === "approved") displayStatus = "Approved";
+      else if (s === "checked-out" || s === "ongoing") displayStatus = "Ongoing";
+      else if (s === "returned") displayStatus = "Returned";
+      else if (s === "cancelled" || s === "rejected") displayStatus = "Cancelled";
+
+      const eq = (item.equipment || "").toLowerCase();
+      let cat = "Tractor";
+      if (eq.includes("harvester")) cat = "Harvester";
+      else if (eq.includes("baler")) cat = "Baler";
+      else if (eq.includes("rake") || eq.includes("mower")) cat = "Mower / Rake";
+      else if (eq.includes("sprayer")) cat = "Sprayer";
+      else if (eq.includes("hauler") || eq.includes("truck")) cat = "Transport";
+
+      return {
+        id: item.displayId || `BK-WZ${1010 + idx}`,
+        assignedDriver: item.assignedDriver || "Self-Operated",
+        machineryModel: item.equipment || "Machinery Unit",
+        category: cat,
+        startDate: item.startDate,
+        endDate: item.endDate,
+        dateRange: `${item.startDate} to ${item.endDate}`,
+        status: displayStatus,
+        clientName: item.memberName || item.farmerName || "Member",
+        farmLocation: item.farmLocation || "Bukidnon",
+        daysCount: days,
+      };
+    });
+
+    return [...formattedLive, ...DEFAULT_DRIVER_BOOKINGS];
+  }, [liveBookings]);
+
+  // All bookings assigned to the currently selected driver
+  const selectedDriverBookings = useMemo(() => {
+    if (!selectedDriver) return [];
+    const targetName = (selectedDriver.name || "").trim().toLowerCase();
+    return allBookings.filter(
+      (b) => (b.assignedDriver || "").trim().toLowerCase() === targetName
+    );
+  }, [selectedDriver, allBookings]);
+
+  // When selectedDriver changes, auto-align calendar to their earliest booking month
+  useEffect(() => {
+    if (selectedDriverBookings.length > 0) {
+      const firstB = selectedDriverBookings[0];
+      const dStr = firstB.startDate || firstB.bookingDate;
+      if (dStr) {
+        const d = new Date(dStr);
+        if (!isNaN(d.getTime())) {
+          setCalDate(new Date(d.getFullYear(), d.getMonth(), 1));
+        }
+      }
+    }
+  }, [selectedDriver, selectedDriverBookings]);
+
+  // Compute dynamic calendar cells for currently viewed month and highlight assigned booking days
+  const calendarCells = useMemo(() => {
+    const year = calDate.getFullYear();
+    const month = calDate.getMonth();
+    const firstDayIndex = new Date(year, month, 1).getDay(); // 0 (Sun) to 6 (Sat)
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const prevMonthDays = new Date(year, month, 0).getDate();
+
+    const cells = [];
+
+    // Faded days from previous month
+    for (let i = firstDayIndex - 1; i >= 0; i--) {
+      cells.push({
+        day: prevMonthDays - i,
+        isCurrentMonth: false,
+        dateObj: new Date(year, month - 1, prevMonthDays - i),
+      });
+    }
+
+    // Days of current month
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dayDate = new Date(year, month, d);
+      // Check if driver has an assigned unit on this date
+      const assignedOnDate = selectedDriverBookings.filter((b) => {
+        const start = b.startDate ? new Date(b.startDate) : (b.bookingDate ? new Date(b.bookingDate) : null);
+        const end = b.endDate ? new Date(b.endDate) : (b.dateRange && b.dateRange.includes("to") ? new Date(b.dateRange.split("to")[1].trim()) : start);
+        if (!start) return false;
+        const normalizedDay = new Date(year, month, d).setHours(0, 0, 0, 0);
+        const startMs = new Date(start).setHours(0, 0, 0, 0);
+        const endMs = end ? new Date(end).setHours(23, 59, 59, 999) : startMs;
+        return normalizedDay >= startMs && normalizedDay <= endMs;
+      });
+
+      cells.push({
+        day: d,
+        isCurrentMonth: true,
+        dateObj: dayDate,
+        hasAssignment: assignedOnDate.length > 0,
+        assignments: assignedOnDate,
+      });
+    }
+
+    // Faded days to fill trailing cells
+    const remaining = (7 - (cells.length % 7)) % 7;
+    for (let i = 1; i <= remaining; i++) {
+      cells.push({
+        day: i,
+        isCurrentMonth: false,
+        dateObj: new Date(year, month + 1, i),
+      });
+    }
+
+    return cells;
+  }, [calDate, selectedDriverBookings]);
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState("");
@@ -586,47 +853,85 @@ export default function Drivers() {
               </div>
             </div>
 
-            {/* 3. Stats 2-Grid Tiles */}
-            <div className="wz-driver-stats-grid">
-              {/* Tile 1: Work Hours */}
-              <div className="wz-driver-stat-tile">
-                <div className="wz-driver-stat-icon-wrap">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <circle cx="12" cy="12" r="10" />
-                    <polyline points="12 6 12 12 16 14" />
-                  </svg>
-                </div>
-                <div>
-                  <div className="wz-driver-stat-title">Work Hours</div>
-                  <div className="wz-driver-stat-value">{selectedDriver.workHours} hours</div>
-                </div>
+            {/* 3. Driver Bookings Card (Replaces Work Performance & Work Hours) */}
+            <div className="wz-driver-bookings-card">
+              <div className="wz-driver-bookings-header">
+                <h4 className="wz-driver-bookings-title">All Assigned Bookings</h4>
+                <span className="wz-driver-bookings-count">
+                  {selectedDriverBookings.length} {selectedDriverBookings.length === 1 ? "Booking" : "Bookings"}
+                </span>
               </div>
 
-              {/* Tile 2: Work Performance */}
-              <div className="wz-driver-stat-tile">
-                <div className="wz-driver-stat-icon-wrap">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
-                    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
-                  </svg>
-                </div>
-                <div>
-                  <div className="wz-driver-stat-title">Work Performance</div>
-                  <div className="wz-driver-stat-value">
-                    {selectedDriver.performance}
-                    <span className="wz-driver-badge-excellent">{selectedDriver.performanceLabel}</span>
+              <div className="wz-driver-bookings-list">
+                {selectedDriverBookings.length === 0 ? (
+                  <div className="wz-driver-no-bookings">
+                    No bookings assigned to this driver yet.
                   </div>
-                </div>
+                ) : (
+                  selectedDriverBookings.map((b) => {
+                    const bId = b.bookingId || (b.id ? `#BK-${String(b.id).slice(-4)}` : `#BK-${String(b._id || "").slice(-4)}`);
+                    const unitName = b.machineryModel || b.unitName || b.vehicle || "Heavy Machinery";
+                    const category = b.category || b.equipmentType || "Equipment";
+                    const dateDisplay = b.dateRange || (b.startDate && b.endDate ? `${b.startDate} to ${b.endDate}` : (b.bookingDate || "Scheduled"));
+                    const statusText = b.status || "Assigned";
+                    const isPending = /pending/i.test(statusText);
+                    const isCompleted = /complete|done|returned/i.test(statusText);
+                    const isCanceled = /cancel|reject/i.test(statusText);
+
+                    return (
+                      <div key={b._id || b.id || bId} className="wz-driver-booking-item">
+                        <div className="wz-driver-booking-top">
+                          <span className="wz-driver-booking-id">{bId}</span>
+                          <span
+                            className="wz-status-pill"
+                            style={{
+                              fontSize: "0.68rem",
+                              padding: "2px 8px",
+                              backgroundColor: isPending ? "#fef3c7" : isCompleted ? "#dcfce7" : isCanceled ? "#fee2e2" : "#e0f2fe",
+                              color: isPending ? "#b45309" : isCompleted ? "#15803d" : isCanceled ? "#b91c1c" : "#0369a1",
+                            }}
+                          >
+                            {statusText}
+                          </span>
+                        </div>
+                        <div className="wz-driver-booking-unit">
+                          <span className="wz-driver-booking-model">{unitName}</span>
+                          <span className="wz-cat-badge" style={{ fontSize: "0.65rem", padding: "1px 6px" }}>{category}</span>
+                        </div>
+                        <div className="wz-driver-booking-meta">
+                          <span>📅 {dateDisplay}</span>
+                          {b.location && <span>📍 {b.location}</span>}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
 
             {/* 4. Mini Attendance / Duty Calendar */}
             <div className="wz-driver-calendar-card">
               <div className="wz-driver-cal-header">
-                <span className="wz-driver-cal-title">August 2028</span>
+                <span className="wz-driver-cal-title">
+                  {calDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                </span>
                 <div className="wz-driver-cal-arrows">
-                  <button className="wz-driver-cal-arrow-btn">&lt;</button>
-                  <button className="wz-driver-cal-arrow-btn">&gt;</button>
+                  <button
+                    type="button"
+                    className="wz-driver-cal-arrow-btn"
+                    title="Previous Month"
+                    onClick={() => setCalDate(new Date(calDate.getFullYear(), calDate.getMonth() - 1, 1))}
+                  >
+                    &lt;
+                  </button>
+                  <button
+                    type="button"
+                    className="wz-driver-cal-arrow-btn"
+                    title="Next Month"
+                    onClick={() => setCalDate(new Date(calDate.getFullYear(), calDate.getMonth() + 1, 1))}
+                  >
+                    &gt;
+                  </button>
                 </div>
               </div>
 
@@ -641,14 +946,16 @@ export default function Drivers() {
               </div>
 
               <div className="wz-driver-cal-days-grid">
-                {CALENDAR_DAYS_AUG_2028.map((item, idx) => {
-                  const isDuty =
-                    item.isCurrentMonth &&
-                    selectedDriver.dutyDays.includes(item.day);
+                {calendarCells.map((item, idx) => {
+                  const isDuty = item.isCurrentMonth && item.hasAssignment;
+                  const tooltipText = isDuty && item.assignments && item.assignments.length > 0
+                    ? `Assigned: ${item.assignments.map((a) => a.machineryModel || a.unitName).join(", ")}`
+                    : undefined;
 
                   return (
                     <div
                       key={idx}
+                      title={tooltipText}
                       className={`wz-driver-cal-day-cell ${
                         isDuty ? "wz-driver-cal-day-duty" : ""
                       } ${!item.isCurrentMonth ? "wz-driver-cal-day-faded" : ""}`}
@@ -660,25 +967,58 @@ export default function Drivers() {
               </div>
             </div>
 
-            {/* 5. Schedule Section */}
+            {/* 5. Schedule Section (Reflects Assigned Machinery Units) */}
             <div className="wz-driver-schedule-card">
               <div className="wz-driver-schedule-header">
-                <h4 className="wz-driver-schedule-title">Schedule</h4>
-                <span style={{ color: "#94a3b8", cursor: "pointer", fontSize: "1.1rem" }}>•••</span>
+                <h4 className="wz-driver-schedule-title">Assigned Schedule</h4>
+                <span style={{ color: "#94a3b8", fontSize: "0.75rem", fontWeight: "600" }}>
+                  {selectedDriverBookings.length} Assigned
+                </span>
               </div>
 
-              {selectedDriver.schedule.map((item, idx) => (
-                <div key={idx} className="wz-driver-schedule-item">
-                  <span className="wz-driver-schedule-date">{item.date}</span>
-                  <div className="wz-driver-schedule-info">
-                    <span className="wz-driver-schedule-client">{item.client}</span>
-                    <div className="wz-driver-schedule-meta">
-                      <span>🕒 {item.time}</span>
-                      <span>🚗 {item.vehicle}</span>
-                    </div>
-                  </div>
+              {selectedDriverBookings.length === 0 ? (
+                <div className="wz-driver-no-bookings" style={{ padding: "12px 4px" }}>
+                  No machinery schedule assigned for this driver.
                 </div>
-              ))}
+              ) : (
+                selectedDriverBookings.map((item, idx) => {
+                  const unitName = item.machineryModel || item.unitName || item.vehicle || "Heavy Machinery";
+                  const scheduleDate = item.dateRange || (item.startDate && item.endDate ? `${item.startDate} to ${item.endDate}` : (item.bookingDate || "Upcoming"));
+                  const timeOrHours = item.usageHours ? `${item.usageHours} hrs` : (item.time || "Full Day Duty");
+                  const location = item.farmLocation || item.location || "On Site";
+                  const statusText = item.status || "Assigned";
+                  const isPending = /pending/i.test(statusText);
+                  const isCompleted = /complete|done|returned/i.test(statusText);
+
+                  return (
+                    <div key={item._id || item.id || idx} className="wz-driver-schedule-item">
+                      <span className="wz-driver-schedule-date">{scheduleDate}</span>
+                      <div className="wz-driver-schedule-info">
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "6px" }}>
+                          <span className="wz-driver-schedule-client" style={{ fontWeight: 700, color: "#0f172a" }}>
+                            🚜 {unitName}
+                          </span>
+                          <span
+                            className="wz-status-pill"
+                            style={{
+                              fontSize: "0.65rem",
+                              padding: "1px 6px",
+                              backgroundColor: isPending ? "#fef3c7" : isCompleted ? "#dcfce7" : "#e0f2fe",
+                              color: isPending ? "#b45309" : isCompleted ? "#15803d" : "#0369a1",
+                            }}
+                          >
+                            {statusText}
+                          </span>
+                        </div>
+                        <div className="wz-driver-schedule-meta">
+                          <span>⏱ {timeOrHours}</span>
+                          <span>📍 {location}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </aside>
         )}

@@ -3199,6 +3199,104 @@
   justify-content: center;
 }
 
+/* Driver Bookings Card (Replaces Work Performance & Work Hours) */
+.wz-driver-bookings-card {
+  background: #ffffff;
+  border: 1px solid var(--wz-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wz-driver-bookings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.wz-driver-bookings-title {
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+}
+
+.wz-driver-bookings-count {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #0284c7;
+  background: #e0f2fe;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.wz-driver-bookings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.wz-driver-booking-item {
+  background: #f8fafc;
+  border: 1px solid #edf2f7;
+  border-radius: 8px;
+  padding: 9px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.wz-driver-booking-item:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.wz-driver-booking-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.wz-driver-booking-id {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.wz-driver-booking-unit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.wz-driver-booking-model {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.wz-driver-booking-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.72rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.wz-driver-no-bookings {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  text-align: center;
+  padding: 14px 8px;
+}
+
 /* Stats 2-Grid Tiles */
 .wz-driver-stats-grid {
   display: grid;
