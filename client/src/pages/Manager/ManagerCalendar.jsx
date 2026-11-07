@@ -527,6 +527,26 @@ export default function ManagerCalendar() {
 
     // Rule: When pending, only dot will see so that schedule determine by the manager still pending
     if (evt.isPending || evt.type === "pending") {
+      if (isCompact) {
+        return (
+          <div
+            key={evt.id}
+            className="wz-cal-pending-dot-item wz-cal-pending-compact"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedEvent(evt);
+              setShowDetailPanel(true);
+            }}
+            title={`Pending Approval: ${evt.equipment} - ${evt.clientName} (${evt.timeExact})`}
+          >
+            <span className="wz-cal-yellow-dot" style={{ width: "6px", height: "6px" }} />
+            <span className="wz-cal-compact-text">
+              <strong>{evt.timeExact}</strong> {evt.equipment}
+            </span>
+          </div>
+        );
+      }
+
       return (
         <div
           key={evt.id}
@@ -553,6 +573,33 @@ export default function ManagerCalendar() {
 
     // Approved: Pickup = Yellow card, Return = Red card
     const cardClass = evt.type === "pickup" ? "wz-event-pickup" : "wz-event-return";
+
+    if (isCompact) {
+      const isPickup = evt.type === "pickup";
+      return (
+        <div
+          key={evt.id}
+          className={`wz-cal-month-compact-item ${isPickup ? "wz-month-pickup" : "wz-month-return"} ${isSelected ? "wz-event-selected" : ""}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelectedEvent(evt);
+            setShowDetailPanel(true);
+          }}
+          title={`${isPickup ? "Pickup (Yellow)" : "Return (Red)"}: ${evt.equipment} (${evt.timeExact}) - ${evt.clientName}`}
+        >
+          <span className={`wz-month-dot ${isPickup ? "dot-pickup" : "dot-return"}`} />
+          <span className="wz-month-time">{evt.timeExact || "9:00 AM"}</span>
+          <span className="wz-month-equip" title={evt.equipment}>
+            {evt.equipment}
+          </span>
+          {evt.isRescheduled && (
+            <span className="wz-month-rescheduled" title="Rescheduled">
+              🔄
+            </span>
+          )}
+        </div>
+      );
+    }
 
     return (
       <div
@@ -1265,7 +1312,7 @@ export default function ManagerCalendar() {
         </div>
 
         {/* ================= Calendar Body Layout ================= */}
-        <div className="wz-cal-body-layout" style={{ padding: "0 24px 20px" }}>
+        <div className="wz-cal-body-layout" style={{ padding: "0 0 16px" }}>
           {/* Main Grid Card based on current viewMode */}
           <div className="wz-cal-grid-card">
             {/* VIEW 1: WEEK VIEW */}
@@ -1377,40 +1424,31 @@ export default function ManagerCalendar() {
                       >
                         <div className="wz-cal-month-cell-header">
                           <span className="wz-cal-month-day-num">{cell.dayNum}</span>
-                          {weatherByDate[cell.dateKey] && (
-                            <span
-                              style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "2px",
-                                fontSize: "0.68rem",
-                                color: "#334155",
-                                background: "#f8fafc",
-                                border: "1px solid #e2e8f0",
-                                borderRadius: "4px",
-                                padding: "1px 4px",
-                                cursor: "pointer",
-                              }}
-                              title={`Kalilangan Forecast: ${weatherByDate[cell.dateKey].condition}, ${Math.round(weatherByDate[cell.dateKey].temp_c)}°C, ${weatherByDate[cell.dateKey].chance_of_rain}% rain`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setShowWeatherCard(true);
-                              }}
-                            >
-                              {weatherByDate[cell.dateKey].icon && (
-                                <img src={weatherByDate[cell.dateKey].icon} alt="" style={{ width: "13px", height: "13px" }} />
-                              )}
-                              <span style={{ fontWeight: 700 }}>{Math.round(weatherByDate[cell.dateKey].temp_c)}°</span>
-                              <span style={{ color: weatherByDate[cell.dateKey].chance_of_rain >= 50 ? "#dc2626" : "#0284c7", fontWeight: 700 }}>
-                                {weatherByDate[cell.dateKey].chance_of_rain}%💧
+                          <div style={{ display: "flex", alignItems: "center", gap: "3px", minWidth: 0, overflow: "hidden" }}>
+                            {weatherByDate[cell.dateKey] && (
+                              <span
+                                className="wz-cal-month-weather-badge"
+                                title={`Kalilangan Forecast: ${weatherByDate[cell.dateKey].condition}, ${Math.round(weatherByDate[cell.dateKey].temp_c)}°C, ${weatherByDate[cell.dateKey].chance_of_rain}% rain`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowWeatherCard(true);
+                                }}
+                              >
+                                {weatherByDate[cell.dateKey].icon && (
+                                  <img src={weatherByDate[cell.dateKey].icon} alt="" style={{ width: "11px", height: "11px" }} />
+                                )}
+                                <span style={{ fontWeight: 700 }}>{Math.round(weatherByDate[cell.dateKey].temp_c)}°</span>
+                                <span style={{ color: weatherByDate[cell.dateKey].chance_of_rain >= 50 ? "#dc2626" : "#0284c7", fontWeight: 700 }}>
+                                  {weatherByDate[cell.dateKey].chance_of_rain}%💧
+                                </span>
                               </span>
-                            </span>
-                          )}
-                          {cellEvents.length > 0 && (
-                            <span className="wz-cal-month-cell-count">
-                              {cellEvents.length} {cellEvents.length === 1 ? "event" : "events"}
-                            </span>
-                          )}
+                            )}
+                            {cellEvents.length > 0 && (
+                              <span className="wz-cal-month-cell-count" title={`${cellEvents.length} events`}>
+                                {cellEvents.length}
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         <div className="wz-cal-month-events-list">
