@@ -106,6 +106,8 @@ export default function Expenses() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [dateRangeFilter, setDateRangeFilter] = useState("1 - 20 August 2028");
   const [sortBy, setSortBy] = useState("date_desc");
+  const [pageSize, setPageSize] = useState(8);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Chart hover month
   const [hoveredMonthIndex, setHoveredMonthIndex] = useState(4); // Default May (index 4)
@@ -155,6 +157,15 @@ export default function Expenses() {
 
     return result;
   }, [transactions, searchQuery, statusFilter, sortBy]);
+
+  const totalPages = Math.ceil(filteredTransactions.length / pageSize) || 1;
+  const paginatedTransactions = useMemo(() => {
+    return filteredTransactions.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  }, [filteredTransactions, currentPage, pageSize]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, sortBy]);
 
   // Select all checkbox
   const handleSelectAll = (e) => {
@@ -896,7 +907,7 @@ export default function Expenses() {
                       </td>
                     </tr>
                   ) : (
-                    filteredTransactions.map((item) => {
+                    paginatedTransactions.map((item) => {
                       const isChecked = selectedIds.includes(item.id);
                       return (
                         <tr
@@ -964,43 +975,53 @@ export default function Expenses() {
             </div>
 
             {/* Pagination Controls */}
-            <div
-              style={{
-                padding: "16px 20px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                borderTop: "1px solid #f1f5f9",
-                fontSize: "0.82rem",
-                color: "#64748b",
-              }}
-            >
-              <span>Showing 1 to {filteredTransactions.length} of {transactions.length} entries</span>
-              <div style={{ display: "flex", gap: "6px" }}>
-                <button
-                  style={{
-                    padding: "6px 12px",
-                    borderRadius: "6px",
-                    border: "1px solid #e2e8f0",
-                    background: "#ffffff",
-                    cursor: "pointer",
-                    fontSize: "0.78rem",
-                    fontWeight: "600",
+            <div className="wz-table-footer" style={{ padding: "14px 20px", borderTop: "1px solid var(--wz-border)", background: "#ffffff" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", color: "#64748b" }}>
+                <span>Results per page:</span>
+                <select
+                  className="wz-dropdown-select"
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
                   }}
+                >
+                  <option value="8">8</option>
+                  <option value="16">16</option>
+                  <option value="24">24</option>
+                  <option value="50">50</option>
+                </select>
+                <span style={{ marginLeft: "12px" }}>
+                  Showing {filteredTransactions.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}–
+                  {Math.min(currentPage * pageSize, filteredTransactions.length)} of {filteredTransactions.length} expenses
+                </span>
+              </div>
+
+              <div className="wz-pagination-btns">
+                <button
+                  className="wz-page-btn"
+                  disabled={currentPage <= 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  title="Previous Page"
                 >
                   &lt;
                 </button>
+
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                  <button
+                    key={p}
+                    className={`wz-page-btn ${p === currentPage ? "active" : ""}`}
+                    onClick={() => setCurrentPage(p)}
+                  >
+                    {p}
+                  </button>
+                ))}
+
                 <button
-                  style={{
-                    padding: "6px 12px",
-                    borderRadius: "6px",
-                    border: "none",
-                    background: "#182538",
-                    color: "#ffffff",
-                    cursor: "pointer",
-                    fontSize: "0.78rem",
-                    fontWeight: "700",
-                  }}
+                  className="wz-page-btn"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  title="Next Page"
                 >
                   &gt;
                 </button>

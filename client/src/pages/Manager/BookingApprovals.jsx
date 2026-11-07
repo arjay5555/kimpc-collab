@@ -250,6 +250,8 @@ export default function BookingApprovals() {
   const [filterType, setFilterType] = useState("All");
   const [filterStatus, setFilterStatus] = useState("All");
   const [sortBy, setSortBy] = useState("date_desc");
+  const [pageSize, setPageSize] = useState(8);
+  const [currentPage, setCurrentPage] = useState(1);
   const [chartPeriod, setChartPeriod] = useState("This Year");
 
   // Selected item (year/month) for interactive click tooltip in Overview chart (null until clicked)
@@ -695,6 +697,15 @@ export default function BookingApprovals() {
 
     return result;
   }, [mergedBookings, searchQuery, filterType, filterStatus, sortBy]);
+
+  const totalPages = Math.ceil(filteredBookings.length / pageSize) || 1;
+  const paginatedBookings = useMemo(() => {
+    return filteredBookings.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  }, [filteredBookings, currentPage, pageSize]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterType, filterStatus, sortBy]);
 
   // ================= Dynamic KPI Counts directly derived from Machinery Bookings =================
   // 1. Pending Bookings: Pending manager confirmation/review
@@ -1443,7 +1454,7 @@ export default function BookingApprovals() {
                     </td>
                   </tr>
                 ) : (
-                  filteredBookings.map((b) => (
+                  paginatedBookings.map((b) => (
                     <tr key={b.id}>
                       {/* Status Pill (First Column - No Dot) */}
                       <td>
@@ -1559,16 +1570,54 @@ export default function BookingApprovals() {
           </div>
 
           {/* Table Footer with Pagination Controls */}
-          <div className="wz-table-footer">
-            <span>
-              Showing {filteredBookings.length} of {mergedBookings.length} bookings
-            </span>
+          <div className="wz-table-footer" style={{ marginTop: "24px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", color: "#64748b" }}>
+              <span>Results per page:</span>
+              <select
+                className="wz-dropdown-select"
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+              >
+                <option value="8">8</option>
+                <option value="16">16</option>
+                <option value="24">24</option>
+                <option value="50">50</option>
+              </select>
+              <span style={{ marginLeft: "12px" }}>
+                Showing {filteredBookings.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}–
+                {Math.min(currentPage * pageSize, filteredBookings.length)} of {filteredBookings.length} bookings
+              </span>
+            </div>
 
             <div className="wz-pagination-btns">
-              <button className="wz-page-btn" title="Previous Page">
+              <button
+                className="wz-page-btn"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                title="Previous Page"
+              >
                 &lt;
               </button>
-              <button className="wz-page-btn" title="Next Page">
+
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                <button
+                  key={p}
+                  className={`wz-page-btn ${p === currentPage ? "active" : ""}`}
+                  onClick={() => setCurrentPage(p)}
+                >
+                  {p}
+                </button>
+              ))}
+
+              <button
+                className="wz-page-btn"
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                title="Next Page"
+              >
                 &gt;
               </button>
             </div>

@@ -150,6 +150,8 @@ export default function Payments() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [dateRangeFilter, setDateRangeFilter] = useState("1 Aug - 20 Aug 2028");
   const [sortBy, setSortBy] = useState("date_desc");
+  const [pageSize, setPageSize] = useState(8);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Fetch live applications to connect member bookings to manager financials
   const fetchApplications = async () => {
@@ -323,6 +325,15 @@ export default function Payments() {
 
     return result;
   }, [allInvoices, searchQuery, statusFilter, sortBy]);
+
+  const totalPages = Math.ceil(filteredInvoices.length / pageSize) || 1;
+  const paginatedInvoices = useMemo(() => {
+    return filteredInvoices.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  }, [filteredInvoices, currentPage, pageSize]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, sortBy]);
 
   // Checkbox handlers
   const handleSelectAll = (e) => {
@@ -638,7 +649,7 @@ export default function Payments() {
                       </td>
                     </tr>
                   ) : (
-                    filteredInvoices.map((inv) => {
+                    paginatedInvoices.map((inv) => {
                       const isChecked = selectedIds.includes(inv.id);
                       return (
                         <tr
@@ -754,82 +765,53 @@ export default function Payments() {
             </div>
 
             {/* Pagination footer */}
-            <div
-              style={{
-                padding: "16px 20px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                borderTop: "1px solid #f1f5f9",
-                fontSize: "0.82rem",
-                color: "#64748b",
-              }}
-            >
-              <span>Showing 1 to {filteredInvoices.length} of {invoices.length} entries</span>
-              <div style={{ display: "flex", gap: "6px" }}>
-                <button
-                  style={{
-                    padding: "6px 12px",
-                    borderRadius: "6px",
-                    border: "1px solid #e2e8f0",
-                    background: "#ffffff",
-                    cursor: "pointer",
-                    fontSize: "0.78rem",
-                    fontWeight: "600",
+            <div className="wz-table-footer" style={{ padding: "14px 20px", borderTop: "1px solid var(--wz-border)", background: "#ffffff" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", color: "#64748b" }}>
+                <span>Results per page:</span>
+                <select
+                  className="wz-dropdown-select"
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
                   }}
+                >
+                  <option value="8">8</option>
+                  <option value="16">16</option>
+                  <option value="24">24</option>
+                  <option value="50">50</option>
+                </select>
+                <span style={{ marginLeft: "12px" }}>
+                  Showing {filteredInvoices.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}–
+                  {Math.min(currentPage * pageSize, filteredInvoices.length)} of {filteredInvoices.length} invoices
+                </span>
+              </div>
+
+              <div className="wz-pagination-btns">
+                <button
+                  className="wz-page-btn"
+                  disabled={currentPage <= 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  title="Previous Page"
                 >
                   &lt;
                 </button>
+
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                  <button
+                    key={p}
+                    className={`wz-page-btn ${p === currentPage ? "active" : ""}`}
+                    onClick={() => setCurrentPage(p)}
+                  >
+                    {p}
+                  </button>
+                ))}
+
                 <button
-                  style={{
-                    padding: "6px 12px",
-                    borderRadius: "6px",
-                    border: "none",
-                    background: "#ff3b5c",
-                    color: "#ffffff",
-                    cursor: "pointer",
-                    fontSize: "0.78rem",
-                    fontWeight: "700",
-                  }}
-                >
-                  1
-                </button>
-                <button
-                  style={{
-                    padding: "6px 12px",
-                    borderRadius: "6px",
-                    border: "1px solid #e2e8f0",
-                    background: "#ffffff",
-                    cursor: "pointer",
-                    fontSize: "0.78rem",
-                    fontWeight: "600",
-                  }}
-                >
-                  2
-                </button>
-                <button
-                  style={{
-                    padding: "6px 12px",
-                    borderRadius: "6px",
-                    border: "1px solid #e2e8f0",
-                    background: "#ffffff",
-                    cursor: "pointer",
-                    fontSize: "0.78rem",
-                    fontWeight: "600",
-                  }}
-                >
-                  3
-                </button>
-                <button
-                  style={{
-                    padding: "6px 12px",
-                    borderRadius: "6px",
-                    border: "1px solid #e2e8f0",
-                    background: "#ffffff",
-                    cursor: "pointer",
-                    fontSize: "0.78rem",
-                    fontWeight: "600",
-                  }}
+                  className="wz-page-btn"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  title="Next Page"
                 >
                   &gt;
                 </button>

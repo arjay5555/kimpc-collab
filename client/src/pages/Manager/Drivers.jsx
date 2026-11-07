@@ -585,6 +585,8 @@ export default function Drivers() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
   const [sortBy, setSortBy] = useState("name_asc");
+  const [pageSize, setPageSize] = useState(8);
+  const [currentPage, setCurrentPage] = useState(1);
   const [financialsOpen, setFinancialsOpen] = useState(false);
 
   // Add / Edit Modal State
@@ -662,6 +664,15 @@ export default function Drivers() {
 
     return result;
   }, [drivers, searchQuery, filterStatus, sortBy]);
+
+  const totalPages = Math.ceil(filteredDrivers.length / pageSize) || 1;
+  const paginatedDrivers = useMemo(() => {
+    return filteredDrivers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  }, [filteredDrivers, currentPage, pageSize]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterStatus, sortBy]);
 
   // Handle Save Driver (Create or Edit)
   const handleSaveDriver = async (e) => {
@@ -856,7 +867,7 @@ export default function Drivers() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredDrivers.map((d) => {
+                  {paginatedDrivers.map((d) => {
                     const isSelected = Boolean(
                       selectedDriver &&
                         ((selectedDriver._id && d._id && selectedDriver._id === d._id) ||
@@ -908,15 +919,55 @@ export default function Drivers() {
 
             {/* Pagination Footer */}
             <div className="wz-table-footer" style={{ padding: "14px 18px", borderTop: "1px solid var(--wz-border)", background: "#ffffff" }}>
-              <span>Showing {filteredDrivers.length} of {drivers.length} drivers</span>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", color: "#64748b" }}>
+                <span>Results per page:</span>
+                <select
+                  className="wz-dropdown-select"
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                >
+                  <option value="8">8</option>
+                  <option value="16">16</option>
+                  <option value="24">24</option>
+                  <option value="50">50</option>
+                </select>
+                <span style={{ marginLeft: "12px" }}>
+                  Showing {filteredDrivers.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}–
+                  {Math.min(currentPage * pageSize, filteredDrivers.length)} of {filteredDrivers.length} drivers
+                </span>
+              </div>
 
               <div className="wz-pagination-btns">
-                <button className="wz-page-btn">&lt;</button>
-                <button className="wz-page-btn active">1</button>
-                <button className="wz-page-btn">2</button>
-                <button className="wz-page-btn">3</button>
-                <button className="wz-page-btn">4</button>
-                <button className="wz-page-btn">&gt;</button>
+                <button
+                  className="wz-page-btn"
+                  disabled={currentPage <= 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  title="Previous Page"
+                >
+                  &lt;
+                </button>
+
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                  <button
+                    key={p}
+                    className={`wz-page-btn ${p === currentPage ? "active" : ""}`}
+                    onClick={() => setCurrentPage(p)}
+                  >
+                    {p}
+                  </button>
+                ))}
+
+                <button
+                  className="wz-page-btn"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  title="Next Page"
+                >
+                  &gt;
+                </button>
               </div>
             </div>
           </div>
