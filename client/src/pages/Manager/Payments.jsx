@@ -671,11 +671,6 @@ export default function Payments() {
                           </td>
                           <td style={{ fontWeight: "700", color: "#0f172a", whiteSpace: "nowrap" }}>
                             {inv.id}
-                            {inv.isLive && (
-                              <span style={{ marginLeft: "4px", fontSize: "0.65rem", background: "#ecfdf5", color: "#059669", padding: "1px 4px", borderRadius: "3px", fontWeight: 700 }}>
-                                LIVE
-                              </span>
-                            )}
                           </td>
                           <td>
                             <div style={{ fontWeight: "600", color: "#0f172a", lineHeight: 1.25 }}>{inv.clientName}</div>
@@ -684,35 +679,8 @@ export default function Payments() {
                             )}
                           </td>
                           <td style={{ color: "#334155", fontWeight: 500, fontSize: "0.76rem" }}>{inv.machineryModel}</td>
-                          <td>
-                            <div style={{ fontSize: "0.75rem", display: "flex", alignItems: "center", gap: "3px", flexWrap: "wrap" }}>
-                              <strong style={{ color: "#0f172a" }}>{inv.paymentMethod || "Cash"}</strong>
-                              {inv.paymentMethod === "Cash" && inv.cashPaymentOption && (
-                                <span style={{ color: "#0284c7", fontSize: "0.70rem" }}>• {inv.cashPaymentOption}</span>
-                              )}
-                              {inv.paymentMethod === "GCash" && (
-                                inv.gcashProof ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => setPreviewGcashImage(inv.gcashProof)}
-                                    style={{
-                                      background: "#ecfdf5",
-                                      border: "1px solid #a7f3d0",
-                                      borderRadius: "4px",
-                                      padding: "1px 4px",
-                                      color: "#047857",
-                                      fontSize: "0.68rem",
-                                      fontWeight: 700,
-                                      cursor: "pointer",
-                                    }}
-                                  >
-                                    📷 Proof
-                                  </button>
-                                ) : (
-                                  <span style={{ color: "#f59e0b", fontSize: "0.68rem" }}>• Pending</span>
-                                )
-                              )}
-                            </div>
+                          <td style={{ whiteSpace: "nowrap" }}>
+                            <strong style={{ color: "#0f172a", fontWeight: "600" }}>{inv.paymentMethod || "Cash"}</strong>
                           </td>
                           <td style={{ whiteSpace: "nowrap" }}>₱{Number(inv.ratePerDay).toLocaleString()}</td>
                           <td style={{ whiteSpace: "nowrap", fontSize: "0.74rem" }}>{inv.rentalPeriod}</td>
