@@ -727,7 +727,7 @@ export default function BookingApprovals() {
   const kpiTrends = useMemo(() => {
     const computeForPredicate = (predicate) => {
       if (!mergedBookings || mergedBookings.length === 0) {
-        return { direction: "as_is", pct: 0, text: "0% as is" };
+        return { direction: "as_is", pct: 0 };
       }
       // Sort chronologically (oldest first)
       const sorted = [...mergedBookings].sort((a, b) => {
@@ -747,13 +747,13 @@ export default function BookingApprovals() {
       if (recent > prior) {
         const base = prior > 0 ? prior : 1;
         const pct = Math.round(((recent - prior) / base) * 100);
-        return { direction: "increase", pct, text: `+${pct}% increase` };
+        return { direction: "increase", pct };
       } else if (recent < prior) {
         const base = prior > 0 ? prior : 1;
         const pct = Math.round(((prior - recent) / base) * 100);
-        return { direction: "decrease", pct, text: `-${pct}% decrease` };
+        return { direction: "decrease", pct };
       } else {
-        return { direction: "as_is", pct: 0, text: "0% as is" };
+        return { direction: "as_is", pct: 0 };
       }
     };
 
@@ -771,13 +771,38 @@ export default function BookingApprovals() {
     };
   }, [mergedBookings]);
 
+  // Helper to render KPI trend: strictly arrow and percentage (e.g. ↑ 200%, ↓ 50%, or 0%), no signs or words, no container
+  const renderTrend = (trend, incColor = "#16a34a", decColor = "#dc2626") => {
+    if (!trend) return null;
+    const { direction, pct } = trend;
+    if (direction === "increase" && pct > 0) {
+      return (
+        <span className="wz-kpi-trend-plain" style={{ color: incColor }}>
+          ↑ {pct}%
+        </span>
+      );
+    }
+    if (direction === "decrease" && pct > 0) {
+      return (
+        <span className="wz-kpi-trend-plain" style={{ color: decColor }}>
+          ↓ {pct}%
+        </span>
+      );
+    }
+    return (
+      <span className="wz-kpi-trend-plain" style={{ color: "#64748b" }}>
+        0%
+      </span>
+    );
+  };
+
   // Helper to render sparkline based on trend: "increase" | "decrease" | "as_is"
   const renderSparkline = (direction, color, id) => {
     const gradId = `sparkGrad_${id}`;
     if (direction === "increase") {
       return (
-        <div className="wz-sparkline-container" title="Trending Up (Increase)">
-          <svg width="96" height="48" viewBox="0 0 100 50">
+        <div className="wz-sparkline-container" title="Trending Up">
+          <svg width="52" height="26" viewBox="0 0 100 50" preserveAspectRatio="none">
             <defs>
               <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={color} stopOpacity="0.32" />
@@ -801,8 +826,8 @@ export default function BookingApprovals() {
     }
     if (direction === "decrease") {
       return (
-        <div className="wz-sparkline-container" title="Trending Down (Decrease)">
-          <svg width="96" height="48" viewBox="0 0 100 50">
+        <div className="wz-sparkline-container" title="Trending Down">
+          <svg width="52" height="26" viewBox="0 0 100 50" preserveAspectRatio="none">
             <defs>
               <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={color} stopOpacity="0.32" />
@@ -826,8 +851,8 @@ export default function BookingApprovals() {
     }
     // "as_is"
     return (
-      <div className="wz-sparkline-container" title="Steady (As Is)">
-        <svg width="96" height="48" viewBox="0 0 100 50">
+      <div className="wz-sparkline-container" title="Steady">
+        <svg width="52" height="26" viewBox="0 0 100 50" preserveAspectRatio="none">
           <defs>
             <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={color} stopOpacity="0.2" />
@@ -1074,30 +1099,7 @@ export default function BookingApprovals() {
                 </div>
                 <div className="wz-kpi-big-num">{pendingCount}</div>
                 <div>
-                  {kpiTrends.pending.direction === "increase" && (
-                    <span className="wz-trend-badge" style={{ background: "#fef3c7", color: "#b45309" }}>
-                      ↑ {kpiTrends.pending.text}{" "}
-                      <span className="wz-trend-subtitle" style={{ color: "#78350f", marginLeft: "4px" }}>
-                        awaiting review
-                      </span>
-                    </span>
-                  )}
-                  {kpiTrends.pending.direction === "decrease" && (
-                    <span className="wz-trend-badge wz-trend-positive">
-                      ↓ {kpiTrends.pending.text}{" "}
-                      <span className="wz-trend-subtitle" style={{ color: "#065f46", marginLeft: "4px" }}>
-                        cleared
-                      </span>
-                    </span>
-                  )}
-                  {kpiTrends.pending.direction === "as_is" && (
-                    <span className="wz-trend-badge wz-trend-neutral">
-                      → {kpiTrends.pending.text}{" "}
-                      <span className="wz-trend-subtitle" style={{ color: "#64748b", marginLeft: "4px" }}>
-                        steady
-                      </span>
-                    </span>
-                  )}
+                  {renderTrend(kpiTrends.pending, "#b45309", "#16a34a")}
                 </div>
               </div>
 
@@ -1127,30 +1129,7 @@ export default function BookingApprovals() {
                 </div>
                 <div className="wz-kpi-big-num">{ongoingCount}</div>
                 <div>
-                  {kpiTrends.ongoing.direction === "increase" && (
-                    <span className="wz-trend-badge wz-trend-positive">
-                      ↑ {kpiTrends.ongoing.text}{" "}
-                      <span className="wz-trend-subtitle" style={{ color: "#64748b", marginLeft: "4px" }}>
-                        in progress
-                      </span>
-                    </span>
-                  )}
-                  {kpiTrends.ongoing.direction === "decrease" && (
-                    <span className="wz-trend-badge wz-trend-negative">
-                      ↓ {kpiTrends.ongoing.text}{" "}
-                      <span className="wz-trend-subtitle" style={{ color: "#991b1b", marginLeft: "4px" }}>
-                        in progress
-                      </span>
-                    </span>
-                  )}
-                  {kpiTrends.ongoing.direction === "as_is" && (
-                    <span className="wz-trend-badge wz-trend-neutral">
-                      → {kpiTrends.ongoing.text}{" "}
-                      <span className="wz-trend-subtitle" style={{ color: "#64748b", marginLeft: "4px" }}>
-                        in progress
-                      </span>
-                    </span>
-                  )}
+                  {renderTrend(kpiTrends.ongoing, "#16a34a", "#dc2626")}
                 </div>
               </div>
 
@@ -1177,30 +1156,7 @@ export default function BookingApprovals() {
                 </div>
                 <div className="wz-kpi-big-num">{canceledCount}</div>
                 <div>
-                  {kpiTrends.canceled.direction === "increase" && (
-                    <span className="wz-trend-badge wz-trend-negative">
-                      ↑ {kpiTrends.canceled.text}{" "}
-                      <span className="wz-trend-subtitle" style={{ color: "#991b1b", marginLeft: "4px" }}>
-                        canceled &amp; rejected
-                      </span>
-                    </span>
-                  )}
-                  {kpiTrends.canceled.direction === "decrease" && (
-                    <span className="wz-trend-badge wz-trend-positive">
-                      ↓ {kpiTrends.canceled.text}{" "}
-                      <span className="wz-trend-subtitle" style={{ color: "#065f46", marginLeft: "4px" }}>
-                        fewer cancels
-                      </span>
-                    </span>
-                  )}
-                  {kpiTrends.canceled.direction === "as_is" && (
-                    <span className="wz-trend-badge wz-trend-neutral">
-                      → {kpiTrends.canceled.text}{" "}
-                      <span className="wz-trend-subtitle" style={{ color: "#64748b", marginLeft: "4px" }}>
-                        canceled &amp; rejected
-                      </span>
-                    </span>
-                  )}
+                  {renderTrend(kpiTrends.canceled, "#dc2626", "#16a34a")}
                 </div>
               </div>
 
@@ -1226,30 +1182,7 @@ export default function BookingApprovals() {
                 </div>
                 <div className="wz-kpi-big-num">{completedCount}</div>
                 <div>
-                  {kpiTrends.completed.direction === "increase" && (
-                    <span className="wz-trend-badge wz-trend-positive">
-                      ↑ {kpiTrends.completed.text}{" "}
-                      <span className="wz-trend-subtitle" style={{ color: "#64748b", marginLeft: "4px" }}>
-                        returned &amp; settled
-                      </span>
-                    </span>
-                  )}
-                  {kpiTrends.completed.direction === "decrease" && (
-                    <span className="wz-trend-badge wz-trend-negative">
-                      ↓ {kpiTrends.completed.text}{" "}
-                      <span className="wz-trend-subtitle" style={{ color: "#991b1b", marginLeft: "4px" }}>
-                        returned &amp; settled
-                      </span>
-                    </span>
-                  )}
-                  {kpiTrends.completed.direction === "as_is" && (
-                    <span className="wz-trend-badge wz-trend-neutral">
-                      → {kpiTrends.completed.text}{" "}
-                      <span className="wz-trend-subtitle" style={{ color: "#64748b", marginLeft: "4px" }}>
-                        returned &amp; settled
-                      </span>
-                    </span>
-                  )}
+                  {renderTrend(kpiTrends.completed, "#16a34a", "#dc2626")}
                 </div>
               </div>
 
