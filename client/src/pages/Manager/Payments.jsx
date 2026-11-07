@@ -23,7 +23,7 @@ function formatBookingDateRange(startDate, endDate) {
 
 const INITIAL_INVOICES = [
   {
-    id: "INV-WZ1001",
+    id: "BK-WZ1001",
     clientName: "Alice Johnson",
     clientPhone: "+63 917 123 4567",
     machineryModel: "John Deere 5075E Utility Tractor",
@@ -37,7 +37,7 @@ const INITIAL_INVOICES = [
     status: "Completed",
   },
   {
-    id: "INV-WZ1002",
+    id: "BK-WZ1002",
     clientName: "Bob Smith",
     clientPhone: "+63 928 234 5678",
     machineryModel: "Kubota DC-70 Plus Combine Harvester",
@@ -50,7 +50,7 @@ const INITIAL_INVOICES = [
     status: "Awaiting",
   },
   {
-    id: "INV-WZ1003",
+    id: "BK-WZ1003",
     clientName: "Charlie Davis",
     clientPhone: "+63 939 345 6789",
     machineryModel: "New Holland Roll-Belt 450 Round Baler",
@@ -63,7 +63,7 @@ const INITIAL_INVOICES = [
     status: "Completed",
   },
   {
-    id: "INV-WZ1004",
+    id: "BK-WZ1004",
     clientName: "Diana White",
     clientPhone: "+63 915 456 7890",
     machineryModel: "Case IH Farmall 90JX 4WD Tractor",
@@ -77,7 +77,7 @@ const INITIAL_INVOICES = [
     status: "Completed",
   },
   {
-    id: "INV-WZ1005",
+    id: "BK-WZ1005",
     clientName: "Edward Green",
     clientPhone: "+63 920 567 8901",
     machineryModel: "Kuhn GA 4121 GM Rotary Rake",
@@ -90,7 +90,7 @@ const INITIAL_INVOICES = [
     status: "Awaiting",
   },
   {
-    id: "INV-WZ1006",
+    id: "BK-WZ1006",
     clientName: "Fiona Brown",
     clientPhone: "+63 916 678 9012",
     machineryModel: "Ag Leader Precision Boom Sprayer",
@@ -103,7 +103,7 @@ const INITIAL_INVOICES = [
     status: "Completed",
   },
   {
-    id: "INV-WZ1007",
+    id: "BK-WZ1007",
     clientName: "George Clark",
     clientPhone: "+63 927 789 0123",
     machineryModel: "Isuzu Forward Flatbed Hauler",
@@ -117,7 +117,7 @@ const INITIAL_INVOICES = [
     status: "Completed",
   },
   {
-    id: "INV-WZ1008",
+    id: "BK-WZ1008",
     clientName: "Helen Martinez",
     clientPhone: "+63 918 890 1234",
     machineryModel: "John Deere 5075E Utility Tractor",
@@ -182,8 +182,11 @@ export default function Payments() {
       const isPaid = app.paymentStatus === "Paid" || app.financials?.isSettled;
       const isOverdue = !isPaid && app.endDate && new Date(app.endDate) < new Date();
 
+      const bookingId = app.displayId || (app._id ? `BK-${String(app._id).slice(-6).toUpperCase()}` : `BK-WZ${1010 + idx}`);
+
       return {
-        id: app.receiptNo || (app.displayId ? `INV-${app.displayId}` : `INV-APP-${String(app._id || idx).slice(-6).toUpperCase()}`),
+        id: bookingId,
+        bookingId: bookingId,
         rawId: app._id || app.id,
         clientName: app.memberName || app.farmerName || app.memberEmail || "Member",
         clientPhone: app.farmerPhone || app.memberPhone || app.clientPhone || "—",
@@ -250,13 +253,13 @@ export default function Payments() {
       setInvoices((prev) =>
         prev.map((item) => (item.id === inv.id ? { ...item, status: "Completed" } : item))
       );
-      setFeedback(`Invoice ${inv.id} marked as Completed.`);
+      setFeedback(`Payment for booking ${inv.id} marked as Completed.`);
       return;
     }
 
     if (
       !window.confirm(
-        `Mark payment for invoice ${inv.id} (${inv.clientName}) as Completed (Paid)? This will verify payment, issue official receipt, and notify the member.`
+        `Mark payment for booking ${inv.id} (${inv.clientName}) as Completed (Paid)? This will verify payment, issue official receipt, and notify the member.`
       )
     ) {
       return;
@@ -354,7 +357,7 @@ export default function Payments() {
   const openCreateModal = () => {
     setEditingInvoice(null);
     setFormData({
-      id: `INV-WZ${1000 + invoices.length + 1}`,
+      id: `BK-WZ${1000 + invoices.length + 1}`,
       clientName: "",
       machineryModel: "Kubota M7060 Tractor",
       ratePerDay: 60,
@@ -380,7 +383,7 @@ export default function Payments() {
   };
 
   const handleDelete = (id) => {
-    if (window.confirm(`Are you sure you want to delete invoice ${id}?`)) {
+    if (window.confirm(`Are you sure you want to delete payment record for booking ${id}?`)) {
       setInvoices((prev) => prev.filter((inv) => inv.id !== id));
       setSelectedIds((prev) => prev.filter((item) => item !== id));
     }
@@ -456,7 +459,7 @@ export default function Payments() {
                 </div>
               </div>
               <div className="wz-payments-kpi-bottom">
-                <span className="wz-payments-kpi-subtext">{kpiStats.completedCount} invoices settled</span>
+                <span className="wz-payments-kpi-subtext">{kpiStats.completedCount} payments settled</span>
                 <span className="wz-trend-positive">
                   ✓ Verified &amp; Paid
                 </span>
@@ -478,7 +481,7 @@ export default function Payments() {
                 </div>
               </div>
               <div className="wz-payments-kpi-bottom">
-                <span className="wz-payments-kpi-subtext">{kpiStats.awaitingCount} invoices pending</span>
+                <span className="wz-payments-kpi-subtext">{kpiStats.awaitingCount} payments pending</span>
                 <span className="wz-trend-neutral" style={{ color: "#d97706" }}>
                   ⏳ Pending verification
                 </span>
@@ -501,7 +504,7 @@ export default function Payments() {
                 </div>
               </div>
               <div className="wz-payments-kpi-bottom">
-                <span className="wz-payments-kpi-subtext">{kpiStats.overdueCount} invoices past due</span>
+                <span className="wz-payments-kpi-subtext">{kpiStats.overdueCount} payments past due</span>
                 <span className="wz-trend-negative">
                   ⚠️ Action required
                 </span>
@@ -543,7 +546,7 @@ export default function Payments() {
               <ManagerSearchBar
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
-                placeholder="Search invoice, client name, etc"
+                placeholder="Search booking ID, client name, etc"
                 filters={[
                   {
                     id: "status",
@@ -629,7 +632,7 @@ export default function Payments() {
                         style={{ cursor: "pointer" }}
                       />
                     </th>
-                    <th>Invoice ↕</th>
+                    <th>Booking ID ↕</th>
                     <th>Client ↕</th>
                     <th>Machinery ↕</th>
                     <th>Payment ↕</th>
@@ -645,7 +648,7 @@ export default function Payments() {
                   {filteredInvoices.length === 0 ? (
                     <tr>
                       <td colSpan="11" style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>
-                        No invoices found matching your criteria.
+                        No payment records found matching your criteria.
                       </td>
                     </tr>
                   ) : (
@@ -783,7 +786,7 @@ export default function Payments() {
                 </select>
                 <span style={{ marginLeft: "12px" }}>
                   Showing {filteredInvoices.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}–
-                  {Math.min(currentPage * pageSize, filteredInvoices.length)} of {filteredInvoices.length} invoices
+                  {Math.min(currentPage * pageSize, filteredInvoices.length)} of {filteredInvoices.length} payments
                 </span>
               </div>
 
@@ -855,7 +858,7 @@ export default function Payments() {
               }}
             >
               <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: "800", color: "#0f172a" }}>
-                {editingInvoice ? `Edit Invoice (${editingInvoice.id})` : "Create New Invoice"}
+                {editingInvoice ? `Edit Payment Record (${editingInvoice.id})` : "Create New Payment Record"}
               </h3>
               <button
                 onClick={() => setIsModalOpen(false)}
@@ -1050,7 +1053,7 @@ export default function Payments() {
                     cursor: "pointer",
                   }}
                 >
-                  {editingInvoice ? "Save Changes" : "Create Invoice"}
+                  {editingInvoice ? "Save Changes" : "Create Payment Record"}
                 </button>
               </div>
             </form>
@@ -1153,6 +1156,9 @@ export default function Payments() {
                   {receiptInvoice.receiptNo || receiptInvoice.id}
                 </div>
                 <div style={{ fontSize: "0.78rem", color: "#475569", marginTop: "2px" }}>
+                  Booking ID: <strong>{receiptInvoice.id}</strong>
+                </div>
+                <div style={{ fontSize: "0.78rem", color: "#475569", marginTop: "1px" }}>
                   Due Date: <strong>{receiptInvoice.dueDate}</strong>
                 </div>
                 <div style={{ fontSize: "0.76rem", color: "#64748b" }}>

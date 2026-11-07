@@ -1370,7 +1370,7 @@ export default function BookingApprovals() {
               <ManagerSearchBar
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
-                placeholder="Search machinery, ID, phone..."
+                placeholder="Search member, machinery, ID, phone..."
                 filters={[
                   {
                     id: "machineryType",
@@ -1415,6 +1415,8 @@ export default function BookingApprovals() {
                     { value: "date_desc", label: "Newest Date" },
                     { value: "date_asc", label: "Oldest Date" },
                     { value: "id_asc", label: "Booking ID" },
+                    { value: "client_asc", label: "Member (A-Z)" },
+                    { value: "client_desc", label: "Member (Z-A)" },
                   ],
                 }}
               />
@@ -1438,6 +1440,7 @@ export default function BookingApprovals() {
                 <tr>
                   <th>Status <span className="wz-sort-arrow">↕</span></th>
                   <th>Booking ID <span className="wz-sort-arrow">↕</span></th>
+                  <th>Member <span className="wz-sort-arrow">↕</span></th>
                   <th>Booking Date <span className="wz-sort-arrow">↕</span></th>
                   <th>Phone Number <span className="wz-sort-arrow">↕</span></th>
                   <th>Machinery Model <span className="wz-sort-arrow">↕</span></th>
@@ -1449,7 +1452,7 @@ export default function BookingApprovals() {
               <tbody>
                 {filteredBookings.length === 0 ? (
                   <tr>
-                    <td colSpan="8" style={{ padding: "36px", textAlign: "center", color: "#64748b" }}>
+                    <td colSpan="9" style={{ padding: "36px", textAlign: "center", color: "#64748b" }}>
                       No machinery bookings found matching your search.
                     </td>
                   </tr>
@@ -1467,6 +1470,33 @@ export default function BookingApprovals() {
 
                       {/* Booking ID */}
                       <td className="wz-booking-id">{b.id}</td>
+
+                      {/* Member Name */}
+                      <td>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <img
+                            src={
+                              b.clientAvatar ||
+                              `https://ui-avatars.com/api/?name=${encodeURIComponent(b.clientName || "Member")}&background=0284c7&color=fff&bold=true`
+                            }
+                            alt={b.clientName}
+                            style={{
+                              width: "28px",
+                              height: "28px",
+                              borderRadius: "50%",
+                              objectFit: "cover",
+                              flexShrink: 0,
+                            }}
+                            onError={(e) => {
+                              e.currentTarget.onerror = null;
+                              e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(b.clientName || "Member")}&background=0284c7&color=fff&bold=true`;
+                            }}
+                          />
+                          <span className="wz-client-name" style={{ whiteSpace: "nowrap" }}>
+                            {b.clientName || "Member"}
+                          </span>
+                        </div>
+                      </td>
 
                       {/* Booking Date */}
                       <td style={{ color: "#64748b" }}>{b.bookingDate}</td>
