@@ -284,6 +284,58 @@ export default function Payments() {
     }
   };
 
+  // Filtered invoices
+  const filteredInvoices = useMemo(() => {
+    let result = allInvoices.filter((inv) => {
+      const q = searchQuery.toLowerCase().trim();
+      const matchesSearch =
+        !q ||
+        inv.id.toLowerCase().includes(q) ||
+        inv.clientName.toLowerCase().includes(q) ||
+        inv.machineryModel.toLowerCase().includes(q);
+
+      const matchesStatus =
+        statusFilter === "All" || inv.status.toLowerCase() === statusFilter.toLowerCase();
+
+      return matchesSearch && matchesStatus;
+    });
+
+    result.sort((a, b) => {
+      if (sortBy === "date_asc") return (a.dueDate || "").localeCompare(b.dueDate || "");
+      if (sortBy === "date_desc") return (b.dueDate || "").localeCompare(a.dueDate || "");
+      if (sortBy === "amount_desc") return (Number(b.amount) || 0) - (Number(a.amount) || 0);
+      if (sortBy === "amount_asc") return (Number(a.amount) || 0) - (Number(b.amount) || 0);
+      if (sortBy === "client_asc") return (a.clientName || "").localeCompare(b.clientName || "");
+      return 0;
+    });
+
+    return result;
+  }, [allInvoices, searchQuery, statusFilter, sortBy]);
+
+  const totalPages = Math.ceil(filteredInvoices.length / pageSize) || 1;
+  const paginatedInvoices = useMemo(() => {
+    return filteredInvoices.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  }, [filteredInvoices, currentPage, pageSize]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, sortBy]);
+
+  // Checkbox handlers
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedIds(filteredInvoices.map((inv) => inv.id));
+    } else {
+      setSelectedIds([]);
+    }
+  };
+
+  const handleSelectOne = (id) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
   // Modal State for Record Payment
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
