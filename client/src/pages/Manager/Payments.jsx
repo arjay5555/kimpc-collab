@@ -177,6 +177,11 @@ export default function Payments() {
 
   // Merge live applications into invoices
   const allInvoices = useMemo(() => {
+    let storedPayments = {};
+    try {
+      storedPayments = JSON.parse(localStorage.getItem("kimpc_booking_payments") || "{}");
+    } catch (e) {}
+
     const formattedLive = liveApplications.map((app, idx) => {
       const dailyRate = app.financials?.dailyRate || app.ratePerHectare || 2800;
       const days = getDaysCount(app.startDate, app.endDate);
@@ -185,11 +190,23 @@ export default function Payments() {
       const isOverdue = !isPaid && app.endDate && new Date(app.endDate) < new Date();
 
       const bookingId = app.displayId || (app._id ? `BK-${String(app._id).slice(-6).toUpperCase()}` : `BK-WZ${1010 + idx}`);
+      const rawId = app._id || app.id;
+      const pRec = storedPayments[bookingId] || (rawId && storedPayments[rawId]) || null;
+
+      const finalStatus = pRec?.status || (isPaid ? "Completed" : (isOverdue ? "Overdue" : "Awaiting"));
+      const finalAmount = pRec?.amount !== undefined ? Number(pRec.amount) : total;
+      const finalMethod = pRec?.paymentMethod || app.paymentMethod || "Cash";
+      const finalType = pRec?.paymentType || "Full Rental Payment";
+      const finalDateReceived = pRec?.dateReceived || (finalStatus === "Completed" ? (app.endDate || app.startDate || new Date().toISOString().slice(0, 10)) : "");
+      const finalReceiptNo = pRec?.receiptNo || app.receiptNo || `REC-2026-${String(app._id || idx).slice(-4).toUpperCase()}`;
+      const finalProof = pRec?.proofOfPayment || app.gcashProof || null;
+      const finalNotes = pRec?.notes || "";
+      const finalRecordedBy = pRec?.recordedBy || user?.fullName || user?.email || "Manager";
 
       return {
         id: bookingId,
         bookingId: bookingId,
-        rawId: app._id || app.id,
+        rawId,
         clientName: app.memberName || app.farmerName || app.memberEmail || "Member",
         clientPhone: app.farmerPhone || app.memberPhone || app.clientPhone || "—",
         clientEmail: app.memberEmail || "",
@@ -198,13 +215,18 @@ export default function Payments() {
         daysCount: days,
         hectares: app.hectares || 1,
         rentalPeriod: app.hectares ? `${app.hectares} ha (${days}d)` : `${days} Day${days > 1 ? "s" : ""}`,
-        amount: total,
+        amount: finalAmount,
         dueDate: app.endDate || app.startDate || "2028-08-15",
-        paymentMethod: app.paymentMethod || "Cash",
-        cashPaymentOption: app.cashPaymentOption || (app.paymentMethod === "Cash" ? "Upon Pickup" : ""),
-        gcashProof: app.gcashProof || null,
-        receiptNo: app.receiptNo || `REC-2026-${String(app._id || idx).slice(-4).toUpperCase()}`,
-        status: isPaid ? "Completed" : (isOverdue ? "Overdue" : "Awaiting"),
+        paymentMethod: finalMethod,
+        paymentType: finalType,
+        dateReceived: finalDateReceived,
+        receiptNo: finalReceiptNo,
+        proofOfPayment: finalProof,
+        notes: finalNotes,
+        recordedBy: finalRecordedBy,
+        cashPaymentOption: app.cashPaymentOption || (finalMethod === "Cash" ? "Upon Pickup" : ""),
+        gcashProof: finalProof,
+        status: finalStatus,
         assignedDriver: app.assignedDriver || "Self-Operated",
         startDate: app.startDate,
         endDate: app.endDate,
@@ -213,8 +235,35 @@ export default function Payments() {
       };
     });
 
-    return [...formattedLive, ...invoices];
-  }, [liveApplications, invoices]);
+    const formattedMock = invoices.map((inv) => {
+      const pRec = storedPayments[inv.id] || null;
+      const finalStatus = pRec?.status || inv.status;
+      const finalAmount = pRec?.amount !== undefined ? Number(pRec.amount) : inv.amount;
+      const finalMethod = pRec?.paymentMethod || inv.paymentMethod || "Cash";
+      const finalType = pRec?.paymentType || "Full Rental Payment";
+      const finalDateReceived = pRec?.dateReceived || (finalStatus === "Completed" ? inv.dueDate : "");
+      const finalReceiptNo = pRec?.receiptNo || inv.receiptNo || `REC-2026-${String(inv.id).replace(/\D/g, "")}`;
+      const finalProof = pRec?.proofOfPayment || inv.gcashProof || null;
+      const finalNotes = pRec?.notes || "";
+      const finalRecordedBy = pRec?.recordedBy || user?.fullName || user?.email || "Manager";
+
+      return {
+        ...inv,
+        amount: finalAmount,
+        status: finalStatus,
+        paymentMethod: finalMethod,
+        paymentType: finalType,
+        dateReceived: finalDateReceived,
+        receiptNo: finalReceiptNo,
+        proofOfPayment: finalProof,
+        gcashProof: finalProof,
+        notes: finalNotes,
+        recordedBy: finalRecordedBy,
+      };
+    });
+
+    return [...formattedLive, ...formattedMock];
+  }, [liveApplications, invoices, user]);
 
   // Compute live KPI metrics
   const kpiStats = useMemo(() => {
@@ -255,6 +304,9 @@ export default function Payments() {
       setInvoices((prev) =>
         prev.map((item) => (item.id === inv.id ? { ...item, status: "Completed" } : item))
       );
+      if (viewingPayment && viewingPayment.id === inv.id) {
+        setViewingPayment((prev) => ({ ...prev, status: "Completed" }));
+      }
       setFeedback(`Payment for booking ${inv.id} marked as Completed.`);
       return;
     }
@@ -275,6 +327,9 @@ export default function Payments() {
       });
       if (res.ok) {
         setFeedback(`Payment settled for ${inv.id}! Member notified and receipt ready.`);
+        if (viewingPayment && viewingPayment.id === inv.id) {
+          setViewingPayment((prev) => ({ ...prev, status: "Completed" }));
+        }
         fetchApplications();
       } else {
         setFeedback(res.data?.error || "Failed to settle payment.");
@@ -336,9 +391,10 @@ export default function Payments() {
     );
   };
 
-  // Modal State for Record Payment
+  // Modal State for Record Payment & View Details
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
+  const [viewingPayment, setViewingPayment] = useState(null);
   const [formData, setFormData] = useState({
     bookingId: "",
     rawId: "",
@@ -803,32 +859,39 @@ export default function Payments() {
                             )}
                           </td>
                           <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
-                            <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                              {inv.status !== "Completed" && (
-                                <button
-                                  className="wz-fin-action-btn"
-                                  style={{ background: "#059669", color: "#ffffff", borderColor: "#059669", fontWeight: 700 }}
-                                  onClick={() => handleSettleInvoice(inv)}
-                                  title="Mark invoice as Paid & settled"
-                                >
-                                  ✓ Settle
-                                </button>
-                              )}
-                              <button
-                                className="wz-fin-action-btn"
-                                onClick={() => setReceiptInvoice(inv)}
-                                title="View & print official receipt voucher"
-                              >
-                                Receipt
-                              </button>
-                              <button
-                                className="wz-fin-action-btn delete"
-                                onClick={() => handleDelete(inv.id)}
-                                title="Delete invoice"
-                              >
-                                Delete
-                              </button>
-                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setViewingPayment(inv)}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "6px",
+                                background: "#f8fafc",
+                                color: "#0f172a",
+                                border: "1px solid #cbd5e1",
+                                borderRadius: "8px",
+                                padding: "6px 12px",
+                                fontSize: "0.75rem",
+                                fontWeight: "700",
+                                cursor: "pointer",
+                                transition: "all 0.15s ease",
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = "#e2e8f0";
+                                e.currentTarget.style.borderColor = "#94a3b8";
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = "#f8fafc";
+                                e.currentTarget.style.borderColor = "#cbd5e1";
+                              }}
+                              title="View payment record audit and details"
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                <circle cx="12" cy="10" r="3" />
+                              </svg>
+                              View Details
+                            </button>
                           </td>
                         </tr>
                       );
@@ -1253,6 +1316,459 @@ export default function Payments() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: PAYMENT VIEW DETAILS & AUDIT ================= */}
+      {viewingPayment && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(15, 23, 42, 0.65)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 10000,
+            padding: "20px",
+          }}
+          onClick={() => setViewingPayment(null)}
+        >
+          <div
+            style={{
+              background: "#ffffff",
+              borderRadius: "16px",
+              width: "100%",
+              maxWidth: "640px",
+              maxHeight: "92vh",
+              overflowY: "auto",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+              border: "1px solid #e2e8f0",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "20px 24px",
+                borderBottom: "1px solid #e2e8f0",
+                background: "#f8fafc",
+                borderRadius: "16px 16px 0 0",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <div
+                  style={{
+                    width: "42px",
+                    height: "42px",
+                    borderRadius: "10px",
+                    background: "#ecfdf5",
+                    color: "#059669",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "1.3rem",
+                    fontWeight: 800,
+                    border: "1px solid #a7f3d0",
+                  }}
+                >
+                  💳
+                </div>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: "800", color: "#0f172a" }}>
+                      Payment Audit &amp; Details
+                    </h3>
+                    <span
+                      style={{
+                        fontSize: "0.72rem",
+                        fontFamily: "monospace",
+                        background: "#e2e8f0",
+                        color: "#334155",
+                        padding: "2px 6px",
+                        borderRadius: "4px",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {viewingPayment.id}
+                    </span>
+                  </div>
+                  <p style={{ margin: "2px 0 0", fontSize: "0.78rem", color: "#64748b" }}>
+                    Official transaction breakdown and payment verification record
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setViewingPayment(null)}
+                style={{
+                  background: "#f1f5f9",
+                  border: "none",
+                  borderRadius: "50%",
+                  width: "32px",
+                  height: "32px",
+                  fontSize: "1rem",
+                  color: "#64748b",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+                title="Close details"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "18px" }}>
+              {/* Status Strip & Member Quick Glance */}
+              <div
+                style={{
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "12px",
+                  padding: "14px 18px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: "12px",
+                }}
+              >
+                <div>
+                  <span style={{ fontSize: "0.72rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.5px" }}>
+                    Billed Member
+                  </span>
+                  <div style={{ fontWeight: 800, color: "#0f172a", fontSize: "1rem" }}>
+                    {viewingPayment.clientName}
+                  </div>
+                  {viewingPayment.clientPhone && viewingPayment.clientPhone !== "—" && (
+                    <div style={{ fontSize: "0.76rem", color: "#475569" }}>📞 {viewingPayment.clientPhone}</div>
+                  )}
+                </div>
+
+                <div style={{ textAlign: "right" }}>
+                  <span style={{ fontSize: "0.72rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.5px" }}>
+                    Settlement Status
+                  </span>
+                  <div style={{ marginTop: "4px" }}>
+                    {viewingPayment.status === "Completed" && (
+                      <span className="wz-status-completed" style={{ fontSize: "0.78rem", padding: "4px 10px" }}>
+                        ✓ Paid &amp; Completed
+                      </span>
+                    )}
+                    {viewingPayment.status === "Awaiting" && (
+                      <span className="wz-status-awaiting" style={{ fontSize: "0.78rem", padding: "4px 10px" }}>
+                        ⏳ Awaiting Payment
+                      </span>
+                    )}
+                    {viewingPayment.status === "Overdue" && (
+                      <span className="wz-status-overdue" style={{ fontSize: "0.78rem", padding: "4px 10px" }}>
+                        ⚠️ Overdue Settlement
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Machinery & Rental Context */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "12px",
+                  padding: "12px 16px",
+                  background: "#ffffff",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "10px",
+                }}
+              >
+                <div>
+                  <span style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600 }}>Rented Machinery Unit:</span>
+                  <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.85rem", marginTop: "2px" }}>
+                    🚜 {viewingPayment.machineryModel}
+                  </div>
+                </div>
+                <div>
+                  <span style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600 }}>Rental Period / Schedule:</span>
+                  <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.85rem", marginTop: "2px" }}>
+                    📅 {viewingPayment.rentalPeriod || "Standard Rental"}
+                  </div>
+                </div>
+              </div>
+
+              {/* The 7 Core Requested Audit Fields */}
+              <div
+                style={{
+                  background: "#ffffff",
+                  border: "1.5px solid #cbd5e1",
+                  borderRadius: "12px",
+                  padding: "18px",
+                  boxShadow: "0 2px 8px rgba(15, 23, 42, 0.04)",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", borderBottom: "1px solid #f1f5f9", paddingBottom: "10px", marginBottom: "14px" }}>
+                  <span style={{ fontSize: "1.1rem" }}>📋</span>
+                  <h4 style={{ margin: 0, fontSize: "0.88rem", fontWeight: "800", color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    Payment Information &amp; Audit Trail
+                  </h4>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "14px" }}>
+                  {/* 1. Payment Amount */}
+                  <div style={{ background: "#ecfdf5", border: "1px solid #a7f3d0", borderRadius: "10px", padding: "12px 14px" }}>
+                    <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#047857", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                      1. Payment Amount
+                    </span>
+                    <div style={{ fontSize: "1.35rem", fontWeight: 900, color: "#065f46", marginTop: "4px" }}>
+                      ₱{Number(viewingPayment.amount || 0).toLocaleString()}
+                    </div>
+                  </div>
+
+                  {/* 2. Payment Type */}
+                  <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px" }}>
+                    <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                      2. Payment Type
+                    </span>
+                    <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#0f172a", marginTop: "6px" }}>
+                      {viewingPayment.paymentType || "Full Rental Payment"}
+                    </div>
+                  </div>
+
+                  {/* 3. Payment Method */}
+                  <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px" }}>
+                    <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                      3. Payment Method
+                    </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "6px" }}>
+                      <span
+                        style={{
+                          background: viewingPayment.paymentMethod === "GCash" ? "#ecfdf5" : (viewingPayment.paymentMethod === "Bank Transfer" ? "#eff6ff" : "#f1f5f9"),
+                          color: viewingPayment.paymentMethod === "GCash" ? "#047857" : (viewingPayment.paymentMethod === "Bank Transfer" ? "#1d4ed8" : "#334155"),
+                          border: `1px solid ${viewingPayment.paymentMethod === "GCash" ? "#a7f3d0" : (viewingPayment.paymentMethod === "Bank Transfer" ? "#bfdbfe" : "#cbd5e1")}`,
+                          padding: "3px 8px",
+                          borderRadius: "6px",
+                          fontWeight: 800,
+                          fontSize: "0.80rem",
+                        }}
+                      >
+                        {viewingPayment.paymentMethod || "Cash"}
+                      </span>
+                      {viewingPayment.cashPaymentOption && viewingPayment.paymentMethod === "Cash" && (
+                        <span style={{ fontSize: "0.72rem", color: "#0284c7", fontWeight: 600 }}>• {viewingPayment.cashPaymentOption}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 4. Date Received */}
+                  <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px" }}>
+                    <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                      4. Date Received
+                    </span>
+                    <div style={{ fontSize: "0.92rem", fontWeight: 800, color: "#0f172a", marginTop: "6px" }}>
+                      📅 {viewingPayment.dateReceived || viewingPayment.dueDate || "—"}
+                    </div>
+                  </div>
+
+                  {/* 5. Receipt or Reference Number */}
+                  <div style={{ gridColumn: "span 2", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px" }}>
+                    <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                      5. Receipt or Reference Number
+                    </span>
+                    <div style={{ fontSize: "0.95rem", fontWeight: 900, fontFamily: "monospace", color: "#0f172a", marginTop: "4px" }}>
+                      {viewingPayment.receiptNo || viewingPayment.referenceNumber || viewingPayment.id}
+                    </div>
+                  </div>
+
+                  {/* 6. Proof of Payment or Notes with View button */}
+                  <div style={{ gridColumn: "span 2", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "14px" }}>
+                    <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px", display: "block", marginBottom: "8px" }}>
+                      6. Proof of Payment or Notes
+                    </span>
+                    
+                    <div style={{ display: "grid", gridTemplateColumns: (viewingPayment.proofOfPayment || viewingPayment.gcashProof) ? "1fr 1fr" : "1fr", gap: "12px" }}>
+                      {/* Notes box */}
+                      <div>
+                        <span style={{ fontSize: "0.72rem", color: "#475569", fontWeight: 600, display: "block", marginBottom: "4px" }}>
+                          📝 Remarks / Payment Notes:
+                        </span>
+                        <div style={{ background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "6px", padding: "8px 10px", fontSize: "0.80rem", color: "#334155", minHeight: "42px" }}>
+                          {viewingPayment.notes || "Standard payment record for KIMPC machinery rental."}
+                        </div>
+                      </div>
+
+                      {/* Proof of Payment with View button */}
+                      {(viewingPayment.proofOfPayment || viewingPayment.gcashProof) ? (
+                        <div>
+                          <span style={{ fontSize: "0.72rem", color: "#475569", fontWeight: 600, display: "block", marginBottom: "4px" }}>
+                            📷 Attached Proof Screenshot:
+                          </span>
+                          <div style={{ display: "flex", alignItems: "center", gap: "10px", background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "6px", padding: "6px 10px" }}>
+                            <img
+                              src={viewingPayment.proofOfPayment || viewingPayment.gcashProof}
+                              alt="Proof of Payment"
+                              onClick={() => setPreviewGcashImage(viewingPayment.proofOfPayment || viewingPayment.gcashProof)}
+                              style={{
+                                width: "44px",
+                                height: "44px",
+                                objectFit: "cover",
+                                borderRadius: "6px",
+                                border: "2px solid #059669",
+                                cursor: "pointer",
+                              }}
+                              title="Click to view full image"
+                            />
+                            <div>
+                              <div style={{ fontSize: "0.72rem", color: "#065f46", fontWeight: 700, marginBottom: "3px" }}>
+                                ✓ Proof Uploaded
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setPreviewGcashImage(viewingPayment.proofOfPayment || viewingPayment.gcashProof)}
+                                style={{
+                                  background: "#0284c7",
+                                  color: "#ffffff",
+                                  border: "none",
+                                  borderRadius: "5px",
+                                  padding: "3px 8px",
+                                  fontSize: "0.72rem",
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                }}
+                              >
+                                🔍 View Proof
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "#f1f5f9", border: "1px dashed #cbd5e1", borderRadius: "6px", padding: "8px 10px", fontSize: "0.75rem", color: "#64748b" }}>
+                          <span>ℹ️</span> No digital screenshot attached (Cash / In-person payment recorded).
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 7. Recorded By (Filled automatically what account of manager used) */}
+                  <div style={{ gridColumn: "span 2", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "10px", padding: "12px 14px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "6px" }}>
+                      <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#166534", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                        7. Recorded By
+                      </span>
+                      <span style={{ fontSize: "0.68rem", fontWeight: 700, background: "#dcfce7", color: "#15803d", padding: "2px 8px", borderRadius: "12px", border: "1px solid #86efac" }}>
+                        ✓ Auto-filled with active manager account
+                      </span>
+                    </div>
+                    <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#14532d", marginTop: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <span>👤</span>
+                      <span>{viewingPayment.recordedBy || user?.fullName || user?.name || user?.email || "Manager"}</span>
+                      {user?.role && (
+                        <span style={{ fontSize: "0.70rem", background: "#bbf7d0", color: "#166534", padding: "1px 6px", borderRadius: "4px", fontWeight: 700 }}>
+                          {user.role}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer with Actions */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: "10px",
+                padding: "16px 24px",
+                borderTop: "1px solid #e2e8f0",
+                background: "#f8fafc",
+                borderRadius: "0 0 16px 16px",
+              }}
+            >
+              <div>
+                {viewingPayment.status !== "Completed" ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleSettleInvoice(viewingPayment);
+                      setViewingPayment(null);
+                    }}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      background: "#059669",
+                      color: "#ffffff",
+                      border: "none",
+                      borderRadius: "8px",
+                      padding: "8px 16px",
+                      fontWeight: 700,
+                      fontSize: "0.82rem",
+                      cursor: "pointer",
+                      boxShadow: "0 2px 6px rgba(5, 150, 105, 0.25)",
+                    }}
+                  >
+                    ✓ Confirm &amp; Settle Payment
+                  </button>
+                ) : (
+                  <span style={{ fontSize: "0.76rem", color: "#059669", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                    ✓ Verified &amp; Settled in Cooperative Ledger
+                  </span>
+                )}
+              </div>
+
+              <div style={{ display: "flex", gap: "10px" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReceiptInvoice(viewingPayment);
+                  }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    background: "#ffffff",
+                    color: "#0f172a",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "8px",
+                    padding: "8px 14px",
+                    fontWeight: 700,
+                    fontSize: "0.82rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  🖨️ Receipt Voucher
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewingPayment(null)}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    background: "#ffffff",
+                    color: "#64748b",
+                    fontWeight: 600,
+                    fontSize: "0.82rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
