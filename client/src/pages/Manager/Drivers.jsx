@@ -431,13 +431,18 @@ export default function Drivers() {
           api("/applications"),
         ]);
         if (driverRes && driverRes.ok) {
-          const dList = Array.isArray(driverRes.data)
+          const rawList = Array.isArray(driverRes.data)
             ? driverRes.data
             : Array.isArray(driverRes.data?.data)
             ? driverRes.data.data
             : [];
-          if (dList.length > 0) {
-            setDrivers(dList);
+          if (rawList.length > 0) {
+            const normalized = rawList.map((d, index) => ({
+              ...d,
+              id: d._id || d.id || `driver-${index}`,
+              _id: d._id || d.id || `driver-${index}`,
+            }));
+            setDrivers(normalized);
           }
         }
         if (appRes && appRes.ok) {
@@ -682,11 +687,16 @@ export default function Drivers() {
         });
         const saved = res && res.ok ? (res.data?.data || res.data) : null;
         if (saved) {
+          const normalizedSaved = {
+            ...saved,
+            id: saved._id || saved.id || `driver-${Date.now()}`,
+            _id: saved._id || saved.id || `driver-${Date.now()}`,
+          };
           const updated = drivers.map((d) =>
-            d._id === targetId || d.id === targetId ? { ...d, ...saved } : d
+            d._id === targetId || d.id === targetId ? normalizedSaved : d
           );
           setDrivers(updated);
-          setSelectedDriver(updated.find((d) => d._id === targetId || d.id === targetId) || saved);
+          setSelectedDriver(normalizedSaved);
           setEditingDriver(null);
           setShowAddModal(false);
         } else {
@@ -717,8 +727,13 @@ export default function Drivers() {
         });
         if (res && res.ok) {
           const saved = res.data?.data || res.data;
-          setDrivers([saved, ...drivers]);
-          setSelectedDriver(saved);
+          const normalizedSaved = {
+            ...saved,
+            id: saved._id || saved.id || `driver-${Date.now()}`,
+            _id: saved._id || saved.id || `driver-${Date.now()}`,
+          };
+          setDrivers([normalizedSaved, ...drivers]);
+          setSelectedDriver(normalizedSaved);
           setShowAddModal(false);
           setDriverForm({
             name: "",
@@ -842,11 +857,16 @@ export default function Drivers() {
                 </thead>
                 <tbody>
                   {filteredDrivers.map((d) => {
-                    const isSelected = selectedDriver?.id === d.id;
+                    const isSelected = Boolean(
+                      selectedDriver &&
+                        ((selectedDriver._id && d._id && selectedDriver._id === d._id) ||
+                          (selectedDriver.id && d.id && selectedDriver.id === d.id) ||
+                          (selectedDriver.name && d.name && selectedDriver.name.trim().toLowerCase() === d.name.trim().toLowerCase()))
+                    );
 
                     return (
                       <tr
-                        key={d.id}
+                        key={d._id || d.id || d.name}
                         className={`wz-driver-row ${isSelected ? "wz-driver-row-selected" : ""}`}
                         onClick={() => setSelectedDriver(d)}
                       >
@@ -887,7 +907,7 @@ export default function Drivers() {
             </div>
 
             {/* Pagination Footer */}
-            <div className="wz-table-footer" style={{ padding: "14px 18px", borderTop: "1px solid var(--wz-border)" }}>
+            <div className="wz-table-footer" style={{ padding: "14px 18px", borderTop: "1px solid var(--wz-border)", background: "#ffffff" }}>
               <span>Showing {filteredDrivers.length} of {drivers.length} drivers</span>
 
               <div className="wz-pagination-btns">
