@@ -430,11 +430,25 @@ export default function Drivers() {
           api("/drivers"),
           api("/applications"),
         ]);
-        if (driverRes && driverRes.ok && Array.isArray(driverRes.data) && driverRes.data.length > 0) {
-          setDrivers(driverRes.data);
+        if (driverRes && driverRes.ok) {
+          const dList = Array.isArray(driverRes.data)
+            ? driverRes.data
+            : Array.isArray(driverRes.data?.data)
+            ? driverRes.data.data
+            : [];
+          if (dList.length > 0) {
+            setDrivers(dList);
+          }
         }
-        if (appRes && appRes.ok && Array.isArray(appRes.data)) {
-          setLiveBookings(appRes.data);
+        if (appRes && appRes.ok) {
+          const aList = Array.isArray(appRes.data)
+            ? appRes.data
+            : Array.isArray(appRes.data?.data)
+            ? appRes.data.data
+            : [];
+          if (aList.length > 0) {
+            setLiveBookings(aList);
+          }
         }
       } catch (err) {
         console.error("Failed to load driver/booking data:", err);

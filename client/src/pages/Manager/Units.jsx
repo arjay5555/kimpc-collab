@@ -103,6 +103,21 @@ const EMPTY_UNIT_FORM = {
   driverPhone: "",
 };
 
+// Fallback registered drivers if database collection is empty
+const DEFAULT_DRIVERS = [
+  { id: "d1", name: "John Adams", email: "john.adams@example.com", phone: "111-222-3333", status: "On Duty" },
+  { id: "d2", name: "Emily Brown", email: "emily.brown@example.com", phone: "222-333-4444", status: "Sick Leave" },
+  { id: "d3", name: "Michael Clark", email: "michael.clark@example.com", phone: "333-444-5555", status: "On Duty" },
+  { id: "d4", name: "Sarah Davis", email: "sarah.davis@example.com", phone: "444-555-6666", status: "Half-Day Leave" },
+  { id: "d5", name: "James Evans", email: "james.evans@example.com", phone: "555-666-7777", status: "On Duty" },
+  { id: "d6", name: "Laura Fisher", email: "laura.fisher@example.com", phone: "666-777-8888", status: "On Duty" },
+  { id: "d7", name: "Robert Gray", email: "robert.gray@example.com", phone: "777-888-9999", status: "Sick Leave" },
+  { id: "d8", name: "Jessica Harris", email: "jessica.harris@example.com", phone: "888-999-0000", status: "On Duty" },
+  { id: "d9", name: "Daniel Jackson", email: "daniel.jackson@example.com", phone: "999-000-1111", status: "On Duty" },
+  { id: "d10", name: "Olivia King", email: "olivia.king@example.com", phone: "000-111-2222", status: "On Duty" },
+  { id: "d11", name: "David Lee", email: "david.lee@example.com", phone: "111-222-3334", status: "Half-Day Leave" },
+];
+
 export default function Units() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -167,11 +182,22 @@ export default function Units() {
     try {
       setDriversLoading(true);
       const res = await api("/drivers");
-      if (res && res.ok && Array.isArray(res.data)) {
-        setDrivers(res.data);
+      const list =
+        res && res.ok
+          ? Array.isArray(res.data)
+            ? res.data
+            : Array.isArray(res.data?.data)
+            ? res.data.data
+            : []
+          : [];
+      if (list.length > 0) {
+        setDrivers(list);
+      } else {
+        setDrivers(DEFAULT_DRIVERS);
       }
     } catch (err) {
       console.error("Error loading drivers:", err);
+      setDrivers(DEFAULT_DRIVERS);
     } finally {
       setDriversLoading(false);
     }
@@ -214,6 +240,7 @@ export default function Units() {
     setDriverModalUnit(unit);
     setDriverSearchQuery("");
     setDriverError("");
+    fetchDrivers();
   };
 
   const handleAssignDriver = async (driverName, driverPhone = "") => {
@@ -326,6 +353,9 @@ export default function Units() {
     });
     setFormErrors({});
     setActiveFormTab("basic");
+    if (!drivers || drivers.length === 0) {
+      fetchDrivers();
+    }
     setShowAddModal(true);
   };
 
@@ -385,6 +415,9 @@ export default function Units() {
     });
     setFormErrors({});
     setActiveFormTab("basic");
+    if (!drivers || drivers.length === 0) {
+      fetchDrivers();
+    }
     setShowAddModal(true);
   };
 
@@ -2833,7 +2866,7 @@ export default function Units() {
             {/* Footer with link to Drivers registry */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "14px" }}>
               <Link
-                to="/drivers"
+                to="/manager/drivers"
                 style={{ fontSize: "0.8rem", color: "#0284c7", fontWeight: "600", textDecoration: "none" }}
               >
                 Manage registered drivers &rarr;
