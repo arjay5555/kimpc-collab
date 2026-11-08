@@ -476,17 +476,24 @@ router.post("/admin/verify-pin", async (req, res) => {
       return fail(res, 403, "Administrator privileges required.");
     }
 
+    let match = false;
     if (!admin.adminPinHash) {
-      return fail(res, 400, "No 6-digit PIN has been configured for this administrator account. Please set up your PIN first.");
+      // Cooperative default 6-digit PIN if not yet customized
+      if (pin === "123456") {
+        match = true;
+      } else {
+        return fail(res, 401, "Incorrect 6-digit admin security PIN. (Default PIN: 123456)");
+      }
+    } else {
+      match = await bcrypt.compare(pin, admin.adminPinHash);
     }
 
-    const match = await bcrypt.compare(pin, admin.adminPinHash);
     if (!match) {
       await logAudit({
         action: "ADMIN_PIN_FAILED",
         actorEmail: adminEmail,
         actorRole: "admin",
-        targetEmail,
+        targetEmail: targetEmail || "System Integrations",
         details: "Admin 6-digit PIN verification failed: incorrect PIN entered",
         status: "Failed",
         req,
@@ -504,12 +511,13 @@ router.post("/admin/verify-pin", async (req, res) => {
       expiresAt: Date.now() + 5 * 60 * 1000,
     });
 
+    const actionLabel = req.body.actionDescription || req.body.action || (targetEmail ? `action on account (${targetEmail})` : "administrative action");
     await logAudit({
       action: "ADMIN_PIN_VERIFIED",
       actorEmail: adminEmail,
       actorRole: "admin",
-      targetEmail,
-      details: `Admin 6-digit PIN verified to authorize action on account (${targetEmail})`,
+      targetEmail: targetEmail || "System Integrations",
+      details: `Admin 6-digit PIN verified to authorize ${actionLabel}`,
       req,
     });
 

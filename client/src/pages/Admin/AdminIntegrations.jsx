@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { api } from "../../services/api";
+import { useAuth } from "../../context/AuthContext";
 import AdminSidebar from "../../components/AdminSidebar";
 import AdminTopbar from "../../components/AdminTopbar";
 import "../../styles/admin-kimpc.css";
 
 export default function AdminIntegrations() {
+  const { user } = useAuth();
   const [settings, setSettings] = useState({
     googleLoginEnabled: true,
     facebookLoginEnabled: false,
@@ -69,6 +71,144 @@ export default function AdminIntegrations() {
   // Individual saving state & feedback
   const [keySaving, setKeySaving] = useState({});
   const [keyFeedback, setKeyFeedback] = useState({});
+
+  // 6-Digit PIN Security Modal State
+  const [pinModal, setPinModal] = useState({
+    open: false,
+    actionDescription: "",
+    onSuccess: null,
+  });
+  const [pinDigits, setPinDigits] = useState(["", "", "", "", "", ""]);
+  const [pinError, setPinError] = useState("");
+  const [pinLoading, setPinLoading] = useState(false);
+  const [showPin, setShowPin] = useState(false);
+  const pinInputRefs = [
+    useRef(null),
+    useRef(null),
+    useRef(null),
+    useRef(null),
+    useRef(null),
+    useRef(null),
+  ];
+
+  const requestPinAuthorization = (actionDescription, onSuccess) => {
+    setPinDigits(["", "", "", "", "", ""]);
+    setPinError("");
+    setPinLoading(false);
+    setPinModal({
+      open: true,
+      actionDescription,
+      onSuccess,
+    });
+    setTimeout(() => {
+      pinInputRefs[0]?.current?.focus();
+    }, 100);
+  };
+
+  const handleVerifyPin = async (e) => {
+    if (e) e.preventDefault();
+    const pin = pinDigits.join("").trim();
+    if (pin.length !== 6) {
+      setPinError("Please enter all 6 digits of your PIN.");
+      return;
+    }
+
+    setPinLoading(true);
+    setPinError("");
+
+    try {
+      const adminEmail = user?.email || JSON.parse(localStorage.getItem("kimpc_user") || "{}")?.email || "admin@kimpc.test";
+      const res = await api("/admin/verify-pin", {
+        method: "POST",
+        body: {
+          adminEmail,
+          pin,
+          actionDescription: pinModal.actionDescription,
+        },
+      });
+
+      if (!res.ok) {
+        setPinError(res.data?.error || "Incorrect 6-digit admin security PIN.");
+        setPinLoading(false);
+        setPinDigits(["", "", "", "", "", ""]);
+        pinInputRefs[0]?.current?.focus();
+        return;
+      }
+
+      // PIN Verified successfully
+      const callback = pinModal.onSuccess;
+      setPinModal({ open: false, actionDescription: "", onSuccess: null });
+      setPinLoading(false);
+
+      if (typeof callback === "function") {
+        callback();
+      }
+    } catch (err) {
+      setPinError("Network error while verifying PIN.");
+      setPinLoading(false);
+    }
+  };
+
+  const handlePinDigitChange = (index, value) => {
+    const cleaned = value.replace(/\D/g, "");
+    if (!cleaned) {
+      const next = [...pinDigits];
+      next[index] = "";
+      setPinDigits(next);
+      return;
+    }
+
+    if (cleaned.length > 1) {
+      const next = [...pinDigits];
+      const chars = cleaned.slice(0, 6).split("");
+      chars.forEach((c, i) => {
+        if (index + i < 6) next[index + i] = c;
+      });
+      setPinDigits(next);
+      const targetIdx = Math.min(5, index + chars.length);
+      pinInputRefs[targetIdx]?.current?.focus();
+      return;
+    }
+
+    const next = [...pinDigits];
+    next[index] = cleaned[0];
+    setPinDigits(next);
+
+    if (index < 5) {
+      pinInputRefs[index + 1]?.current?.focus();
+    }
+  };
+
+  const handlePinKeyDown = (index, e) => {
+    if (e.key === "Backspace" && !pinDigits[index] && index > 0) {
+      pinInputRefs[index - 1]?.current?.focus();
+    } else if (e.key === "Enter") {
+      handleVerifyPin();
+    }
+  };
+
+  const handlePinPaste = (e) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (!pasted) return;
+    const next = ["", "", "", "", "", ""];
+    pasted.split("").forEach((c, i) => {
+      next[i] = c;
+    });
+    setPinDigits(next);
+    const targetIdx = Math.min(5, pasted.length);
+    pinInputRefs[targetIdx]?.current?.focus();
+  };
+
+  const handleRequestEdit = (serviceKey, serviceName) => {
+    if (expandedKeys[serviceKey]) {
+      setExpandedKeys((p) => ({ ...p, [serviceKey]: false }));
+    } else {
+      requestPinAuthorization(`edit ${serviceName} credentials`, () => {
+        setExpandedKeys((p) => ({ ...p, [serviceKey]: true }));
+      });
+    }
+  };
 
   // 1. Fetch current integration switches & customizable keys
   const fetchSettingsAndKeys = async () => {
@@ -189,23 +329,55 @@ export default function AdminIntegrations() {
     }
   };
 
-  // Toggle handlers mapped to both dedicated routes and PUT
-  const handleToggleGoogle = () =>
-    updateSetting("/admin/settings/google-login", "googleLoginEnabled", !settings.googleLoginEnabled, "Google Sign-In");
-  const handleToggleFacebook = () =>
-    updateSetting("/admin/settings/facebook-login", "facebookLoginEnabled", !settings.facebookLoginEnabled, "Facebook Sign-In");
-  const handleToggleRecaptcha = () =>
-    updateSetting("/admin/settings/recaptcha", "recaptchaEnabled", !settings.recaptchaEnabled, "Google reCAPTCHA v2");
-  const handleToggleWeather = () =>
-    updateSetting("/admin/settings/weather", "weatherEnabled", !settings.weatherEnabled, "Kalilangan Weather Forecast API");
-  const handleToggleOneSignal = () =>
-    updateSetting("/admin/settings/onesignal", "oneSignalEnabled", !settings.oneSignalEnabled, "OneSignal Web Push");
-  const handleToggleCloudinary = () =>
-    updateSetting("/admin/settings/cloudinary", "cloudinaryEnabled", !settings.cloudinaryEnabled, "Cloudinary Media Storage");
-  const handleToggleEmailReset = () =>
-    updateSetting("/admin/settings/email-reset", "emailResetEnabled", !settings.emailResetEnabled, "Gmail Password Reset Service");
-  const handleToggleGoogleCalendar = () =>
-    updateSetting("/admin/settings/google-calendar", "googleCalendarEnabled", !settings.googleCalendarEnabled, "Google Calendar Integration");
+  // Toggle handlers mapped to both dedicated routes and PUT with 6-digit PIN protection
+  const handleToggleGoogle = () => {
+    const nextState = !settings.googleLoginEnabled;
+    requestPinAuthorization(`${nextState ? "enable" : "disable"} Google Sign-In`, () => {
+      updateSetting("/admin/settings/google-login", "googleLoginEnabled", nextState, "Google Sign-In");
+    });
+  };
+  const handleToggleFacebook = () => {
+    const nextState = !settings.facebookLoginEnabled;
+    requestPinAuthorization(`${nextState ? "enable" : "disable"} Facebook Sign-In`, () => {
+      updateSetting("/admin/settings/facebook-login", "facebookLoginEnabled", nextState, "Facebook Sign-In");
+    });
+  };
+  const handleToggleRecaptcha = () => {
+    const nextState = !settings.recaptchaEnabled;
+    requestPinAuthorization(`${nextState ? "enable" : "disable"} Google reCAPTCHA v2`, () => {
+      updateSetting("/admin/settings/recaptcha", "recaptchaEnabled", nextState, "Google reCAPTCHA v2");
+    });
+  };
+  const handleToggleWeather = () => {
+    const nextState = !settings.weatherEnabled;
+    requestPinAuthorization(`${nextState ? "enable" : "disable"} Kalilangan Weather Forecast API`, () => {
+      updateSetting("/admin/settings/weather", "weatherEnabled", nextState, "Kalilangan Weather Forecast API");
+    });
+  };
+  const handleToggleOneSignal = () => {
+    const nextState = !settings.oneSignalEnabled;
+    requestPinAuthorization(`${nextState ? "enable" : "disable"} OneSignal Web Push`, () => {
+      updateSetting("/admin/settings/onesignal", "oneSignalEnabled", nextState, "OneSignal Web Push");
+    });
+  };
+  const handleToggleCloudinary = () => {
+    const nextState = !settings.cloudinaryEnabled;
+    requestPinAuthorization(`${nextState ? "enable" : "disable"} Cloudinary Media Storage`, () => {
+      updateSetting("/admin/settings/cloudinary", "cloudinaryEnabled", nextState, "Cloudinary Media Storage");
+    });
+  };
+  const handleToggleEmailReset = () => {
+    const nextState = !settings.emailResetEnabled;
+    requestPinAuthorization(`${nextState ? "enable" : "disable"} Gmail Password Reset Service`, () => {
+      updateSetting("/admin/settings/email-reset", "emailResetEnabled", nextState, "Gmail Password Reset Service");
+    });
+  };
+  const handleToggleGoogleCalendar = () => {
+    const nextState = !settings.googleCalendarEnabled;
+    requestPinAuthorization(`${nextState ? "enable" : "disable"} Google Calendar Integration`, () => {
+      updateSetting("/admin/settings/google-calendar", "googleCalendarEnabled", nextState, "Google Calendar Integration");
+    });
+  };
 
   // Save / Reset Handlers for Customizable Keys
   const handleSaveGoogleKeys = async () => {
@@ -665,7 +837,7 @@ export default function AdminIntegrations() {
                 {/* Edit customizable credentials icon button */}
                 <button
                   type="button"
-                  onClick={() => setExpandedKeys((p) => ({ ...p, google: !p.google }))}
+                  onClick={() => handleRequestEdit("google", "Google Sign-In")}
                   style={{
                     background: "none",
                     border: "none",
@@ -939,7 +1111,7 @@ export default function AdminIntegrations() {
                 {/* Edit customizable credentials icon button */}
                 <button
                   type="button"
-                  onClick={() => setExpandedKeys((p) => ({ ...p, facebook: !p.facebook }))}
+                  onClick={() => handleRequestEdit("facebook", "Facebook Sign-In")}
                   style={{
                     background: "none",
                     border: "none",
@@ -1213,7 +1385,7 @@ export default function AdminIntegrations() {
                 {/* Edit customizable credentials icon button */}
                 <button
                   type="button"
-                  onClick={() => setExpandedKeys((p) => ({ ...p, recaptcha: !p.recaptcha }))}
+                  onClick={() => handleRequestEdit("recaptcha", "Google reCAPTCHA v2")}
                   style={{
                     background: "none",
                     border: "none",
@@ -1483,7 +1655,7 @@ export default function AdminIntegrations() {
                 {/* Edit customizable credentials icon button */}
                 <button
                   type="button"
-                  onClick={() => setExpandedKeys((p) => ({ ...p, weather: !p.weather }))}
+                  onClick={() => handleRequestEdit("weather", "Kalilangan Weather Forecast API")}
                   style={{
                     background: "none",
                     border: "none",
@@ -1733,7 +1905,7 @@ export default function AdminIntegrations() {
                 {/* Edit customizable credentials icon button */}
                 <button
                   type="button"
-                  onClick={() => setExpandedKeys((p) => ({ ...p, oneSignal: !p.oneSignal }))}
+                  onClick={() => handleRequestEdit("oneSignal", "OneSignal Web Push")}
                   style={{
                     background: "none",
                     border: "none",
@@ -2007,7 +2179,7 @@ export default function AdminIntegrations() {
                 {/* Edit customizable credentials icon button */}
                 <button
                   type="button"
-                  onClick={() => setExpandedKeys((p) => ({ ...p, cloudinary: !p.cloudinary }))}
+                  onClick={() => handleRequestEdit("cloudinary", "Cloudinary Media Storage")}
                   style={{
                     background: "none",
                     border: "none",
@@ -2303,7 +2475,7 @@ export default function AdminIntegrations() {
                 {/* Edit customizable credentials icon button */}
                 <button
                   type="button"
-                  onClick={() => setExpandedKeys((p) => ({ ...p, email: !p.email }))}
+                  onClick={() => handleRequestEdit("email", "Gmail Password Reset Service")}
                   style={{
                     background: "none",
                     border: "none",
@@ -2599,7 +2771,7 @@ export default function AdminIntegrations() {
                 {/* Edit customizable credentials icon button */}
                 <button
                   type="button"
-                  onClick={() => setExpandedKeys((p) => ({ ...p, calendar: !p.calendar }))}
+                  onClick={() => handleRequestEdit("calendar", "Google Calendar Integration")}
                   style={{
                     background: "none",
                     border: "none",
@@ -2854,6 +3026,271 @@ export default function AdminIntegrations() {
             )}
           </div>
         </div>
+
+        {/* ================= 6-DIGIT ADMIN PIN VERIFICATION MODAL ================= */}
+        {pinModal.open && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              backgroundColor: "rgba(15, 23, 42, 0.65)",
+              backdropFilter: "blur(4px)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 10000,
+              padding: "20px",
+            }}
+            onClick={() => {
+              if (!pinLoading) {
+                setPinModal({ open: false, actionDescription: "", onSuccess: null });
+              }
+            }}
+          >
+            <div
+              style={{
+                background: "#ffffff",
+                borderRadius: "16px",
+                width: "100%",
+                maxWidth: "460px",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+                border: "1px solid #e2e8f0",
+                overflow: "hidden",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div
+                style={{
+                  padding: "22px 24px 18px",
+                  borderBottom: "1px solid #f1f5f9",
+                  background: "#f8fafc",
+                  display: "flex",
+                  alignItems: "flex-start",
+                  justifyContent: "space-between",
+                  gap: "12px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <div
+                    style={{
+                      width: "44px",
+                      height: "44px",
+                      borderRadius: "12px",
+                      background: "#ecfdf5",
+                      border: "1px solid #a7f3d0",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "1.3rem",
+                      color: "#059669",
+                      flexShrink: 0,
+                    }}
+                  >
+                    🔒
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 800, color: "#0f172a" }}>
+                      6-Digit Security PIN
+                    </h3>
+                    <p style={{ margin: "3px 0 0", fontSize: "0.78rem", color: "#64748b" }}>
+                      Administrator authorization required
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={pinLoading}
+                  onClick={() => setPinModal({ open: false, actionDescription: "", onSuccess: null })}
+                  style={{
+                    background: "#f1f5f9",
+                    border: "none",
+                    borderRadius: "50%",
+                    width: "30px",
+                    height: "30px",
+                    cursor: "pointer",
+                    fontSize: "0.95rem",
+                    color: "#64748b",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <form onSubmit={handleVerifyPin} style={{ padding: "24px" }}>
+                <div
+                  style={{
+                    background: "#eff6ff",
+                    border: "1px solid #bfdbfe",
+                    borderRadius: "10px",
+                    padding: "12px 14px",
+                    marginBottom: "20px",
+                    fontSize: "0.82rem",
+                    color: "#1e40af",
+                    lineHeight: 1.4,
+                  }}
+                >
+                  <strong>Security Protection:</strong> Please enter your 6-digit PIN before you can{" "}
+                  <span style={{ fontWeight: 800, textDecoration: "underline" }}>
+                    {pinModal.actionDescription}
+                  </span>.
+                </div>
+
+                {/* 6 Digit Inputs */}
+                <div style={{ marginBottom: "14px" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.78rem",
+                      fontWeight: 700,
+                      color: "#475569",
+                      marginBottom: "10px",
+                      textAlign: "center",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                    }}
+                  >
+                    Enter 6-Digit Admin PIN
+                  </label>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "center",
+                      gap: "8px",
+                    }}
+                    onPaste={handlePinPaste}
+                  >
+                    {pinDigits.map((digit, idx) => (
+                      <input
+                        key={idx}
+                        ref={pinInputRefs[idx]}
+                        type={showPin ? "text" : "password"}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={1}
+                        value={digit}
+                        onChange={(e) => handlePinDigitChange(idx, e.target.value)}
+                        onKeyDown={(e) => handlePinKeyDown(idx, e)}
+                        disabled={pinLoading}
+                        autoFocus={idx === 0}
+                        style={{
+                          width: "46px",
+                          height: "52px",
+                          textAlign: "center",
+                          fontSize: "1.4rem",
+                          fontWeight: "800",
+                          color: "#0f172a",
+                          borderRadius: "10px",
+                          border: digit ? "2px solid #059669" : "1.5px solid #cbd5e1",
+                          background: digit ? "#f0fdf4" : "#ffffff",
+                          outline: "none",
+                          transition: "all 0.15s ease",
+                          boxShadow: digit ? "0 2px 4px rgba(5, 150, 105, 0.15)" : "none",
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Show / Hide PIN Toggle & Helper note */}
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: "16px",
+                    padding: "0 4px",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setShowPin(!showPin)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "#0284c7",
+                      fontSize: "0.76rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      padding: 0,
+                    }}
+                  >
+                    {showPin ? "🙈 Hide digits" : "👁️ Show digits"}
+                  </button>
+
+                  <span style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                    Default PIN: <strong style={{ color: "#0f172a" }}>123456</strong>
+                  </span>
+                </div>
+
+                {/* Error Message */}
+                {pinError && (
+                  <div
+                    style={{
+                      background: "#fef2f2",
+                      border: "1px solid #fecaca",
+                      color: "#991b1b",
+                      fontSize: "0.78rem",
+                      fontWeight: 600,
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      marginBottom: "16px",
+                      textAlign: "center",
+                    }}
+                  >
+                    ⚠️ {pinError}
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "10px" }}>
+                  <button
+                    type="button"
+                    disabled={pinLoading}
+                    onClick={() => setPinModal({ open: false, actionDescription: "", onSuccess: null })}
+                    style={{
+                      padding: "9px 16px",
+                      borderRadius: "8px",
+                      border: "1px solid #cbd5e1",
+                      background: "#ffffff",
+                      color: "#475569",
+                      fontWeight: 600,
+                      fontSize: "0.82rem",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={pinLoading || pinDigits.join("").length !== 6}
+                    style={{
+                      padding: "9px 20px",
+                      borderRadius: "8px",
+                      border: "none",
+                      background: pinDigits.join("").length === 6 ? "#059669" : "#94a3b8",
+                      color: "#ffffff",
+                      fontWeight: 700,
+                      fontSize: "0.82rem",
+                      cursor: pinDigits.join("").length === 6 && !pinLoading ? "pointer" : "not-allowed",
+                      boxShadow: pinDigits.join("").length === 6 ? "0 2px 6px rgba(5, 150, 105, 0.25)" : "none",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    {pinLoading ? "Verifying..." : "✓ Authorize & Confirm"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
