@@ -77,8 +77,11 @@ export default function AdminIntegrations() {
     open: false,
     actionDescription: "",
     onSuccess: null,
+    isFirstPin: false,
   });
+  const [adminHasPin, setAdminHasPin] = useState(null);
   const [pinDigits, setPinDigits] = useState(["", "", "", "", "", ""]);
+  const [confirmPinDigits, setConfirmPinDigits] = useState(["", "", "", "", "", ""]);
   const [pinError, setPinError] = useState("");
   const [pinLoading, setPinLoading] = useState(false);
   const [showPin, setShowPin] = useState(false);
@@ -90,21 +93,62 @@ export default function AdminIntegrations() {
     useRef(null),
     useRef(null),
   ];
+  const confirmPinInputRefs = [
+    useRef(null),
+    useRef(null),
+    useRef(null),
+    useRef(null),
+    useRef(null),
+    useRef(null),
+  ];
 
-  const requestPinAuthorization = (actionDescription, onSuccess) => {
+  const checkPinStatus = async () => {
+    try {
+      const email = user?.email || JSON.parse(localStorage.getItem("kimpc_user") || "{}")?.email || "admin@kimpc.test";
+      const res = await api(`/admin/pin-status?email=${encodeURIComponent(email)}`);
+      if (res.ok && res.data) {
+        setAdminHasPin(Boolean(res.data.hasPin));
+        return Boolean(res.data.hasPin);
+      }
+    } catch (e) {
+      console.warn("Could not check pin status:", e);
+    }
+    return false;
+  };
+
+  useEffect(() => {
+    checkPinStatus();
+  }, [user?.email]);
+
+  const requestPinAuthorization = async (actionDescription, onSuccess) => {
     setPinDigits(["", "", "", "", "", ""]);
+    setConfirmPinDigits(["", "", "", "", "", ""]);
     setPinError("");
     setPinLoading(false);
+
+    // Refresh PIN status from backend to verify if this admin account has set their PIN
+    let hasPin = adminHasPin;
+    try {
+      const email = user?.email || JSON.parse(localStorage.getItem("kimpc_user") || "{}")?.email || "admin@kimpc.test";
+      const res = await api(`/admin/pin-status?email=${encodeURIComponent(email)}`);
+      if (res.ok && res.data) {
+        hasPin = Boolean(res.data.hasPin);
+        setAdminHasPin(hasPin);
+      }
+    } catch (e) {}
+
     setPinModal({
       open: true,
       actionDescription,
       onSuccess,
+      isFirstPin: !hasPin,
     });
     setTimeout(() => {
       pinInputRefs[0]?.current?.focus();
     }, 100);
   };
 
+  // 1. Verify existing 6-digit PIN
   const handleVerifyPin = async (e) => {
     if (e) e.preventDefault();
     const pin = pinDigits.join("").trim();
@@ -137,7 +181,7 @@ export default function AdminIntegrations() {
 
       // PIN Verified successfully
       const callback = pinModal.onSuccess;
-      setPinModal({ open: false, actionDescription: "", onSuccess: null });
+      setPinModal({ open: false, actionDescription: "", onSuccess: null, isFirstPin: false });
       setPinLoading(false);
 
       if (typeof callback === "function") {
@@ -147,6 +191,112 @@ export default function AdminIntegrations() {
       setPinError("Network error while verifying PIN.");
       setPinLoading(false);
     }
+  };
+
+  // 2. Set initial 6-digit PIN (for admin account with no PIN yet)
+  const handleSetInitialPin = async (e) => {
+    if (e) e.preventDefault();
+    const newPin = pinDigits.join("").trim();
+    const confirmPin = confirmPinDigits.join("").trim();
+
+    if (newPin.length !== 6) {
+      setPinError("New PIN must be exactly 6 digits.");
+      return;
+    }
+    if (confirmPin.length !== 6) {
+      setPinError("Please repeat all 6 digits in the confirmation field.");
+      return;
+    }
+    if (newPin !== confirmPin) {
+      setPinError("New PIN and confirmation PIN do not match.");
+      return;
+    }
+
+    setPinLoading(true);
+    setPinError("");
+
+    try {
+      const adminEmail = user?.email || JSON.parse(localStorage.getItem("kimpc_user") || "{}")?.email || "admin@kimpc.test";
+      const res = await api("/admin/set-initial-pin", {
+        method: "POST",
+        body: {
+          email: adminEmail,
+          newPin,
+          confirmPin,
+        },
+      });
+
+      if (!res.ok) {
+        setPinError(res.data?.error || "Failed to set security PIN.");
+        setPinLoading(false);
+        return;
+      }
+
+      setAdminHasPin(true);
+      const callback = pinModal.onSuccess;
+      const desc = pinModal.actionDescription;
+      setPinModal({ open: false, actionDescription: "", onSuccess: null, isFirstPin: false });
+      setPinLoading(false);
+      setFeedback({ message: `Security PIN set successfully! Authorized ${desc}.`, isError: false });
+
+      if (typeof callback === "function") {
+        callback();
+      }
+    } catch (err) {
+      setPinError("Network error while setting initial PIN.");
+      setPinLoading(false);
+    }
+  };
+
+  const handleConfirmPinDigitChange = (index, value) => {
+    const cleaned = value.replace(/\D/g, "");
+    if (!cleaned) {
+      const next = [...confirmPinDigits];
+      next[index] = "";
+      setConfirmPinDigits(next);
+      return;
+    }
+
+    if (cleaned.length > 1) {
+      const next = [...confirmPinDigits];
+      const chars = cleaned.slice(0, 6).split("");
+      chars.forEach((c, i) => {
+        if (index + i < 6) next[index + i] = c;
+      });
+      setConfirmPinDigits(next);
+      const targetIdx = Math.min(5, index + chars.length);
+      confirmPinInputRefs[targetIdx]?.current?.focus();
+      return;
+    }
+
+    const next = [...confirmPinDigits];
+    next[index] = cleaned[0];
+    setConfirmPinDigits(next);
+
+    if (index < 5) {
+      confirmPinInputRefs[index + 1]?.current?.focus();
+    }
+  };
+
+  const handleConfirmPinKeyDown = (index, e) => {
+    if (e.key === "Backspace" && !confirmPinDigits[index] && index > 0) {
+      confirmPinInputRefs[index - 1]?.current?.focus();
+    } else if (e.key === "Enter") {
+      handleSetInitialPin();
+    }
+  };
+
+  const handleConfirmPinPaste = (e) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (!pasted) return;
+    const next = ["", "", "", "", "", ""];
+    pasted.split("").forEach((c, i) => {
+      next[i] = c;
+    });
+    setConfirmPinDigits(next);
+    const targetIdx = Math.min(5, pasted.length);
+    confirmPinInputRefs[targetIdx]?.current?.focus();
   };
 
   const handlePinDigitChange = (index, value) => {
@@ -3052,17 +3202,18 @@ export default function AdminIntegrations() {
                 background: "#ffffff",
                 borderRadius: "16px",
                 width: "100%",
-                maxWidth: "460px",
+                maxWidth: pinModal.isFirstPin ? "500px" : "460px",
                 boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
                 border: "1px solid #e2e8f0",
                 overflow: "hidden",
+                transition: "max-width 0.2s ease",
               }}
               onClick={(e) => e.stopPropagation()}
             >
               {/* Modal Header */}
               <div
                 style={{
-                  padding: "22px 24px 18px",
+                  padding: "20px 24px 16px",
                   borderBottom: "1px solid #f1f5f9",
                   background: "#f8fafc",
                   display: "flex",
@@ -3077,24 +3228,26 @@ export default function AdminIntegrations() {
                       width: "44px",
                       height: "44px",
                       borderRadius: "12px",
-                      background: "#ecfdf5",
-                      border: "1px solid #a7f3d0",
+                      background: pinModal.isFirstPin ? "#eff6ff" : "#ecfdf5",
+                      border: `1px solid ${pinModal.isFirstPin ? "#bfdbfe" : "#a7f3d0"}`,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       fontSize: "1.3rem",
-                      color: "#059669",
+                      color: pinModal.isFirstPin ? "#2563eb" : "#059669",
                       flexShrink: 0,
                     }}
                   >
-                    🔒
+                    {pinModal.isFirstPin ? "🔑" : "🔒"}
                   </div>
                   <div>
-                    <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 800, color: "#0f172a" }}>
-                      6-Digit Security PIN
+                    <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800, color: "#0f172a" }}>
+                      {pinModal.isFirstPin ? "Create 6-Digit Admin PIN" : "6-Digit Security PIN"}
                     </h3>
                     <p style={{ margin: "3px 0 0", fontSize: "0.78rem", color: "#64748b" }}>
-                      Administrator authorization required
+                      {pinModal.isFirstPin
+                        ? `First-time setup for ${user?.email || "administrator"}`
+                        : "Administrator authorization required"}
                     </p>
                   </div>
                 </div>
@@ -3102,7 +3255,7 @@ export default function AdminIntegrations() {
                 <button
                   type="button"
                   disabled={pinLoading}
-                  onClick={() => setPinModal({ open: false, actionDescription: "", onSuccess: null })}
+                  onClick={() => setPinModal({ open: false, actionDescription: "", onSuccess: null, isFirstPin: false })}
                   style={{
                     background: "#f1f5f9",
                     border: "none",
@@ -3122,40 +3275,60 @@ export default function AdminIntegrations() {
               </div>
 
               {/* Modal Body */}
-              <form onSubmit={handleVerifyPin} style={{ padding: "24px" }}>
-                <div
-                  style={{
-                    background: "#eff6ff",
-                    border: "1px solid #bfdbfe",
-                    borderRadius: "10px",
-                    padding: "12px 14px",
-                    marginBottom: "20px",
-                    fontSize: "0.82rem",
-                    color: "#1e40af",
-                    lineHeight: 1.4,
-                  }}
-                >
-                  <strong>Security Protection:</strong> Please enter your 6-digit PIN before you can{" "}
-                  <span style={{ fontWeight: 800, textDecoration: "underline" }}>
-                    {pinModal.actionDescription}
-                  </span>.
-                </div>
+              <form onSubmit={pinModal.isFirstPin ? handleSetInitialPin : handleVerifyPin} style={{ padding: "22px 24px" }}>
+                {pinModal.isFirstPin ? (
+                  <div
+                    style={{
+                      background: "#eff6ff",
+                      border: "1px solid #bfdbfe",
+                      borderRadius: "10px",
+                      padding: "12px 14px",
+                      marginBottom: "18px",
+                      fontSize: "0.80rem",
+                      color: "#1e40af",
+                      lineHeight: 1.45,
+                    }}
+                  >
+                    <strong>First-Time Setup:</strong> This admin account does not have a security PIN yet. Please create and confirm your personal 6-digit PIN before you can{" "}
+                    <span style={{ fontWeight: 800, textDecoration: "underline" }}>
+                      {pinModal.actionDescription}
+                    </span>.
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      background: "#eff6ff",
+                      border: "1px solid #bfdbfe",
+                      borderRadius: "10px",
+                      padding: "12px 14px",
+                      marginBottom: "18px",
+                      fontSize: "0.80rem",
+                      color: "#1e40af",
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    <strong>Security Protection:</strong> Please enter your 6-digit PIN before you can{" "}
+                    <span style={{ fontWeight: 800, textDecoration: "underline" }}>
+                      {pinModal.actionDescription}
+                    </span>.
+                  </div>
+                )}
 
-                {/* 6 Digit Inputs */}
-                <div style={{ marginBottom: "14px" }}>
+                {/* 1st PIN Input Row */}
+                <div style={{ marginBottom: pinModal.isFirstPin ? "16px" : "14px" }}>
                   <label
                     style={{
                       display: "block",
-                      fontSize: "0.78rem",
+                      fontSize: "0.76rem",
                       fontWeight: 700,
                       color: "#475569",
-                      marginBottom: "10px",
+                      marginBottom: "8px",
                       textAlign: "center",
                       textTransform: "uppercase",
                       letterSpacing: "0.5px",
                     }}
                   >
-                    Enter 6-Digit Admin PIN
+                    {pinModal.isFirstPin ? "Step 1: Choose 6-Digit PIN" : "Enter 6-Digit Admin PIN"}
                   </label>
 
                   <div
@@ -3180,10 +3353,10 @@ export default function AdminIntegrations() {
                         disabled={pinLoading}
                         autoFocus={idx === 0}
                         style={{
-                          width: "46px",
-                          height: "52px",
+                          width: "44px",
+                          height: "50px",
                           textAlign: "center",
-                          fontSize: "1.4rem",
+                          fontSize: "1.35rem",
                           fontWeight: "800",
                           color: "#0f172a",
                           borderRadius: "10px",
@@ -3197,6 +3370,64 @@ export default function AdminIntegrations() {
                     ))}
                   </div>
                 </div>
+
+                {/* 2nd PIN Input Row (Only shown if isFirstPin) */}
+                {pinModal.isFirstPin && (
+                  <div style={{ marginBottom: "16px" }}>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.76rem",
+                        fontWeight: 700,
+                        color: "#475569",
+                        marginBottom: "8px",
+                        textAlign: "center",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.5px",
+                      }}
+                    >
+                      Step 2: Confirm 6-Digit PIN
+                    </label>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "center",
+                        gap: "8px",
+                      }}
+                      onPaste={handleConfirmPinPaste}
+                    >
+                      {confirmPinDigits.map((digit, idx) => (
+                        <input
+                          key={idx}
+                          ref={confirmPinInputRefs[idx]}
+                          type={showPin ? "text" : "password"}
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          maxLength={1}
+                          value={digit}
+                          onChange={(e) => handleConfirmPinDigitChange(idx, e.target.value)}
+                          onKeyDown={(e) => handleConfirmPinKeyDown(idx, e)}
+                          disabled={pinLoading}
+                          style={{
+                            width: "44px",
+                            height: "50px",
+                            textAlign: "center",
+                            fontSize: "1.35rem",
+                            fontWeight: "800",
+                            color: "#0f172a",
+                            borderRadius: "10px",
+                            border: digit ? "2px solid #2563eb" : "1.5px solid #cbd5e1",
+                            background: digit ? "#eff6ff" : "#ffffff",
+                            outline: "none",
+                            transition: "all 0.15s ease",
+                            boxShadow: digit ? "0 2px 4px rgba(37, 99, 235, 0.15)" : "none",
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Show / Hide PIN Toggle & Helper note */}
                 <div
@@ -3225,7 +3456,9 @@ export default function AdminIntegrations() {
                   </button>
 
                   <span style={{ fontSize: "0.72rem", color: "#64748b" }}>
-                    Default PIN: <strong style={{ color: "#0f172a" }}>123456</strong>
+                    {pinModal.isFirstPin ? "Must be exactly 6 digits" : (
+                      <span>Default PIN: <strong style={{ color: "#0f172a" }}>123456</strong></span>
+                    )}
                   </span>
                 </div>
 
@@ -3253,7 +3486,7 @@ export default function AdminIntegrations() {
                   <button
                     type="button"
                     disabled={pinLoading}
-                    onClick={() => setPinModal({ open: false, actionDescription: "", onSuccess: null })}
+                    onClick={() => setPinModal({ open: false, actionDescription: "", onSuccess: null, isFirstPin: false })}
                     style={{
                       padding: "9px 16px",
                       borderRadius: "8px",
@@ -3268,24 +3501,45 @@ export default function AdminIntegrations() {
                     Cancel
                   </button>
 
-                  <button
-                    type="submit"
-                    disabled={pinLoading || pinDigits.join("").length !== 6}
-                    style={{
-                      padding: "9px 20px",
-                      borderRadius: "8px",
-                      border: "none",
-                      background: pinDigits.join("").length === 6 ? "#059669" : "#94a3b8",
-                      color: "#ffffff",
-                      fontWeight: 700,
-                      fontSize: "0.82rem",
-                      cursor: pinDigits.join("").length === 6 && !pinLoading ? "pointer" : "not-allowed",
-                      boxShadow: pinDigits.join("").length === 6 ? "0 2px 6px rgba(5, 150, 105, 0.25)" : "none",
-                      transition: "all 0.15s ease",
-                    }}
-                  >
-                    {pinLoading ? "Verifying..." : "✓ Authorize & Confirm"}
-                  </button>
+                  {pinModal.isFirstPin ? (
+                    <button
+                      type="submit"
+                      disabled={pinLoading || pinDigits.join("").length !== 6 || confirmPinDigits.join("").length !== 6}
+                      style={{
+                        padding: "9px 20px",
+                        borderRadius: "8px",
+                        border: "none",
+                        background: (pinDigits.join("").length === 6 && confirmPinDigits.join("").length === 6) ? "#2563eb" : "#94a3b8",
+                        color: "#ffffff",
+                        fontWeight: 700,
+                        fontSize: "0.82rem",
+                        cursor: (pinDigits.join("").length === 6 && confirmPinDigits.join("").length === 6) && !pinLoading ? "pointer" : "not-allowed",
+                        boxShadow: (pinDigits.join("").length === 6 && confirmPinDigits.join("").length === 6) ? "0 2px 6px rgba(37, 99, 235, 0.25)" : "none",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      {pinLoading ? "Setting PIN..." : "✓ Set PIN & Authorize"}
+                    </button>
+                  ) : (
+                    <button
+                      type="submit"
+                      disabled={pinLoading || pinDigits.join("").length !== 6}
+                      style={{
+                        padding: "9px 20px",
+                        borderRadius: "8px",
+                        border: "none",
+                        background: pinDigits.join("").length === 6 ? "#059669" : "#94a3b8",
+                        color: "#ffffff",
+                        fontWeight: 700,
+                        fontSize: "0.82rem",
+                        cursor: pinDigits.join("").length === 6 && !pinLoading ? "pointer" : "not-allowed",
+                        boxShadow: pinDigits.join("").length === 6 ? "0 2px 6px rgba(5, 150, 105, 0.25)" : "none",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      {pinLoading ? "Verifying..." : "✓ Authorize & Confirm"}
+                    </button>
+                  )}
                 </div>
               </form>
             </div>

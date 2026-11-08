@@ -43,6 +43,79 @@ export default function SettingsModal({
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordFeedback, setPasswordFeedback] = useState({ message: "", isError: false });
 
+  // Admin 6-Digit Security PIN Form State (Admin Only)
+  const [pinData, setPinData] = useState({
+    currentPin: "",
+    newPin: "",
+    confirmPin: "",
+  });
+  const [showPinForm, setShowPinForm] = useState(false);
+  const [pinLoading, setPinLoading] = useState(false);
+  const [pinFeedback, setPinFeedback] = useState({ message: "", isError: false });
+  const [adminHasPin, setAdminHasPin] = useState(false);
+
+  const fetchPinStatus = async () => {
+    if (!isAdmin || !user?.email) return;
+    try {
+      const res = await api(`/admin/pin-status?email=${encodeURIComponent(user.email)}`);
+      if (res.ok && res.data) {
+        setAdminHasPin(Boolean(res.data.hasPin));
+      }
+    } catch (err) {
+      console.warn("Could not fetch PIN status:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && isAdmin) {
+      fetchPinStatus();
+    }
+  }, [isOpen, isAdmin, user?.email]);
+
+  const handlePinSubmit = async (e) => {
+    e.preventDefault();
+    if (!/^\d{6}$/.test(pinData.newPin)) {
+      setPinFeedback({ message: "New PIN must be exactly 6 numeric digits.", isError: true });
+      return;
+    }
+    if (pinData.newPin !== pinData.confirmPin) {
+      setPinFeedback({ message: "New PIN and confirmation do not match.", isError: true });
+      return;
+    }
+    if (pinData.newPin === pinData.currentPin) {
+      setPinFeedback({ message: "New PIN must be different from current PIN.", isError: true });
+      return;
+    }
+
+    setPinLoading(true);
+    setPinFeedback({ message: "", isError: false });
+
+    try {
+      const res = await api("/admin/change-pin", {
+        method: "POST",
+        body: {
+          email: user?.email,
+          currentPin: pinData.currentPin,
+          newPin: pinData.newPin,
+          confirmPin: pinData.confirmPin,
+        },
+      });
+
+      setPinLoading(false);
+      if (!res.ok) {
+        setPinFeedback({ message: res.data?.error || "Failed to update security PIN.", isError: true });
+      } else {
+        setPinData({ currentPin: "", newPin: "", confirmPin: "" });
+        setAdminHasPin(true);
+        setPinFeedback({ message: "6-digit admin security PIN updated successfully!", isError: false });
+        setTimeout(() => setPinFeedback({ message: "", isError: false }), 4000);
+      }
+    } catch (err) {
+      setPinLoading(false);
+      setPinFeedback({ message: "Network error updating security PIN.", isError: true });
+    }
+  };
+
   // Customizable API Keys State (Admin Only)
   const [apiKeys, setApiKeys] = useState({
     google: { isCustom: false, customClientId: "", customClientSecret: "", defaultClientIdMasked: "", defaultClientSecretMasked: "" },
@@ -715,6 +788,125 @@ export default function SettingsModal({
                   </button>
                 </form>
               </div>
+
+              {/* Section 3: Admin 6-Digit Security PIN (Admin Only) */}
+              {isAdmin && (
+                <>
+                  <hr style={{ border: "none", borderTop: "1px solid var(--wz-border, #e2e8f0)", margin: "24px 0" }} />
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "14px" }}>
+                      <div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 800, color: "var(--wz-text, #0f172a)" }}>
+                            Admin 6-Digit Security PIN
+                          </h4>
+                          <span
+                            style={{
+                              fontSize: "0.70rem",
+                              fontWeight: 700,
+                              padding: "2px 8px",
+                              borderRadius: "10px",
+                              background: adminHasPin ? "#ecfdf5" : "#fffbeb",
+                              color: adminHasPin ? "#15803d" : "#b45309",
+                              border: `1px solid ${adminHasPin ? "#86efac" : "#fde68a"}`,
+                            }}
+                          >
+                            {adminHasPin ? "● PIN Configured" : "● Using Default (123456)"}
+                          </span>
+                        </div>
+                        <p style={{ margin: "2px 0 0", fontSize: "0.75rem", color: "#64748b" }}>
+                          Manage the 6-digit PIN required to authorize sensitive administrator actions (integrations, account management).
+                        </p>
+                      </div>
+                    </div>
+
+                    {pinFeedback.message && (
+                      <div
+                        style={{
+                          padding: "8px 12px",
+                          marginBottom: "12px",
+                          borderRadius: "8px",
+                          fontSize: "0.8rem",
+                          background: pinFeedback.isError ? "#fee2e2" : "#f0fdf4",
+                          color: pinFeedback.isError ? "#991b1b" : "#166534",
+                          border: `1px solid ${pinFeedback.isError ? "#fca5a5" : "#bbf7d0"}`,
+                        }}
+                      >
+                        {pinFeedback.message}
+                      </div>
+                    )}
+
+                    <form onSubmit={handlePinSubmit}>
+                      <div className="wz-form-group">
+                        <label className="wz-form-label">
+                          Current 6-Digit PIN {adminHasPin ? "" : "(Enter default: 123456)"}
+                        </label>
+                        <input
+                          type={showPinForm ? "text" : "password"}
+                          className="wz-form-input"
+                          maxLength={6}
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          value={pinData.currentPin}
+                          onChange={(e) => setPinData({ ...pinData, currentPin: e.target.value.replace(/\D/g, "") })}
+                          placeholder={adminHasPin ? "Enter current 6-digit PIN" : "Default: 123456"}
+                          required
+                        />
+                      </div>
+
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                        <div className="wz-form-group">
+                          <label className="wz-form-label">New 6-Digit PIN</label>
+                          <input
+                            type={showPinForm ? "text" : "password"}
+                            className="wz-form-input"
+                            maxLength={6}
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            value={pinData.newPin}
+                            onChange={(e) => setPinData({ ...pinData, newPin: e.target.value.replace(/\D/g, "") })}
+                            placeholder="Exactly 6 digits"
+                            required
+                          />
+                        </div>
+                        <div className="wz-form-group">
+                          <label className="wz-form-label">Confirm New PIN</label>
+                          <input
+                            type={showPinForm ? "text" : "password"}
+                            className="wz-form-input"
+                            maxLength={6}
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            value={pinData.confirmPin}
+                            onChange={(e) => setPinData({ ...pinData, confirmPin: e.target.value.replace(/\D/g, "") })}
+                            placeholder="Repeat 6 digits"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "4px", marginBottom: "16px" }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.78rem", color: "#64748b", cursor: "pointer" }}>
+                          <input
+                            type="checkbox"
+                            checked={showPinForm}
+                            onChange={(e) => setShowPinForm(e.target.checked)}
+                          />
+                          <span>Show PIN digits</span>
+                        </label>
+                      </div>
+
+                      <button
+                        type="submit"
+                        className="wz-btn-submit"
+                        disabled={pinLoading}
+                      >
+                        {pinLoading ? "Updating PIN..." : "Update Security PIN"}
+                      </button>
+                    </form>
+                  </div>
+                </>
+              )}
             </div>
           )}
 

@@ -333,7 +333,7 @@ router.patch("/accounts/:email/archive", async (req, res) => {
 // 1. Get current PIN status for an admin
 router.get("/admin/pin-status", async (req, res) => {
   try {
-    const email = cleanEmail(req.query.email);
+    const email = cleanEmail(req.query.email || req.user?.email);
     if (!email) return fail(res, 400, "Admin email required.");
 
     const admin = await Account.findOne({ email });
@@ -353,7 +353,7 @@ router.get("/admin/pin-status", async (req, res) => {
 // 2. Set initial 6-digit PIN (for 1st admin or Google admins without a PIN)
 router.post("/admin/set-initial-pin", async (req, res) => {
   try {
-    const email = cleanEmail(req.body.email);
+    const email = cleanEmail(req.body.email || req.user?.email);
     const newPin = String(req.body.newPin ?? "").trim();
     const confirmPin = String(req.body.confirmPin ?? "").trim();
 
@@ -396,7 +396,7 @@ router.post("/admin/set-initial-pin", async (req, res) => {
 // 3. Change One-Time Temporary PIN or update PIN
 router.post("/admin/change-pin", async (req, res) => {
   try {
-    const email = cleanEmail(req.body.email);
+    const email = cleanEmail(req.body.email || req.user?.email);
     const currentPin = String(req.body.currentPin ?? "").trim();
     const newPin = String(req.body.newPin ?? "").trim();
     const confirmPin = String(req.body.confirmPin ?? "").trim();
@@ -406,20 +406,23 @@ router.post("/admin/change-pin", async (req, res) => {
     if (!admin || admin.role !== "admin") return fail(res, 403, "Administrator privileges required.");
 
     if (!admin.adminPinHash) {
-      return fail(res, 400, "No PIN has been configured for this account yet. Please initialize your PIN.");
-    }
-
-    const match = await bcrypt.compare(currentPin, admin.adminPinHash);
-    if (!match) {
-      await logAudit({
-        action: "ADMIN_PIN_CHANGE_FAILED",
-        actorEmail: email,
-        actorRole: "admin",
-        details: "Attempted PIN change with invalid current/one-time PIN",
-        status: "Failed",
-        req,
-      });
-      return fail(res, 401, "Invalid current or one-time PIN.");
+      // If no custom PIN set, allow default PIN 123456 as currentPin
+      if (currentPin !== "123456") {
+        return fail(res, 401, "Invalid current PIN. (Default PIN: 123456)");
+      }
+    } else {
+      const match = await bcrypt.compare(currentPin, admin.adminPinHash);
+      if (!match) {
+        await logAudit({
+          action: "ADMIN_PIN_CHANGE_FAILED",
+          actorEmail: email,
+          actorRole: "admin",
+          details: "Attempted PIN change with invalid current PIN",
+          status: "Failed",
+          req,
+        });
+        return fail(res, 401, "Invalid current PIN.");
+      }
     }
 
     if (!/^\d{6}$/.test(newPin)) {
@@ -431,7 +434,7 @@ router.post("/admin/change-pin", async (req, res) => {
     }
 
     if (newPin === currentPin) {
-      return fail(res, 400, "New PIN must be different from current one-time PIN.");
+      return fail(res, 400, "New PIN must be different from current PIN.");
     }
 
     admin.adminPinHash = await bcrypt.hash(newPin, 10);
