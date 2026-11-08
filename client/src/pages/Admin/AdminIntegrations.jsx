@@ -926,57 +926,6 @@ export default function AdminIntegrations() {
           </div>
         )}
 
-        {/* Active Session PIN Authorization Indicator */}
-        {isPinAuthorized && (
-          <div
-            style={{
-              padding: "10px 16px",
-              marginBottom: "18px",
-              borderRadius: "10px",
-              background: "#ecfdf5",
-              border: "1px solid #a7f3d0",
-              color: "#065f46",
-              fontSize: "0.82rem",
-              fontWeight: 600,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              flexWrap: "wrap",
-              gap: "10px",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span style={{ fontSize: "1.1rem" }}>🔓</span>
-              <span>
-                <strong>Session PIN Verified:</strong> Integration controls are unlocked. You can configure and toggle any integration without re-entering your PIN until you navigate away.
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setIsPinAuthorized(false);
-                setFeedback({ message: "Security PIN session locked. The next action will require your PIN.", isError: false });
-              }}
-              style={{
-                background: "#ffffff",
-                border: "1px solid #cbd5e1",
-                borderRadius: "6px",
-                padding: "4px 10px",
-                fontSize: "0.75rem",
-                fontWeight: 700,
-                color: "#334155",
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "4px",
-              }}
-              title="Lock integrations page immediately"
-            >
-              🔒 Lock Now
-            </button>
-          </div>
-        )}
-
         {/* Component-level override to disable browser inner reveal eye and clear buttons */}
         <style>{`
           input::-ms-reveal,
