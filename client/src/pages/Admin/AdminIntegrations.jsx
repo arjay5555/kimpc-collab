@@ -79,6 +79,8 @@ export default function AdminIntegrations() {
     onSuccess: null,
     isFirstPin: false,
   });
+  // Page-session PIN authorization (persists across actions while on this page, resets upon navigating away)
+  const [isPinAuthorized, setIsPinAuthorized] = useState(false);
   const [adminHasPin, setAdminHasPin] = useState(null);
   const [pinDigits, setPinDigits] = useState(["", "", "", "", "", ""]);
   const [confirmPinDigits, setConfirmPinDigits] = useState(["", "", "", "", "", ""]);
@@ -102,6 +104,13 @@ export default function AdminIntegrations() {
     useRef(null),
   ];
 
+  // Reset page-level authorization whenever this component unmounts (admin navigates to another page)
+  useEffect(() => {
+    return () => {
+      setIsPinAuthorized(false);
+    };
+  }, []);
+
   const checkPinStatus = async () => {
     try {
       const email = user?.email || JSON.parse(localStorage.getItem("kimpc_user") || "{}")?.email || "admin@kimpc.test";
@@ -121,6 +130,14 @@ export default function AdminIntegrations() {
   }, [user?.email]);
 
   const requestPinAuthorization = async (actionDescription, onSuccess) => {
+    // If already authorized during this visit on the integrations page, proceed immediately!
+    if (isPinAuthorized) {
+      if (typeof onSuccess === "function") {
+        onSuccess();
+      }
+      return;
+    }
+
     setPinDigits(["", "", "", "", "", ""]);
     setConfirmPinDigits(["", "", "", "", "", ""]);
     setPinError("");
@@ -179,7 +196,8 @@ export default function AdminIntegrations() {
         return;
       }
 
-      // PIN Verified successfully
+      // PIN Verified successfully for this visit
+      setIsPinAuthorized(true);
       const callback = pinModal.onSuccess;
       setPinModal({ open: false, actionDescription: "", onSuccess: null, isFirstPin: false });
       setPinLoading(false);
@@ -233,6 +251,7 @@ export default function AdminIntegrations() {
       }
 
       setAdminHasPin(true);
+      setIsPinAuthorized(true);
       const callback = pinModal.onSuccess;
       const desc = pinModal.actionDescription;
       setPinModal({ open: false, actionDescription: "", onSuccess: null, isFirstPin: false });
@@ -903,6 +922,57 @@ export default function AdminIntegrations() {
               style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", fontWeight: 700 }}
             >
               ✕
+            </button>
+          </div>
+        )}
+
+        {/* Active Session PIN Authorization Indicator */}
+        {isPinAuthorized && (
+          <div
+            style={{
+              padding: "10px 16px",
+              marginBottom: "18px",
+              borderRadius: "10px",
+              background: "#ecfdf5",
+              border: "1px solid #a7f3d0",
+              color: "#065f46",
+              fontSize: "0.82rem",
+              fontWeight: 600,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: "10px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "1.1rem" }}>🔓</span>
+              <span>
+                <strong>Session PIN Verified:</strong> Integration controls are unlocked. You can configure and toggle any integration without re-entering your PIN until you navigate away.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setIsPinAuthorized(false);
+                setFeedback({ message: "Security PIN session locked. The next action will require your PIN.", isError: false });
+              }}
+              style={{
+                background: "#ffffff",
+                border: "1px solid #cbd5e1",
+                borderRadius: "6px",
+                padding: "4px 10px",
+                fontSize: "0.75rem",
+                fontWeight: 700,
+                color: "#334155",
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+              }}
+              title="Lock integrations page immediately"
+            >
+              🔒 Lock Now
             </button>
           </div>
         )}
