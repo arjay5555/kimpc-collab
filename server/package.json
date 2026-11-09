@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch --watch-path=server.js --watch-path=app.js --watch-path=config --watch-path=routes --watch-path=models --watch-path=services --watch-path=controllers --watch-path=middleware server.js",
-    "seed": "node seed.js"
+    "seed": "node seed.js",
+    "db:check": "node scripts/db-inspect.js",
+    "db:seed": "node seed.js"
   },
   "license": "ISC",
   "dependencies": {

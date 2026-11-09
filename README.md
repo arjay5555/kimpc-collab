@@ -62,21 +62,44 @@ minders/
 │   ├── controllers/                   # Request controllers (manager analytics, fleet, operations)
 │   ├── middleware/                    # Express middleware (JWT authentication, role authorization)
 │   ├── models/                        # Mongoose data models (Account, Application, MachineryUnit, etc.)
+│   │   └── index.js                   # Central unified model export registry
 │   ├── routes/                        # API endpoints (api, auth, applications, machinery, geocode)
 │   ├── services/                      # Reusable backend services (auditLogger, mailer, googleCalendar)
 │   ├── workers/                       # Scheduled cron workers (booking reminders, audit archives)
 │   ├── scripts/                       # Database maintenance and verification scripts
+│   │   └── db-inspect.js              # Database health check & collection inspector CLI
 │   ├── uploads/                       # Uploaded machinery photos and GCash receipt images
 │   ├── public/                        # Legacy fallback static assets
 │   ├── .env                           # Backend environment variables (DB URI, OAuth keys)
 │   ├── .env.example                   # Template for required environment variables
+│   ├── DATABASE_SCHEMA.md             # Complete Database Schema, ERD, and Data Dictionary
 │   ├── package.json                   # Server dependencies & scripts (Express, Mongoose, etc.)
 │   ├── app.js                         # Express application setup, middleware, and route mounting
 │   ├── seed.js                        # Database seeder for demo Admin, Manager, and Member accounts
 │   └── server.js                      # Server bootstrapper (connects DB, workers, and starts listener)
 │
 ├── .gitignore                         # Git exclusion rules
-└── package.json                       # Monorepo orchestrator scripts (npm run dev, build, client)
+└── package.json                       # Monorepo orchestrator scripts (npm run dev, build, client, db:check)
+```
+
+---
+
+## 🗄️ Database Architecture & Schema Documentation
+
+The system connects to **MongoDB Atlas** (database: `minders`). For complete developer documentation on collections, schemas, entity relationships, and indexes, see:
+
+👉 [**server/DATABASE_SCHEMA.md**](file:///c:/Users/DELL%20RTX/OneDrive/Documents/pads/BUKSU/Merge%20Project/minders/server/DATABASE_SCHEMA.md)
+
+### Database Management Commands
+
+```bash
+# Check live database connection, collections, document counts & integration statuses
+npm run db:check
+
+# Seed default demo accounts (Admin, Manager, Member)
+npm run seed
+# or
+npm run db:seed
 ```
 
 ---

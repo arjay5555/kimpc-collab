@@ -12,7 +12,9 @@
     "client:dev": "npm --prefix client run dev",
     "client:build": "npm --prefix client run build",
     "build": "npm --prefix client run build",
-    "seed": "npm --prefix server run seed"
+    "seed": "npm --prefix server run seed",
+    "db:check": "npm --prefix server run db:check",
+    "db:seed": "npm --prefix server run seed"
   },
   "license": "ISC"
 }
