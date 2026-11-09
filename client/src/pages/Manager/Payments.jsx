@@ -22,115 +22,7 @@ function formatBookingDateRange(startDate, endDate) {
   return `${startDate} to ${endDate}`;
 }
 
-const INITIAL_INVOICES = [
-  {
-    id: "BK-WZ1001",
-    clientName: "Alice Johnson",
-    clientPhone: "+63 917 123 4567",
-    machineryModel: "John Deere 5075E Utility Tractor",
-    ratePerDay: 2800,
-    rentalPeriod: "2 Days",
-    daysCount: 2,
-    amount: 5600,
-    dueDate: "2028-08-05",
-    paymentMethod: "Cash",
-    cashPaymentOption: "Upon Pickup",
-    status: "Completed",
-  },
-  {
-    id: "BK-WZ1002",
-    clientName: "Bob Smith",
-    clientPhone: "+63 928 234 5678",
-    machineryModel: "Kubota DC-70 Plus Combine Harvester",
-    ratePerDay: 5500,
-    rentalPeriod: "7 Days",
-    daysCount: 7,
-    amount: 38500,
-    dueDate: "2028-08-08",
-    paymentMethod: "GCash",
-    status: "Awaiting",
-  },
-  {
-    id: "BK-WZ1003",
-    clientName: "Charlie Davis",
-    clientPhone: "+63 939 345 6789",
-    machineryModel: "New Holland Roll-Belt 450 Round Baler",
-    ratePerDay: 3200,
-    rentalPeriod: "31 Days",
-    daysCount: 31,
-    amount: 99200,
-    dueDate: "2028-09-02",
-    paymentMethod: "Bank Transfer",
-    status: "Completed",
-  },
-  {
-    id: "BK-WZ1004",
-    clientName: "Diana White",
-    clientPhone: "+63 915 456 7890",
-    machineryModel: "Case IH Farmall 90JX 4WD Tractor",
-    ratePerDay: 3600,
-    rentalPeriod: "1 Day",
-    daysCount: 1,
-    amount: 3600,
-    dueDate: "2028-08-03",
-    paymentMethod: "Cash",
-    cashPaymentOption: "Upon Pickup",
-    status: "Completed",
-  },
-  {
-    id: "BK-WZ1005",
-    clientName: "Edward Green",
-    clientPhone: "+63 920 567 8901",
-    machineryModel: "Kuhn GA 4121 GM Rotary Rake",
-    ratePerDay: 1900,
-    rentalPeriod: "8 Days",
-    daysCount: 8,
-    amount: 15200,
-    dueDate: "2028-08-10",
-    paymentMethod: "GCash",
-    status: "Awaiting",
-  },
-  {
-    id: "BK-WZ1006",
-    clientName: "Fiona Brown",
-    clientPhone: "+63 916 678 9012",
-    machineryModel: "Ag Leader Precision Boom Sprayer",
-    ratePerDay: 2100,
-    rentalPeriod: "32 Days",
-    daysCount: 32,
-    amount: 67200,
-    dueDate: "2028-09-03",
-    paymentMethod: "Bank Transfer",
-    status: "Completed",
-  },
-  {
-    id: "BK-WZ1007",
-    clientName: "George Clark",
-    clientPhone: "+63 927 789 0123",
-    machineryModel: "Isuzu Forward Flatbed Hauler",
-    ratePerDay: 4200,
-    rentalPeriod: "2 Days",
-    daysCount: 2,
-    amount: 8400,
-    dueDate: "2028-08-05",
-    paymentMethod: "Cash",
-    cashPaymentOption: "Upon Return",
-    status: "Completed",
-  },
-  {
-    id: "BK-WZ1008",
-    clientName: "Helen Martinez",
-    clientPhone: "+63 918 890 1234",
-    machineryModel: "John Deere 5075E Utility Tractor",
-    ratePerDay: 2800,
-    rentalPeriod: "7 Days",
-    daysCount: 7,
-    amount: 19600,
-    dueDate: "2028-08-11",
-    paymentMethod: "GCash",
-    status: "Overdue",
-  },
-];
+const INITIAL_INVOICES = [];
 
 export default function Payments() {
   const navigate = useNavigate();
@@ -147,10 +39,10 @@ export default function Payments() {
   const [previewGcashImage, setPreviewGcashImage] = useState(null);
 
   const [invoices, setInvoices] = useState([]);
-  const [selectedIds, setSelectedIds] = useState(["INV-WZ1004"]);
+  const [selectedIds, setSelectedIds] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
-  const [dateRangeFilter, setDateRangeFilter] = useState("1 Aug - 20 Aug 2028");
+  const [dateRangeFilter, setDateRangeFilter] = useState("All Dates");
   const [sortBy, setSortBy] = useState("date_desc");
   const [pageSize, setPageSize] = useState(8);
   const [currentPage, setCurrentPage] = useState(1);
@@ -617,12 +509,6 @@ export default function Payments() {
                   </svg>
                 </div>
               </div>
-              <div className="wz-payments-kpi-bottom">
-                <span className="wz-payments-kpi-subtext">{kpiStats.completedCount} payments settled</span>
-                <span className="wz-trend-positive">
-                  ✓ Verified &amp; Paid
-                </span>
-              </div>
             </div>
 
             {/* Card 2: Awaiting Payment */}
@@ -638,12 +524,6 @@ export default function Payments() {
                     <polyline points="12 6 12 12 16 14" />
                   </svg>
                 </div>
-              </div>
-              <div className="wz-payments-kpi-bottom">
-                <span className="wz-payments-kpi-subtext">{kpiStats.awaitingCount} payments pending</span>
-                <span className="wz-trend-neutral" style={{ color: "#d97706" }}>
-                  ⏳ Pending verification
-                </span>
               </div>
             </div>
 
@@ -661,12 +541,6 @@ export default function Payments() {
                     <line x1="12" y1="16" x2="12.01" y2="16" />
                   </svg>
                 </div>
-              </div>
-              <div className="wz-payments-kpi-bottom">
-                <span className="wz-payments-kpi-subtext">{kpiStats.overdueCount} payments past due</span>
-                <span className="wz-trend-negative">
-                  ⚠️ Action required
-                </span>
               </div>
             </div>
           </section>
