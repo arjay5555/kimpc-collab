@@ -484,18 +484,11 @@ export default function AdminTopbar({
         </div>
       </header>
 
-      {/* Settings Modal (Account & Security + Appearance + OAuth) */}
+      {/* Settings Modal (Account & Security + Appearance) */}
       <SettingsModal
         isOpen={settingsModalOpen}
         onClose={() => setSettingsModalOpen(false)}
         initialTab={settingsInitialTab}
-        settings={activeSettings}
-        onToggleGoogle={externalToggleGoogle || handleInternalToggleGoogle}
-        onToggleFacebook={externalToggleFacebook || handleInternalToggleFacebook}
-        onToggleRecaptcha={externalToggleRecaptcha || handleInternalToggleRecaptcha}
-        onToggleWeather={externalToggleWeather || handleInternalToggleWeather}
-        onToggleOneSignal={externalToggleOneSignal || handleInternalToggleOneSignal}
-        onToggleCloudinary={externalToggleCloudinary || handleInternalToggleCloudinary}
       />
     </>
   );
