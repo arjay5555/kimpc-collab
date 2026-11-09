@@ -346,7 +346,7 @@ export default function Expenses() {
                 {/* Card 1: Balance */}
                 <div className="wz-booking-kpi-card">
                   <div className="wz-kpi-left">
-                    <div className="wz-kpi-circle-icon" style={{ background: "#eff6ff", borderColor: "#dbeafe", color: "#1d4ed8" }}>
+                    <div className="wz-kpi-circle-icon">
                       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                         <rect x="2" y="5" width="20" height="14" rx="2" />
                         <line x1="2" y1="10" x2="22" y2="10" />
@@ -368,7 +368,7 @@ export default function Expenses() {
                 {/* Card 2: Income */}
                 <div className="wz-booking-kpi-card">
                   <div className="wz-kpi-left">
-                    <div className="wz-kpi-circle-icon" style={{ background: "#ecfdf5", borderColor: "#a7f3d0", color: "#059669" }}>
+                    <div className="wz-kpi-circle-icon">
                       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
                         <polyline points="17 6 23 6 23 12" />
@@ -390,7 +390,7 @@ export default function Expenses() {
                 {/* Card 3: Expenses */}
                 <div className="wz-booking-kpi-card">
                   <div className="wz-kpi-left">
-                    <div className="wz-kpi-circle-icon" style={{ background: "#fff1f2", borderColor: "#fecdd3", color: "#e11d48" }}>
+                    <div className="wz-kpi-circle-icon">
                       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="23 18 13.5 8.5 8.5 13.5 1 6" />
                         <polyline points="17 18 23 18 23 12" />
