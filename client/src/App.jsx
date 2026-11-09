@@ -140,7 +140,7 @@ export default function App() {
       <Route
         path="/member/settings"
         element={
-          <ProtectedRoute allowedRoles={["member", "manager", "admin"]}>
+          <ProtectedRoute allowedRoles={["member"]}>
             <MemberLayout>
               <Settings />
             </MemberLayout>

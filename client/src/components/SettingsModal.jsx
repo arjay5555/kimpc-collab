@@ -290,54 +290,6 @@ export default function SettingsModal({
                   </div>
                 </div>
 
-                {/* Quick Link to Web Push & Full Settings */}
-                <div
-                  style={{
-                    background: "#f0fdf4",
-                    border: "1px solid #bbf7d0",
-                    borderRadius: "10px",
-                    padding: "10px 14px",
-                    marginBottom: "16px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    flexWrap: "wrap",
-                    gap: "10px",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <span style={{ fontSize: "1.1rem" }}>🔔</span>
-                    <div>
-                      <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#166534" }}>
-                        Push Notifications &amp; Member Preferences
-                      </div>
-                      <div style={{ fontSize: "0.72rem", color: "#15803d" }}>
-                        Configure OneSignal web push alerts, booking reminders &amp; farm settings.
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onClose();
-                      navigate("/member/settings");
-                    }}
-                    style={{
-                      background: "#166534",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: "6px",
-                      padding: "6px 12px",
-                      fontSize: "0.74rem",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    Open Notification Settings →
-                  </button>
-                </div>
-
                 {profileFeedback.message && (
                   <div
                     style={{
@@ -383,14 +335,14 @@ export default function SettingsModal({
                       <input
                         type="text"
                         className="wz-form-input"
-                        value={profileData.cooperativeId || "Staff / Admin"}
+                        value={profileData.cooperativeId || (isAdmin ? "ADMIN-01" : user?.role === "manager" ? "MGR-01" : "MEM-01")}
                         disabled
                       />
                     </div>
                   </div>
 
                   <div className="wz-form-group">
-                    <label className="wz-form-label">Email Address (Managed by Admin)</label>
+                    <label className="wz-form-label">Email Address {isAdmin ? "(Primary Account)" : "(System Account)"}</label>
                     <input
                       type="email"
                       className="wz-form-input"

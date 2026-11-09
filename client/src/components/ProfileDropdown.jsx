@@ -59,7 +59,7 @@ export default function ProfileDropdown({
     navigate("/login");
   };
 
-  const roleName = (user?.role || "user").toLowerCase();
+  const roleName = (userDetails.role || user?.role || "user").toLowerCase();
   const isAdmin = roleName === "admin";
   const isManager = roleName === "manager";
   const isMember = roleName === "member";
@@ -142,7 +142,11 @@ export default function ProfileDropdown({
             className="wz-profile-action-btn"
             onClick={() => {
               onClose();
-              navigate("/member/settings");
+              if (isAdmin || isManager) {
+                if (onOpenSettings) onOpenSettings();
+              } else {
+                navigate("/member/settings");
+              }
             }}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
