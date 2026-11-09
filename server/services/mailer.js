@@ -522,6 +522,133 @@ This request expires in ${expiryMinutes} minutes.
   });
 }
 
+/**
+ * Send security alert email when an account is temporarily locked due to multiple failed login attempts.
+ */
+async function sendAccountLockoutSecurityEmail({
+  toEmail,
+  fullName,
+  role,
+  attempts = 5,
+  lockoutMinutes = 15,
+  ipAddress,
+  userAgent,
+  resetPasswordUrl,
+}) {
+  const subject = `[KIMPC Security Shield] Security Alert: Your Account has been Temporarily Locked`;
+  const timeFormatted = new Date().toLocaleString("en-US", { timeZone: "Asia/Manila", dateStyle: "medium", timeStyle: "short" });
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; color: #1e293b; }
+        .card { max-width: 520px; margin: 0 auto; background: #ffffff; border-radius: 14px; border: 1px solid #e2e8f0; padding: 34px 28px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); }
+        .header { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; border-bottom: 1px solid #f1f5f9; padding-bottom: 16px; }
+        .logo { background: #991b1b; color: #ffffff; font-weight: 800; font-size: 1.2rem; width: 40px; height: 40px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; }
+        .title { font-size: 1.08rem; font-weight: 700; color: #0f172a; margin: 0; }
+        .subtitle { font-size: 0.78rem; color: #64748b; margin: 2px 0 0; }
+        .alert-badge { display: inline-block; padding: 5px 12px; background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; border-radius: 6px; font-size: 0.76rem; font-weight: 800; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.05em; }
+        .info-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin: 18px 0; font-size: 0.86rem; }
+        .info-row { display: flex; justify-content: space-between; margin-bottom: 8px; }
+        .info-row:last-child { margin-bottom: 0; }
+        .info-label { color: #64748b; font-weight: 600; }
+        .info-val { color: #0f172a; font-weight: 700; }
+        .btn-reset { display: inline-block; background: #0f172a; color: #ffffff !important; padding: 12px 24px; border-radius: 8px; font-size: 0.90rem; font-weight: 700; text-decoration: none; text-align: center; margin-top: 10px; }
+        .footer { font-size: 0.74rem; color: #94a3b8; margin-top: 26px; border-top: 1px solid #f1f5f9; padding-top: 16px; line-height: 1.5; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="header">
+          <div class="logo">🛡️</div>
+          <div>
+            <p class="title">KIMPC Security Shield</p>
+            <p class="subtitle">Account Protection Protocol</p>
+          </div>
+        </div>
+
+        <div class="alert-badge">⚠️ Account Temporarily Locked</div>
+
+        <h2 style="font-size: 1.2rem; margin: 0 0 10px; color: #0f172a;">Multiple Failed Login Attempts Detected</h2>
+        <p style="font-size: 0.88rem; line-height: 1.5; color: #475569; margin: 0 0 14px;">
+          Hello <strong>${fullName || "Member"}</strong>,
+        </p>
+        <p style="font-size: 0.88rem; line-height: 1.5; color: #475569; margin: 0 0 14px;">
+          We detected <strong>${attempts} consecutive failed sign-in attempts</strong> on your KIMPC account (<strong>${toEmail}</strong>). For your protection, your account sign-in has been temporarily locked for <strong>${lockoutMinutes} minutes</strong>.
+        </p>
+
+        <div class="info-box">
+          <div class="info-row">
+            <span class="info-label">Account Role:</span>
+            <span class="info-val">${(role || "member").toUpperCase()}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Time (PHT):</span>
+            <span class="info-val">${timeFormatted}</span>
+          </div>
+          ${ipAddress ? `
+          <div class="info-row">
+            <span class="info-label">IP Address:</span>
+            <span class="info-val">${ipAddress}</span>
+          </div>` : ""}
+          <div class="info-row">
+            <span class="info-label">Lockout Duration:</span>
+            <span class="info-val">${lockoutMinutes} Minutes</span>
+          </div>
+        </div>
+
+        <h3 style="font-size: 0.95rem; margin: 18px 0 6px; color: #0f172a;">What should you do?</h3>
+        <p style="font-size: 0.84rem; line-height: 1.5; color: #475569; margin: 0 0 10px;">
+          • <strong>If this was you:</strong> You may wait ${lockoutMinutes} minutes for the security lock to automatically expire, or reset your password immediately using the link below.
+        </p>
+        <p style="font-size: 0.84rem; line-height: 1.5; color: #475569; margin: 0 0 16px;">
+          • <strong>If this wasn't you:</strong> Someone may be attempting to access your account. We strongly recommend resetting your password immediately:
+        </p>
+
+        ${resetPasswordUrl ? `
+        <div style="text-align: center; margin: 18px 0;">
+          <a href="${resetPasswordUrl}" class="btn-reset" target="_blank" rel="noopener noreferrer">
+            🔒 Reset Account Password
+          </a>
+        </div>
+        ` : ""}
+
+        <div class="footer">
+          This security alert was automatically generated by the KIMPC Security Shield to protect members, managers, and administrators against unauthorized access.
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const textContent = `
+[KIMPC Security Shield] Security Alert: Your Account has been Temporarily Locked
+
+Hello ${fullName || "Member"},
+
+We detected ${attempts} consecutive failed sign-in attempts on your KIMPC account (${toEmail}).
+For your protection, sign-in is temporarily locked for ${lockoutMinutes} minutes.
+
+Time: ${timeFormatted}
+${ipAddress ? `IP Address: ${ipAddress}\n` : ""}
+If this was not you, please reset your password immediately:
+${resetPasswordUrl || "http://localhost:5173/forgot-password"}
+
+Thank you,
+KIMPC Security Shield
+  `.trim();
+
+  return dispatchEmail({
+    to: toEmail,
+    subject,
+    html: htmlContent,
+    text: textContent,
+  });
+}
+
 module.exports = {
   dispatchEmail,
   sendPasswordResetEmail,
@@ -529,4 +656,5 @@ module.exports = {
   sendDeleteOtpEmail,
   sendMemberSupportEmail,
   sendDeveloperIntegrationAuthEmail,
+  sendAccountLockoutSecurityEmail,
 };

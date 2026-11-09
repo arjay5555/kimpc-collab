@@ -5,7 +5,11 @@ const Account = require("../models/Account");
 const SystemSetting = require("../models/SystemSetting");
 const authenticate = require("../middleware/authenticate");
 const { logAudit } = require("../services/auditLogger");
-const { sendPasswordResetEmail, sendPasswordChangedNotificationEmail } = require("../services/mailer");
+const {
+  sendPasswordResetEmail,
+  sendPasswordChangedNotificationEmail,
+  sendAccountLockoutSecurityEmail,
+} = require("../services/mailer");
 const {
   updateEnvFile,
   DEFAULT_GOOGLE_CLIENT_ID,
@@ -1174,6 +1178,17 @@ router.post("/login", async (req, res) => {
   }
 
   const email = account.email;
+
+  // 1. Check if account is temporarily locked due to brute force login attempts
+  if (account.lockoutUntil && account.lockoutUntil > new Date()) {
+    const remainingMinutes = Math.ceil((account.lockoutUntil.getTime() - Date.now()) / 60000);
+    return fail(
+      res,
+      429,
+      `Too many failed login attempts. Your account has been temporarily locked for ${remainingMinutes} more minute${remainingMinutes > 1 ? "s" : ""} for security. A security alert was sent to ${email}.`
+    );
+  }
+
   if (!account.emailVerified || account.verificationStatus === "pending") {
     const isDeclined = account.verificationStatus === "declined";
     await logAudit({
@@ -1227,16 +1242,80 @@ router.post("/login", async (req, res) => {
     return fail(res, 403, "This account is currently archived and inactive. Please contact the administrator.");
   }
 
-  if (!(await bcrypt.compare(password, account.passwordHash))) {
+  const passwordValid = await bcrypt.compare(password, account.passwordHash);
+  if (!passwordValid) {
+    const MAX_LOGIN_ATTEMPTS = 5;
+    const LOCKOUT_MINUTES = 15;
+    const nextAttempts = (account.failedLoginAttempts || 0) + 1;
+    account.failedLoginAttempts = nextAttempts;
+
+    if (nextAttempts >= MAX_LOGIN_ATTEMPTS) {
+      account.lockoutUntil = new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000);
+      account.failedLoginAttempts = 0; // reset counter once locked
+      await account.save();
+
+      const ipAddress = req.ip || req.headers["x-forwarded-for"] || req.connection?.remoteAddress || "";
+      const userAgent = req.headers["user-agent"] || "";
+      const clientUrl = process.env.APP_BASE_URL || "http://localhost:5173";
+      const resetPasswordUrl = `${clientUrl}/forgot-password`;
+
+      await logAudit({
+        action: "ACCOUNT_LOCKED",
+        actorEmail: email,
+        actorRole: account.role,
+        targetEmail: email,
+        targetName: account.fullName,
+        details: `Account temporarily locked for ${LOCKOUT_MINUTES} minutes after ${MAX_LOGIN_ATTEMPTS} consecutive failed sign-in attempts. Security notification email dispatched.`,
+        status: "Locked",
+        req,
+      });
+
+      // Dispatch security alert email to account owner (member, manager, or admin)
+      try {
+        await sendAccountLockoutSecurityEmail({
+          toEmail: email,
+          fullName: account.fullName,
+          role: account.role,
+          attempts: MAX_LOGIN_ATTEMPTS,
+          lockoutMinutes: LOCKOUT_MINUTES,
+          ipAddress,
+          userAgent,
+          resetPasswordUrl,
+        });
+      } catch (mailErr) {
+        console.error("[Login Security] Failed to dispatch account lockout email:", mailErr);
+      }
+
+      return fail(
+        res,
+        429,
+        `Too many failed login attempts. Your account has been temporarily locked for ${LOCKOUT_MINUTES} minutes for security. A security alert email has been sent to your registered email address.`
+      );
+    }
+
+    await account.save();
+    const attemptsLeft = MAX_LOGIN_ATTEMPTS - nextAttempts;
+
     await logAudit({
       action: "LOGIN_FAILED",
       actorEmail: email,
       actorRole: account.role,
-      details: "Sign-in rejected: invalid password entered",
+      details: `Sign-in rejected: invalid password entered (${nextAttempts}/${MAX_LOGIN_ATTEMPTS} attempts)`,
       status: "Failed",
       req,
     });
-    return fail(res, 401, "The email or password is incorrect.");
+    return fail(
+      res,
+      401,
+      `The email or password is incorrect. (${attemptsLeft} attempt${attemptsLeft > 1 ? "s" : ""} remaining before temporary lock)`
+    );
+  }
+
+  // Password correct: reset failed login attempts & clear any lockout
+  if (account.failedLoginAttempts || account.lockoutUntil) {
+    account.failedLoginAttempts = 0;
+    account.lockoutUntil = null;
+    await account.save();
   }
 
   await logAudit({

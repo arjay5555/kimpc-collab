@@ -47,6 +47,9 @@ const accountSchema = new mongoose.Schema(
     adminPinHash: { type: String, default: null },
     mustChangePin: { type: Boolean, default: false },
     pinSetAt: { type: Date, default: null },
+    // Login brute force protection & security lockout
+    failedLoginAttempts: { type: Number, default: 0 },
+    lockoutUntil: { type: Date, default: null },
     // One-Time Password (OTP) & Forgot Password recovery
     mustChangePassword: { type: Boolean, default: false },
     forgotPasswordRequested: { type: Boolean, default: false },
