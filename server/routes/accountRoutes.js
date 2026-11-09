@@ -457,6 +457,11 @@ router.post("/admin/change-pin", async (req, res) => {
   }
 });
 
+// In-memory rate limiting and lockout store for Admin PIN attempts
+const adminPinAttempts = new Map();
+const MAX_PIN_ATTEMPTS = 5;
+const PIN_LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
+
 // 4. Verify 6-digit PIN for destructive actions
 router.post("/admin/verify-pin", async (req, res) => {
   try {
@@ -465,6 +470,17 @@ router.post("/admin/verify-pin", async (req, res) => {
     const targetEmail = cleanEmail(req.body.targetEmail);
 
     if (!adminEmail || !pin) return fail(res, 400, "Admin email and 6-digit PIN are required.");
+
+    // Check if PIN verification is currently locked due to too many failed attempts
+    const attemptRecord = adminPinAttempts.get(adminEmail) || { count: 0, lockedUntil: 0 };
+    if (attemptRecord.lockedUntil && Date.now() < attemptRecord.lockedUntil) {
+      const remainingMinutes = Math.ceil((attemptRecord.lockedUntil - Date.now()) / 60000);
+      return fail(
+        res,
+        429,
+        `Too many incorrect PIN attempts. Security PIN verification is locked for ${remainingMinutes} more minute${remainingMinutes > 1 ? "s" : ""}.`
+      );
+    }
 
     const admin = await Account.findOne({ email: adminEmail });
     if (!admin || admin.role !== "admin") {
@@ -481,28 +497,45 @@ router.post("/admin/verify-pin", async (req, res) => {
 
     let match = false;
     if (!admin.adminPinHash) {
-      // Cooperative default 6-digit PIN if not yet customized
-      if (pin === "123456") {
-        match = true;
-      } else {
-        return fail(res, 401, "Incorrect 6-digit admin security PIN. (Default PIN: 123456)");
-      }
+      match = (pin === "123456");
     } else {
       match = await bcrypt.compare(pin, admin.adminPinHash);
     }
 
     if (!match) {
+      attemptRecord.count += 1;
+      if (attemptRecord.count >= MAX_PIN_ATTEMPTS) {
+        attemptRecord.lockedUntil = Date.now() + PIN_LOCKOUT_MS;
+        adminPinAttempts.set(adminEmail, attemptRecord);
+        await logAudit({
+          action: "ADMIN_PIN_LOCKED",
+          actorEmail: adminEmail,
+          actorRole: "admin",
+          targetEmail: targetEmail || "System Integrations",
+          details: `Admin PIN locked for 15 minutes after ${MAX_PIN_ATTEMPTS} consecutive failed attempts`,
+          status: "Locked",
+          req,
+        });
+        return fail(res, 429, "Too many incorrect PIN attempts. Security PIN verification has been locked for 15 minutes.");
+      }
+
+      adminPinAttempts.set(adminEmail, attemptRecord);
+      const attemptsLeft = MAX_PIN_ATTEMPTS - attemptRecord.count;
+
       await logAudit({
         action: "ADMIN_PIN_FAILED",
         actorEmail: adminEmail,
         actorRole: "admin",
         targetEmail: targetEmail || "System Integrations",
-        details: "Admin 6-digit PIN verification failed: incorrect PIN entered",
+        details: `Admin 6-digit PIN verification failed: incorrect PIN entered (${attemptRecord.count}/${MAX_PIN_ATTEMPTS})`,
         status: "Failed",
         req,
       });
-      return fail(res, 401, "Incorrect 6-digit admin security PIN.");
+      return fail(res, 401, `Incorrect 6-digit admin security PIN. (${attemptsLeft} attempt${attemptsLeft > 1 ? "s" : ""} remaining)`);
     }
+
+    // Reset failed attempts upon successful verification
+    adminPinAttempts.delete(adminEmail);
 
     const targetAccount = targetEmail ? await Account.findOne({ email: targetEmail }) : null;
 

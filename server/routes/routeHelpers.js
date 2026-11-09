@@ -48,33 +48,25 @@ function generateUserToken(account, extra = {}) {
 
 async function requireAdmin(req, res, next) {
   try {
-    const authHeader = req.headers.authorization;
-    let adminUser = null;
-
-    if (authHeader && authHeader.startsWith("Bearer ")) {
-      const token = authHeader.split(" ")[1];
-      try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        if (decoded && decoded.role === "admin") {
-          adminUser = (await Account.findById(decoded.id)) || (await Account.findOne({ email: decoded.email }));
-        }
-      } catch (err) {
-        // Token invalid or expired, continue to fallback
-      }
-    }
+    let adminUser = req.user && req.user.role === "admin" ? req.user : null;
 
     if (!adminUser) {
-      const adminEmail = cleanEmail(req.headers["x-admin-email"] || req.body?.adminEmail || req.query?.adminEmail);
-      if (adminEmail) {
-        const candidate = await Account.findOne({ email: adminEmail });
-        if (candidate && candidate.role === "admin") {
-          adminUser = candidate;
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        const token = authHeader.split(" ")[1];
+        try {
+          const decoded = jwt.verify(token, JWT_SECRET);
+          if (decoded && (decoded.role === "admin" || decoded.id || decoded.email)) {
+            adminUser = (await Account.findById(decoded.id)) || (await Account.findOne({ email: decoded.email }));
+          }
+        } catch (err) {
+          // Token invalid or expired
         }
       }
     }
 
-    if (!adminUser || adminUser.role !== "admin") {
-      return fail(res, 403, "Access denied. Administrator privileges required.");
+    if (!adminUser || adminUser.role !== "admin" || adminUser.isSuspended || adminUser.isArchived) {
+      return fail(res, 403, "Access denied. Valid administrator credentials required.");
     }
 
     req.admin = adminUser;
@@ -90,7 +82,7 @@ async function verifyRecaptcha(token) {
   const recaptchaEnabled = await getSystemSetting("recaptchaEnabled", true);
   if (!recaptchaEnabled) return true;
   if (!token) return false;
-  if (token === "test" || token === "bypass") return true;
+  if (process.env.NODE_ENV !== "production" && (token === "test" || token === "bypass")) return true;
 
   const { getEffectiveRecaptchaKeys } = require("../services/apiKeyManager");
   const { secretKey: secret } = await getEffectiveRecaptchaKeys();

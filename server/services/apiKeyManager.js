@@ -58,51 +58,44 @@ const DEFAULT_GOOGLE_CLIENT_SECRET = (process.env.DEFAULT_GOOGLE_CLIENT_SECRET |
 
 // 2. Facebook OAuth Credentials
 const DEFAULT_FACEBOOK_APP_ID =
-  (process.env.DEFAULT_FACEBOOK_APP_ID || process.env.FACEBOOK_APP_ID || "").trim() || "4031349940338782";
+  (process.env.DEFAULT_FACEBOOK_APP_ID || process.env.FACEBOOK_APP_ID || "").trim();
 
 const DEFAULT_FACEBOOK_APP_SECRET =
-  (process.env.DEFAULT_FACEBOOK_APP_SECRET || process.env.FACEBOOK_APP_SECRET || "").trim() ||
-  Buffer.from("NDQ5NTRmYWI2ZTcyYTJmY2VlOWIxZmMzZDQ4YTkxMzk=", "base64").toString("utf-8");
+  (process.env.DEFAULT_FACEBOOK_APP_SECRET || process.env.FACEBOOK_APP_SECRET || "").trim();
 
 // 3. Google reCAPTCHA v2 Credentials
 const DEFAULT_RECAPTCHA_SITE_KEY =
-  (process.env.DEFAULT_RECAPTCHA_SITE_KEY || process.env.RECAPTCHA_SITE_KEY || "").trim() || "6LfrJe0tAAAAAIIeW87yfUlJuzJOokkWT4KM6UG5";
+  (process.env.DEFAULT_RECAPTCHA_SITE_KEY || process.env.RECAPTCHA_SITE_KEY || "").trim();
 
 const DEFAULT_RECAPTCHA_SECRET_KEY =
-  (process.env.DEFAULT_RECAPTCHA_SECRET_KEY || process.env.RECAPTCHA_SECRET_KEY || "").trim() ||
-  Buffer.from("NkxmckplMHRBQUFBQUNQQmlQWXVGOEhMZXo4b3kxSEJ0aDVhU1QxMg==", "base64").toString("utf-8");
+  (process.env.DEFAULT_RECAPTCHA_SECRET_KEY || process.env.RECAPTCHA_SECRET_KEY || "").trim();
 
 // 4. WeatherAPI.com Key
 const DEFAULT_WEATHER_API_KEY =
-  (process.env.DEFAULT_WEATHER_API_KEY || process.env.WEATHER_API_KEY || "").trim() || "7145472cabdc45fe8f414215260611";
+  (process.env.DEFAULT_WEATHER_API_KEY || process.env.WEATHER_API_KEY || "").trim();
 
 // 5. OneSignal Web Push Credentials
 const DEFAULT_ONESIGNAL_APP_ID =
-  (process.env.DEFAULT_ONESIGNAL_APP_ID || process.env.ONESIGNAL_APP_ID || "").trim() || "fc811113-559c-40c3-ba59-e703db896839";
+  (process.env.DEFAULT_ONESIGNAL_APP_ID || process.env.ONESIGNAL_APP_ID || "").trim();
 
 const DEFAULT_ONESIGNAL_REST_KEY =
-  (process.env.DEFAULT_ONESIGNAL_REST_KEY || process.env.ONESIGNAL_REST_API_KEY || "").trim() ||
-  Buffer.from(
-    "b3NfdjJfYXBwXzdzYXJjZTJ2dHJhbWhvc3o0NGI1eGNsaWhmemxuN3VjZml0dW9qNDY3aWNjbHJlaGloanB4eTJqZWFjZmJkanZ1cW5nZXFlbGoybDNtazVhNGJrNHFuZW52amR0aXdwZGFmd25ieXE=",
-    "base64"
-  ).toString("utf-8");
+  (process.env.DEFAULT_ONESIGNAL_REST_KEY || process.env.ONESIGNAL_REST_API_KEY || "").trim();
 
 // 6. Cloudinary Storage Credentials
 const DEFAULT_CLOUDINARY_CLOUD_NAME =
-  (process.env.DEFAULT_CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_CLOUD_NAME || "").trim() || "kimpc";
+  (process.env.DEFAULT_CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_CLOUD_NAME || "").trim();
 
 const DEFAULT_CLOUDINARY_API_KEY =
-  (process.env.DEFAULT_CLOUDINARY_API_KEY || process.env.CLOUDINARY_API_KEY || "").trim() || "691365116427346";
+  (process.env.DEFAULT_CLOUDINARY_API_KEY || process.env.CLOUDINARY_API_KEY || "").trim();
 
 const DEFAULT_CLOUDINARY_API_SECRET =
-  (process.env.DEFAULT_CLOUDINARY_API_SECRET || process.env.CLOUDINARY_API_SECRET || "").trim() ||
-  Buffer.from("MGFOQUFWMlhZVW9fMHh5dUhhNldVZmhLS25Z", "base64").toString("utf-8");
+  (process.env.DEFAULT_CLOUDINARY_API_SECRET || process.env.CLOUDINARY_API_SECRET || "").trim();
 
 // 7. Gmail SMTP Service Credentials
 const DEFAULT_SMTP_USER =
-  (process.env.DEFAULT_SMTP_USER || process.env.SMTP_USER || "").trim() || "kimpc.system@gmail.com";
+  (process.env.DEFAULT_SMTP_USER || process.env.SMTP_USER || "").trim();
 const DEFAULT_SMTP_PASS =
-  (process.env.DEFAULT_SMTP_PASS || process.env.SMTP_PASS || "").trim() || "dluhpzevpbwbjcyc";
+  (process.env.DEFAULT_SMTP_PASS || process.env.SMTP_PASS || "").trim();
 const DEFAULT_SMTP_FROM =
   (process.env.DEFAULT_SMTP_FROM || process.env.SMTP_FROM || "").trim() || `"KIMPC Security" <kimpc.system@gmail.com>`;
 

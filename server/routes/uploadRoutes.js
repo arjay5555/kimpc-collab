@@ -1,12 +1,13 @@
 const express = require("express");
 const router = express.Router();
 const cloudinaryService = require("../services/cloudinaryService");
+const authenticate = require("../middleware/authenticate");
 
 /**
  * GET /api/upload/status
  * Check if Cloudinary credentials are fully active
  */
-router.get("/status", (req, res) => {
+router.get("/status", authenticate, (req, res) => {
   return res.json({
     ok: true,
     configured: cloudinaryService.isConfigured(),
@@ -20,7 +21,7 @@ router.get("/status", (req, res) => {
  * Generic image uploader for profile photos, machinery units, receipts, and avatars
  * Payload: { image: string (base64 data URI), folder: string (optional), filename: string (optional) }
  */
-router.post("/image", async (req, res) => {
+router.post("/image", authenticate, async (req, res) => {
   try {
     const { image, folder, filename } = req.body;
     if (!image) {
