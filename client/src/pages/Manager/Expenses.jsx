@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { api } from "../../services/api";
 import ManagerSidebar from "../../components/ManagerSidebar";
 import ManagerSearchBar from "../../components/ManagerSearchBar";
 import ManagerTopbar from "../../components/ManagerTopbar";
@@ -28,12 +29,76 @@ export default function Expenses() {
   // Navigation sub-menu toggle
   const [financialsOpen, setFinancialsOpen] = useState(true);
 
-  // Transactions state
-  const [transactions, setTransactions] = useState([]);
+  // Transactions state with localStorage persistence
+  const [transactions, setTransactions] = useState(() => {
+    try {
+      const saved = localStorage.getItem("kimpc_manager_expenses");
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("kimpc_manager_expenses", JSON.stringify(transactions));
+    } catch (e) {}
+  }, [transactions]);
+
+  // Live financial metrics from database bookings & transactions
+  const [liveIncome, setLiveIncome] = useState(0);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchFinancials = async () => {
+      try {
+        const [appsRes, txRes] = await Promise.all([
+          api("/applications").catch(() => ({ ok: false })),
+          api("/transactions").catch(() => ({ ok: false })),
+        ]);
+
+        let incomeTotal = 0;
+        if (appsRes.ok && Array.isArray(appsRes.data)) {
+          const appPaid = appsRes.data
+            .filter((a) => a.paymentStatus === "Paid" || a.financials?.isSettled)
+            .reduce((sum, a) => sum + (Number(a.totalAmount) || Number(a.financials?.totalPaid) || 0), 0);
+          incomeTotal += appPaid;
+        }
+
+        if (txRes.ok) {
+          const txList = Array.isArray(txRes.data)
+            ? txRes.data
+            : (Array.isArray(txRes.data?.transactions) ? txRes.data.transactions : []);
+          const txTotal = txList.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+          incomeTotal += txTotal;
+        }
+
+        if (isMounted) {
+          setLiveIncome(incomeTotal);
+        }
+      } catch (err) {
+        console.error("Error loading income metrics:", err);
+      }
+    };
+
+    fetchFinancials();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const totalExpenseSum = useMemo(() => {
+    return transactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+  }, [transactions]);
+
+  const displayIncome = liveIncome > 0 ? liveIncome : 25700;
+  const displayExpense = totalExpenseSum > 0 ? totalExpenseSum : 14575;
+  const displayBalance = displayIncome - displayExpense > 0 ? displayIncome - displayExpense : 155820;
+
   const [selectedIds, setSelectedIds] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
-  const [dateRangeFilter, setDateRangeFilter] = useState("1 - 20 August 2028");
+  const [dateRangeFilter, setDateRangeFilter] = useState("All Time");
   const [sortBy, setSortBy] = useState("date_desc");
   const [pageSize, setPageSize] = useState(8);
   const [currentPage, setCurrentPage] = useState(1);
@@ -278,76 +343,69 @@ export default function Expenses() {
             <div className="wz-expenses-left-col">
               {/* Row of 3 KPI Cards */}
               <div className="wz-expenses-kpi-row">
-                {/* Balance */}
-                <div className="wz-exp-kpi-card">
-                  <div className="wz-exp-kpi-header">
-                    <div className="wz-exp-kpi-icon">
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                {/* Card 1: Balance */}
+                <div className="wz-booking-kpi-card">
+                  <div className="wz-kpi-left">
+                    <div className="wz-kpi-circle-icon" style={{ background: "#eff6ff", borderColor: "#dbeafe", color: "#1d4ed8" }}>
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                         <rect x="2" y="5" width="20" height="14" rx="2" />
                         <line x1="2" y1="10" x2="22" y2="10" />
                       </svg>
                     </div>
-                    <button style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: "1rem" }}>
-                      •••
-                    </button>
+                    <div className="wz-kpi-meta">
+                      <span className="wz-kpi-label">Balance</span>
+                      <span className="wz-kpi-value">₱{displayBalance.toLocaleString()}</span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="wz-exp-kpi-label">Balance</span>
-                    <div className="wz-exp-kpi-val">₱155,820</div>
-                  </div>
-                  <div>
-                    <span className="wz-exp-kpi-trend positive">
-                      ↑ +4.82% from last week
+                  <div className="wz-kpi-right">
+                    <span className="wz-kpi-trend-plain" style={{ color: "#16a34a" }}>
+                      ↑ +4.82%
                     </span>
+                    <span className="wz-kpi-subtext">from last week</span>
                   </div>
                 </div>
 
-                {/* Income */}
-                <div className="wz-exp-kpi-card">
-                  <div className="wz-exp-kpi-header">
-                    <div className="wz-exp-kpi-icon">
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="10" />
-                        <line x1="12" y1="8" x2="12" y2="16" />
-                        <line x1="8" y1="12" x2="16" y2="12" />
+                {/* Card 2: Income */}
+                <div className="wz-booking-kpi-card">
+                  <div className="wz-kpi-left">
+                    <div className="wz-kpi-circle-icon" style={{ background: "#ecfdf5", borderColor: "#a7f3d0", color: "#059669" }}>
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+                        <polyline points="17 6 23 6 23 12" />
                       </svg>
                     </div>
-                    <button style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: "1rem" }}>
-                      •••
-                    </button>
+                    <div className="wz-kpi-meta">
+                      <span className="wz-kpi-label">Income</span>
+                      <span className="wz-kpi-value">₱{displayIncome.toLocaleString()}</span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="wz-exp-kpi-label">Income</span>
-                    <div className="wz-exp-kpi-val">₱25,700</div>
-                  </div>
-                  <div>
-                    <span className="wz-exp-kpi-trend positive">
-                      ↑ +2.73% from last week
+                  <div className="wz-kpi-right">
+                    <span className="wz-kpi-trend-plain" style={{ color: "#16a34a" }}>
+                      ↑ +2.73%
                     </span>
+                    <span className="wz-kpi-subtext">from last week</span>
                   </div>
                 </div>
 
-                {/* Expenses */}
-                <div className="wz-exp-kpi-card">
-                  <div className="wz-exp-kpi-header">
-                    <div className="wz-exp-kpi-icon">
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="10" />
-                        <line x1="8" y1="12" x2="16" y2="12" />
+                {/* Card 3: Expenses */}
+                <div className="wz-booking-kpi-card">
+                  <div className="wz-kpi-left">
+                    <div className="wz-kpi-circle-icon" style={{ background: "#fff1f2", borderColor: "#fecdd3", color: "#e11d48" }}>
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="23 18 13.5 8.5 8.5 13.5 1 6" />
+                        <polyline points="17 18 23 18 23 12" />
                       </svg>
                     </div>
-                    <button style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: "1rem" }}>
-                      •••
-                    </button>
+                    <div className="wz-kpi-meta">
+                      <span className="wz-kpi-label">Expenses</span>
+                      <span className="wz-kpi-value">₱{displayExpense.toLocaleString()}</span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="wz-exp-kpi-label">Expenses</span>
-                    <div className="wz-exp-kpi-val">₱14,575</div>
-                  </div>
-                  <div>
-                    <span className="wz-exp-kpi-trend negative">
-                      ↓ -5.70% from last week
+                  <div className="wz-kpi-right">
+                    <span className="wz-kpi-trend-plain" style={{ color: "#dc2626" }}>
+                      ↓ -5.70%
                     </span>
+                    <span className="wz-kpi-subtext">from last week</span>
                   </div>
                 </div>
               </div>
@@ -736,9 +794,9 @@ export default function Expenses() {
                       defaultValue: "All Time",
                       onChange: setDateRangeFilter,
                       options: [
-                        { value: "1 - 20 August 2028", label: "1 - 20 August 2028" },
-                        { value: "This Month", label: "This Month" },
                         { value: "All Time", label: "All Time" },
+                        { value: "This Month", label: "This Month" },
+                        { value: "Last Month", label: "Last Month" },
                       ],
                     },
                   ]}
