@@ -283,6 +283,114 @@ export default function Payments() {
     );
   };
 
+  // Download payment transactions to CSV
+  const handleDownloadTransactionsCsv = () => {
+    const targetInvoices =
+      selectedIds.length > 0
+        ? allInvoices.filter((inv) => selectedIds.includes(inv.id))
+        : filteredInvoices;
+
+    if (targetInvoices.length === 0) {
+      setFeedback("No payment transactions found to download.");
+      return;
+    }
+
+    const headers = [
+      "Receipt No",
+      "Booking ID",
+      "Client Name",
+      "Client Phone",
+      "Machinery Model",
+      "Daily Rate (PHP)",
+      "Rental Period",
+      "Total Amount (PHP)",
+      "Payment Method",
+      "Payment Type",
+      "Due Date",
+      "Date Received",
+      "Status",
+      "Driver",
+      "Recorded By",
+      "Notes",
+    ];
+
+    const rows = targetInvoices.map((inv) => [
+      `"${(inv.receiptNo || inv.id || "").replace(/"/g, '""')}"`,
+      `"${(inv.id || "").replace(/"/g, '""')}"`,
+      `"${(inv.clientName || "").replace(/"/g, '""')}"`,
+      `"${(inv.clientPhone || "").replace(/"/g, '""')}"`,
+      `"${(inv.machineryModel || "").replace(/"/g, '""')}"`,
+      inv.ratePerDay || 0,
+      `"${(inv.rentalPeriod || "").replace(/"/g, '""')}"`,
+      inv.amount || 0,
+      `"${(inv.paymentMethod || "Cash").replace(/"/g, '""')}"`,
+      `"${(inv.paymentType || "Full Rental Payment").replace(/"/g, '""')}"`,
+      `"${(inv.dueDate || "").replace(/"/g, '""')}"`,
+      `"${(inv.dateReceived || "").replace(/"/g, '""')}"`,
+      `"${(inv.status || "").replace(/"/g, '""')}"`,
+      `"${(inv.assignedDriver || "Self-Operated").replace(/"/g, '""')}"`,
+      `"${(inv.recordedBy || "").replace(/"/g, '""')}"`,
+      `"${(inv.notes || "").replace(/"/g, '""')}"`,
+    ]);
+
+    const csvContent =
+      "data:text/csv;charset=utf-8,\uFEFF" +
+      [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    const dateStr = new Date().toISOString().slice(0, 10);
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `KIMPC_Payment_Transactions_${dateStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setFeedback(`Downloaded ${targetInvoices.length} payment transaction${targetInvoices.length > 1 ? "s" : ""} as CSV.`);
+  };
+
+  // Download individual transaction receipt summary (.txt)
+  const handleDownloadSingleTransaction = (inv) => {
+    if (!inv) return;
+    const lines = [
+      "===========================================================",
+      "  KALILANGAN IRRIGATORS MULTI-PURPOSE COOPERATIVE (KIMPC)  ",
+      "             OFFICIAL PAYMENT TRANSACTION RECEIPT          ",
+      "===========================================================",
+      `Receipt No:       ${inv.receiptNo || inv.id}`,
+      `Booking Ref:      ${inv.id}`,
+      `Date Issued:      ${inv.dateReceived || inv.dueDate || new Date().toISOString().slice(0, 10)}`,
+      `Payment Status:   ${inv.status}`,
+      "-----------------------------------------------------------",
+      `Client / Member:  ${inv.clientName}`,
+      `Contact Phone:    ${inv.clientPhone || "—"}`,
+      `Machinery:        ${inv.machineryModel}`,
+      `Daily Rate:       PHP ${Number(inv.ratePerDay || 0).toLocaleString()}`,
+      `Rental Period:    ${inv.rentalPeriod || "Standard Rental"}`,
+      `Driver:           ${inv.assignedDriver || "Self-Operated"}`,
+      "-----------------------------------------------------------",
+      `Payment Method:   ${inv.paymentMethod || "Cash"} ${inv.cashPaymentOption ? `(${inv.cashPaymentOption})` : ""}`,
+      `Payment Type:     ${inv.paymentType || "Full Rental Payment"}`,
+      `Total Amount:     PHP ${Number(inv.amount || 0).toLocaleString()}`,
+      `Recorded By:      ${inv.recordedBy || user?.fullName || "Manager"}`,
+      `Notes:            ${inv.notes || "None"}`,
+      "===========================================================",
+      "  This document serves as an electronic transaction copy   ",
+      "        Pursuant to CDA & RA 9520 Cooperative Rules        ",
+      "===========================================================",
+    ];
+    const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Receipt_${(inv.receiptNo || inv.id).replace(/[^a-zA-Z0-9-_]/g, "_")}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setFeedback(`Downloaded transaction receipt for ${inv.id}.`);
+  };
+
   // Modal State for Record Payment & View Details
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
@@ -639,29 +747,71 @@ export default function Payments() {
               />
             </div>
 
-            <button
-              onClick={openCreateModal}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "8px",
-                background: "#ff3b5c",
-                color: "#ffffff",
-                border: "none",
-                borderRadius: "10px",
-                padding: "10px 18px",
-                fontSize: "0.85rem",
-                fontWeight: "700",
-                cursor: "pointer",
-                boxShadow: "0 4px 12px rgba(255, 59, 92, 0.25)",
-              }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-              Record Payment
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={handleDownloadTransactionsCsv}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  background: "#f8fafc",
+                  border: "1px solid var(--wz-border)",
+                  borderRadius: "10px",
+                  padding: "10px 16px",
+                  fontSize: "0.85rem",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                  color: "#334155",
+                  boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
+                  transition: "all 0.15s ease",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "#f1f5f9";
+                  e.currentTarget.style.borderColor = "#cbd5e1";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "#f8fafc";
+                  e.currentTarget.style.borderColor = "var(--wz-border)";
+                }}
+                title={
+                  selectedIds.length > 0
+                    ? `Download ${selectedIds.length} selected transaction(s) as CSV`
+                    : "Download all payment transactions as CSV"
+                }
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                <span>Download Transactions {selectedIds.length > 0 ? `(${selectedIds.length})` : "CSV"}</span>
+              </button>
+
+              <button
+                onClick={openCreateModal}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  background: "#ff3b5c",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: "10px",
+                  padding: "10px 18px",
+                  fontSize: "0.85rem",
+                  fontWeight: "700",
+                  cursor: "pointer",
+                  boxShadow: "0 4px 12px rgba(255, 59, 92, 0.25)",
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                Record Payment
+              </button>
+            </div>
           </section>
 
           {/* Invoices Table Card */}
@@ -1620,7 +1770,32 @@ export default function Payments() {
                 )}
               </div>
 
-              <div style={{ display: "flex", gap: "10px" }}>
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadSingleTransaction(viewingPayment)}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    background: "#ffffff",
+                    color: "#0f172a",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "8px",
+                    padding: "8px 14px",
+                    fontWeight: 700,
+                    fontSize: "0.82rem",
+                    cursor: "pointer",
+                  }}
+                  title="Download Transaction Receipt (.txt)"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                  Download Receipt
+                </button>
                 <button
                   type="button"
                   onClick={() => {
@@ -1874,6 +2049,31 @@ export default function Payments() {
                 }}
               >
                 Close
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDownloadSingleTransaction(receiptInvoice)}
+                style={{
+                  padding: "9px 16px",
+                  borderRadius: "8px",
+                  border: "1px solid #cbd5e1",
+                  background: "#ffffff",
+                  color: "#0f172a",
+                  fontWeight: 700,
+                  fontSize: "0.85rem",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+                title="Download Receipt File"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Download Receipt (.txt)
               </button>
               <button
                 type="button"
