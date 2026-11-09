@@ -27,6 +27,7 @@ import ManagerCalendar from "./pages/Manager/ManagerCalendar";
 import Drivers from "./pages/Manager/Drivers";
 import Payments from "./pages/Manager/Payments";
 import Expenses from "./pages/Manager/Expenses";
+import ManagerReports from "./pages/Manager/ManagerReports";
 import ManagerMessages from "./pages/Manager/ManagerMessages";
 
 // Admin
@@ -282,6 +283,22 @@ export default function App() {
         element={
           <ProtectedRoute allowedRoles={["manager", "admin"]}>
             <Expenses />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/manager/reports"
+        element={
+          <ProtectedRoute allowedRoles={["manager", "admin"]}>
+            <ManagerReports />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/reports"
+        element={
+          <ProtectedRoute allowedRoles={["manager", "admin"]}>
+            <ManagerReports />
           </ProtectedRoute>
         }
       />

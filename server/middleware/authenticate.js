@@ -9,13 +9,19 @@ const JWT_SECRET = process.env.JWT_SECRET || "minders-secret-jwt-key-cooperative
  * Populates req.user with the authenticated Mongoose account document.
  */
 async function authenticate(req, res, next) {
+  let token = "";
   const authorization = req.headers.authorization || "";
-  if (!authorization.startsWith("Bearer ")) {
+  if (authorization.startsWith("Bearer ")) {
+    token = authorization.slice("Bearer ".length).trim();
+  } else if (req.query && req.query.token) {
+    token = String(req.query.token).trim();
+  }
+
+  if (!token) {
     return res.status(401).json({ error: "Authentication required. Missing Bearer token." });
   }
 
   try {
-    const token = authorization.slice("Bearer ".length).trim();
     const payload = jwt.verify(token, JWT_SECRET);
     if (!payload.id && !payload.email) {
       return res.status(401).json({ error: "Invalid or expired authentication token." });

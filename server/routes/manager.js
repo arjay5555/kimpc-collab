@@ -4,6 +4,7 @@ const SupportMessage = require("../models/SupportMessage");
 const Notification = require("../models/Notification");
 const { clean, fail } = require("./routeHelpers");
 const { logAudit } = require("../services/auditLogger");
+const reportService = require("../services/reportService");
 
 const {
   getCalendarEvents,
@@ -135,6 +136,48 @@ router.delete("/messages/:id", async (req, res) => {
     res.json({ ok: true, message: "Message deleted." });
   } catch (err) {
     res.status(500).json({ error: "Failed to delete message." });
+  }
+});
+
+// ==========================================
+// MANAGER REPORTS ENDPOINTS
+// ==========================================
+
+// Preview Report Data
+router.get("/reports/preview", async (req, res) => {
+  try {
+    const reportData = await reportService.getReportData(req.query);
+    res.json({ ok: true, report: reportData });
+  } catch (err) {
+    console.error("Report preview error:", err);
+    res.status(500).json({ ok: false, error: "Failed to generate report preview: " + err.message });
+  }
+});
+
+// Download Report PDF
+router.get("/reports/pdf", async (req, res) => {
+  try {
+    const reportData = await reportService.getReportData(req.query);
+    const cleanTitle = (reportData.reportTitle || "Report").replace(/[^a-zA-Z0-9]/g, "-");
+    const filename = `KIMPC-${cleanTitle}-${reportData.period.startDate}-to-${reportData.period.endDate}.pdf`;
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+
+    const loggedInManager =
+      req.user?.fullName ||
+      (req.user?.firstName && req.user?.lastName ? `${req.user.firstName} ${req.user.lastName}` : null) ||
+      req.user?.name ||
+      "Operations Manager";
+
+    reportService.generateReportPDF(reportData, res, {
+      loggedInManager,
+    });
+  } catch (err) {
+    console.error("Report PDF error:", err);
+    if (!res.headersSent) {
+      res.status(500).json({ ok: false, error: "Failed to generate report PDF: " + err.message });
+    }
   }
 });
 
