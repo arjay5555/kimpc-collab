@@ -112,7 +112,7 @@ export default function AdminIntegrations() {
   const [devAuthOtpDigits, setDevAuthOtpDigits] = useState(["", "", "", "", "", ""]);
   const [devAuthOtpError, setDevAuthOtpError] = useState("");
   const [devAuthOtpLoading, setDevAuthOtpLoading] = useState(false);
-  const [showDevOtpInput, setShowDevOtpInput] = useState(false);
+  const [showDevOtpInput, setShowDevOtpInput] = useState(true);
   const [resendCooldown, setResendCooldown] = useState(0);
   const devPollTimerRef = useRef(null);
   const devOtpInputRefs = [
@@ -220,9 +220,11 @@ export default function AdminIntegrations() {
     }
   };
 
-  const handleVerifyDevOtp = async (e) => {
-    if (e) e.preventDefault();
-    const otp = devAuthOtpDigits.join("").trim();
+  const handleVerifyDevOtp = async (eOrOtp) => {
+    if (eOrOtp && typeof eOrOtp.preventDefault === "function") {
+      eOrOtp.preventDefault();
+    }
+    const otp = (typeof eOrOtp === "string" ? eOrOtp : devAuthOtpDigits.join("")).trim();
     if (otp.length !== 6) {
       setDevAuthOtpError("Please enter the complete 6-digit Developer OTP.");
       return;
@@ -281,6 +283,10 @@ export default function AdminIntegrations() {
       setDevAuthOtpDigits(next);
       const nextIdx = Math.min(index + digits.length, 5);
       devOtpInputRefs[nextIdx]?.current?.focus();
+      const fullOtp = next.join("");
+      if (fullOtp.length === 6) {
+        handleVerifyDevOtp(fullOtp);
+      }
       return;
     }
 
@@ -290,12 +296,19 @@ export default function AdminIntegrations() {
     setDevAuthOtpError("");
     if (index < 5) {
       devOtpInputRefs[index + 1]?.current?.focus();
+    } else {
+      const fullOtp = next.join("");
+      if (fullOtp.length === 6) {
+        handleVerifyDevOtp(fullOtp);
+      }
     }
   };
 
   const handleDevOtpKeyDown = (index, e) => {
     if (e.key === "Backspace" && !devAuthOtpDigits[index] && index > 0) {
       devOtpInputRefs[index - 1]?.current?.focus();
+    } else if (e.key === "Enter") {
+      handleVerifyDevOtp();
     }
   };
 
@@ -310,6 +323,9 @@ export default function AdminIntegrations() {
     setDevAuthOtpDigits(next);
     const nextIdx = Math.min(pasted.length, 5);
     devOtpInputRefs[nextIdx]?.current?.focus();
+    if (pasted.length === 6) {
+      handleVerifyDevOtp(pasted);
+    }
   };
 
   const checkPinStatus = async () => {
@@ -367,9 +383,11 @@ export default function AdminIntegrations() {
   };
 
   // 1. Verify existing 6-digit PIN
-  const handleVerifyPin = async (e) => {
-    if (e) e.preventDefault();
-    const pin = pinDigits.join("").trim();
+  const handleVerifyPin = async (eOrPin) => {
+    if (eOrPin && typeof eOrPin.preventDefault === "function") {
+      eOrPin.preventDefault();
+    }
+    const pin = (typeof eOrPin === "string" ? eOrPin : pinDigits.join("")).trim();
     if (pin.length !== 6) {
       setPinError("Please enter all 6 digits of your PIN.");
       return;
@@ -522,6 +540,10 @@ export default function AdminIntegrations() {
       setPinDigits(next);
       const targetIdx = Math.min(5, index + chars.length);
       pinInputRefs[targetIdx]?.current?.focus();
+      const full = next.join("");
+      if (full.length === 6 && !pinModal.isFirstPin) {
+        handleVerifyPin(full);
+      }
       return;
     }
 
@@ -531,6 +553,11 @@ export default function AdminIntegrations() {
 
     if (index < 5) {
       pinInputRefs[index + 1]?.current?.focus();
+    } else {
+      const full = next.join("");
+      if (full.length === 6 && !pinModal.isFirstPin) {
+        handleVerifyPin(full);
+      }
     }
   };
 
@@ -553,6 +580,9 @@ export default function AdminIntegrations() {
     setPinDigits(next);
     const targetIdx = Math.min(5, pasted.length);
     pinInputRefs[targetIdx]?.current?.focus();
+    if (pasted.length === 6 && !pinModal.isFirstPin) {
+      handleVerifyPin(pasted);
+    }
   };
 
   const handleRequestEdit = (serviceKey, serviceName) => {
@@ -3598,28 +3628,36 @@ export default function AdminIntegrations() {
                           </p>
                         </div>
 
-                        {/* Collapsible Direct OTP Entry */}
-                        <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: "14px" }}>
-                          <button
-                            type="button"
-                            onClick={() => setShowDevOtpInput(!showDevOtpInput)}
+                        {/* Alternative Direct OTP Entry */}
+                        <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: "14px" }}>
+                          <div
                             style={{
-                              background: "none",
-                              border: "none",
-                              color: "#0284c7",
-                              fontSize: "0.78rem",
-                              fontWeight: 700,
-                              cursor: "pointer",
-                              padding: "4px 0",
                               display: "flex",
                               alignItems: "center",
-                              gap: "6px",
-                              margin: "0 auto",
+                              justifyContent: "space-between",
+                              marginBottom: showDevOtpInput ? "10px" : "0",
                             }}
                           >
-                            <span>{showDevOtpInput ? "▼" : "▶"}</span>
-                            <span>{showDevOtpInput ? "Hide Developer OTP Entry" : "Or Enter 6-Digit Developer OTP Directly"}</span>
-                          </button>
+                            <span style={{ fontSize: "0.80rem", fontWeight: 700, color: "#1e293b", display: "flex", alignItems: "center", gap: "6px" }}>
+                              <span>🔑</span>
+                              <span>Alternative: Enter 6-Digit Developer OTP</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setShowDevOtpInput(!showDevOtpInput)}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                color: "#0284c7",
+                                fontSize: "0.75rem",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                                padding: "2px 6px",
+                              }}
+                            >
+                              {showDevOtpInput ? "Hide ▲" : "Show ▼"}
+                            </button>
+                          </div>
 
                           {showDevOtpInput && (
                             <form onSubmit={handleVerifyDevOtp} style={{ marginTop: "14px", textAlign: "center" }}>
