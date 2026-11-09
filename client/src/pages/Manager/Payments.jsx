@@ -287,6 +287,17 @@ export default function Payments() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
   const [viewingPayment, setViewingPayment] = useState(null);
+
+  // Bookings available for recording payment (strictly exclude already Completed or Paid bookings)
+  const availableBookingsForPayment = useMemo(() => {
+    return allInvoices.filter((b) => {
+      // If editing an existing payment record, keep it visible in the list
+      if (editingInvoice && (b.id === editingInvoice.id || b.rawId === editingInvoice.rawId)) return true;
+      const st = (b.status || "").toLowerCase();
+      return st !== "completed" && st !== "paid";
+    });
+  }, [allInvoices, editingInvoice]);
+
   const [formData, setFormData] = useState({
     bookingId: "",
     rawId: "",
@@ -337,7 +348,12 @@ export default function Payments() {
   const openCreateModal = () => {
     setEditingInvoice(null);
     const today = new Date().toISOString().slice(0, 10);
-    const pendingBooking = allInvoices.find((i) => i.status !== "Completed") || allInvoices[0];
+    // Find first unsettled/pending booking (never a completed or paid one)
+    const pendingBooking = allInvoices.find((i) => {
+      const st = (i.status || "").toLowerCase();
+      return st !== "completed" && st !== "paid";
+    }) || null;
+
     setFormData({
       bookingId: pendingBooking ? pendingBooking.id : "",
       rawId: pendingBooking?.rawId || "",
@@ -906,8 +922,12 @@ export default function Payments() {
                     color: "#0f172a",
                   }}
                 >
-                  <option value="">-- Choose a booking to record payment --</option>
-                  {allInvoices.map((b) => (
+                  <option value="">
+                    {availableBookingsForPayment.length === 0
+                      ? "-- No pending or unpaid bookings to record --"
+                      : "-- Choose an unsettled booking to record payment --"}
+                  </option>
+                  {availableBookingsForPayment.map((b) => (
                     <option key={b.id} value={b.id}>
                       {b.id} — {b.clientName} ({b.machineryModel}) • ₱{Number(b.amount).toLocaleString()} [{b.status}]
                     </option>
