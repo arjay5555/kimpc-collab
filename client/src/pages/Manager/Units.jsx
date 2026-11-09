@@ -193,11 +193,11 @@ export default function Units() {
       if (list.length > 0) {
         setDrivers(list);
       } else {
-        setDrivers(DEFAULT_DRIVERS);
+        setDrivers([]);
       }
     } catch (err) {
       console.error("Error loading drivers:", err);
-      setDrivers(DEFAULT_DRIVERS);
+      setDrivers([]);
     } finally {
       setDriversLoading(false);
     }

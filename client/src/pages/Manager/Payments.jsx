@@ -146,7 +146,7 @@ export default function Payments() {
   const [receiptInvoice, setReceiptInvoice] = useState(null);
   const [previewGcashImage, setPreviewGcashImage] = useState(null);
 
-  const [invoices, setInvoices] = useState(INITIAL_INVOICES);
+  const [invoices, setInvoices] = useState([]);
   const [selectedIds, setSelectedIds] = useState(["INV-WZ1004"]);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");

@@ -5,78 +5,7 @@ import ManagerSearchBar from "../../components/ManagerSearchBar";
 import ManagerTopbar from "../../components/ManagerTopbar";
 import "../../styles/admin-kimpc.css";
 
-const INITIAL_TRANSACTIONS = [
-  {
-    id: "EXP-101",
-    title: "Oil Change",
-    category: "Machinery Maintenance",
-    categoryColor: "#ff3b5c",
-    quantity: 1,
-    amount: 100,
-    date: "2024-08-01",
-    status: "Completed",
-  },
-  {
-    id: "EXP-102",
-    title: "Fuel Purchase",
-    category: "Fuel",
-    categoryColor: "#38bdf8",
-    quantity: 50,
-    amount: 2000,
-    date: "2024-08-03",
-    status: "Pending",
-  },
-  {
-    id: "EXP-103",
-    title: "Insurance Payment",
-    category: "Insurance",
-    categoryColor: "#93c5fd",
-    quantity: 1,
-    amount: 1500,
-    date: "2024-08-05",
-    status: "Completed",
-  },
-  {
-    id: "EXP-104",
-    title: "Office Supplies Purchase",
-    category: "Office Supplies",
-    categoryColor: "#94a3b8",
-    quantity: 20,
-    amount: 200,
-    date: "2024-08-06",
-    status: "Completed",
-  },
-  {
-    id: "EXP-105",
-    title: "Marketing Campaign",
-    category: "Marketing",
-    categoryColor: "#cbd5e1",
-    quantity: 1,
-    amount: 500,
-    date: "2024-08-07",
-    status: "Completed",
-  },
-  {
-    id: "EXP-106",
-    title: "Hydraulic Fluid Replacement",
-    category: "Machinery Maintenance",
-    categoryColor: "#ff3b5c",
-    quantity: 4,
-    amount: 800,
-    date: "2024-08-08",
-    status: "Completed",
-  },
-  {
-    id: "EXP-107",
-    title: "Equipment Annual Inspection",
-    category: "Machinery Maintenance",
-    categoryColor: "#ff3b5c",
-    quantity: 2,
-    amount: 1200,
-    date: "2024-08-09",
-    status: "Completed",
-  },
-];
+const INITIAL_TRANSACTIONS = [];
 
 const MONTHS_DATA = [
   { month: "Jan", income: 14000, expense: 9500 },
@@ -100,7 +29,7 @@ export default function Expenses() {
   const [financialsOpen, setFinancialsOpen] = useState(true);
 
   // Transactions state
-  const [transactions, setTransactions] = useState(INITIAL_TRANSACTIONS);
+  const [transactions, setTransactions] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");

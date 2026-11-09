@@ -10,38 +10,33 @@ export default function ManagerDashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  // Data stats
+  // Data stats (initialized to placeholder until live MongoDB data loads)
   const [stats, setStats] = useState({
-    totalRevenue: "₱8,450",
-    newBookings: "386",
-    rentedMachinery: "214",
-    availableMachinery: "89",
+    totalRevenue: "—",
+    newBookings: "—",
+    rentedMachinery: "—",
+    availableMachinery: "—",
   });
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [liveUnits, setLiveUnits] = useState([]);
 
-  // Machinery availability checker state
+  // Machinery availability checker state (defaults to today's date)
   const [selectedMachineryType, setSelectedMachineryType] = useState("4WD Tractor");
-  const [selectedDate, setSelectedDate] = useState("2028-08-17");
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [selectedTime, setSelectedTime] = useState("10:00 AM");
   const [availResult, setAvailResult] = useState(null);
 
-  // Reminders list
-  const [reminders, setReminders] = useState([
-    {
-      id: 1,
-      title: "Inspect and service the fleet machinery.",
-      date: "2028-08-10",
-    },
-    {
-      id: 2,
-      title: "Update the machinery rental pricing plans for the upcoming season.",
-      date: "2028-08-12",
-    },
-    {
-      id: 3,
-      title: "Review customer feedback and implement improvements.",
-      date: "2028-08-15",
-    },
-  ]);
+  // Reminders list (persisted in localStorage, no hardcoded future dates)
+  const [reminders, setReminders] = useState(() => {
+    try {
+      const stored = localStorage.getItem("kimpc_manager_reminders");
+      if (stored) return JSON.parse(stored);
+    } catch (e) {}
+    return [
+      { id: 1, title: "Review pending machinery booking applications.", date: new Date().toISOString().split("T")[0] },
+      { id: 2, title: "Check fleet maintenance schedules and operational logs.", date: new Date().toISOString().split("T")[0] },
+    ];
+  });
   const [newReminderText, setNewReminderText] = useState("");
   const [showAddReminder, setShowAddReminder] = useState(false);
 
@@ -50,39 +45,95 @@ export default function ManagerDashboard() {
   const [financialsOpen, setFinancialsOpen] = useState(false);
 
   useEffect(() => {
-    // Fetch live machinery units count
-    api("/machinery-units").then(({ ok, data }) => {
-      if (ok && Array.isArray(data)) {
-        const available = data.filter((u) => (u.status || "").toLowerCase() === "available").length;
-        const rented = data.filter((u) => (u.status || "").toLowerCase() === "rented" || (u.status || "").toLowerCase() === "in use").length;
-        if (data.length > 0) {
-          setStats((prev) => ({
-            ...prev,
-            availableMachinery: available > 0 ? `${available}` : "89",
-            rentedMachinery: rented > 0 ? `${rented}` : "214",
-          }));
-        }
-      }
-    });
+    let isMounted = true;
+    setLoadingStats(true);
 
-    // Fetch applications
-    api("/applications").then(({ ok, data }) => {
-      if (ok && Array.isArray(data) && data.length > 0) {
-        setStats((prev) => ({
-          ...prev,
-          newBookings: `${data.length}`,
-        }));
-      }
-    });
+    Promise.all([
+      api("/machinery-units"),
+      api("/applications"),
+      api("/transactions"),
+    ])
+      .then(([unitsRes, appsRes, txRes]) => {
+        if (!isMounted) return;
+
+        const units = Array.isArray(unitsRes.data?.data)
+          ? unitsRes.data.data
+          : Array.isArray(unitsRes.data)
+          ? unitsRes.data
+          : [];
+        const apps = Array.isArray(appsRes.data?.data)
+          ? appsRes.data.data
+          : Array.isArray(appsRes.data)
+          ? appsRes.data
+          : [];
+        const txs = Array.isArray(txRes.data?.data)
+          ? txRes.data.data
+          : Array.isArray(txRes.data)
+          ? txRes.data
+          : [];
+
+        setLiveUnits(units);
+
+        const available = units.filter((u) => (u.status || "").toLowerCase() === "available").length;
+        const rented = units.filter((u) => {
+          const s = (u.status || "").toLowerCase();
+          return s === "rented" || s === "in use" || s === "checked-out";
+        }).length;
+
+        // Calculate real revenue from completed transactions and settled bookings
+        let totalRev = 0;
+        txs.forEach((t) => {
+          if ((t.status || "").toLowerCase() !== "declined") {
+            totalRev += Number(t.amount || 0);
+          }
+        });
+        if (totalRev === 0) {
+          apps.forEach((a) => {
+            if (a.paymentStatus === "Fully Paid" || a.paymentStatus === "Downpayment Paid") {
+              totalRev += Number(a.totalAmount || a.downpaymentAmount || 0);
+            }
+          });
+        }
+
+        const pendingBookings = apps.filter((a) => (a.status || "").toLowerCase() === "pending").length;
+
+        setStats({
+          totalRevenue: `₱${totalRev.toLocaleString()}`,
+          newBookings: `${pendingBookings || apps.length}`,
+          rentedMachinery: `${rented}`,
+          availableMachinery: `${available}`,
+        });
+        setLoadingStats(false);
+      })
+      .catch((err) => {
+        console.warn("Could not load dashboard metrics:", err);
+        if (isMounted) setLoadingStats(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const handleCheckAvailability = () => {
+    const matching = liveUnits.filter((u) => {
+      const typeMatch =
+        !selectedMachineryType ||
+        (u.category || "").toLowerCase().includes(selectedMachineryType.toLowerCase()) ||
+        (u.name || "").toLowerCase().includes(selectedMachineryType.toLowerCase());
+      const isAvail = (u.status || "").toLowerCase() === "available";
+      return typeMatch && isAvail;
+    });
+
     setAvailResult({
       type: selectedMachineryType,
       date: selectedDate,
       time: selectedTime,
-      availableUnits: 3,
-      names: ["JD-5075-01 (John Deere)", "CASE-90JX-04 (Case IH)", "KB-DC70-02 (Kubota)"],
+      availableUnits: matching.length,
+      names:
+        matching.length > 0
+          ? matching.slice(0, 5).map((u) => `${u.unitId || "Unit"} (${u.name || "Equipment"})`)
+          : ["No units currently available for this category."],
     });
   };
 
@@ -91,14 +142,18 @@ export default function ManagerDashboard() {
     if (!newReminderText.trim()) return;
     const now = new Date();
     const dateStr = now.toISOString().split("T")[0];
-    setReminders([
+    const updated = [
       ...reminders,
       {
         id: Date.now(),
         title: newReminderText.trim(),
         date: dateStr,
       },
-    ]);
+    ];
+    setReminders(updated);
+    try {
+      localStorage.setItem("kimpc_manager_reminders", JSON.stringify(updated));
+    } catch (err) {}
     setNewReminderText("");
     setShowAddReminder(false);
   };

@@ -411,7 +411,7 @@ export default function Drivers() {
   const navigate = useNavigate();
 
   // Drivers list state
-  const [drivers, setDrivers] = useState(INITIAL_DRIVERS);
+  const [drivers, setDrivers] = useState([]);
   // Selected driver detail panel (Default: null until selected/clicked)
   const [selectedDriver, setSelectedDriver] = useState(null);
   // Live applications / bookings
@@ -500,7 +500,7 @@ export default function Drivers() {
       };
     });
 
-    return [...formattedLive, ...DEFAULT_DRIVER_BOOKINGS];
+    return formattedLive;
   }, [liveBookings]);
 
   // All bookings assigned to the currently selected driver
