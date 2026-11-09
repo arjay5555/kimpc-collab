@@ -400,10 +400,133 @@ async function sendMemberSupportEmail({ toEmail, fromEmail, fullName, subject, m
   });
 }
 
+/**
+ * Send System Developer authorization email for modifying external integrations.
+ */
+async function sendDeveloperIntegrationAuthEmail({
+  toEmail,
+  adminEmail,
+  adminName,
+  actionDescription,
+  authorizeUrl,
+  denyUrl,
+  otpCode,
+  expiryMinutes = 15,
+}) {
+  const subject = `[KIMPC Security Shield] Action Required: Authorize Integration Change by ${adminName || adminEmail}`;
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; color: #1e293b; }
+        .card { max-width: 540px; margin: 0 auto; background: #ffffff; border-radius: 14px; border: 1px solid #e2e8f0; padding: 36px 32px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); }
+        .header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; border-bottom: 1px solid #f1f5f9; padding-bottom: 18px; }
+        .logo { background: #0f172a; color: #ffffff; font-weight: 800; font-size: 1.2rem; width: 40px; height: 40px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; }
+        .title { font-size: 1.1rem; font-weight: 700; color: #0f172a; margin: 0; }
+        .subtitle { font-size: 0.78rem; color: #64748b; margin: 2px 0 0; }
+        .badge { display: inline-block; padding: 4px 10px; background: #fef3c7; color: #92400e; border: 1px solid #fde68a; border-radius: 6px; font-size: 0.75rem; font-weight: 700; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.05em; }
+        .info-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; margin: 18px 0; font-size: 0.88rem; }
+        .info-row { display: flex; justify-content: space-between; margin-bottom: 8px; }
+        .info-row:last-child { margin-bottom: 0; }
+        .info-label { color: #64748b; font-weight: 600; }
+        .info-val { color: #0f172a; font-weight: 700; }
+        .btn-container { margin: 24px 0 16px; }
+        .btn-auth { display: inline-block; background: #166534; color: #ffffff !important; padding: 12px 24px; border-radius: 8px; font-size: 0.92rem; font-weight: 700; text-decoration: none; text-align: center; margin-right: 10px; }
+        .btn-deny { display: inline-block; background: #ffffff; color: #dc2626 !important; border: 1px solid #fca5a5; padding: 11px 20px; border-radius: 8px; font-size: 0.92rem; font-weight: 700; text-decoration: none; text-align: center; }
+        .otp-container { text-align: center; background: #f0fdf4; border: 1px dashed #166534; border-radius: 8px; padding: 14px; margin-top: 20px; }
+        .otp-code { font-family: monospace; font-size: 1.8rem; font-weight: 800; letter-spacing: 6px; color: #166534; margin: 4px 0; }
+        .footer { font-size: 0.75rem; color: #94a3b8; margin-top: 28px; border-top: 1px solid #f1f5f9; padding-top: 18px; line-height: 1.5; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="header">
+          <div class="logo">K</div>
+          <div>
+            <p class="title">KIMPC Security Shield</p>
+            <p class="subtitle">System Developer Dual-Authorization Protocol</p>
+          </div>
+        </div>
+
+        <div class="badge">Security Gate: Developer Verification</div>
+
+        <h2 style="font-size: 1.25rem; margin: 0 0 10px; color: #0f172a;">Authorize Integration Modification</h2>
+        <p style="font-size: 0.9rem; line-height: 1.5; color: #475569; margin: 0 0 14px;">
+          An administrator has verified their 6-digit security PIN and requested authorization from the <strong>System Developer</strong> to modify external integrations.
+        </p>
+
+        <div class="info-box">
+          <div class="info-row">
+            <span class="info-label">Requesting Admin:</span>
+            <span class="info-val">${adminName || "Admin"} (${adminEmail})</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Action Target:</span>
+            <span class="info-val">${actionDescription || "System Integrations & API Keys"}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Valid For:</span>
+            <span class="info-val">${expiryMinutes} Minutes</span>
+          </div>
+        </div>
+
+        <div class="btn-container">
+          <a href="${authorizeUrl}" class="btn-auth" target="_blank" rel="noopener noreferrer">
+            ✓ Authorize Changes
+          </a>
+          <a href="${denyUrl}" class="btn-deny" target="_blank" rel="noopener noreferrer">
+            ✕ Deny Request
+          </a>
+        </div>
+
+        <div class="otp-container">
+          <div style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: #166534; font-weight: 700;">
+            Alternative: 6-Digit Developer OTP
+          </div>
+          <div class="otp-code">${otpCode}</div>
+          <div style="font-size: 0.74rem; color: #64748b;">
+            Give this code to the administrator if you prefer verbal/direct authorization.
+          </div>
+        </div>
+
+        <div class="footer">
+          This dual-authorization check is triggered whenever external API credentials, OAuth providers, or integration toggles are modified. If you did not expect this request, click "Deny Request" immediately.
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const textContent = `
+[KIMPC Security Shield] Action Required: Authorize Integration Change
+
+An administrator has requested authorization to modify system integrations:
+- Admin: ${adminName || "Admin"} (${adminEmail})
+- Target: ${actionDescription || "System Integrations & API Keys"}
+- Developer OTP: ${otpCode}
+
+Click to Authorize: ${authorizeUrl}
+Click to Deny: ${denyUrl}
+
+This request expires in ${expiryMinutes} minutes.
+  `.trim();
+
+  return dispatchEmail({
+    to: toEmail,
+    subject,
+    html: htmlContent,
+    text: textContent,
+  });
+}
+
 module.exports = {
   dispatchEmail,
   sendPasswordResetEmail,
   sendPasswordChangedNotificationEmail,
   sendDeleteOtpEmail,
   sendMemberSupportEmail,
+  sendDeveloperIntegrationAuthEmail,
 };

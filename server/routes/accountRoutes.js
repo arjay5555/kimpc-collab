@@ -8,7 +8,7 @@ const Account = require("../models/Account");
 const Application = require("../models/Application");
 const AuditLog = require("../models/AuditLog");
 
-const { sendDeleteOtpEmail } = require("../services/mailer");
+const { sendDeleteOtpEmail, sendDeveloperIntegrationAuthEmail } = require("../services/mailer");
 const { logAudit, logSystemEvent } = require("../services/auditLogger");
 const {
   ROLES,
@@ -538,6 +538,262 @@ router.post("/admin/verify-pin", async (req, res) => {
     console.error("Error verifying admin PIN:", error);
     res.status(500).json({ error: "Failed to verify admin PIN." });
   }
+});
+
+// ---------- SYSTEM DEVELOPER DUAL-CONTROL INTEGRATION AUTHORIZATION ----------
+
+// In-memory store for System Developer dual-control authorization
+// requestId -> { requestId, token, otpCode, adminEmail, adminName, actionDescription, devEmail, status, expiresAt, createdAt }
+const developerAuthStore = new Map();
+const developerTokenIndex = new Map();
+
+function maskDevEmail(email) {
+  if (!email || !email.includes("@")) return "dev••••@••••.com";
+  const [local, domain] = email.split("@");
+  const visible = local.slice(0, 2);
+  return `${visible}${"•".repeat(Math.max(4, local.length - 2))}@${domain}`;
+}
+
+function renderDevAuthResultPage({ success, title, message }) {
+  const bgBadge = success ? "#dcfce7" : "#fee2e2";
+  const textBadge = success ? "#15803d" : "#991b1b";
+  const icon = success ? "✓" : "✕";
+
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>${title} - KIMPC Security</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .card { max-width: 460px; width: 100%; background: #1e293b; border-radius: 16px; border: 1px solid #334155; padding: 36px 30px; text-align: center; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
+        .icon-circle { width: 64px; height: 64px; border-radius: 50%; background: ${bgBadge}; color: ${textBadge}; font-size: 28px; font-weight: 900; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; }
+        h1 { font-size: 1.35rem; margin: 0 0 12px; color: #f8fafc; font-weight: 800; }
+        p { font-size: 0.92rem; color: #94a3b8; line-height: 1.6; margin: 0 0 24px; }
+        .status-pill { display: inline-block; padding: 6px 14px; background: rgba(255,255,255,0.06); border-radius: 20px; font-size: 0.78rem; font-weight: 600; color: #cbd5e1; }
+        .footer { font-size: 0.74rem; color: #64748b; margin-top: 24px; border-top: 1px solid #334155; padding-top: 16px; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="icon-circle">${icon}</div>
+        <h1>${title}</h1>
+        <p>${message}</p>
+        <div class="status-pill">KIMPC Security Shield Protocol</div>
+        <div class="footer">You may safely close this browser window.</div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+// 1. Dispatch Developer Authorization Request via Email
+router.post("/admin/integrations/dev-auth/request", async (req, res) => {
+  try {
+    const adminEmail = cleanEmail(req.body.adminEmail || req.user?.email);
+    const actionDescription = clean(req.body.actionDescription) || "Modify System Integrations";
+
+    if (!adminEmail) return fail(res, 400, "Admin email is required.");
+    const admin = await Account.findOne({ email: adminEmail });
+    if (!admin || admin.role !== "admin") return fail(res, 403, "Administrator access required.");
+
+    const devEmail = cleanEmail(process.env.SYSTEM_DEVELOPER_EMAIL) || "arjaypading.me@gmail.com";
+    const requestId = crypto.randomUUID();
+    const token = crypto.randomBytes(32).toString("hex");
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 15 * 60 * 1000; // 15 minutes
+
+    const record = {
+      requestId,
+      token,
+      otpCode,
+      adminEmail: admin.email,
+      adminName: admin.fullName || "System Admin",
+      actionDescription,
+      devEmail,
+      status: "PENDING",
+      expiresAt,
+      createdAt: Date.now(),
+    };
+
+    developerAuthStore.set(requestId, record);
+    developerTokenIndex.set(token, requestId);
+
+    // Build authorize & deny URLs using the current host
+    const host = req.get("host");
+    const protocol = req.protocol;
+    const serverBaseUrl = `${protocol}://${host}`;
+    const authorizeUrl = `${serverBaseUrl}/api/admin/integrations/dev-auth/authorize?token=${token}`;
+    const denyUrl = `${serverBaseUrl}/api/admin/integrations/dev-auth/deny?token=${token}`;
+
+    await sendDeveloperIntegrationAuthEmail({
+      toEmail: devEmail,
+      adminEmail: admin.email,
+      adminName: admin.fullName,
+      actionDescription,
+      authorizeUrl,
+      denyUrl,
+      otpCode,
+      expiryMinutes: 15,
+    });
+
+    await logAudit({
+      action: "DEV_AUTH_REQUESTED",
+      actorEmail: admin.email,
+      actorRole: "admin",
+      targetEmail: devEmail,
+      details: `Dispatched dual-control authorization request to System Developer (${devEmail}) for action: ${actionDescription}`,
+      req,
+    });
+
+    res.json({
+      ok: true,
+      requestId,
+      devEmailMasked: maskDevEmail(devEmail),
+      expiresAt,
+      message: "Authorization request sent to the System Developer.",
+    });
+  } catch (err) {
+    console.error("Developer auth request error:", err);
+    res.status(500).json({ error: "Failed to dispatch developer authorization request." });
+  }
+});
+
+// 2. Poll Status of Developer Authorization Request
+router.get("/admin/integrations/dev-auth/status/:requestId", async (req, res) => {
+  const { requestId } = req.params;
+  const record = developerAuthStore.get(requestId);
+  if (!record) {
+    return res.json({ ok: false, status: "NOT_FOUND", error: "Request not found or expired." });
+  }
+
+  if (Date.now() > record.expiresAt && record.status === "PENDING") {
+    record.status = "EXPIRED";
+  }
+
+  res.json({
+    ok: true,
+    requestId: record.requestId,
+    status: record.status, // "PENDING" | "APPROVED" | "DENIED" | "EXPIRED"
+    actionDescription: record.actionDescription,
+    expiresAt: record.expiresAt,
+  });
+});
+
+// 3. Verify Developer OTP Code (Direct fallback for phone/in-person authorization)
+router.post("/admin/integrations/dev-auth/verify-otp", async (req, res) => {
+  try {
+    const requestId = String(req.body.requestId || "").trim();
+    const otpCode = String(req.body.otpCode || "").trim();
+
+    if (!requestId || !otpCode) {
+      return fail(res, 400, "Request ID and 6-digit developer OTP are required.");
+    }
+
+    const record = developerAuthStore.get(requestId);
+    if (!record) {
+      return fail(res, 404, "Authorization request expired or not found. Please initiate a new request.");
+    }
+
+    if (Date.now() > record.expiresAt) {
+      record.status = "EXPIRED";
+      return fail(res, 410, "Developer authorization request has expired. Please initiate a new request.");
+    }
+
+    if (record.status === "DENIED") {
+      return fail(res, 403, "This request was denied by the System Developer.");
+    }
+
+    if (record.otpCode !== otpCode) {
+      return fail(res, 401, "Invalid 6-digit Developer OTP code.");
+    }
+
+    record.status = "APPROVED";
+
+    await logAudit({
+      action: "DEV_AUTH_APPROVED",
+      actorEmail: record.adminEmail,
+      actorRole: "admin",
+      targetEmail: record.devEmail,
+      details: `Developer authorization verified via 6-digit OTP code for action: ${record.actionDescription}`,
+      req,
+    });
+
+    res.json({
+      ok: true,
+      status: "APPROVED",
+      message: "System Developer authorization confirmed successfully.",
+    });
+  } catch (err) {
+    console.error("Developer OTP verify error:", err);
+    res.status(500).json({ error: "Failed to verify developer OTP." });
+  }
+});
+
+// 4. Developer Single-Click Authorize Link (From Email)
+router.get("/admin/integrations/dev-auth/authorize", async (req, res) => {
+  const token = String(req.query.token || "").trim();
+  const requestId = developerTokenIndex.get(token);
+  const record = requestId ? developerAuthStore.get(requestId) : null;
+
+  if (!record || Date.now() > record.expiresAt) {
+    return res.status(410).send(renderDevAuthResultPage({
+      success: false,
+      title: "Authorization Link Expired or Invalid",
+      message: "This authorization request has expired or has already been used.",
+    }));
+  }
+
+  record.status = "APPROVED";
+
+  await logAudit({
+    action: "DEV_AUTH_APPROVED",
+    actorEmail: record.adminEmail,
+    actorRole: "admin",
+    targetEmail: record.devEmail,
+    details: `System Developer (${record.devEmail}) clicked Authorize link for action: ${record.actionDescription}`,
+    req,
+  });
+
+  return res.send(renderDevAuthResultPage({
+    success: true,
+    title: "Action Successfully Authorized",
+    message: `You have authorized Admin <strong>${record.adminName}</strong> (${record.adminEmail}) to modify <strong>${record.actionDescription}</strong>. The administrator portal has automatically unlocked.`,
+  }));
+});
+
+// 5. Developer Single-Click Deny Link (From Email)
+router.get("/admin/integrations/dev-auth/deny", async (req, res) => {
+  const token = String(req.query.token || "").trim();
+  const requestId = developerTokenIndex.get(token);
+  const record = requestId ? developerAuthStore.get(requestId) : null;
+
+  if (!record) {
+    return res.status(410).send(renderDevAuthResultPage({
+      success: false,
+      title: "Request Expired or Invalid",
+      message: "This request has expired or is no longer valid.",
+    }));
+  }
+
+  record.status = "DENIED";
+
+  await logAudit({
+    action: "DEV_AUTH_DENIED",
+    actorEmail: record.adminEmail,
+    actorRole: "admin",
+    targetEmail: record.devEmail,
+    details: `System Developer (${record.devEmail}) clicked Deny link for action: ${record.actionDescription}`,
+    req,
+  });
+
+  return res.send(renderDevAuthResultPage({
+    success: false,
+    title: "Integration Modification Denied",
+    message: `You have blocked the request by Admin <strong>${record.adminName}</strong> to modify <strong>${record.actionDescription}</strong>. The action has been blocked.`,
+  }));
 });
 
 // ---------- MULTI-FACTOR ACCOUNT DELETION VERIFICATION FLOW ----------

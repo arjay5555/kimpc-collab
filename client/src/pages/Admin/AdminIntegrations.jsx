@@ -104,12 +104,213 @@ export default function AdminIntegrations() {
     useRef(null),
   ];
 
+  // System Developer Dual-Control Authorization State
+  const [devAuthStep, setDevAuthStep] = useState(false);
+  const [devAuthRequestId, setDevAuthRequestId] = useState(null);
+  const [devAuthMaskedEmail, setDevAuthMaskedEmail] = useState("");
+  const [devAuthStatus, setDevAuthStatus] = useState("PENDING"); // "PENDING" | "APPROVED" | "DENIED" | "EXPIRED"
+  const [devAuthOtpDigits, setDevAuthOtpDigits] = useState(["", "", "", "", "", ""]);
+  const [devAuthOtpError, setDevAuthOtpError] = useState("");
+  const [devAuthOtpLoading, setDevAuthOtpLoading] = useState(false);
+  const [showDevOtpInput, setShowDevOtpInput] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const devPollTimerRef = useRef(null);
+  const devOtpInputRefs = [
+    useRef(null),
+    useRef(null),
+    useRef(null),
+    useRef(null),
+    useRef(null),
+    useRef(null),
+  ];
+
   // Reset page-level authorization whenever this component unmounts (admin navigates to another page)
   useEffect(() => {
     return () => {
       setIsPinAuthorized(false);
+      if (devPollTimerRef.current) {
+        clearInterval(devPollTimerRef.current);
+      }
     };
   }, []);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
+
+  const handleClosePinModal = () => {
+    if (devPollTimerRef.current) {
+      clearInterval(devPollTimerRef.current);
+    }
+    setPinModal({ open: false, actionDescription: "", onSuccess: null, isFirstPin: false });
+    setDevAuthStep(false);
+    setDevAuthStatus("PENDING");
+    setDevAuthOtpDigits(["", "", "", "", "", ""]);
+    setDevAuthOtpError("");
+    setPinLoading(false);
+  };
+
+  const startDeveloperAuthorization = async (actionDesc, callback) => {
+    setDevAuthStep(true);
+    setDevAuthStatus("PENDING");
+    setDevAuthOtpDigits(["", "", "", "", "", ""]);
+    setDevAuthOtpError("");
+    setPinLoading(true);
+
+    try {
+      const adminEmail = user?.email || JSON.parse(localStorage.getItem("kimpc_user") || "{}")?.email || "admin@kimpc.test";
+      const res = await api("/admin/integrations/dev-auth/request", {
+        method: "POST",
+        body: {
+          adminEmail,
+          actionDescription: actionDesc || "Modify System Integrations",
+        },
+      });
+
+      setPinLoading(false);
+      if (!res.ok) {
+        setPinError(res.data?.error || "Failed to dispatch request to System Developer.");
+        setDevAuthStep(false);
+        return;
+      }
+
+      const reqId = res.data.requestId;
+      setDevAuthRequestId(reqId);
+      setDevAuthMaskedEmail(res.data.devEmailMasked || "ar••••••••••@gmail.com");
+      setResendCooldown(60);
+
+      // Start polling developer approval status every 2 seconds
+      if (devPollTimerRef.current) clearInterval(devPollTimerRef.current);
+      devPollTimerRef.current = setInterval(async () => {
+        try {
+          const statusRes = await api(`/admin/integrations/dev-auth/status/${reqId}`);
+          if (statusRes.ok && statusRes.data) {
+            const st = statusRes.data.status;
+            if (st === "APPROVED") {
+              clearInterval(devPollTimerRef.current);
+              setDevAuthStatus("APPROVED");
+              setTimeout(() => {
+                setIsPinAuthorized(true);
+                setPinModal({ open: false, actionDescription: "", onSuccess: null, isFirstPin: false });
+                setDevAuthStep(false);
+                if (typeof callback === "function") {
+                  callback();
+                }
+              }, 1200);
+            } else if (st === "DENIED") {
+              clearInterval(devPollTimerRef.current);
+              setDevAuthStatus("DENIED");
+            } else if (st === "EXPIRED") {
+              clearInterval(devPollTimerRef.current);
+              setDevAuthStatus("EXPIRED");
+            }
+          }
+        } catch (e) {
+          // ignore transient poll failure
+        }
+      }, 2000);
+    } catch (err) {
+      setPinError("Network error contacting developer authorization service.");
+      setDevAuthStep(false);
+      setPinLoading(false);
+    }
+  };
+
+  const handleVerifyDevOtp = async (e) => {
+    if (e) e.preventDefault();
+    const otp = devAuthOtpDigits.join("").trim();
+    if (otp.length !== 6) {
+      setDevAuthOtpError("Please enter the complete 6-digit Developer OTP.");
+      return;
+    }
+
+    setDevAuthOtpLoading(true);
+    setDevAuthOtpError("");
+
+    try {
+      const res = await api("/admin/integrations/dev-auth/verify-otp", {
+        method: "POST",
+        body: {
+          requestId: devAuthRequestId,
+          otpCode: otp,
+        },
+      });
+
+      setDevAuthOtpLoading(false);
+      if (!res.ok) {
+        setDevAuthOtpError(res.data?.error || "Incorrect 6-digit Developer OTP.");
+        return;
+      }
+
+      if (devPollTimerRef.current) clearInterval(devPollTimerRef.current);
+      setDevAuthStatus("APPROVED");
+      const callback = pinModal.onSuccess;
+      setTimeout(() => {
+        setIsPinAuthorized(true);
+        setPinModal({ open: false, actionDescription: "", onSuccess: null, isFirstPin: false });
+        setDevAuthStep(false);
+        if (typeof callback === "function") {
+          callback();
+        }
+      }, 1200);
+    } catch (err) {
+      setDevAuthOtpLoading(false);
+      setDevAuthOtpError("Network error verifying Developer OTP.");
+    }
+  };
+
+  const handleDevOtpDigitChange = (index, value) => {
+    const cleaned = value.replace(/\D/g, "");
+    if (!cleaned) {
+      const next = [...devAuthOtpDigits];
+      next[index] = "";
+      setDevAuthOtpDigits(next);
+      return;
+    }
+
+    if (cleaned.length > 1) {
+      const next = [...devAuthOtpDigits];
+      const digits = cleaned.slice(0, 6).split("");
+      digits.forEach((d, i) => {
+        if (index + i < 6) next[index + i] = d;
+      });
+      setDevAuthOtpDigits(next);
+      const nextIdx = Math.min(index + digits.length, 5);
+      devOtpInputRefs[nextIdx]?.current?.focus();
+      return;
+    }
+
+    const next = [...devAuthOtpDigits];
+    next[index] = cleaned;
+    setDevAuthOtpDigits(next);
+    setDevAuthOtpError("");
+    if (index < 5) {
+      devOtpInputRefs[index + 1]?.current?.focus();
+    }
+  };
+
+  const handleDevOtpKeyDown = (index, e) => {
+    if (e.key === "Backspace" && !devAuthOtpDigits[index] && index > 0) {
+      devOtpInputRefs[index - 1]?.current?.focus();
+    }
+  };
+
+  const handleDevOtpPaste = (e) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (!pasted) return;
+    const next = ["", "", "", "", "", ""];
+    for (let i = 0; i < pasted.length; i++) {
+      next[i] = pasted[i];
+    }
+    setDevAuthOtpDigits(next);
+    const nextIdx = Math.min(pasted.length, 5);
+    devOtpInputRefs[nextIdx]?.current?.focus();
+  };
 
   const checkPinStatus = async () => {
     try {
@@ -196,15 +397,8 @@ export default function AdminIntegrations() {
         return;
       }
 
-      // PIN Verified successfully for this visit
-      setIsPinAuthorized(true);
-      const callback = pinModal.onSuccess;
-      setPinModal({ open: false, actionDescription: "", onSuccess: null, isFirstPin: false });
-      setPinLoading(false);
-
-      if (typeof callback === "function") {
-        callback();
-      }
+      // PIN Verified successfully! Now proceed to Step 2: System Developer Dual-Control Authorization
+      await startDeveloperAuthorization(pinModal.actionDescription, pinModal.onSuccess);
     } catch (err) {
       setPinError("Network error while verifying PIN.");
       setPinLoading(false);
@@ -251,16 +445,8 @@ export default function AdminIntegrations() {
       }
 
       setAdminHasPin(true);
-      setIsPinAuthorized(true);
-      const callback = pinModal.onSuccess;
-      const desc = pinModal.actionDescription;
-      setPinModal({ open: false, actionDescription: "", onSuccess: null, isFirstPin: false });
-      setPinLoading(false);
-      setFeedback({ message: `Security PIN set successfully! Authorized ${desc}.`, isError: false });
-
-      if (typeof callback === "function") {
-        callback();
-      }
+      // Initial PIN set! Now proceed to Step 2: System Developer Dual-Control Authorization
+      await startDeveloperAuthorization(pinModal.actionDescription, pinModal.onSuccess);
     } catch (err) {
       setPinError("Network error while setting initial PIN.");
       setPinLoading(false);
@@ -3196,7 +3382,7 @@ export default function AdminIntegrations() {
           </div>
         </div>
 
-        {/* ================= 6-DIGIT ADMIN PIN VERIFICATION MODAL ================= */}
+        {/* ================= 6-DIGIT ADMIN PIN & DEVELOPER DUAL-CONTROL MODAL ================= */}
         {pinModal.open && (
           <div
             style={{
@@ -3210,18 +3396,14 @@ export default function AdminIntegrations() {
               zIndex: 10000,
               padding: "20px",
             }}
-            onClick={() => {
-              if (!pinLoading) {
-                setPinModal({ open: false, actionDescription: "", onSuccess: null });
-              }
-            }}
+            onClick={handleClosePinModal}
           >
             <div
               style={{
                 background: "#ffffff",
                 borderRadius: "16px",
                 width: "100%",
-                maxWidth: pinModal.isFirstPin ? "500px" : "460px",
+                maxWidth: devAuthStep ? "500px" : pinModal.isFirstPin ? "500px" : "460px",
                 boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
                 border: "1px solid #e2e8f0",
                 overflow: "hidden",
@@ -3229,338 +3411,654 @@ export default function AdminIntegrations() {
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Modal Header */}
-              <div
-                style={{
-                  padding: "20px 24px 16px",
-                  borderBottom: "1px solid #f1f5f9",
-                  background: "#f8fafc",
-                  display: "flex",
-                  alignItems: "flex-start",
-                  justifyContent: "space-between",
-                  gap: "12px",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              {devAuthStep ? (
+                /* ================= STEP 2: SYSTEM DEVELOPER DUAL-CONTROL AUTHORIZATION ================= */
+                <div>
+                  {/* Modal Header */}
                   <div
                     style={{
-                      width: "44px",
-                      height: "44px",
-                      borderRadius: "12px",
-                      background: pinModal.isFirstPin ? "#eff6ff" : "#ecfdf5",
-                      border: `1px solid ${pinModal.isFirstPin ? "#bfdbfe" : "#a7f3d0"}`,
+                      padding: "20px 24px 16px",
+                      borderBottom: "1px solid #f1f5f9",
+                      background: "#f8fafc",
                       display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: "1.3rem",
-                      color: pinModal.isFirstPin ? "#2563eb" : "#059669",
-                      flexShrink: 0,
+                      alignItems: "flex-start",
+                      justifyContent: "space-between",
+                      gap: "12px",
                     }}
                   >
-                    {pinModal.isFirstPin ? "🔑" : "🔒"}
-                  </div>
-                  <div>
-                    <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800, color: "#0f172a" }}>
-                      {pinModal.isFirstPin ? "Create 6-Digit Admin PIN" : "6-Digit Security PIN"}
-                    </h3>
-                    <p style={{ margin: "3px 0 0", fontSize: "0.78rem", color: "#64748b" }}>
-                      {pinModal.isFirstPin
-                        ? `First-time setup for ${user?.email || "administrator"}`
-                        : "Administrator authorization required"}
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  disabled={pinLoading}
-                  onClick={() => setPinModal({ open: false, actionDescription: "", onSuccess: null, isFirstPin: false })}
-                  style={{
-                    background: "#f1f5f9",
-                    border: "none",
-                    borderRadius: "50%",
-                    width: "30px",
-                    height: "30px",
-                    cursor: "pointer",
-                    fontSize: "0.95rem",
-                    color: "#64748b",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  ✕
-                </button>
-              </div>
-
-              {/* Modal Body */}
-              <form onSubmit={pinModal.isFirstPin ? handleSetInitialPin : handleVerifyPin} style={{ padding: "22px 24px" }}>
-                {pinModal.isFirstPin ? (
-                  <div
-                    style={{
-                      background: "#eff6ff",
-                      border: "1px solid #bfdbfe",
-                      borderRadius: "10px",
-                      padding: "12px 14px",
-                      marginBottom: "18px",
-                      fontSize: "0.80rem",
-                      color: "#1e40af",
-                      lineHeight: 1.45,
-                    }}
-                  >
-                    <strong>First-Time Setup:</strong> This admin account does not have a security PIN yet. Please create and confirm your personal 6-digit PIN before you can{" "}
-                    <span style={{ fontWeight: 800, textDecoration: "underline" }}>
-                      {pinModal.actionDescription}
-                    </span>.
-                  </div>
-                ) : (
-                  <div
-                    style={{
-                      background: "#eff6ff",
-                      border: "1px solid #bfdbfe",
-                      borderRadius: "10px",
-                      padding: "12px 14px",
-                      marginBottom: "18px",
-                      fontSize: "0.80rem",
-                      color: "#1e40af",
-                      lineHeight: 1.4,
-                    }}
-                  >
-                    <strong>Security Protection:</strong> Please enter your 6-digit PIN before you can{" "}
-                    <span style={{ fontWeight: 800, textDecoration: "underline" }}>
-                      {pinModal.actionDescription}
-                    </span>.
-                  </div>
-                )}
-
-                {/* 1st PIN Input Row */}
-                <div style={{ marginBottom: pinModal.isFirstPin ? "16px" : "14px" }}>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "0.76rem",
-                      fontWeight: 700,
-                      color: "#475569",
-                      marginBottom: "8px",
-                      textAlign: "center",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px",
-                    }}
-                  >
-                    {pinModal.isFirstPin ? "Step 1: Choose 6-Digit PIN" : "Enter 6-Digit Admin PIN"}
-                  </label>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "center",
-                      gap: "8px",
-                    }}
-                    onPaste={handlePinPaste}
-                  >
-                    {pinDigits.map((digit, idx) => (
-                      <input
-                        key={idx}
-                        ref={pinInputRefs[idx]}
-                        type={showPin ? "text" : "password"}
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        maxLength={1}
-                        value={digit}
-                        onChange={(e) => handlePinDigitChange(idx, e.target.value)}
-                        onKeyDown={(e) => handlePinKeyDown(idx, e)}
-                        disabled={pinLoading}
-                        autoFocus={idx === 0}
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                      <div
                         style={{
                           width: "44px",
-                          height: "50px",
-                          textAlign: "center",
-                          fontSize: "1.35rem",
-                          fontWeight: "800",
-                          color: "#0f172a",
-                          borderRadius: "10px",
-                          border: digit ? "2px solid #059669" : "1.5px solid #cbd5e1",
-                          background: digit ? "#f0fdf4" : "#ffffff",
-                          outline: "none",
-                          transition: "all 0.15s ease",
-                          boxShadow: digit ? "0 2px 4px rgba(5, 150, 105, 0.15)" : "none",
+                          height: "44px",
+                          borderRadius: "12px",
+                          background: devAuthStatus === "APPROVED" ? "#ecfdf5" : devAuthStatus === "DENIED" ? "#fef2f2" : "#fef3c7",
+                          border: `1px solid ${devAuthStatus === "APPROVED" ? "#a7f3d0" : devAuthStatus === "DENIED" ? "#fecaca" : "#fde68a"}`,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: "1.3rem",
+                          flexShrink: 0,
                         }}
-                      />
-                    ))}
-                  </div>
-                </div>
+                      >
+                        {devAuthStatus === "APPROVED" ? "✓" : devAuthStatus === "DENIED" ? "✕" : "🛡️"}
+                      </div>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800, color: "#0f172a" }}>
+                          {devAuthStatus === "APPROVED"
+                            ? "Developer Authorization Granted"
+                            : devAuthStatus === "DENIED"
+                            ? "Authorization Denied"
+                            : "System Developer Authorization"}
+                        </h3>
+                        <p style={{ margin: "3px 0 0", fontSize: "0.78rem", color: "#64748b" }}>
+                          Step 2 of 2: Developer Sign-Off Required
+                        </p>
+                      </div>
+                    </div>
 
-                {/* 2nd PIN Input Row (Only shown if isFirstPin) */}
-                {pinModal.isFirstPin && (
-                  <div style={{ marginBottom: "16px" }}>
-                    <label
+                    <button
+                      type="button"
+                      onClick={handleClosePinModal}
                       style={{
-                        display: "block",
-                        fontSize: "0.76rem",
-                        fontWeight: 700,
-                        color: "#475569",
-                        marginBottom: "8px",
-                        textAlign: "center",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.5px",
+                        background: "#f1f5f9",
+                        border: "none",
+                        borderRadius: "50%",
+                        width: "30px",
+                        height: "30px",
+                        cursor: "pointer",
+                        fontSize: "0.95rem",
+                        color: "#64748b",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
                       }}
                     >
-                      Step 2: Confirm 6-Digit PIN
-                    </label>
+                      ✕
+                    </button>
+                  </div>
 
+                  {/* Modal Body */}
+                  <div style={{ padding: "22px 24px" }}>
+                    {devAuthStatus === "APPROVED" ? (
+                      <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "12px", padding: "24px 20px", textAlign: "center" }}>
+                        <div style={{ width: "52px", height: "52px", borderRadius: "50%", background: "#dcfce7", color: "#166534", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.8rem", margin: "0 auto 12px", fontWeight: 900 }}>
+                          ✓
+                        </div>
+                        <h4 style={{ margin: "0 0 6px", color: "#166534", fontSize: "1.08rem", fontWeight: 800 }}>
+                          Authorized by System Developer!
+                        </h4>
+                        <p style={{ margin: 0, color: "#15803d", fontSize: "0.82rem" }}>
+                          Developer approval confirmed. Unlocking integration configuration...
+                        </p>
+                      </div>
+                    ) : devAuthStatus === "DENIED" ? (
+                      <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "12px", padding: "24px 20px", textAlign: "center" }}>
+                        <div style={{ width: "52px", height: "52px", borderRadius: "50%", background: "#fee2e2", color: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.8rem", margin: "0 auto 12px", fontWeight: 900 }}>
+                          ✕
+                        </div>
+                        <h4 style={{ margin: "0 0 6px", color: "#991b1b", fontSize: "1.08rem", fontWeight: 800 }}>
+                          Authorization Request Denied
+                        </h4>
+                        <p style={{ margin: "0 0 16px", color: "#7f1d1d", fontSize: "0.82rem" }}>
+                          The System Developer has blocked this modification request. Action aborted.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleClosePinModal}
+                          style={{
+                            padding: "8px 20px",
+                            borderRadius: "8px",
+                            border: "1px solid #cbd5e1",
+                            background: "#ffffff",
+                            color: "#475569",
+                            fontSize: "0.82rem",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Close
+                        </button>
+                      </div>
+                    ) : devAuthStatus === "EXPIRED" ? (
+                      <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "12px", padding: "24px 20px", textAlign: "center" }}>
+                        <div style={{ fontSize: "2rem", marginBottom: "8px" }}>⏱️</div>
+                        <h4 style={{ margin: "0 0 6px", color: "#92400e", fontSize: "1.05rem", fontWeight: 800 }}>
+                          Authorization Request Expired
+                        </h4>
+                        <p style={{ margin: "0 0 16px", color: "#b45309", fontSize: "0.82rem" }}>
+                          The 15-minute authorization window elapsed before the developer responded.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => startDeveloperAuthorization(pinModal.actionDescription, pinModal.onSuccess)}
+                          style={{
+                            padding: "8px 20px",
+                            borderRadius: "8px",
+                            border: "none",
+                            background: "#d97706",
+                            color: "#ffffff",
+                            fontSize: "0.82rem",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                          }}
+                        >
+                          ↻ Send New Request
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        {/* Status info box */}
+                        <div
+                          style={{
+                            background: "#f0fdf4",
+                            border: "1px solid #bbf7d0",
+                            borderRadius: "10px",
+                            padding: "12px 14px",
+                            marginBottom: "16px",
+                            fontSize: "0.80rem",
+                            color: "#166534",
+                            lineHeight: 1.45,
+                          }}
+                        >
+                          <strong>✓ Admin PIN Verified!</strong> An authorization request has been dispatched to the System Developer:
+                          <div style={{ marginTop: "4px", fontFamily: "monospace", fontWeight: 700, color: "#0f172a", fontSize: "0.85rem" }}>
+                            📧 {devAuthMaskedEmail}
+                          </div>
+                        </div>
+
+                        {/* Animated pulsing spinner waiting card */}
+                        <div
+                          style={{
+                            background: "#f8fafc",
+                            border: "1px solid #e2e8f0",
+                            borderRadius: "12px",
+                            padding: "20px 16px",
+                            textAlign: "center",
+                            marginBottom: "16px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "inline-block",
+                              width: "28px",
+                              height: "28px",
+                              border: "3px solid #cbd5e1",
+                              borderTopColor: "#166534",
+                              borderRadius: "50%",
+                              animation: "spin 1s linear infinite",
+                              marginBottom: "10px",
+                            }}
+                          />
+                          <div style={{ fontSize: "0.90rem", fontWeight: 800, color: "#0f172a", marginBottom: "4px" }}>
+                            Waiting for Developer to Click Authorize in Email...
+                          </div>
+                          <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b", lineHeight: 1.45 }}>
+                            The System Developer can approve this request with a single click from their phone or computer. This window will automatically unlock.
+                          </p>
+                        </div>
+
+                        {/* Collapsible Direct OTP Entry */}
+                        <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: "14px" }}>
+                          <button
+                            type="button"
+                            onClick={() => setShowDevOtpInput(!showDevOtpInput)}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "#0284c7",
+                              fontSize: "0.78rem",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              padding: "4px 0",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              margin: "0 auto",
+                            }}
+                          >
+                            <span>{showDevOtpInput ? "▼" : "▶"}</span>
+                            <span>{showDevOtpInput ? "Hide Developer OTP Entry" : "Or Enter 6-Digit Developer OTP Directly"}</span>
+                          </button>
+
+                          {showDevOtpInput && (
+                            <form onSubmit={handleVerifyDevOtp} style={{ marginTop: "14px", textAlign: "center" }}>
+                              <p style={{ margin: "0 0 10px", fontSize: "0.74rem", color: "#64748b" }}>
+                                If the developer provided the 6-digit OTP code directly:
+                              </p>
+                              <div style={{ display: "flex", justifyContent: "center", gap: "8px", marginBottom: "10px" }} onPaste={handleDevOtpPaste}>
+                                {devAuthOtpDigits.map((digit, idx) => (
+                                  <input
+                                    key={idx}
+                                    ref={devOtpInputRefs[idx]}
+                                    type="text"
+                                    inputMode="numeric"
+                                    pattern="[0-9]*"
+                                    maxLength={1}
+                                    value={digit}
+                                    onChange={(e) => handleDevOtpDigitChange(idx, e.target.value)}
+                                    onKeyDown={(e) => handleDevOtpKeyDown(idx, e)}
+                                    disabled={devAuthOtpLoading}
+                                    autoFocus={idx === 0}
+                                    style={{
+                                      width: "42px",
+                                      height: "48px",
+                                      textAlign: "center",
+                                      fontSize: "1.3rem",
+                                      fontWeight: 800,
+                                      color: "#0f172a",
+                                      borderRadius: "10px",
+                                      border: digit ? "2px solid #166534" : "1.5px solid #cbd5e1",
+                                      background: digit ? "#f0fdf4" : "#ffffff",
+                                      outline: "none",
+                                    }}
+                                  />
+                                ))}
+                              </div>
+
+                              {devAuthOtpError && (
+                                <div style={{ color: "#991b1b", fontSize: "0.76rem", fontWeight: 600, marginBottom: "10px" }}>
+                                  ⚠️ {devAuthOtpError}
+                                </div>
+                              )}
+
+                              <button
+                                type="submit"
+                                disabled={devAuthOtpLoading || devAuthOtpDigits.join("").length !== 6}
+                                style={{
+                                  padding: "8px 20px",
+                                  borderRadius: "8px",
+                                  border: "none",
+                                  background: devAuthOtpDigits.join("").length === 6 ? "#166534" : "#94a3b8",
+                                  color: "#ffffff",
+                                  fontSize: "0.80rem",
+                                  fontWeight: 700,
+                                  cursor: devAuthOtpDigits.join("").length === 6 && !devAuthOtpLoading ? "pointer" : "not-allowed",
+                                }}
+                              >
+                                {devAuthOtpLoading ? "Verifying OTP..." : "✓ Authorize with Developer OTP"}
+                              </button>
+                            </form>
+                          )}
+                        </div>
+
+                        {/* Modal Footer Controls */}
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "18px", paddingTop: "14px", borderTop: "1px solid #f1f5f9" }}>
+                          <button
+                            type="button"
+                            onClick={() => startDeveloperAuthorization(pinModal.actionDescription, pinModal.onSuccess)}
+                            disabled={resendCooldown > 0 || pinLoading}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: resendCooldown > 0 ? "#94a3b8" : "#166534",
+                              fontSize: "0.78rem",
+                              fontWeight: 600,
+                              cursor: resendCooldown > 0 ? "not-allowed" : "pointer",
+                              padding: 0,
+                            }}
+                          >
+                            {resendCooldown > 0 ? `Resend email in ${resendCooldown}s` : "↻ Resend Authorization Email"}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleClosePinModal}
+                            style={{
+                              padding: "8px 16px",
+                              borderRadius: "8px",
+                              border: "1px solid #cbd5e1",
+                              background: "#ffffff",
+                              color: "#475569",
+                              fontSize: "0.80rem",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                /* ================= STEP 1: ADMIN 6-DIGIT PIN VERIFICATION ================= */
+                <div>
+                  {/* Modal Header */}
+                  <div
+                    style={{
+                      padding: "20px 24px 16px",
+                      borderBottom: "1px solid #f1f5f9",
+                      background: "#f8fafc",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      justifyContent: "space-between",
+                      gap: "12px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                      <div
+                        style={{
+                          width: "44px",
+                          height: "44px",
+                          borderRadius: "12px",
+                          background: pinModal.isFirstPin ? "#eff6ff" : "#ecfdf5",
+                          border: `1px solid ${pinModal.isFirstPin ? "#bfdbfe" : "#a7f3d0"}`,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: "1.3rem",
+                          color: pinModal.isFirstPin ? "#2563eb" : "#059669",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {pinModal.isFirstPin ? "🔑" : "🔒"}
+                      </div>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800, color: "#0f172a" }}>
+                          {pinModal.isFirstPin ? "Create 6-Digit Admin PIN" : "6-Digit Security PIN"}
+                        </h3>
+                        <p style={{ margin: "3px 0 0", fontSize: "0.78rem", color: "#64748b" }}>
+                          {pinModal.isFirstPin
+                            ? `First-time setup for ${user?.email || "administrator"}`
+                            : "Step 1 of 2: Administrator Authorization"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={pinLoading}
+                      onClick={handleClosePinModal}
+                      style={{
+                        background: "#f1f5f9",
+                        border: "none",
+                        borderRadius: "50%",
+                        width: "30px",
+                        height: "30px",
+                        cursor: "pointer",
+                        fontSize: "0.95rem",
+                        color: "#64748b",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {/* Modal Body */}
+                  <form onSubmit={pinModal.isFirstPin ? handleSetInitialPin : handleVerifyPin} style={{ padding: "22px 24px" }}>
+                    {pinModal.isFirstPin ? (
+                      <div
+                        style={{
+                          background: "#eff6ff",
+                          border: "1px solid #bfdbfe",
+                          borderRadius: "10px",
+                          padding: "12px 14px",
+                          marginBottom: "18px",
+                          fontSize: "0.80rem",
+                          color: "#1e40af",
+                          lineHeight: 1.45,
+                        }}
+                      >
+                        <strong>First-Time Setup:</strong> This admin account does not have a security PIN yet. Please create and confirm your personal 6-digit PIN before you can{" "}
+                        <span style={{ fontWeight: 800, textDecoration: "underline" }}>
+                          {pinModal.actionDescription}
+                        </span>.
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          background: "#eff6ff",
+                          border: "1px solid #bfdbfe",
+                          borderRadius: "10px",
+                          padding: "12px 14px",
+                          marginBottom: "18px",
+                          fontSize: "0.80rem",
+                          color: "#1e40af",
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        <strong>Security Protection:</strong> Please enter your 6-digit PIN before you can{" "}
+                        <span style={{ fontWeight: 800, textDecoration: "underline" }}>
+                          {pinModal.actionDescription}
+                        </span>.
+                      </div>
+                    )}
+
+                    {/* 1st PIN Input Row */}
+                    <div style={{ marginBottom: pinModal.isFirstPin ? "16px" : "14px" }}>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "0.76rem",
+                          fontWeight: 700,
+                          color: "#475569",
+                          marginBottom: "8px",
+                          textAlign: "center",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                        }}
+                      >
+                        {pinModal.isFirstPin ? "Step 1: Choose 6-Digit PIN" : "Enter 6-Digit Admin PIN"}
+                      </label>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "center",
+                          gap: "8px",
+                        }}
+                        onPaste={handlePinPaste}
+                      >
+                        {pinDigits.map((digit, idx) => (
+                          <input
+                            key={idx}
+                            ref={pinInputRefs[idx]}
+                            type={showPin ? "text" : "password"}
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            maxLength={1}
+                            value={digit}
+                            onChange={(e) => handlePinDigitChange(idx, e.target.value)}
+                            onKeyDown={(e) => handlePinKeyDown(idx, e)}
+                            disabled={pinLoading}
+                            autoFocus={idx === 0}
+                            style={{
+                              width: "44px",
+                              height: "50px",
+                              textAlign: "center",
+                              fontSize: "1.35rem",
+                              fontWeight: "800",
+                              color: "#0f172a",
+                              borderRadius: "10px",
+                              border: digit ? "2px solid #059669" : "1.5px solid #cbd5e1",
+                              background: digit ? "#f0fdf4" : "#ffffff",
+                              outline: "none",
+                              transition: "all 0.15s ease",
+                              boxShadow: digit ? "0 2px 4px rgba(5, 150, 105, 0.15)" : "none",
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 2nd PIN Input Row (Only shown if isFirstPin) */}
+                    {pinModal.isFirstPin && (
+                      <div style={{ marginBottom: "16px" }}>
+                        <label
+                          style={{
+                            display: "block",
+                            fontSize: "0.76rem",
+                            fontWeight: 700,
+                            color: "#475569",
+                            marginBottom: "8px",
+                            textAlign: "center",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.5px",
+                          }}
+                        >
+                          Step 2: Confirm 6-Digit PIN
+                        </label>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "center",
+                            gap: "8px",
+                          }}
+                          onPaste={handleConfirmPinPaste}
+                        >
+                          {confirmPinDigits.map((digit, idx) => (
+                            <input
+                              key={idx}
+                              ref={confirmPinInputRefs[idx]}
+                              type={showPin ? "text" : "password"}
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              maxLength={1}
+                              value={digit}
+                              onChange={(e) => handleConfirmPinDigitChange(idx, e.target.value)}
+                              onKeyDown={(e) => handleConfirmPinKeyDown(idx, e)}
+                              disabled={pinLoading}
+                              style={{
+                                width: "44px",
+                                height: "50px",
+                                textAlign: "center",
+                                fontSize: "1.35rem",
+                                fontWeight: "800",
+                                color: "#0f172a",
+                                borderRadius: "10px",
+                                border: digit ? "2px solid #2563eb" : "1.5px solid #cbd5e1",
+                                background: digit ? "#eff6ff" : "#ffffff",
+                                outline: "none",
+                                transition: "all 0.15s ease",
+                                boxShadow: digit ? "0 2px 4px rgba(37, 99, 235, 0.15)" : "none",
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Show / Hide PIN Toggle & Helper note */}
                     <div
                       style={{
                         display: "flex",
-                        justifyContent: "center",
-                        gap: "8px",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: "16px",
+                        padding: "0 4px",
                       }}
-                      onPaste={handleConfirmPinPaste}
                     >
-                      {confirmPinDigits.map((digit, idx) => (
-                        <input
-                          key={idx}
-                          ref={confirmPinInputRefs[idx]}
-                          type={showPin ? "text" : "password"}
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          maxLength={1}
-                          value={digit}
-                          onChange={(e) => handleConfirmPinDigitChange(idx, e.target.value)}
-                          onKeyDown={(e) => handleConfirmPinKeyDown(idx, e)}
-                          disabled={pinLoading}
-                          style={{
-                            width: "44px",
-                            height: "50px",
-                            textAlign: "center",
-                            fontSize: "1.35rem",
-                            fontWeight: "800",
-                            color: "#0f172a",
-                            borderRadius: "10px",
-                            border: digit ? "2px solid #2563eb" : "1.5px solid #cbd5e1",
-                            background: digit ? "#eff6ff" : "#ffffff",
-                            outline: "none",
-                            transition: "all 0.15s ease",
-                            boxShadow: digit ? "0 2px 4px rgba(37, 99, 235, 0.15)" : "none",
-                          }}
-                        />
-                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setShowPin(!showPin)}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "#0284c7",
+                          fontSize: "0.76rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          padding: 0,
+                        }}
+                      >
+                        {showPin ? "🙈 Hide digits" : "👁️ Show digits"}
+                      </button>
+
+                      <span style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                        {pinModal.isFirstPin ? "Must be exactly 6 digits" : (
+                          <span>Default PIN: <strong style={{ color: "#0f172a" }}>123456</strong></span>
+                        )}
+                      </span>
                     </div>
-                  </div>
-                )}
 
-                {/* Show / Hide PIN Toggle & Helper note */}
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: "16px",
-                    padding: "0 4px",
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setShowPin(!showPin)}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      color: "#0284c7",
-                      fontSize: "0.76rem",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      padding: 0,
-                    }}
-                  >
-                    {showPin ? "🙈 Hide digits" : "👁️ Show digits"}
-                  </button>
-
-                  <span style={{ fontSize: "0.72rem", color: "#64748b" }}>
-                    {pinModal.isFirstPin ? "Must be exactly 6 digits" : (
-                      <span>Default PIN: <strong style={{ color: "#0f172a" }}>123456</strong></span>
+                    {/* Error Message */}
+                    {pinError && (
+                      <div
+                        style={{
+                          background: "#fef2f2",
+                          border: "1px solid #fecaca",
+                          color: "#991b1b",
+                          fontSize: "0.78rem",
+                          fontWeight: 600,
+                          padding: "8px 12px",
+                          borderRadius: "8px",
+                          marginBottom: "16px",
+                          textAlign: "center",
+                        }}
+                      >
+                        ⚠️ {pinError}
+                      </div>
                     )}
-                  </span>
+
+                    {/* Action Buttons */}
+                    <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "10px" }}>
+                      <button
+                        type="button"
+                        disabled={pinLoading}
+                        onClick={handleClosePinModal}
+                        style={{
+                          padding: "9px 16px",
+                          borderRadius: "8px",
+                          border: "1px solid #cbd5e1",
+                          background: "#ffffff",
+                          color: "#475569",
+                          fontWeight: 600,
+                          fontSize: "0.82rem",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Cancel
+                      </button>
+
+                      {pinModal.isFirstPin ? (
+                        <button
+                          type="submit"
+                          disabled={pinLoading || pinDigits.join("").length !== 6 || confirmPinDigits.join("").length !== 6}
+                          style={{
+                            padding: "9px 20px",
+                            borderRadius: "8px",
+                            border: "none",
+                            background: (pinDigits.join("").length === 6 && confirmPinDigits.join("").length === 6) ? "#2563eb" : "#94a3b8",
+                            color: "#ffffff",
+                            fontWeight: 700,
+                            fontSize: "0.82rem",
+                            cursor: (pinDigits.join("").length === 6 && confirmPinDigits.join("").length === 6) && !pinLoading ? "pointer" : "not-allowed",
+                            boxShadow: (pinDigits.join("").length === 6 && confirmPinDigits.join("").length === 6) ? "0 2px 6px rgba(37, 99, 235, 0.25)" : "none",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          {pinLoading ? "Setting PIN..." : "✓ Set PIN & Continue"}
+                        </button>
+                      ) : (
+                        <button
+                          type="submit"
+                          disabled={pinLoading || pinDigits.join("").length !== 6}
+                          style={{
+                            padding: "9px 20px",
+                            borderRadius: "8px",
+                            border: "none",
+                            background: pinDigits.join("").length === 6 ? "#059669" : "#94a3b8",
+                            color: "#ffffff",
+                            fontWeight: 700,
+                            fontSize: "0.82rem",
+                            cursor: pinDigits.join("").length === 6 && !pinLoading ? "pointer" : "not-allowed",
+                            boxShadow: pinDigits.join("").length === 6 ? "0 2px 6px rgba(5, 150, 105, 0.25)" : "none",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          {pinLoading ? "Verifying PIN..." : "✓ Verify PIN & Request Dev Auth"}
+                        </button>
+                      )}
+                    </div>
+                  </form>
                 </div>
-
-                {/* Error Message */}
-                {pinError && (
-                  <div
-                    style={{
-                      background: "#fef2f2",
-                      border: "1px solid #fecaca",
-                      color: "#991b1b",
-                      fontSize: "0.78rem",
-                      fontWeight: 600,
-                      padding: "8px 12px",
-                      borderRadius: "8px",
-                      marginBottom: "16px",
-                      textAlign: "center",
-                    }}
-                  >
-                    ⚠️ {pinError}
-                  </div>
-                )}
-
-                {/* Action Buttons */}
-                <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "10px" }}>
-                  <button
-                    type="button"
-                    disabled={pinLoading}
-                    onClick={() => setPinModal({ open: false, actionDescription: "", onSuccess: null, isFirstPin: false })}
-                    style={{
-                      padding: "9px 16px",
-                      borderRadius: "8px",
-                      border: "1px solid #cbd5e1",
-                      background: "#ffffff",
-                      color: "#475569",
-                      fontWeight: 600,
-                      fontSize: "0.82rem",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Cancel
-                  </button>
-
-                  {pinModal.isFirstPin ? (
-                    <button
-                      type="submit"
-                      disabled={pinLoading || pinDigits.join("").length !== 6 || confirmPinDigits.join("").length !== 6}
-                      style={{
-                        padding: "9px 20px",
-                        borderRadius: "8px",
-                        border: "none",
-                        background: (pinDigits.join("").length === 6 && confirmPinDigits.join("").length === 6) ? "#2563eb" : "#94a3b8",
-                        color: "#ffffff",
-                        fontWeight: 700,
-                        fontSize: "0.82rem",
-                        cursor: (pinDigits.join("").length === 6 && confirmPinDigits.join("").length === 6) && !pinLoading ? "pointer" : "not-allowed",
-                        boxShadow: (pinDigits.join("").length === 6 && confirmPinDigits.join("").length === 6) ? "0 2px 6px rgba(37, 99, 235, 0.25)" : "none",
-                        transition: "all 0.15s ease",
-                      }}
-                    >
-                      {pinLoading ? "Setting PIN..." : "✓ Set PIN & Authorize"}
-                    </button>
-                  ) : (
-                    <button
-                      type="submit"
-                      disabled={pinLoading || pinDigits.join("").length !== 6}
-                      style={{
-                        padding: "9px 20px",
-                        borderRadius: "8px",
-                        border: "none",
-                        background: pinDigits.join("").length === 6 ? "#059669" : "#94a3b8",
-                        color: "#ffffff",
-                        fontWeight: 700,
-                        fontSize: "0.82rem",
-                        cursor: pinDigits.join("").length === 6 && !pinLoading ? "pointer" : "not-allowed",
-                        boxShadow: pinDigits.join("").length === 6 ? "0 2px 6px rgba(5, 150, 105, 0.25)" : "none",
-                        transition: "all 0.15s ease",
-                      }}
-                    >
-                      {pinLoading ? "Verifying..." : "✓ Authorize & Confirm"}
-                    </button>
-                  )}
-                </div>
-              </form>
+              )}
             </div>
           </div>
         )}
