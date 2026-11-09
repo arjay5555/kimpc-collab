@@ -639,13 +639,13 @@ function generateReportPDF(reportData, stream, options = {}) {
   // Letterhead Drawer (Only on First Page)
   // -------------------------------------------------------------
   const drawLetterhead = () => {
-    // Logo on upper left (40, 32)
+    // Logo on upper left (40, 26)
     const printLogoPath = path.join(__dirname, "../public/images/kimpc-logo-print.png");
     const origLogoPath = path.join(__dirname, "../public/images/kimpc logo.png");
     const logoPath = fs.existsSync(printLogoPath) ? printLogoPath : origLogoPath;
     if (fs.existsSync(logoPath)) {
       try {
-        doc.image(logoPath, 40, 32, { fit: [48, 48] });
+        doc.image(logoPath, 40, 26, { fit: [50, 50] });
       } catch (err) {
         console.warn("PDFKit logo draw notice:", err.message);
       }
@@ -655,107 +655,48 @@ function generateReportPDF(reportData, stream, options = {}) {
     doc.font("Helvetica-Bold").fontSize(11).fillColor("#0f172a").text(
       "KALILANGAN IRRIGATORS MULTI-PURPOSE COOPERATIVE",
       0,
-      32,
+      28,
       { align: "center", width: pageWidth }
     );
 
     doc.font("Helvetica").fontSize(8).fillColor("#64748b").text(
       "Kimagting, Ninoy Aquino, Kalilangan, Bukidnon",
       0,
-      48,
+      42,
       { align: "center", width: pageWidth }
     );
 
     doc.font("Helvetica-Bold").fontSize(11).fillColor("#047857").text(
       reportTitle.toUpperCase(),
       0,
-      63,
+      56,
+      { align: "center", width: pageWidth }
+    );
+
+    // Report Period in header
+    let periodText = `Report Period: ${period.startDate} to ${period.endDate}`;
+    if (appliedFilters && appliedFilters.unitId && appliedFilters.unitId !== "all") {
+      periodText += ` | Unit: ${appliedFilters.unitLabel}`;
+    }
+    if (appliedFilters && appliedFilters.status && appliedFilters.status !== "all") {
+      periodText += ` | Status: ${appliedFilters.status}`;
+    }
+    if (appliedFilters && appliedFilters.paymentMethod && appliedFilters.paymentMethod !== "all") {
+      periodText += ` | Method: ${appliedFilters.paymentMethod}`;
+    }
+
+    doc.font("Helvetica-Bold").fontSize(8.5).fillColor("#334155").text(
+      periodText,
+      0,
+      71,
       { align: "center", width: pageWidth }
     );
 
     // Thin divider line below letterhead
-    const dividerY = 82;
+    const dividerY = 86;
     doc.strokeColor("#cbd5e1").lineWidth(0.75).moveTo(40, dividerY).lineTo(pageWidth - 40, dividerY).stroke();
 
-    // Metadata panel below divider
-    let metaY = dividerY + 6;
-    doc.font("Helvetica").fontSize(7.5).fillColor("#334155");
-
-    // Left column: Period & Date Basis
-    doc.text(`Report Period: ${period.label}`, 40, metaY);
-    doc.fillColor("#64748b").text(dateBasisLabel, 40, metaY + 11, { width: 300 });
-
-    // Right column: Applied filters, Date Generated, Manager
-    const filterText = `Unit: ${appliedFilters.unitLabel} | Status: ${appliedFilters.status} | Method: ${appliedFilters.paymentMethod}`;
-    doc.fillColor("#334155").text(`Generated: ${generatedAt}`, 360, metaY, { align: "right", width: 195 });
-    doc.text(`Manager: ${loggedInManager}`, 360, metaY + 11, { align: "right", width: 195 });
-    doc.fillColor("#64748b").text(filterText, 360, metaY + 22, { align: "right", width: 195 });
-
-    doc.strokeColor("#e2e8f0").lineWidth(0.5).moveTo(40, metaY + 36).lineTo(pageWidth - 40, metaY + 36).stroke();
-
-    return metaY + 44;
-  };
-
-  // -------------------------------------------------------------
-  // Summary Metrics Banner Drawer
-  // -------------------------------------------------------------
-  const drawSummaryMetrics = (startY) => {
-    let nextY = startY;
-
-    if (reportData.reportType === "booking") {
-      const cards = [
-        { label: "Total Bookings", val: metrics.totalBookings || 0, color: "#0f172a" },
-        { label: "Approved / Active", val: (metrics.approvedCount || 0) + (metrics.checkedOutCount || 0), color: "#059669" },
-        { label: "Pending", val: metrics.pendingCount || 0, color: "#d97706" },
-        { label: "Completed / Returned", val: metrics.returnedCount || 0, color: "#2563eb" },
-        { label: "Overdue Returns", val: metrics.overdueCount || 0, color: "#dc2626" },
-      ];
-
-      const cardWidth = (contentWidth - (cards.length - 1) * 6) / cards.length;
-      cards.forEach((card, i) => {
-        const x = 40 + i * (cardWidth + 6);
-        doc.rect(x, nextY, cardWidth, 34).fillAndStroke("#f8fafc", "#e2e8f0");
-        doc.font("Helvetica").fontSize(6.5).fillColor("#64748b").text(card.label.toUpperCase(), x + 4, nextY + 5, { width: cardWidth - 8, align: "center" });
-        doc.font("Helvetica-Bold").fontSize(11).fillColor(card.color).text(String(card.val), x + 4, nextY + 17, { width: cardWidth - 8, align: "center" });
-      });
-      nextY += 42;
-    } else if (reportData.reportType === "machinery_usage") {
-      const cards = [
-        { label: "Total Fleet Units", val: metrics.totalUnits || 0 },
-        { label: "Units Utilized", val: metrics.unitsWithUsageCount || 0 },
-        { label: "Total Rental Days", val: metrics.totalRentalDays || 0 },
-        { label: "Completed Maintenance", val: metrics.totalCompletedMaintenance || 0 },
-        { label: "Days Unavailable", val: metrics.totalDaysUnavailable || 0 },
-      ];
-
-      const cardWidth = (contentWidth - (cards.length - 1) * 6) / cards.length;
-      cards.forEach((card, i) => {
-        const x = 40 + i * (cardWidth + 6);
-        doc.rect(x, nextY, cardWidth, 34).fillAndStroke("#f8fafc", "#e2e8f0");
-        doc.font("Helvetica").fontSize(6.5).fillColor("#64748b").text(card.label.toUpperCase(), x + 4, nextY + 5, { width: cardWidth - 8, align: "center" });
-        doc.font("Helvetica-Bold").fontSize(11).fillColor("#0f172a").text(String(card.val), x + 4, nextY + 17, { width: cardWidth - 8, align: "center" });
-      });
-      nextY += 42;
-    } else if (reportData.reportType === "financial_summary") {
-      const cards = [
-        { label: "Collections", val: formatPesos(metrics.totalCollections), color: "#059669" },
-        { label: "Refunds", val: formatPesos(metrics.totalRefunds), color: "#d97706" },
-        { label: "Operating Expenses", val: formatPesos(metrics.totalExpenses), color: "#dc2626" },
-        { label: "Net Cashflow", val: formatPesos(metrics.netOperatingCashflow), color: metrics.netOperatingCashflow >= 0 ? "#059669" : "#dc2626" },
-        { label: "Outstanding Snapshot", val: formatPesos(metrics.totalOutstanding), color: "#64748b" },
-      ];
-
-      const cardWidth = (contentWidth - (cards.length - 1) * 6) / cards.length;
-      cards.forEach((card, i) => {
-        const x = 40 + i * (cardWidth + 6);
-        doc.rect(x, nextY, cardWidth, 34).fillAndStroke("#f8fafc", "#e2e8f0");
-        doc.font("Helvetica").fontSize(6.5).fillColor("#64748b").text(card.label.toUpperCase(), x + 4, nextY + 5, { width: cardWidth - 8, align: "center" });
-        doc.font("Helvetica-Bold").fontSize(9.5).fillColor(card.color).text(card.val, x + 2, nextY + 17, { width: cardWidth - 4, align: "center" });
-      });
-      nextY += 42;
-    }
-
-    return nextY;
+    return dividerY + 12;
   };
 
   // -------------------------------------------------------------
@@ -779,7 +720,6 @@ function generateReportPDF(reportData, stream, options = {}) {
   // Render Section Tables
   // -------------------------------------------------------------
   let currentY = drawLetterhead();
-  currentY = drawSummaryMetrics(currentY);
 
   const checkPageBreak = (neededHeight, cols) => {
     if (currentY + neededHeight > pageHeight - 55) {
@@ -1034,8 +974,9 @@ function generateReportPDF(reportData, stream, options = {}) {
       { align: "center", width: pageWidth, lineBreak: false }
     );
 
-    doc.font("Helvetica").fontSize(6.5).fillColor("#94a3b8").text(
-      "Kalilangan Irrigators Multi-Purpose Cooperative • Operations & Financial Audit Report",
+    const footerMeta = `Generated: ${generatedAt} | Generated by: ${loggedInManager}`;
+    doc.font("Helvetica").fontSize(6.8).fillColor("#64748b").text(
+      footerMeta,
       40,
       pageHeight - 25,
       { align: "left", width: 280, lineBreak: false }
