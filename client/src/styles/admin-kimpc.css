@@ -4724,13 +4724,64 @@
   background: #ffffff;
   border-radius: 16px;
   width: 100%;
-  max-width: 660px;
+  max-width: 760px;
   max-height: 90vh;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   overflow: hidden;
   display: flex;
   flex-direction: column;
   animation: wzModalFadeIn 0.2s ease-out;
+}
+
+/* Modal 5-Section Layout System */
+.wz-modal-section-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.wz-modal-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #f1f5f9;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wz-modal-section-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #ecfdf5;
+  color: #059669;
+  font-weight: 800;
+  font-size: 0.74rem;
+  border: 1px solid #a7f3d0;
+  flex-shrink: 0;
+}
+
+.wz-modal-section-heading {
+  margin: 0;
+  font-size: 0.94rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.wz-modal-section-sub {
+  font-size: 0.72rem;
+  color: #64748b;
+  display: block;
+  margin-top: 2px;
 }
 
 @keyframes wzModalFadeIn {
@@ -6831,22 +6882,23 @@ input::-webkit-contacts-auto-fill-button {
 /* Compact Manager Bookings Table - Optimized to eliminate horizontal scroll on desktop */
 .wz-bookings-table {
   width: 100%;
-  font-size: 0.75rem !important;
+  font-size: 0.80rem !important;
   table-layout: auto;
 }
 
 .wz-bookings-table th {
-  padding: 8px 6px !important;
-  font-size: 0.72rem !important;
+  padding: 10px 8px !important;
+  font-size: 0.76rem !important;
   font-weight: 700;
+  color: #64748b;
   letter-spacing: -0.01em;
   white-space: nowrap;
 }
 
 .wz-bookings-table td {
-  padding: 8px 6px !important;
-  font-size: 0.75rem !important;
-  white-space: nowrap;
+  padding: 10px 8px !important;
+  font-size: 0.80rem !important;
+  vertical-align: middle;
 }
 
 .wz-bookings-table .wz-status-pill {
