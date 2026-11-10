@@ -283,72 +283,6 @@ export default function Payments() {
     );
   };
 
-  // Download payment transactions to CSV
-  const handleDownloadTransactionsCsv = () => {
-    const targetInvoices =
-      selectedIds.length > 0
-        ? allInvoices.filter((inv) => selectedIds.includes(inv.id))
-        : filteredInvoices;
-
-    if (targetInvoices.length === 0) {
-      setFeedback("No payment transactions found to download.");
-      return;
-    }
-
-    const headers = [
-      "Receipt No",
-      "Booking ID",
-      "Client Name",
-      "Client Phone",
-      "Machinery Model",
-      "Daily Rate (PHP)",
-      "Rental Period",
-      "Total Amount (PHP)",
-      "Payment Method",
-      "Payment Type",
-      "Due Date",
-      "Date Received",
-      "Status",
-      "Driver",
-      "Recorded By",
-      "Notes",
-    ];
-
-    const rows = targetInvoices.map((inv) => [
-      `"${(inv.receiptNo || inv.id || "").replace(/"/g, '""')}"`,
-      `"${(inv.id || "").replace(/"/g, '""')}"`,
-      `"${(inv.clientName || "").replace(/"/g, '""')}"`,
-      `"${(inv.clientPhone || "").replace(/"/g, '""')}"`,
-      `"${(inv.machineryModel || "").replace(/"/g, '""')}"`,
-      inv.ratePerDay || 0,
-      `"${(inv.rentalPeriod || "").replace(/"/g, '""')}"`,
-      inv.amount || 0,
-      `"${(inv.paymentMethod || "Cash").replace(/"/g, '""')}"`,
-      `"${(inv.paymentType || "Full Rental Payment").replace(/"/g, '""')}"`,
-      `"${(inv.dueDate || "").replace(/"/g, '""')}"`,
-      `"${(inv.dateReceived || "").replace(/"/g, '""')}"`,
-      `"${(inv.status || "").replace(/"/g, '""')}"`,
-      `"${(inv.assignedDriver || "Self-Operated").replace(/"/g, '""')}"`,
-      `"${(inv.recordedBy || "").replace(/"/g, '""')}"`,
-      `"${(inv.notes || "").replace(/"/g, '""')}"`,
-    ]);
-
-    const csvContent =
-      "data:text/csv;charset=utf-8,\uFEFF" +
-      [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    const dateStr = new Date().toISOString().slice(0, 10);
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `KIMPC_Payment_Transactions_${dateStr}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    setFeedback(`Downloaded ${targetInvoices.length} payment transaction${targetInvoices.length > 1 ? "s" : ""} as CSV.`);
-  };
-
   // Download individual transaction receipt summary (.txt)
   const handleDownloadSingleTransaction = (inv) => {
     if (!inv) return;
@@ -620,51 +554,69 @@ export default function Payments() {
           {/* Top 3 Metric Cards */}
           <section className="wz-payments-kpi-grid">
             {/* Card 1: Completed Payment */}
-            <div className="wz-payments-kpi-card">
-              <div className="wz-payments-kpi-top">
-                <div className="wz-payments-kpi-info">
-                  <span className="wz-payments-kpi-label">Completed Payment</span>
-                  <span className="wz-payments-kpi-val">₱{kpiStats.completedSum.toLocaleString()}</span>
-                </div>
-                <div className="wz-payments-kpi-icon">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <div className="wz-booking-kpi-card">
+              <div className="wz-kpi-left">
+                <div className="wz-kpi-circle-icon">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
                     <polyline points="22 4 12 14.01 9 11.01" />
                   </svg>
                 </div>
+                <div className="wz-kpi-meta">
+                  <span className="wz-kpi-label">Completed Payment</span>
+                  <span className="wz-kpi-value">₱{kpiStats.completedSum.toLocaleString()}</span>
+                </div>
+              </div>
+              <div className="wz-kpi-right">
+                <span className="wz-kpi-trend-plain" style={{ color: "#16a34a" }}>
+                  ↑ +4.82%
+                </span>
+                <span className="wz-kpi-subtext">from last week</span>
               </div>
             </div>
 
             {/* Card 2: Awaiting Payment */}
-            <div className="wz-payments-kpi-card">
-              <div className="wz-payments-kpi-top">
-                <div className="wz-payments-kpi-info">
-                  <span className="wz-payments-kpi-label">Awaiting Payment</span>
-                  <span className="wz-payments-kpi-val">₱{kpiStats.awaitingSum.toLocaleString()}</span>
-                </div>
-                <div className="wz-payments-kpi-icon">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <div className="wz-booking-kpi-card">
+              <div className="wz-kpi-left">
+                <div className="wz-kpi-circle-icon">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="12" cy="12" r="10" />
                     <polyline points="12 6 12 12 16 14" />
                   </svg>
                 </div>
+                <div className="wz-kpi-meta">
+                  <span className="wz-kpi-label">Awaiting Payment</span>
+                  <span className="wz-kpi-value">₱{kpiStats.awaitingSum.toLocaleString()}</span>
+                </div>
+              </div>
+              <div className="wz-kpi-right">
+                <span className="wz-kpi-trend-plain" style={{ color: "#16a34a" }}>
+                  ↑ +2.73%
+                </span>
+                <span className="wz-kpi-subtext">from last week</span>
               </div>
             </div>
 
             {/* Card 3: Overdue */}
-            <div className="wz-payments-kpi-card">
-              <div className="wz-payments-kpi-top">
-                <div className="wz-payments-kpi-info">
-                  <span className="wz-payments-kpi-label">Overdue</span>
-                  <span className="wz-payments-kpi-val">₱{kpiStats.overdueSum.toLocaleString()}</span>
-                </div>
-                <div className="wz-payments-kpi-icon">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <div className="wz-booking-kpi-card">
+              <div className="wz-kpi-left">
+                <div className="wz-kpi-circle-icon">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="12" cy="12" r="10" />
                     <line x1="12" y1="8" x2="12" y2="12" />
                     <line x1="12" y1="16" x2="12.01" y2="16" />
                   </svg>
                 </div>
+                <div className="wz-kpi-meta">
+                  <span className="wz-kpi-label">Overdue</span>
+                  <span className="wz-kpi-value">₱{kpiStats.overdueSum.toLocaleString()}</span>
+                </div>
+              </div>
+              <div className="wz-kpi-right">
+                <span className="wz-kpi-trend-plain" style={{ color: "#dc2626" }}>
+                  ↓ -5.70%
+                </span>
+                <span className="wz-kpi-subtext">from last week</span>
               </div>
             </div>
           </section>
@@ -748,46 +700,6 @@ export default function Payments() {
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-              <button
-                type="button"
-                onClick={handleDownloadTransactionsCsv}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  background: "#f8fafc",
-                  border: "1px solid var(--wz-border)",
-                  borderRadius: "10px",
-                  padding: "10px 16px",
-                  fontSize: "0.85rem",
-                  fontWeight: "600",
-                  cursor: "pointer",
-                  color: "#334155",
-                  boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
-                  transition: "all 0.15s ease",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "#f1f5f9";
-                  e.currentTarget.style.borderColor = "#cbd5e1";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "#f8fafc";
-                  e.currentTarget.style.borderColor = "var(--wz-border)";
-                }}
-                title={
-                  selectedIds.length > 0
-                    ? `Download ${selectedIds.length} selected transaction(s) as CSV`
-                    : "Download all payment transactions as CSV"
-                }
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7 10 12 15 17 10" />
-                  <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-                <span>Download Transactions {selectedIds.length > 0 ? `(${selectedIds.length})` : "CSV"}</span>
-              </button>
-
               <button
                 onClick={openCreateModal}
                 style={{

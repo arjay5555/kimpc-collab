@@ -255,31 +255,6 @@ export default function Expenses() {
     setIsModalOpen(false);
   };
 
-  // CSV Download export
-  const handleDownloadCsv = () => {
-    const headers = ["Expense ID", "Expense Title", "Category", "Quantity", "Amount (PHP)", "Date", "Status"];
-    const rows = filteredTransactions.map((t) => [
-      t.id,
-      `"${t.title.replace(/"/g, '""')}"`,
-      `"${t.category}"`,
-      t.quantity,
-      t.amount,
-      t.date,
-      t.status,
-    ]);
-
-    const csvContent =
-      "data:text/csv;charset=utf-8," +
-      [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `expenses_report_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   // Tooltip details for hover point
   const currentHovered = MONTHS_DATA[hoveredMonthIndex] || MONTHS_DATA[4];
 
@@ -816,30 +791,6 @@ export default function Expenses() {
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <button
-                  onClick={handleDownloadCsv}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    background: "#f8fafc",
-                    border: "1px solid var(--wz-border)",
-                    borderRadius: "8px",
-                    padding: "8px 14px",
-                    fontSize: "0.82rem",
-                    fontWeight: "600",
-                    cursor: "pointer",
-                    color: "#334155",
-                  }}
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" />
-                  </svg>
-                  Download CSV
-                </button>
-
                 <button
                   onClick={openCreateModal}
                   style={{
