@@ -735,17 +735,6 @@ export default function Payments() {
               <table className="wz-fin-table">
                 <thead>
                   <tr>
-                    <th style={{ width: "32px", textAlign: "center", padding: "10px 4px" }}>
-                      <input
-                        type="checkbox"
-                        checked={
-                          filteredInvoices.length > 0 &&
-                          selectedIds.length === filteredInvoices.length
-                        }
-                        onChange={handleSelectAll}
-                        style={{ cursor: "pointer" }}
-                      />
-                    </th>
                     <th>Status ↕</th>
                     <th>Booking ID ↕</th>
                     <th>Client ↕</th>
@@ -761,28 +750,14 @@ export default function Payments() {
                 <tbody>
                   {filteredInvoices.length === 0 ? (
                     <tr>
-                      <td colSpan="11" style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>
+                      <td colSpan="10" style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>
                         No payment records found matching your criteria.
                       </td>
                     </tr>
                   ) : (
                     paginatedInvoices.map((inv) => {
-                      const isChecked = selectedIds.includes(inv.id);
                       return (
-                        <tr
-                          key={inv.id}
-                          style={{
-                            backgroundColor: isChecked ? "#f0f9ff" : undefined,
-                          }}
-                        >
-                          <td style={{ textAlign: "center", padding: "10px 4px" }}>
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => handleSelectOne(inv.id)}
-                              style={{ cursor: "pointer" }}
-                            />
-                          </td>
+                        <tr key={inv.id}>
                           <td style={{ whiteSpace: "nowrap" }}>
                             {inv.status === "Completed" && (
                               <span className="wz-status-completed">Completed</span>
