@@ -1366,34 +1366,27 @@ export default function BookingApprovals() {
                           type="button"
                           onClick={() => handleOpenViewModal(b)}
                           style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            background: "#ffffff",
-                            color: "#0f172a",
-                            border: "1px solid #cbd5e1",
-                            borderRadius: "8px",
-                            padding: "6px 12px",
-                            fontSize: "0.75rem",
+                            background: "transparent",
+                            border: "none",
+                            padding: "4px 8px",
+                            color: "#059669",
+                            fontSize: "0.82rem",
                             fontWeight: "700",
                             cursor: "pointer",
-                            boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+                            display: "inline-block",
+                            textDecoration: "none",
                             transition: "all 0.15s ease",
                           }}
                           onMouseEnter={(e) => {
-                            e.currentTarget.style.background = "#f1f5f9";
-                            e.currentTarget.style.borderColor = "#94a3b8";
+                            e.currentTarget.style.color = "#047857";
+                            e.currentTarget.style.textDecoration = "underline";
                           }}
                           onMouseLeave={(e) => {
-                            e.currentTarget.style.background = "#ffffff";
-                            e.currentTarget.style.borderColor = "#cbd5e1";
+                            e.currentTarget.style.color = "#059669";
+                            e.currentTarget.style.textDecoration = "none";
                           }}
                           title="View Details"
                         >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                            <circle cx="12" cy="10" r="3" />
-                          </svg>
                           View Details
                         </button>
                       </td>
