@@ -44,7 +44,10 @@ export default function Payments() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [dateRangeFilter, setDateRangeFilter] = useState("All Dates");
   const [sortBy, setSortBy] = useState("date_desc");
-  const [pageSize, setPageSize] = useState(8);
+  const [pageSize, setPageSize] = useState(() => {
+    const saved = localStorage.getItem("kimpc_manager_pageSize");
+    return saved ? Number(saved) : 8;
+  });
   const [currentPage, setCurrentPage] = useState(1);
 
   // Fetch live applications to connect member bookings to manager financials
@@ -743,6 +746,7 @@ export default function Payments() {
                         style={{ cursor: "pointer" }}
                       />
                     </th>
+                    <th>Status ↕</th>
                     <th>Booking ID ↕</th>
                     <th>Client ↕</th>
                     <th>Machinery ↕</th>
@@ -751,7 +755,6 @@ export default function Payments() {
                     <th>Period ↕</th>
                     <th>Amount ↕</th>
                     <th>Due Date ↕</th>
-                    <th>Status ↕</th>
                     <th style={{ textAlign: "center" }}>Action</th>
                   </tr>
                 </thead>
@@ -780,6 +783,17 @@ export default function Payments() {
                               style={{ cursor: "pointer" }}
                             />
                           </td>
+                          <td style={{ whiteSpace: "nowrap" }}>
+                            {inv.status === "Completed" && (
+                              <span className="wz-status-completed">Completed</span>
+                            )}
+                            {inv.status === "Awaiting" && (
+                              <span className="wz-status-awaiting">Awaiting</span>
+                            )}
+                            {inv.status === "Overdue" && (
+                              <span className="wz-status-overdue">Overdue</span>
+                            )}
+                          </td>
                           <td style={{ fontWeight: "700", color: "#0f172a", whiteSpace: "nowrap" }}>
                             {inv.id}
                           </td>
@@ -799,17 +813,6 @@ export default function Payments() {
                             ₱{Number(inv.amount).toLocaleString()}
                           </td>
                           <td style={{ color: "#64748b", whiteSpace: "nowrap", fontSize: "0.74rem" }}>{inv.dueDate}</td>
-                          <td style={{ whiteSpace: "nowrap" }}>
-                            {inv.status === "Completed" && (
-                              <span className="wz-status-completed">Completed</span>
-                            )}
-                            {inv.status === "Awaiting" && (
-                              <span className="wz-status-awaiting">Awaiting</span>
-                            )}
-                            {inv.status === "Overdue" && (
-                              <span className="wz-status-overdue">Overdue</span>
-                            )}
-                          </td>
                           <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
                             <button
                               type="button"
@@ -839,7 +842,6 @@ export default function Payments() {
                               title="View Details"
                             >
                               <span>View Details</span>
-                              <span style={{ fontSize: "0.85rem", fontWeight: "800", lineHeight: 1 }}>&gt;</span>
                             </button>
                           </td>
                         </tr>
@@ -858,8 +860,10 @@ export default function Payments() {
                   className="wz-dropdown-select"
                   value={pageSize}
                   onChange={(e) => {
-                    setPageSize(Number(e.target.value));
+                    const val = Number(e.target.value);
+                    setPageSize(val);
                     setCurrentPage(1);
+                    localStorage.setItem("kimpc_manager_pageSize", String(val));
                   }}
                 >
                   <option value="8">8</option>

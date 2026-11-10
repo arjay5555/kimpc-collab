@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Application = require("../models/Application");
 const MachineryMaintenance = require("../models/MachineryMaintenance");
 const MachineryUnit = require("../models/MachineryUnit");
+const Account = require("../models/Account");
 const { logAudit } = require("../services/auditLogger");
 const { syncBookingToGoogleCalendar } = require("../services/googleCalendarService");
 
@@ -147,7 +148,24 @@ async function listBookings(req, res) {
     Application.countDocuments(filter)
   ]);
 
-  return res.json({ data: bookings, page, limit, total });
+  const allEmails = [...new Set(bookings.map((b) => b.memberEmail).filter(Boolean))];
+  let enriched = bookings.map((b) => (b.toObject ? b.toObject() : b));
+  if (allEmails.length > 0) {
+    const accounts = await Account.find({ email: { $in: allEmails } }).select("email phone avatar").lean();
+    const accountMap = new Map(accounts.map((acc) => [acc.email.toLowerCase(), acc]));
+    enriched = enriched.map((b) => {
+      if (b.memberEmail) {
+        const acc = accountMap.get(b.memberEmail.toLowerCase());
+        if (acc && acc.avatar && !b.clientAvatar) {
+          b.clientAvatar = acc.avatar;
+          b.avatar = acc.avatar;
+        }
+      }
+      return b;
+    });
+  }
+
+  return res.json({ data: enriched, page, limit, total });
 }
 
 async function approveBooking(req, res) {

@@ -42,7 +42,10 @@ export default function BookingApprovals() {
   const [filterType, setFilterType] = useState("All");
   const [filterStatus, setFilterStatus] = useState("All");
   const [sortBy, setSortBy] = useState("date_desc");
-  const [pageSize, setPageSize] = useState(8);
+  const [pageSize, setPageSize] = useState(() => {
+    const saved = localStorage.getItem("kimpc_manager_pageSize");
+    return saved ? Number(saved) : 8;
+  });
   const [currentPage, setCurrentPage] = useState(1);
   const [chartPeriod, setChartPeriod] = useState("This Year");
 
@@ -391,7 +394,22 @@ export default function BookingApprovals() {
       const clientEmail = item.memberEmail || item.clientEmail || `${clientName.toLowerCase().replace(/\s+/g, ".")}@example.com`;
       const clientPhone = item.farmerPhone || item.memberPhone || item.clientPhone || item.phone || (idx % 2 === 0 ? "+63 917 123 4567" : "+63 928 234 5678");
       const clientAddress = item.memberAddress || item.clientAddress || "Kalilangan, Bukidnon";
-      const clientAvatar = item.clientAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(clientName)}&background=0284c7&color=fff&bold=true`;
+      const rawAvatar =
+        item.clientAvatar ||
+        item.avatar ||
+        (item.memberEmail ? localStorage.getItem(`kimpc-avatar-${item.memberEmail}`) : null);
+      let clientAvatar = "";
+      if (rawAvatar && typeof rawAvatar === "string" && rawAvatar.trim()) {
+        const trimmed = rawAvatar.trim();
+        if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("data:")) {
+          clientAvatar = trimmed;
+        } else {
+          clientAvatar = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+        }
+      }
+      if (!clientAvatar) {
+        clientAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(clientName)}&background=0284c7&color=fff&bold=true`;
+      }
       const coopId = item.coopId || `COOP-MB-${String(item._id || idx).slice(-4).toUpperCase()}`;
       const receiptNo = item.receiptNo || (item._id ? `REC-${new Date().getFullYear()}-${String(item._id).slice(-4).toUpperCase()}` : `REC-2028-0${10 + idx}`);
       const paymentMethod = item.paymentMethod || "Cash";
@@ -1405,8 +1423,10 @@ export default function BookingApprovals() {
                 className="wz-dropdown-select"
                 value={pageSize}
                 onChange={(e) => {
-                  setPageSize(Number(e.target.value));
+                  const val = Number(e.target.value);
+                  setPageSize(val);
                   setCurrentPage(1);
+                  localStorage.setItem("kimpc_manager_pageSize", String(val));
                 }}
               >
                 <option value="8">8</option>

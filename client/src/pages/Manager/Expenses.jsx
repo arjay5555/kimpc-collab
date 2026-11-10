@@ -100,7 +100,10 @@ export default function Expenses() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [dateRangeFilter, setDateRangeFilter] = useState("All Time");
   const [sortBy, setSortBy] = useState("date_desc");
-  const [pageSize, setPageSize] = useState(8);
+  const [pageSize, setPageSize] = useState(() => {
+    const saved = localStorage.getItem("kimpc_manager_pageSize");
+    return saved ? Number(saved) : 8;
+  });
   const [currentPage, setCurrentPage] = useState(1);
 
   // Chart hover month
@@ -920,8 +923,10 @@ export default function Expenses() {
                   className="wz-dropdown-select"
                   value={pageSize}
                   onChange={(e) => {
-                    setPageSize(Number(e.target.value));
+                    const val = Number(e.target.value);
+                    setPageSize(val);
                     setCurrentPage(1);
+                    localStorage.setItem("kimpc_manager_pageSize", String(val));
                   }}
                 >
                   <option value="8">8</option>

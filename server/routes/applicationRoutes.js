@@ -49,17 +49,25 @@ router.get("/applications", optionalAuthentication, async (req, res) => {
     const filter = memberEmail ? { memberEmail } : {};
     const applications = await Application.find(filter).sort({ createdAt: -1 }).lean();
 
-    // Ensure memberPhone / farmerPhone / clientPhone are populated from Account if missing
-    const missingEmails = [...new Set(applications.filter((a) => !a.farmerPhone && !a.memberPhone && a.memberEmail).map((a) => a.memberEmail))];
-    if (missingEmails.length > 0) {
-      const accounts = await Account.find({ email: { $in: missingEmails } }).select("email phone").lean();
-      const phoneMap = new Map(accounts.map((acc) => [acc.email, acc.phone]));
+    // Ensure clientAvatar and memberPhone / farmerPhone / clientPhone are populated from Account
+    const allEmails = [...new Set(applications.map((a) => a.memberEmail).filter(Boolean))];
+    if (allEmails.length > 0) {
+      const accounts = await Account.find({ email: { $in: allEmails } }).select("email phone avatar").lean();
+      const accountMap = new Map(accounts.map((acc) => [acc.email.toLowerCase(), acc]));
       applications.forEach((a) => {
-        if (!a.farmerPhone && !a.memberPhone && a.memberEmail) {
-          const ph = phoneMap.get(a.memberEmail) || "";
-          a.farmerPhone = ph;
-          a.memberPhone = ph;
-          a.clientPhone = ph;
+        if (a.memberEmail) {
+          const acc = accountMap.get(a.memberEmail.toLowerCase());
+          if (acc) {
+            if (acc.avatar && !a.clientAvatar) {
+              a.clientAvatar = acc.avatar;
+              a.avatar = acc.avatar;
+            }
+            if (!a.farmerPhone && !a.memberPhone && acc.phone) {
+              a.farmerPhone = acc.phone;
+              a.memberPhone = acc.phone;
+              a.clientPhone = acc.phone;
+            }
+          }
         }
       });
     }
@@ -344,6 +352,20 @@ router.get("/applications/:id", optionalAuthentication, async (req, res) => {
       }).select("imageUrl photos").lean();
       if (u) {
         appObj.imageUrl = u.imageUrl || (Array.isArray(u.photos) && u.photos[0]) || "";
+      }
+    }
+    if (appObj.memberEmail) {
+      const acc = await Account.findOne({ email: appObj.memberEmail }).select("avatar phone").lean();
+      if (acc) {
+        if (acc.avatar && !appObj.clientAvatar) {
+          appObj.clientAvatar = acc.avatar;
+          appObj.avatar = acc.avatar;
+        }
+        if (!appObj.farmerPhone && !appObj.memberPhone && acc.phone) {
+          appObj.farmerPhone = acc.phone;
+          appObj.memberPhone = acc.phone;
+          appObj.clientPhone = acc.phone;
+        }
       }
     }
     res.json(appObj);

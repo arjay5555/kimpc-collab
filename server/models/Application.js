@@ -21,6 +21,7 @@ const applicationSchema = new mongoose.Schema(
     farmFormattedAddress: { type: String, default: "", trim: true },
     machineryModel: { type: String, default: "", trim: true },
     imageUrl: { type: String, default: "" },
+    clientAvatar: { type: String, default: "" },
     assignedDriver: { type: String, default: "Self-Operated", trim: true },
     driverPhone: { type: String, default: "", trim: true },
     paymentStatus: { type: String, enum: ["Paid", "Pending", "Settled", "Refunded"], default: "Pending" },

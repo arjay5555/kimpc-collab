@@ -585,7 +585,10 @@ export default function Drivers() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
   const [sortBy, setSortBy] = useState("name_asc");
-  const [pageSize, setPageSize] = useState(8);
+  const [pageSize, setPageSize] = useState(() => {
+    const saved = localStorage.getItem("kimpc_manager_pageSize");
+    return saved ? Number(saved) : 8;
+  });
   const [currentPage, setCurrentPage] = useState(1);
   const [financialsOpen, setFinancialsOpen] = useState(false);
 
@@ -925,8 +928,10 @@ export default function Drivers() {
                   className="wz-dropdown-select"
                   value={pageSize}
                   onChange={(e) => {
-                    setPageSize(Number(e.target.value));
+                    const val = Number(e.target.value);
+                    setPageSize(val);
                     setCurrentPage(1);
+                    localStorage.setItem("kimpc_manager_pageSize", String(val));
                   }}
                 >
                   <option value="8">8</option>

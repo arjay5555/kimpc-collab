@@ -147,7 +147,10 @@ export default function Units() {
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(8);
+  const [pageSize, setPageSize] = useState(() => {
+    const saved = localStorage.getItem("kimpc_manager_pageSize");
+    return saved ? Number(saved) : 8;
+  });
 
   // Modals
   const [showAddModal, setShowAddModal] = useState(false);
@@ -1183,7 +1186,12 @@ export default function Units() {
             <select
               className="wz-dropdown-select"
               value={pageSize}
-              onChange={(e) => setPageSize(Number(e.target.value))}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                setPageSize(val);
+                setCurrentPage(1);
+                localStorage.setItem("kimpc_manager_pageSize", String(val));
+              }}
             >
               <option value="8">8</option>
               <option value="16">16</option>
