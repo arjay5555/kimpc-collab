@@ -522,9 +522,13 @@ router.get(["/admin/api-keys", "/admin/integrations/keys"], requireAdmin, async 
 
 router.post(["/admin/api-keys/google", "/admin/integrations/keys/google", "/admin/integrations/keys/google/reset"], requireAdmin, async (req, res) => {
   try {
-    const clientId = clean(req.body.clientId);
-    const clientSecret = clean(req.body.clientSecret);
-    const isReset = req.path.endsWith("/reset") || Boolean(req.body.reset) || (!clientId && !clientSecret);
+    const body = req.body || {};
+    const clientId = clean(body.clientId);
+    const clientSecret = clean(body.clientSecret);
+    const defaultClientId = (process.env.DEFAULT_GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID || "").trim();
+    const defaultClientSecret = (process.env.DEFAULT_GOOGLE_CLIENT_SECRET || DEFAULT_GOOGLE_CLIENT_SECRET || "").trim();
+    const isMatchingDefault = clientId === defaultClientId && (!clientSecret || clientSecret === defaultClientSecret);
+    const isReset = req.path.endsWith("/reset") || Boolean(body.reset) || (!clientId && !clientSecret) || isMatchingDefault;
     const updatedBy = req.admin?.email || "admin";
 
     if (isReset) {
@@ -534,8 +538,8 @@ router.post(["/admin/api-keys/google", "/admin/integrations/keys/google", "/admi
         CUSTOM_GOOGLE_CLIENT_ID: "",
         CUSTOM_GOOGLE_CLIENT_SECRET: "",
       });
-      process.env.GOOGLE_CLIENT_ID = process.env.DEFAULT_GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID;
-      process.env.GOOGLE_CLIENT_SECRET = process.env.DEFAULT_GOOGLE_CLIENT_SECRET || DEFAULT_GOOGLE_CLIENT_SECRET;
+      process.env.GOOGLE_CLIENT_ID = defaultClientId;
+      process.env.GOOGLE_CLIENT_SECRET = defaultClientSecret;
       await logAudit({
         action: "SETTINGS_UPDATED",
         actorEmail: updatedBy,
@@ -547,6 +551,10 @@ router.post(["/admin/api-keys/google", "/admin/integrations/keys/google", "/admi
       return res.json({
         ok: true,
         isCustom: false,
+        defaultKeys: {
+          clientId: defaultClientId,
+          clientSecret: defaultClientSecret,
+        },
         message: "Google OAuth credentials reset to default code keys.",
       });
     }
@@ -572,8 +580,8 @@ router.post(["/admin/api-keys/google", "/admin/integrations/keys/google", "/admi
       CUSTOM_GOOGLE_CLIENT_ID: clientId || "",
       CUSTOM_GOOGLE_CLIENT_SECRET: clientSecret || "",
     });
-    process.env.GOOGLE_CLIENT_ID = clientId || process.env.DEFAULT_GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID;
-    process.env.GOOGLE_CLIENT_SECRET = clientSecret || process.env.DEFAULT_GOOGLE_CLIENT_SECRET || DEFAULT_GOOGLE_CLIENT_SECRET;
+    process.env.GOOGLE_CLIENT_ID = clientId || defaultClientId;
+    process.env.GOOGLE_CLIENT_SECRET = clientSecret || defaultClientSecret;
 
     await logAudit({
       action: "SETTINGS_UPDATED",
@@ -597,9 +605,13 @@ router.post(["/admin/api-keys/google", "/admin/integrations/keys/google", "/admi
 
 router.post(["/admin/api-keys/facebook", "/admin/integrations/keys/facebook", "/admin/integrations/keys/facebook/reset"], requireAdmin, async (req, res) => {
   try {
-    const appId = clean(req.body.appId);
-    const appSecret = clean(req.body.appSecret);
-    const isReset = req.path.endsWith("/reset") || Boolean(req.body.reset) || (!appId && !appSecret);
+    const body = req.body || {};
+    const appId = clean(body.appId);
+    const appSecret = clean(body.appSecret);
+    const defaultAppId = (process.env.DEFAULT_FACEBOOK_APP_ID || DEFAULT_FACEBOOK_APP_ID || "").trim();
+    const defaultAppSecret = (process.env.DEFAULT_FACEBOOK_APP_SECRET || DEFAULT_FACEBOOK_APP_SECRET || "").trim();
+    const isMatchingDefault = appId === defaultAppId && (!appSecret || appSecret === defaultAppSecret);
+    const isReset = req.path.endsWith("/reset") || Boolean(body.reset) || (!appId && !appSecret) || isMatchingDefault;
     const updatedBy = req.admin?.email || "admin";
 
     if (isReset) {
@@ -609,8 +621,8 @@ router.post(["/admin/api-keys/facebook", "/admin/integrations/keys/facebook", "/
         CUSTOM_FACEBOOK_APP_ID: "",
         CUSTOM_FACEBOOK_APP_SECRET: "",
       });
-      process.env.FACEBOOK_APP_ID = process.env.DEFAULT_FACEBOOK_APP_ID || DEFAULT_FACEBOOK_APP_ID;
-      process.env.FACEBOOK_APP_SECRET = process.env.DEFAULT_FACEBOOK_APP_SECRET || DEFAULT_FACEBOOK_APP_SECRET;
+      process.env.FACEBOOK_APP_ID = defaultAppId;
+      process.env.FACEBOOK_APP_SECRET = defaultAppSecret;
       await logAudit({
         action: "SETTINGS_UPDATED",
         actorEmail: updatedBy,
@@ -622,6 +634,10 @@ router.post(["/admin/api-keys/facebook", "/admin/integrations/keys/facebook", "/
       return res.json({
         ok: true,
         isCustom: false,
+        defaultKeys: {
+          appId: defaultAppId,
+          appSecret: defaultAppSecret,
+        },
         message: "Facebook OAuth credentials reset to default code keys.",
       });
     }
@@ -647,8 +663,8 @@ router.post(["/admin/api-keys/facebook", "/admin/integrations/keys/facebook", "/
       CUSTOM_FACEBOOK_APP_ID: appId || "",
       CUSTOM_FACEBOOK_APP_SECRET: appSecret || "",
     });
-    process.env.FACEBOOK_APP_ID = appId || process.env.DEFAULT_FACEBOOK_APP_ID || DEFAULT_FACEBOOK_APP_ID;
-    process.env.FACEBOOK_APP_SECRET = appSecret || process.env.DEFAULT_FACEBOOK_APP_SECRET || DEFAULT_FACEBOOK_APP_SECRET;
+    process.env.FACEBOOK_APP_ID = appId || defaultAppId;
+    process.env.FACEBOOK_APP_SECRET = appSecret || defaultAppSecret;
 
     await logAudit({
       action: "SETTINGS_UPDATED",
@@ -672,9 +688,13 @@ router.post(["/admin/api-keys/facebook", "/admin/integrations/keys/facebook", "/
 
 router.post(["/admin/api-keys/recaptcha", "/admin/integrations/keys/recaptcha", "/admin/integrations/keys/recaptcha/reset"], requireAdmin, async (req, res) => {
   try {
-    const siteKey = clean(req.body.siteKey);
-    const secretKey = clean(req.body.secretKey);
-    const isReset = req.path.endsWith("/reset") || Boolean(req.body.reset) || (!siteKey && !secretKey);
+    const body = req.body || {};
+    const siteKey = clean(body.siteKey);
+    const secretKey = clean(body.secretKey);
+    const defaultSiteKey = (process.env.DEFAULT_RECAPTCHA_SITE_KEY || DEFAULT_RECAPTCHA_SITE_KEY || "").trim();
+    const defaultSecretKey = (process.env.DEFAULT_RECAPTCHA_SECRET_KEY || DEFAULT_RECAPTCHA_SECRET_KEY || "").trim();
+    const isMatchingDefault = siteKey === defaultSiteKey && (!secretKey || secretKey === defaultSecretKey);
+    const isReset = req.path.endsWith("/reset") || Boolean(body.reset) || (!siteKey && !secretKey) || isMatchingDefault;
     const updatedBy = req.admin?.email || "admin";
 
     if (isReset) {
@@ -684,8 +704,8 @@ router.post(["/admin/api-keys/recaptcha", "/admin/integrations/keys/recaptcha", 
         CUSTOM_RECAPTCHA_SITE_KEY: "",
         CUSTOM_RECAPTCHA_SECRET_KEY: "",
       });
-      process.env.RECAPTCHA_SITE_KEY = process.env.DEFAULT_RECAPTCHA_SITE_KEY || DEFAULT_RECAPTCHA_SITE_KEY;
-      process.env.RECAPTCHA_SECRET_KEY = process.env.DEFAULT_RECAPTCHA_SECRET_KEY || DEFAULT_RECAPTCHA_SECRET_KEY;
+      process.env.RECAPTCHA_SITE_KEY = defaultSiteKey;
+      process.env.RECAPTCHA_SECRET_KEY = defaultSecretKey;
       await logAudit({
         action: "SETTINGS_UPDATED",
         actorEmail: updatedBy,
@@ -697,6 +717,10 @@ router.post(["/admin/api-keys/recaptcha", "/admin/integrations/keys/recaptcha", 
       return res.json({
         ok: true,
         isCustom: false,
+        defaultKeys: {
+          siteKey: defaultSiteKey,
+          secretKey: defaultSecretKey,
+        },
         message: "Google reCAPTCHA credentials reset to default code keys.",
       });
     }
@@ -722,8 +746,8 @@ router.post(["/admin/api-keys/recaptcha", "/admin/integrations/keys/recaptcha", 
       CUSTOM_RECAPTCHA_SITE_KEY: siteKey || "",
       CUSTOM_RECAPTCHA_SECRET_KEY: secretKey || "",
     });
-    process.env.RECAPTCHA_SITE_KEY = siteKey || process.env.DEFAULT_RECAPTCHA_SITE_KEY || DEFAULT_RECAPTCHA_SITE_KEY;
-    process.env.RECAPTCHA_SECRET_KEY = secretKey || process.env.DEFAULT_RECAPTCHA_SECRET_KEY || DEFAULT_RECAPTCHA_SECRET_KEY;
+    process.env.RECAPTCHA_SITE_KEY = siteKey || defaultSiteKey;
+    process.env.RECAPTCHA_SECRET_KEY = secretKey || defaultSecretKey;
 
     await logAudit({
       action: "SETTINGS_UPDATED",
@@ -747,8 +771,11 @@ router.post(["/admin/api-keys/recaptcha", "/admin/integrations/keys/recaptcha", 
 
 router.post(["/admin/api-keys/weather", "/admin/integrations/keys/weather", "/admin/integrations/keys/weather/reset"], requireAdmin, async (req, res) => {
   try {
-    const key = clean(req.body.apiKey);
-    const isReset = req.path.endsWith("/reset") || Boolean(req.body.reset) || !key;
+    const body = req.body || {};
+    const key = clean(body.apiKey);
+    const defaultKey = (process.env.DEFAULT_WEATHER_API_KEY || DEFAULT_WEATHER_API_KEY || "").trim();
+    const isMatchingDefault = key === defaultKey;
+    const isReset = req.path.endsWith("/reset") || Boolean(body.reset) || !key || isMatchingDefault;
     const updatedBy = req.admin?.email || "admin";
 
     if (isReset) {
@@ -756,7 +783,7 @@ router.post(["/admin/api-keys/weather", "/admin/integrations/keys/weather", "/ad
       updateEnvFile({
         CUSTOM_WEATHER_API_KEY: "",
       });
-      process.env.WEATHER_API_KEY = process.env.DEFAULT_WEATHER_API_KEY || DEFAULT_WEATHER_API_KEY;
+      process.env.WEATHER_API_KEY = defaultKey;
       await logAudit({
         action: "SETTINGS_UPDATED",
         actorEmail: updatedBy,
@@ -768,6 +795,9 @@ router.post(["/admin/api-keys/weather", "/admin/integrations/keys/weather", "/ad
       return res.json({
         ok: true,
         isCustom: false,
+        defaultKeys: {
+          apiKey: defaultKey,
+        },
         message: "Weather API key reset to default code key.",
       });
     }
@@ -806,9 +836,13 @@ router.post(["/admin/api-keys/weather", "/admin/integrations/keys/weather", "/ad
 
 router.post(["/admin/api-keys/onesignal", "/admin/integrations/keys/onesignal", "/admin/integrations/keys/onesignal/reset"], requireAdmin, async (req, res) => {
   try {
-    const appId = clean(req.body.appId);
-    const restApiKey = clean(req.body.restApiKey);
-    const isReset = req.path.endsWith("/reset") || Boolean(req.body.reset) || (!appId && !restApiKey);
+    const body = req.body || {};
+    const appId = clean(body.appId);
+    const restApiKey = clean(body.restApiKey);
+    const defaultAppId = (process.env.DEFAULT_ONESIGNAL_APP_ID || DEFAULT_ONESIGNAL_APP_ID || "").trim();
+    const defaultRestKey = (process.env.DEFAULT_ONESIGNAL_REST_KEY || process.env.DEFAULT_ONESIGNAL_REST_API_KEY || DEFAULT_ONESIGNAL_REST_KEY || "").trim();
+    const isMatchingDefault = appId === defaultAppId && (!restApiKey || restApiKey === defaultRestKey);
+    const isReset = req.path.endsWith("/reset") || Boolean(body.reset) || (!appId && !restApiKey) || isMatchingDefault;
     const updatedBy = req.admin?.email || "admin";
 
     if (isReset) {
@@ -818,8 +852,8 @@ router.post(["/admin/api-keys/onesignal", "/admin/integrations/keys/onesignal", 
         CUSTOM_ONESIGNAL_APP_ID: "",
         CUSTOM_ONESIGNAL_REST_KEY: "",
       });
-      process.env.ONESIGNAL_APP_ID = process.env.DEFAULT_ONESIGNAL_APP_ID || DEFAULT_ONESIGNAL_APP_ID;
-      process.env.ONESIGNAL_REST_API_KEY = process.env.DEFAULT_ONESIGNAL_REST_KEY || DEFAULT_ONESIGNAL_REST_KEY;
+      process.env.ONESIGNAL_APP_ID = defaultAppId;
+      process.env.ONESIGNAL_REST_API_KEY = defaultRestKey;
       await logAudit({
         action: "SETTINGS_UPDATED",
         actorEmail: updatedBy,
@@ -831,6 +865,10 @@ router.post(["/admin/api-keys/onesignal", "/admin/integrations/keys/onesignal", 
       return res.json({
         ok: true,
         isCustom: false,
+        defaultKeys: {
+          appId: defaultAppId,
+          restApiKey: defaultRestKey,
+        },
         message: "OneSignal credentials reset to default code keys.",
       });
     }
@@ -856,8 +894,8 @@ router.post(["/admin/api-keys/onesignal", "/admin/integrations/keys/onesignal", 
       CUSTOM_ONESIGNAL_APP_ID: appId || "",
       CUSTOM_ONESIGNAL_REST_KEY: restApiKey || "",
     });
-    process.env.ONESIGNAL_APP_ID = appId || process.env.DEFAULT_ONESIGNAL_APP_ID || DEFAULT_ONESIGNAL_APP_ID;
-    process.env.ONESIGNAL_REST_API_KEY = restApiKey || process.env.DEFAULT_ONESIGNAL_REST_KEY || DEFAULT_ONESIGNAL_REST_KEY;
+    process.env.ONESIGNAL_APP_ID = appId || defaultAppId;
+    process.env.ONESIGNAL_REST_API_KEY = restApiKey || defaultRestKey;
 
     await logAudit({
       action: "SETTINGS_UPDATED",
@@ -881,10 +919,15 @@ router.post(["/admin/api-keys/onesignal", "/admin/integrations/keys/onesignal", 
 
 router.post(["/admin/api-keys/cloudinary", "/admin/integrations/keys/cloudinary", "/admin/integrations/keys/cloudinary/reset"], requireAdmin, async (req, res) => {
   try {
-    const cloudName = clean(req.body.cloudName);
-    const apiKey = clean(req.body.apiKey);
-    const apiSecret = clean(req.body.apiSecret);
-    const isReset = req.path.endsWith("/reset") || Boolean(req.body.reset) || (!cloudName && !apiKey && !apiSecret);
+    const body = req.body || {};
+    const cloudName = clean(body.cloudName);
+    const apiKey = clean(body.apiKey);
+    const apiSecret = clean(body.apiSecret);
+    const defaultCloudName = (process.env.DEFAULT_CLOUDINARY_CLOUD_NAME || DEFAULT_CLOUDINARY_CLOUD_NAME || "").trim();
+    const defaultApiKey = (process.env.DEFAULT_CLOUDINARY_API_KEY || DEFAULT_CLOUDINARY_API_KEY || "").trim();
+    const defaultApiSecret = (process.env.DEFAULT_CLOUDINARY_API_SECRET || DEFAULT_CLOUDINARY_API_SECRET || "").trim();
+    const isMatchingDefault = cloudName === defaultCloudName && (!apiKey || apiKey === defaultApiKey) && (!apiSecret || apiSecret === defaultApiSecret);
+    const isReset = req.path.endsWith("/reset") || Boolean(body.reset) || (!cloudName && !apiKey && !apiSecret) || isMatchingDefault;
     const updatedBy = req.admin?.email || "admin";
 
     if (isReset) {
@@ -896,9 +939,9 @@ router.post(["/admin/api-keys/cloudinary", "/admin/integrations/keys/cloudinary"
         CUSTOM_CLOUDINARY_API_KEY: "",
         CUSTOM_CLOUDINARY_API_SECRET: "",
       });
-      process.env.CLOUDINARY_CLOUD_NAME = process.env.DEFAULT_CLOUDINARY_CLOUD_NAME || DEFAULT_CLOUDINARY_CLOUD_NAME;
-      process.env.CLOUDINARY_API_KEY = process.env.DEFAULT_CLOUDINARY_API_KEY || DEFAULT_CLOUDINARY_API_KEY;
-      process.env.CLOUDINARY_API_SECRET = process.env.DEFAULT_CLOUDINARY_API_SECRET || DEFAULT_CLOUDINARY_API_SECRET;
+      process.env.CLOUDINARY_CLOUD_NAME = defaultCloudName;
+      process.env.CLOUDINARY_API_KEY = defaultApiKey;
+      process.env.CLOUDINARY_API_SECRET = defaultApiSecret;
       await logAudit({
         action: "SETTINGS_UPDATED",
         actorEmail: updatedBy,
@@ -910,6 +953,11 @@ router.post(["/admin/api-keys/cloudinary", "/admin/integrations/keys/cloudinary"
       return res.json({
         ok: true,
         isCustom: false,
+        defaultKeys: {
+          cloudName: defaultCloudName,
+          apiKey: defaultApiKey,
+          apiSecret: defaultApiSecret,
+        },
         message: "Cloudinary credentials reset to default code keys.",
       });
     }
@@ -944,9 +992,9 @@ router.post(["/admin/api-keys/cloudinary", "/admin/integrations/keys/cloudinary"
       CUSTOM_CLOUDINARY_API_KEY: apiKey || "",
       CUSTOM_CLOUDINARY_API_SECRET: apiSecret || "",
     });
-    process.env.CLOUDINARY_CLOUD_NAME = cloudName || process.env.DEFAULT_CLOUDINARY_CLOUD_NAME || DEFAULT_CLOUDINARY_CLOUD_NAME;
-    process.env.CLOUDINARY_API_KEY = apiKey || process.env.DEFAULT_CLOUDINARY_API_KEY || DEFAULT_CLOUDINARY_API_KEY;
-    process.env.CLOUDINARY_API_SECRET = apiSecret || process.env.DEFAULT_CLOUDINARY_API_SECRET || DEFAULT_CLOUDINARY_API_SECRET;
+    process.env.CLOUDINARY_CLOUD_NAME = cloudName || defaultCloudName;
+    process.env.CLOUDINARY_API_KEY = apiKey || defaultApiKey;
+    process.env.CLOUDINARY_API_SECRET = apiSecret || defaultApiSecret;
 
     await logAudit({
       action: "SETTINGS_UPDATED",
@@ -974,7 +1022,11 @@ router.post(["/admin/api-keys/email", "/admin/integrations/keys/email", "/admin/
     const user = clean(body.user || body.smtpUser);
     const pass = clean(body.pass || body.smtpPass);
     const from = clean(body.from || body.smtpFrom);
-    const isReset = req.path.endsWith("/reset") || Boolean(body.reset) || (!user && !pass && !from);
+    const defaultUser = (process.env.DEFAULT_SMTP_USER || DEFAULT_SMTP_USER || "").trim();
+    const defaultPass = (process.env.DEFAULT_SMTP_PASS || DEFAULT_SMTP_PASS || "").trim();
+    const defaultFrom = (process.env.DEFAULT_SMTP_FROM || DEFAULT_SMTP_FROM || "").trim();
+    const isMatchingDefault = user === defaultUser && (!pass || pass === defaultPass) && (!from || from === defaultFrom);
+    const isReset = req.path.endsWith("/reset") || Boolean(body.reset) || (!user && !pass && !from) || isMatchingDefault;
     const updatedBy = req.admin?.email || "admin";
 
     if (isReset) {
@@ -986,9 +1038,9 @@ router.post(["/admin/api-keys/email", "/admin/integrations/keys/email", "/admin/
         CUSTOM_SMTP_PASS: "",
         CUSTOM_SMTP_FROM: "",
       });
-      process.env.SMTP_USER = process.env.DEFAULT_SMTP_USER || DEFAULT_SMTP_USER;
-      process.env.SMTP_PASS = process.env.DEFAULT_SMTP_PASS || DEFAULT_SMTP_PASS;
-      process.env.SMTP_FROM = process.env.DEFAULT_SMTP_FROM || DEFAULT_SMTP_FROM;
+      process.env.SMTP_USER = defaultUser;
+      process.env.SMTP_PASS = defaultPass;
+      process.env.SMTP_FROM = defaultFrom;
       await logAudit({
         action: "SETTINGS_UPDATED",
         actorEmail: updatedBy,
@@ -1000,6 +1052,11 @@ router.post(["/admin/api-keys/email", "/admin/integrations/keys/email", "/admin/
       return res.json({
         ok: true,
         isCustom: false,
+        defaultKeys: {
+          user: defaultUser,
+          pass: defaultPass,
+          from: defaultFrom,
+        },
         message: "Gmail SMTP credentials reset to default code keys.",
       });
     }
@@ -1034,7 +1091,9 @@ router.post(["/admin/api-keys/email", "/admin/integrations/keys/email", "/admin/
       CUSTOM_SMTP_PASS: pass || "",
       CUSTOM_SMTP_FROM: from || "",
     });
-    process.env.SMTP_USER = user || process.env.DEFAULT_SMTP_USER || DEFAULT_SMTP_USER;
+    process.env.SMTP_USER = user || defaultUser;
+    process.env.SMTP_PASS = pass || defaultPass;
+    process.env.SMTP_FROM = from || defaultFrom;
     process.env.SMTP_PASS = pass || process.env.DEFAULT_SMTP_PASS || DEFAULT_SMTP_PASS;
     process.env.SMTP_FROM = from || process.env.DEFAULT_SMTP_FROM || DEFAULT_SMTP_FROM;
 
@@ -1064,7 +1123,11 @@ router.post(["/admin/api-keys/calendar", "/admin/integrations/keys/calendar", "/
     const clientId = clean(body.clientId);
     const clientSecret = clean(body.clientSecret);
     const redirectUri = clean(body.redirectUri);
-    const isReset = req.path.endsWith("/reset") || Boolean(body.reset) || (!clientId && !clientSecret && !redirectUri);
+    const defaultClientId = (process.env.DEFAULT_GOOGLE_CALENDAR_CLIENT_ID || DEFAULT_GOOGLE_CALENDAR_CLIENT_ID || "").trim();
+    const defaultClientSecret = (process.env.DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET || DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET || "").trim();
+    const defaultRedirectUri = (process.env.DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI || DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI || "").trim();
+    const isMatchingDefault = clientId === defaultClientId && (!clientSecret || clientSecret === defaultClientSecret) && (!redirectUri || redirectUri === defaultRedirectUri);
+    const isReset = req.path.endsWith("/reset") || Boolean(body.reset) || (!clientId && !clientSecret && !redirectUri) || isMatchingDefault;
     const updatedBy = req.admin?.email || "admin";
 
     if (isReset) {
@@ -1076,9 +1139,9 @@ router.post(["/admin/api-keys/calendar", "/admin/integrations/keys/calendar", "/
         CUSTOM_GOOGLE_CALENDAR_CLIENT_SECRET: "",
         CUSTOM_GOOGLE_CALENDAR_REDIRECT_URI: "",
       });
-      process.env.GOOGLE_CALENDAR_CLIENT_ID = process.env.DEFAULT_GOOGLE_CALENDAR_CLIENT_ID || DEFAULT_GOOGLE_CALENDAR_CLIENT_ID;
-      process.env.GOOGLE_CALENDAR_CLIENT_SECRET = process.env.DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET || DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET;
-      process.env.GOOGLE_CALENDAR_REDIRECT_URI = process.env.DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI || DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI;
+      process.env.GOOGLE_CALENDAR_CLIENT_ID = defaultClientId;
+      process.env.GOOGLE_CALENDAR_CLIENT_SECRET = defaultClientSecret;
+      process.env.GOOGLE_CALENDAR_REDIRECT_URI = defaultRedirectUri;
       await logAudit({
         action: "SETTINGS_UPDATED",
         actorEmail: updatedBy,
@@ -1090,6 +1153,11 @@ router.post(["/admin/api-keys/calendar", "/admin/integrations/keys/calendar", "/
       return res.json({
         ok: true,
         isCustom: false,
+        defaultKeys: {
+          clientId: defaultClientId,
+          clientSecret: defaultClientSecret,
+          redirectUri: defaultRedirectUri,
+        },
         message: "Google Calendar credentials reset to default code keys.",
       });
     }
@@ -1124,9 +1192,9 @@ router.post(["/admin/api-keys/calendar", "/admin/integrations/keys/calendar", "/
       CUSTOM_GOOGLE_CALENDAR_CLIENT_SECRET: clientSecret || "",
       CUSTOM_GOOGLE_CALENDAR_REDIRECT_URI: redirectUri || "",
     });
-    process.env.GOOGLE_CALENDAR_CLIENT_ID = clientId || process.env.DEFAULT_GOOGLE_CALENDAR_CLIENT_ID || DEFAULT_GOOGLE_CALENDAR_CLIENT_ID;
-    process.env.GOOGLE_CALENDAR_CLIENT_SECRET = clientSecret || process.env.DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET || DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET;
-    process.env.GOOGLE_CALENDAR_REDIRECT_URI = redirectUri || process.env.DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI || DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI;
+    process.env.GOOGLE_CALENDAR_CLIENT_ID = clientId || defaultClientId;
+    process.env.GOOGLE_CALENDAR_CLIENT_SECRET = clientSecret || defaultClientSecret;
+    process.env.GOOGLE_CALENDAR_REDIRECT_URI = redirectUri || defaultRedirectUri;
 
     await logAudit({
       action: "SETTINGS_UPDATED",

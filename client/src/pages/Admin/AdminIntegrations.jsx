@@ -629,38 +629,38 @@ export default function AdminIntegrations() {
 
         setKeyInputs({
           google: {
-            clientId: d.google?.customClientId || "",
-            clientSecret: d.google?.customClientSecret || "",
+            clientId: d.google?.isCustom ? (d.google?.customClientId || "") : (d.google?.defaultClientId || ""),
+            clientSecret: d.google?.isCustom ? (d.google?.customClientSecret || "") : (d.google?.defaultClientSecret || ""),
           },
           facebook: {
-            appId: d.facebook?.customAppId || "",
-            appSecret: d.facebook?.customAppSecret || "",
+            appId: d.facebook?.isCustom ? (d.facebook?.customAppId || "") : (d.facebook?.defaultAppId || ""),
+            appSecret: d.facebook?.isCustom ? (d.facebook?.customAppSecret || "") : (d.facebook?.defaultAppSecret || ""),
           },
           recaptcha: {
-            siteKey: d.recaptcha?.customSiteKey || "",
-            secretKey: d.recaptcha?.customSecretKey || "",
+            siteKey: d.recaptcha?.isCustom ? (d.recaptcha?.customSiteKey || "") : (d.recaptcha?.defaultSiteKey || ""),
+            secretKey: d.recaptcha?.isCustom ? (d.recaptcha?.customSecretKey || "") : (d.recaptcha?.defaultSecretKey || ""),
           },
           weather: {
-            apiKey: d.weather?.customKey || "",
+            apiKey: d.weather?.isCustom ? (d.weather?.customKey || "") : (d.weather?.defaultKey || ""),
           },
           oneSignal: {
-            appId: d.oneSignal?.customAppId || "",
-            restApiKey: d.oneSignal?.customRestApiKey || "",
+            appId: d.oneSignal?.isCustom ? (d.oneSignal?.customAppId || "") : (d.oneSignal?.defaultAppId || ""),
+            restApiKey: d.oneSignal?.isCustom ? (d.oneSignal?.customRestApiKey || "") : (d.oneSignal?.defaultRestKey || ""),
           },
           cloudinary: {
-            cloudName: d.cloudinary?.customCloudName || "",
-            apiKey: d.cloudinary?.customApiKey || "",
-            apiSecret: d.cloudinary?.customApiSecret || "",
+            cloudName: d.cloudinary?.isCustom ? (d.cloudinary?.customCloudName || "") : (d.cloudinary?.defaultCloudName || ""),
+            apiKey: d.cloudinary?.isCustom ? (d.cloudinary?.customApiKey || "") : (d.cloudinary?.defaultApiKey || ""),
+            apiSecret: d.cloudinary?.isCustom ? (d.cloudinary?.customApiSecret || "") : (d.cloudinary?.defaultApiSecret || ""),
           },
           email: {
-            user: d.email?.customUser || "",
-            pass: d.email?.customPass || "",
-            from: d.email?.customFrom || "",
+            user: d.email?.isCustom ? (d.email?.customUser || "") : (d.email?.defaultUser || ""),
+            pass: d.email?.isCustom ? (d.email?.customPass || "") : (d.email?.defaultPass || ""),
+            from: d.email?.isCustom ? (d.email?.customFrom || "") : (d.email?.defaultFrom || ""),
           },
           calendar: {
-            clientId: d.calendar?.customClientId || "",
-            clientSecret: d.calendar?.customClientSecret || "",
-            redirectUri: d.calendar?.customRedirectUri || "",
+            clientId: d.calendar?.isCustom ? (d.calendar?.customClientId || "") : (d.calendar?.defaultClientId || ""),
+            clientSecret: d.calendar?.isCustom ? (d.calendar?.customClientSecret || "") : (d.calendar?.defaultClientSecret || ""),
+            redirectUri: d.calendar?.isCustom ? (d.calendar?.customRedirectUri || "") : (d.calendar?.defaultRedirectUri || ""),
           },
         });
       }
@@ -796,11 +796,25 @@ export default function AdminIntegrations() {
     try {
       const res = await api("/admin/integrations/keys/google/reset", { method: "POST" });
       if (res.ok) {
-        setKeyInputs((p) => ({ ...p, google: { clientId: "", clientSecret: "" } }));
+        const defs = res.data?.defaultKeys || {
+          clientId: apiKeys.google?.defaultClientId || "",
+          clientSecret: apiKeys.google?.defaultClientSecret || "",
+        };
+        setKeyInputs((p) => ({
+          ...p,
+          google: {
+            clientId: defs.clientId || "",
+            clientSecret: defs.clientSecret || "",
+          },
+        }));
         setKeyFeedback((p) => ({ ...p, google: { isError: false, message: "Reset to default system credentials." } }));
-        fetchSettingsAndKeys();
+        await fetchSettingsAndKeys();
         setTimeout(() => setKeyFeedback((p) => ({ ...p, google: null })), 4000);
+      } else {
+        setKeyFeedback((p) => ({ ...p, google: { isError: true, message: res.data?.error || "Failed to reset Google credentials." } }));
       }
+    } catch {
+      setKeyFeedback((p) => ({ ...p, google: { isError: true, message: "Network error resetting Google credentials." } }));
     } finally {
       setKeySaving((p) => ({ ...p, google: false }));
     }
@@ -837,11 +851,25 @@ export default function AdminIntegrations() {
     try {
       const res = await api("/admin/integrations/keys/facebook/reset", { method: "POST" });
       if (res.ok) {
-        setKeyInputs((p) => ({ ...p, facebook: { appId: "", appSecret: "" } }));
+        const defs = res.data?.defaultKeys || {
+          appId: apiKeys.facebook?.defaultAppId || "",
+          appSecret: apiKeys.facebook?.defaultAppSecret || "",
+        };
+        setKeyInputs((p) => ({
+          ...p,
+          facebook: {
+            appId: defs.appId || "",
+            appSecret: defs.appSecret || "",
+          },
+        }));
         setKeyFeedback((p) => ({ ...p, facebook: { isError: false, message: "Reset to default system credentials." } }));
-        fetchSettingsAndKeys();
+        await fetchSettingsAndKeys();
         setTimeout(() => setKeyFeedback((p) => ({ ...p, facebook: null })), 4000);
+      } else {
+        setKeyFeedback((p) => ({ ...p, facebook: { isError: true, message: res.data?.error || "Failed to reset Facebook credentials." } }));
       }
+    } catch {
+      setKeyFeedback((p) => ({ ...p, facebook: { isError: true, message: "Network error resetting Facebook credentials." } }));
     } finally {
       setKeySaving((p) => ({ ...p, facebook: false }));
     }
@@ -878,11 +906,25 @@ export default function AdminIntegrations() {
     try {
       const res = await api("/admin/integrations/keys/recaptcha/reset", { method: "POST" });
       if (res.ok) {
-        setKeyInputs((p) => ({ ...p, recaptcha: { siteKey: "", secretKey: "" } }));
+        const defs = res.data?.defaultKeys || {
+          siteKey: apiKeys.recaptcha?.defaultSiteKey || "",
+          secretKey: apiKeys.recaptcha?.defaultSecretKey || "",
+        };
+        setKeyInputs((p) => ({
+          ...p,
+          recaptcha: {
+            siteKey: defs.siteKey || "",
+            secretKey: defs.secretKey || "",
+          },
+        }));
         setKeyFeedback((p) => ({ ...p, recaptcha: { isError: false, message: "Reset to default system credentials." } }));
-        fetchSettingsAndKeys();
+        await fetchSettingsAndKeys();
         setTimeout(() => setKeyFeedback((p) => ({ ...p, recaptcha: null })), 4000);
+      } else {
+        setKeyFeedback((p) => ({ ...p, recaptcha: { isError: true, message: res.data?.error || "Failed to reset reCAPTCHA keys." } }));
       }
+    } catch {
+      setKeyFeedback((p) => ({ ...p, recaptcha: { isError: true, message: "Network error resetting reCAPTCHA keys." } }));
     } finally {
       setKeySaving((p) => ({ ...p, recaptcha: false }));
     }
@@ -918,11 +960,23 @@ export default function AdminIntegrations() {
     try {
       const res = await api("/admin/integrations/keys/weather/reset", { method: "POST" });
       if (res.ok) {
-        setKeyInputs((p) => ({ ...p, weather: { apiKey: "" } }));
+        const defs = res.data?.defaultKeys || {
+          apiKey: apiKeys.weather?.defaultKey || "",
+        };
+        setKeyInputs((p) => ({
+          ...p,
+          weather: {
+            apiKey: defs.apiKey || "",
+          },
+        }));
         setKeyFeedback((p) => ({ ...p, weather: { isError: false, message: "Reset to default system credentials." } }));
-        fetchSettingsAndKeys();
+        await fetchSettingsAndKeys();
         setTimeout(() => setKeyFeedback((p) => ({ ...p, weather: null })), 4000);
+      } else {
+        setKeyFeedback((p) => ({ ...p, weather: { isError: true, message: res.data?.error || "Failed to reset Weather API key." } }));
       }
+    } catch {
+      setKeyFeedback((p) => ({ ...p, weather: { isError: true, message: "Network error resetting Weather API key." } }));
     } finally {
       setKeySaving((p) => ({ ...p, weather: false }));
     }
@@ -959,11 +1013,25 @@ export default function AdminIntegrations() {
     try {
       const res = await api("/admin/integrations/keys/onesignal/reset", { method: "POST" });
       if (res.ok) {
-        setKeyInputs((p) => ({ ...p, oneSignal: { appId: "", restApiKey: "" } }));
+        const defs = res.data?.defaultKeys || {
+          appId: apiKeys.oneSignal?.defaultAppId || "",
+          restApiKey: apiKeys.oneSignal?.defaultRestKey || "",
+        };
+        setKeyInputs((p) => ({
+          ...p,
+          oneSignal: {
+            appId: defs.appId || "",
+            restApiKey: defs.restApiKey || "",
+          },
+        }));
         setKeyFeedback((p) => ({ ...p, oneSignal: { isError: false, message: "Reset to default system credentials." } }));
-        fetchSettingsAndKeys();
+        await fetchSettingsAndKeys();
         setTimeout(() => setKeyFeedback((p) => ({ ...p, oneSignal: null })), 4000);
+      } else {
+        setKeyFeedback((p) => ({ ...p, oneSignal: { isError: true, message: res.data?.error || "Failed to reset OneSignal credentials." } }));
       }
+    } catch {
+      setKeyFeedback((p) => ({ ...p, oneSignal: { isError: true, message: "Network error resetting OneSignal credentials." } }));
     } finally {
       setKeySaving((p) => ({ ...p, oneSignal: false }));
     }
@@ -1001,11 +1069,27 @@ export default function AdminIntegrations() {
     try {
       const res = await api("/admin/integrations/keys/cloudinary/reset", { method: "POST" });
       if (res.ok) {
-        setKeyInputs((p) => ({ ...p, cloudinary: { cloudName: "", apiKey: "", apiSecret: "" } }));
+        const defs = res.data?.defaultKeys || {
+          cloudName: apiKeys.cloudinary?.defaultCloudName || "",
+          apiKey: apiKeys.cloudinary?.defaultApiKey || "",
+          apiSecret: apiKeys.cloudinary?.defaultApiSecret || "",
+        };
+        setKeyInputs((p) => ({
+          ...p,
+          cloudinary: {
+            cloudName: defs.cloudName || "",
+            apiKey: defs.apiKey || "",
+            apiSecret: defs.apiSecret || "",
+          },
+        }));
         setKeyFeedback((p) => ({ ...p, cloudinary: { isError: false, message: "Reset to default system credentials." } }));
-        fetchSettingsAndKeys();
+        await fetchSettingsAndKeys();
         setTimeout(() => setKeyFeedback((p) => ({ ...p, cloudinary: null })), 4000);
+      } else {
+        setKeyFeedback((p) => ({ ...p, cloudinary: { isError: true, message: res.data?.error || "Failed to reset Cloudinary credentials." } }));
       }
+    } catch {
+      setKeyFeedback((p) => ({ ...p, cloudinary: { isError: true, message: "Network error resetting Cloudinary credentials." } }));
     } finally {
       setKeySaving((p) => ({ ...p, cloudinary: false }));
     }
@@ -1043,11 +1127,27 @@ export default function AdminIntegrations() {
     try {
       const res = await api("/admin/integrations/keys/email/reset", { method: "POST" });
       if (res.ok) {
-        setKeyInputs((p) => ({ ...p, email: { user: "", pass: "", from: "" } }));
+        const defs = res.data?.defaultKeys || {
+          user: apiKeys.email?.defaultUser || "",
+          pass: apiKeys.email?.defaultPass || "",
+          from: apiKeys.email?.defaultFrom || "",
+        };
+        setKeyInputs((p) => ({
+          ...p,
+          email: {
+            user: defs.user || "",
+            pass: defs.pass || "",
+            from: defs.from || "",
+          },
+        }));
         setKeyFeedback((p) => ({ ...p, email: { isError: false, message: "Reset to default system credentials." } }));
-        fetchSettingsAndKeys();
+        await fetchSettingsAndKeys();
         setTimeout(() => setKeyFeedback((p) => ({ ...p, email: null })), 4000);
+      } else {
+        setKeyFeedback((p) => ({ ...p, email: { isError: true, message: res.data?.error || "Failed to reset Gmail SMTP credentials." } }));
       }
+    } catch {
+      setKeyFeedback((p) => ({ ...p, email: { isError: true, message: "Network error resetting Gmail SMTP credentials." } }));
     } finally {
       setKeySaving((p) => ({ ...p, email: false }));
     }
@@ -1085,11 +1185,27 @@ export default function AdminIntegrations() {
     try {
       const res = await api("/admin/integrations/keys/calendar/reset", { method: "POST" });
       if (res.ok) {
-        setKeyInputs((p) => ({ ...p, calendar: { clientId: "", clientSecret: "", redirectUri: "" } }));
+        const defs = res.data?.defaultKeys || {
+          clientId: apiKeys.calendar?.defaultClientId || "",
+          clientSecret: apiKeys.calendar?.defaultClientSecret || "",
+          redirectUri: apiKeys.calendar?.defaultRedirectUri || "",
+        };
+        setKeyInputs((p) => ({
+          ...p,
+          calendar: {
+            clientId: defs.clientId || "",
+            clientSecret: defs.clientSecret || "",
+            redirectUri: defs.redirectUri || "",
+          },
+        }));
         setKeyFeedback((p) => ({ ...p, calendar: { isError: false, message: "Reset to default system credentials." } }));
-        fetchSettingsAndKeys();
+        await fetchSettingsAndKeys();
         setTimeout(() => setKeyFeedback((p) => ({ ...p, calendar: null })), 4000);
+      } else {
+        setKeyFeedback((p) => ({ ...p, calendar: { isError: true, message: res.data?.error || "Failed to reset Google Calendar credentials." } }));
       }
+    } catch {
+      setKeyFeedback((p) => ({ ...p, calendar: { isError: true, message: "Network error resetting Google Calendar credentials." } }));
     } finally {
       setKeySaving((p) => ({ ...p, calendar: false }));
     }
