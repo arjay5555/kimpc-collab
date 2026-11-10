@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { api } from "../../services/api";
+import { api, getCachedApiData } from "../../services/api";
 import ManagerSidebar from "../../components/ManagerSidebar";
 import ManagerSearchBar from "../../components/ManagerSearchBar";
 import ManagerTopbar from "../../components/ManagerTopbar";
@@ -411,11 +411,17 @@ export default function Drivers() {
   const navigate = useNavigate();
 
   // Drivers list state
-  const [drivers, setDrivers] = useState([]);
+  const [drivers, setDrivers] = useState(() => {
+    const cached = getCachedApiData("/drivers");
+    return Array.isArray(cached) ? cached : (cached?.data || []);
+  });
   // Selected driver detail panel (Default: null until selected/clicked)
   const [selectedDriver, setSelectedDriver] = useState(null);
   // Live applications / bookings
-  const [liveBookings, setLiveBookings] = useState([]);
+  const [liveBookings, setLiveBookings] = useState(() => {
+    const cached = getCachedApiData("/applications");
+    return Array.isArray(cached) ? cached : [];
+  });
 
   // Dynamic calendar navigation state for the driver's schedule
   const [calDate, setCalDate] = useState(() => {

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { api } from "../../services/api";
+import { api, getCachedApiData } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import ManagerSidebar from "../../components/ManagerSidebar";
 import ManagerSearchBar from "../../components/ManagerSearchBar";
@@ -32,8 +32,11 @@ export default function Payments() {
   const [financialsOpen, setFinancialsOpen] = useState(true);
 
   // Live applications & Invoices state
-  const [liveApplications, setLiveApplications] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [liveApplications, setLiveApplications] = useState(() => {
+    const cached = getCachedApiData("/applications");
+    return Array.isArray(cached) ? cached : [];
+  });
+  const [loading, setLoading] = useState(() => !getCachedApiData("/applications"));
   const [feedback, setFeedback] = useState("");
   const [receiptInvoice, setReceiptInvoice] = useState(null);
   const [previewGcashImage, setPreviewGcashImage] = useState(null);
@@ -53,6 +56,9 @@ export default function Payments() {
   // Fetch live applications to connect member bookings to manager financials
   const fetchApplications = async () => {
     try {
+      if (!getCachedApiData("/applications")) {
+        setLoading(true);
+      }
       const res = await api("/applications");
       if (res.ok && Array.isArray(res.data)) {
         setLiveApplications(res.data);

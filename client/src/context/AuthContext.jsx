@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { api, getSignedInEmail, getSignedInRole, getSignedInName, getAuthToken, isAuthenticated } from "../services/api";
+import { api, getSignedInEmail, getSignedInRole, getSignedInName, getAuthToken, isAuthenticated, clearApiCache } from "../services/api";
 import { initOneSignal, logoutOneSignal } from "../services/oneSignal";
 
 const AuthContext = createContext(null);
@@ -123,6 +123,7 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
+    clearApiCache();
     sessionStorage.removeItem("kimpc-member-auth");
     sessionStorage.removeItem("kimpc-member-email");
     sessionStorage.removeItem("kimpc-account-role");

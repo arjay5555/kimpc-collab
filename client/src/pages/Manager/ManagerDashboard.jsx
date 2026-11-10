@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { api } from "../../services/api";
+import { api, getCachedApiData } from "../../services/api";
 import ManagerSidebar from "../../components/ManagerSidebar";
 import ManagerTopbar from "../../components/ManagerTopbar";
 import "../../styles/admin-kimpc.css";
@@ -11,14 +11,20 @@ export default function ManagerDashboard() {
   const navigate = useNavigate();
 
   // Data stats (initialized to placeholder until live MongoDB data loads)
-  const [stats, setStats] = useState({
-    totalRevenue: "—",
-    newBookings: "—",
-    rentedMachinery: "—",
-    availableMachinery: "—",
+  const [stats, setStats] = useState(() => {
+    const cachedStats = getCachedApiData("/manager/stats");
+    return cachedStats || {
+      totalRevenue: "—",
+      newBookings: "—",
+      rentedMachinery: "—",
+      availableMachinery: "—",
+    };
   });
-  const [loadingStats, setLoadingStats] = useState(true);
-  const [liveUnits, setLiveUnits] = useState([]);
+  const [loadingStats, setLoadingStats] = useState(() => !getCachedApiData("/machinery-units"));
+  const [liveUnits, setLiveUnits] = useState(() => {
+    const cachedUnits = getCachedApiData("/machinery-units");
+    return Array.isArray(cachedUnits) ? cachedUnits : (cachedUnits?.data || []);
+  });
 
   // Machinery availability checker state (defaults to today's date)
   const [selectedMachineryType, setSelectedMachineryType] = useState("4WD Tractor");
@@ -46,7 +52,9 @@ export default function ManagerDashboard() {
 
   useEffect(() => {
     let isMounted = true;
-    setLoadingStats(true);
+    if (!getCachedApiData("/machinery-units")) {
+      setLoadingStats(true);
+    }
 
     Promise.all([
       api("/machinery-units"),

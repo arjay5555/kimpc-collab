@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { api } from "../../services/api";
+import { api, getCachedApiData } from "../../services/api";
 import AdminSidebar from "../../components/AdminSidebar";
 import AdminTopbar from "../../components/AdminTopbar";
 import "../../styles/admin-kimpc.css";
@@ -10,8 +10,11 @@ export default function AccountManagement() {
   const [activeMainTab, setActiveMainTab] = useState("directory"); // "directory" | "permissions"
 
   // Accounts state
-  const [accounts, setAccounts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [accounts, setAccounts] = useState(() => {
+    const cached = getCachedApiData("/accounts");
+    return Array.isArray(cached) ? cached : [];
+  });
+  const [loading, setLoading] = useState(() => !getCachedApiData("/accounts"));
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all"); // "all" | "pending" | "active" | "deactivated" | "declined" | "staff"
   const [feedback, setFeedback] = useState({ message: "", isError: false });
@@ -56,7 +59,9 @@ export default function AccountManagement() {
   const [permissionsSaving, setPermissionsSaving] = useState(false);
 
   const fetchAccounts = async () => {
-    setLoading(true);
+    if (!getCachedApiData("/accounts")) {
+      setLoading(true);
+    }
     const res = await api("/accounts");
     if (res.ok && Array.isArray(res.data)) {
       setAccounts(res.data);

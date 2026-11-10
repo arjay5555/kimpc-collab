@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { api } from "../../services/api";
+import { api, getCachedApiData } from "../../services/api";
 import MemberTopbar from "../../components/MemberTopbar";
 
 const EMPTY_BOOKING = {
@@ -203,11 +203,14 @@ export default function EquipmentCatalog() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const [units, setUnits] = useState([]);
+  const [units, setUnits] = useState(() => {
+    const cached = getCachedApiData("/machinery-units");
+    return Array.isArray(cached?.data) ? cached.data : (Array.isArray(cached) ? cached : []);
+  });
   const [unit, setUnit] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [maintenance, setMaintenance] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !getCachedApiData("/machinery-units"));
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All categories");
@@ -366,7 +369,9 @@ export default function EquipmentCatalog() {
   };
 
   const loadCatalog = useCallback(async () => {
-    setLoading(true);
+    if (!getCachedApiData("/machinery-units")) {
+      setLoading(true);
+    }
     const response = await api("/machinery-units");
     if (!response.ok) {
       setError(response.data?.error || "Could not load the equipment catalog.");

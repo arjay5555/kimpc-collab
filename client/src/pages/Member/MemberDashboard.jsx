@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { api } from "../../services/api";
+import { api, getCachedApiData } from "../../services/api";
 import { getApplicationsUrl, unwrapListResponse } from "../../services/memberPortal";
 import MemberTopbar from "../../components/MemberTopbar";
 
@@ -31,14 +31,23 @@ function formatTimeAgo(dateInput) {
 export default function MemberDashboard() {
   const { user } = useAuth();
 
-  const [applications, setApplications] = useState([]);
+  const [applications, setApplications] = useState(() => {
+    const cached = getCachedApiData("/applications");
+    return Array.isArray(cached) ? cached : [];
+  });
   const [machineryUnitsMap, setMachineryUnitsMap] = useState(new Map());
-  const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [notifications, setNotifications] = useState(() => {
+    const cached = getCachedApiData("/notifications");
+    return Array.isArray(cached) ? cached : (cached?.notifications || []);
+  });
+  const [loading, setLoading] = useState(() => !getCachedApiData("/applications"));
   const [loadError, setLoadError] = useState("");
 
   const fetchData = useCallback(async () => {
     try {
+      if (!getCachedApiData("/applications")) {
+        setLoading(true);
+      }
       const [appsRes, unitsRes, notifsRes] = await Promise.all([
         api(getApplicationsUrl(user?.email)),
         api("/machinery-units"),

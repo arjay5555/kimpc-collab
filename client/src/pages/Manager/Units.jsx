@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { api } from "../../services/api";
+import { api, getCachedApiData } from "../../services/api";
 import ManagerSidebar from "../../components/ManagerSidebar";
 import ManagerSearchBar from "../../components/ManagerSearchBar";
 import ManagerTopbar from "../../components/ManagerTopbar";
@@ -123,13 +123,28 @@ export default function Units() {
   const navigate = useNavigate();
 
   // Data states
-  const [units, setUnits] = useState([]);
-  const [counts, setCounts] = useState({ total: 0, operational: 0, underMaintenance: 0, retired: 0 });
-  const [loading, setLoading] = useState(true);
+  const [units, setUnits] = useState(() => {
+    const cached = getCachedApiData("/machinery-units");
+    return Array.isArray(cached) ? cached : (cached?.data || []);
+  });
+  const [counts, setCounts] = useState(() => {
+    const cached = getCachedApiData("/machinery-units");
+    if (cached?.counts) return cached.counts;
+    const list = Array.isArray(cached) ? cached : (cached?.data || []);
+    const total = list.length;
+    const operational = list.filter((u) => (u.operatingCondition || u.status) === "Operational" || (u.status === "Available")).length;
+    const underMaintenance = list.filter((u) => (u.operatingCondition || u.status) === "Under Maintenance" || ["Maintenance", "Repair"].includes(u.status)).length;
+    const retired = list.filter((u) => (u.operatingCondition || u.status) === "Retired" || ["Dispose", "Unavailable", "Retired"].includes(u.status)).length;
+    return { total, operational, underMaintenance, retired };
+  });
+  const [loading, setLoading] = useState(() => !getCachedApiData("/machinery-units"));
   const [feedback, setFeedback] = useState({ message: "", isError: false });
 
   // Registered Drivers state & Assign Driver Modal
-  const [drivers, setDrivers] = useState([]);
+  const [drivers, setDrivers] = useState(() => {
+    const cached = getCachedApiData("/drivers");
+    return Array.isArray(cached) ? cached : [];
+  });
   const [driversLoading, setDriversLoading] = useState(false);
   const [driverModalUnit, setDriverModalUnit] = useState(null);
   const [driverSearchQuery, setDriverSearchQuery] = useState("");
@@ -209,7 +224,9 @@ export default function Units() {
   // Fetch machinery units
   const fetchUnits = async () => {
     try {
-      setLoading(true);
+      if (!getCachedApiData("/machinery-units")) {
+        setLoading(true);
+      }
       const res = await api("/machinery-units");
       if (res.ok && res.data) {
         const list = Array.isArray(res.data) ? res.data : (res.data.data || []);

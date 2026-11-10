@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { api, getAuthToken, getSignedInEmail } from "../../services/api";
+import { api, getAuthToken, getSignedInEmail, getCachedApiData } from "../../services/api";
 import ManagerSidebar from "../../components/ManagerSidebar";
 import ManagerTopbar from "../../components/ManagerTopbar";
 import "../../styles/admin-kimpc.css";
@@ -137,8 +137,11 @@ export default function ManagerCalendar() {
   const [searchQuery, setSearchQuery] = useState("");
 
   // Live applications from API
-  const [applications, setApplications] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [applications, setApplications] = useState(() => {
+    const cached = getCachedApiData("/applications");
+    return Array.isArray(cached) ? cached : [];
+  });
+  const [loading, setLoading] = useState(() => !getCachedApiData("/applications"));
 
   // Selected event for the right sidebar detail panel
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -158,7 +161,9 @@ export default function ManagerCalendar() {
 
   // Fetch live applications
   const fetchApplications = async () => {
-    setLoading(true);
+    if (!getCachedApiData("/applications")) {
+      setLoading(true);
+    }
     try {
       const res = await api("/applications");
       if (res.ok && Array.isArray(res.data)) {

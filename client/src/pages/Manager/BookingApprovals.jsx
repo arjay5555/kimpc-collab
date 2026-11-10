@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { api } from "../../services/api";
+import { api, getCachedApiData } from "../../services/api";
 import ManagerSidebar from "../../components/ManagerSidebar";
 import ManagerSearchBar from "../../components/ManagerSearchBar";
 import ManagerTopbar from "../../components/ManagerTopbar";
@@ -33,8 +33,11 @@ export default function BookingApprovals() {
   const navigate = useNavigate();
 
   // Bookings list state
-  const [liveBookings, setLiveBookings] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [liveBookings, setLiveBookings] = useState(() => {
+    const cached = getCachedApiData("/applications");
+    return Array.isArray(cached) ? cached : [];
+  });
+  const [loading, setLoading] = useState(() => !getCachedApiData("/applications"));
   const [feedback, setFeedback] = useState({ message: "", isError: false });
 
   // Filters & Search
@@ -418,7 +421,10 @@ export default function BookingApprovals() {
 
   // Add Booking Modal
   const [showAddModal, setShowAddModal] = useState(false);
-  const [machineryUnits, setMachineryUnits] = useState([]);
+  const [machineryUnits, setMachineryUnits] = useState(() => {
+    const cached = getCachedApiData("/machinery-units");
+    return Array.isArray(cached) ? cached : [];
+  });
   const [newBooking, setNewBooking] = useState({
     farmerName: "",
     farmerPhone: "",

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { api } from "../../services/api";
+import { api, getCachedApiData } from "../../services/api";
 import { getApplicationsUrl, unwrapListResponse } from "../../services/memberPortal";
 import MemberTopbar from "../../components/MemberTopbar";
 
@@ -22,8 +22,11 @@ function formatBookingDateRange(startDate, endDate) {
 
 export default function MemberPayments() {
   const { user } = useAuth();
-  const [applications, setApplications] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [applications, setApplications] = useState(() => {
+    const cached = getCachedApiData("/applications");
+    return Array.isArray(cached) ? cached : [];
+  });
+  const [loading, setLoading] = useState(() => !getCachedApiData("/applications"));
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -34,6 +37,9 @@ export default function MemberPayments() {
 
   const fetchApplications = useCallback(async () => {
     try {
+      if (!getCachedApiData("/applications")) {
+        setLoading(true);
+      }
       const response = await api(getApplicationsUrl(user?.email));
       if (response.ok) {
         setApplications(unwrapListResponse(response));

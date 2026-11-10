@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { api } from "../../services/api";
+import { api, getCachedApiData } from "../../services/api";
 import AdminSidebar from "../../components/AdminSidebar";
 import AdminTopbar from "../../components/AdminTopbar";
 import "../../styles/admin-kimpc.css";
 
 export default function AuditLogs() {
-  const [logs, setLogs] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [logs, setLogs] = useState(() => {
+    const cached = getCachedApiData("/admin/audit-logs?limit=500");
+    return cached?.logs || (Array.isArray(cached) ? cached : []);
+  });
+  const [loading, setLoading] = useState(() => !getCachedApiData("/admin/audit-logs?limit=500"));
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [filterModule, setFilterModule] = useState("all");
   const [filterResult, setFilterResult] = useState("all");
