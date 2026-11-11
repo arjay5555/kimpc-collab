@@ -9,6 +9,7 @@ const MachineryUnit = require("../models/MachineryUnit");
 const MachineryMaintenance = require("../models/MachineryMaintenance");
 const Application = require("../models/Application");
 const Account = require("../models/Account");
+const SystemSetting = require("../models/SystemSetting");
 
 const authManager = require("../middleware/authManager");
 const { logAudit } = require("../services/auditLogger");
@@ -493,6 +494,93 @@ router.post("/machinery-units/upload-photo", authManager, async (req, res) => {
   }
 });
 
+const TYPE_PREFIXES_SETTING_KEY = "machinery_type_prefixes";
+
+function normalizePrefix(raw) {
+  return String(raw || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+}
+
+function escapeRegExp(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function extractIdPrefixAndNumber(unitId) {
+  const match = String(unitId || "")
+    .trim()
+    .toUpperCase()
+    .match(/^([A-Z0-9]+)-(\d+)$/);
+  if (!match) return null;
+  return { prefix: match[1], num: parseInt(match[2], 10) };
+}
+
+async function loadTypePrefixesAndNextNumbers() {
+  const saved = await SystemSetting.getSystemSetting(TYPE_PREFIXES_SETTING_KEY, {});
+  const typePrefixes = {};
+  if (saved && typeof saved === "object" && !Array.isArray(saved)) {
+    for (const [k, v] of Object.entries(saved)) {
+      const typeName = clean(k);
+      const pref = normalizePrefix(v);
+      if (typeName && pref) {
+        typePrefixes[typeName] = pref;
+      }
+    }
+  }
+
+  const allUnits = await MachineryUnit.find({}).select("unitId category").lean();
+  const prefixNextNumbers = {};
+
+  allUnits.forEach((u) => {
+    const parsed = extractIdPrefixAndNumber(u.unitId);
+    if (parsed) {
+      const currentNext = prefixNextNumbers[parsed.prefix] || 1;
+      if (parsed.num >= currentNext) {
+        prefixNextNumbers[parsed.prefix] = parsed.num + 1;
+      }
+      const cat = clean(u.category);
+      if (cat) {
+        const existingKey = Object.keys(typePrefixes).find(
+          (k) => k.toLowerCase() === cat.toLowerCase()
+        );
+        const ownerOfPrefix = Object.entries(typePrefixes).find(
+          ([, p]) => p === parsed.prefix
+        )?.[0];
+        if (!existingKey && !ownerOfPrefix) {
+          typePrefixes[cat] = parsed.prefix;
+        }
+      }
+    }
+  });
+
+  return { typePrefixes, prefixNextNumbers, allUnits };
+}
+
+function findPrefixConflictOwner(prefix, category, typePrefixes, allUnits) {
+  const cleanPref = normalizePrefix(prefix);
+  if (!cleanPref) return null;
+  const catLower = clean(category).toLowerCase();
+
+  for (const [typeName, savedPref] of Object.entries(typePrefixes)) {
+    if (savedPref === cleanPref && typeName.toLowerCase() !== catLower) {
+      return typeName;
+    }
+  }
+
+  for (const u of allUnits) {
+    const parsed = extractIdPrefixAndNumber(u.unitId);
+    if (parsed && parsed.prefix === cleanPref) {
+      const uCat = clean(u.category);
+      if (uCat && uCat.toLowerCase() !== catLower) {
+        return uCat;
+      }
+    }
+  }
+
+  return null;
+}
+
 /**
  * GET /api/machinery-units
  * Returns machinery units with summary counts, search, filtering, and role-based data scrubbing.
@@ -606,11 +694,15 @@ router.get("/machinery-units", optionalAuth, async (req, res) => {
       });
     }
 
+    const { typePrefixes, prefixNextNumbers } = await loadTypePrefixesAndNextNumbers();
+
     res.json({
       ok: true,
       data: units,
       total: totalMatching,
       counts,
+      typePrefixes,
+      prefixNextNumbers,
       page: pageNum,
       limit: limitNum,
     });
@@ -823,10 +915,72 @@ router.post("/machinery-units", authManager, async (req, res) => {
       }
     }
 
-    // Asset code uniqueness check
-    const existing = await MachineryUnit.findOne({ unitId });
+    // Unit ID & Prefix uniqueness checks
+    const requestedPrefix = normalizePrefix(body.unitPrefix);
+    const parsedUnitId = extractIdPrefixAndNumber(unitId);
+    const effectivePrefix = requestedPrefix || parsedUnitId?.prefix || "";
+
+    const { typePrefixes, allUnits } = await loadTypePrefixesAndNextNumbers();
+
+    const existing = await MachineryUnit.findOne({
+      unitId: { $regex: new RegExp(`^${escapeRegExp(unitId)}$`, "i") },
+    });
     if (existing) {
-      return fail(res, 409, `A machinery unit with Asset Code "${unitId}" already exists.`);
+      return fail(res, 409, `A machinery unit with Unit ID "${unitId}" already exists.`);
+    }
+
+    if (effectivePrefix) {
+      const prefixOwner = findPrefixConflictOwner(
+        effectivePrefix,
+        category,
+        typePrefixes,
+        allUnits
+      );
+      if (prefixOwner) {
+        return fail(
+          res,
+          409,
+          `Prefix "${effectivePrefix}" is already used by "${prefixOwner}". Please use a unique prefix.`
+        );
+      }
+
+      const existingKeyForCategory = Object.keys(typePrefixes).find(
+        (k) => k.toLowerCase() === category.toLowerCase()
+      );
+      const savedPrefForCategory = existingKeyForCategory
+        ? typePrefixes[existingKeyForCategory]
+        : "";
+      const hasExistingUnitsInCategory = allUnits.some(
+        (u) => clean(u.category).toLowerCase() === category.toLowerCase()
+      );
+      if (
+        hasExistingUnitsInCategory &&
+        savedPrefForCategory &&
+        requestedPrefix &&
+        requestedPrefix !== savedPrefForCategory
+      ) {
+        return fail(
+          res,
+          409,
+          `Type "${category}" already uses prefix "${savedPrefForCategory}".`
+        );
+      }
+    }
+
+    if (parsedUnitId && parsedUnitId.prefix !== effectivePrefix) {
+      const idPrefixOwner = findPrefixConflictOwner(
+        parsedUnitId.prefix,
+        category,
+        typePrefixes,
+        allUnits
+      );
+      if (idPrefixOwner) {
+        return fail(
+          res,
+          409,
+          `Unit ID prefix "${parsedUnitId.prefix}" belongs to "${idPrefixOwner}".`
+        );
+      }
     }
 
     const attachments = Array.isArray(body.attachments)
@@ -884,6 +1038,23 @@ router.post("/machinery-units", authManager, async (req, res) => {
     });
 
     const managerEmail = req.user?.email || "manager";
+
+    if (effectivePrefix) {
+      const existingKeyForCategory = Object.keys(typePrefixes).find(
+        (k) => k.toLowerCase() === category.toLowerCase()
+      );
+      const targetKey = existingKeyForCategory || category;
+      if (typePrefixes[targetKey] !== effectivePrefix) {
+        typePrefixes[targetKey] = effectivePrefix;
+        await SystemSetting.setSystemSetting(
+          TYPE_PREFIXES_SETTING_KEY,
+          typePrefixes,
+          "Unique uppercase Unit ID prefixes per machinery type",
+          managerEmail
+        );
+      }
+    }
+
     await logAudit({
       action: "MACHINERY_UNIT_CREATED",
       actorEmail: managerEmail,
@@ -896,6 +1067,7 @@ router.post("/machinery-units", authManager, async (req, res) => {
     res.status(201).json({
       ok: true,
       data: normalizeUnit(newUnit),
+      typePrefixes,
       message: `Machinery unit ${unitId} successfully registered.`,
     });
   } catch (err) {

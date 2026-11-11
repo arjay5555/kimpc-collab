@@ -7951,3 +7951,21 @@ input::-webkit-contacts-auto-fill-button {
   background: #334155;
   color: #f8fafc;
 }
+
+.wz-unit-identity-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(76px, 0.6fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.wz-unit-prefix-input {
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+}
+
+@media (max-width: 640px) {
+  .wz-unit-identity-top {
+    grid-template-columns: 1fr;
+  }
+}

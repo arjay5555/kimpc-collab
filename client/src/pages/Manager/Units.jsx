@@ -51,6 +51,7 @@ const ACQUISITION_SOURCES = [
 const EMPTY_UNIT_FORM = {
   // 1. Basic Information
   unitId: "",
+  unitPrefix: "",
   name: "",
   category: "Tractor",
   brand: "",
@@ -126,6 +127,18 @@ export default function Units() {
   const [units, setUnits] = useState(() => {
     const cached = getCachedApiData("/machinery-units");
     return Array.isArray(cached) ? cached : (cached?.data || []);
+  });
+  const [typePrefixes, setTypePrefixes] = useState(() => {
+    const cached = getCachedApiData("/machinery-units");
+    return cached?.typePrefixes && typeof cached.typePrefixes === "object"
+      ? cached.typePrefixes
+      : {};
+  });
+  const [prefixNextNumbers, setPrefixNextNumbers] = useState(() => {
+    const cached = getCachedApiData("/machinery-units");
+    return cached?.prefixNextNumbers && typeof cached.prefixNextNumbers === "object"
+      ? cached.prefixNextNumbers
+      : {};
   });
   const [counts, setCounts] = useState(() => {
     const cached = getCachedApiData("/machinery-units");
@@ -235,6 +248,12 @@ export default function Units() {
       if (res.ok && res.data) {
         const list = Array.isArray(res.data) ? res.data : (res.data.data || []);
         setUnits(list);
+        if (res.data.typePrefixes && typeof res.data.typePrefixes === "object") {
+          setTypePrefixes(res.data.typePrefixes);
+        }
+        if (res.data.prefixNextNumbers && typeof res.data.prefixNextNumbers === "object") {
+          setPrefixNextNumbers(res.data.prefixNextNumbers);
+        }
         if (res.data.counts) {
           setCounts(res.data.counts);
         } else {
@@ -394,17 +413,92 @@ export default function Units() {
     }
   }, [feedback]);
 
+  const normalizePrefix = (raw) =>
+    String(raw || "")
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "")
+      .slice(0, 8);
+
+  const extractIdPrefixAndNum = (unitId) => {
+    const match = String(unitId || "")
+      .trim()
+      .toUpperCase()
+      .match(/^([A-Z0-9]+)-(\d+)$/);
+    if (!match) return null;
+    return { prefix: match[1], num: parseInt(match[2], 10) };
+  };
+
+  const getSavedPrefixForType = (typeName) => {
+    const cleanType = String(typeName || "").trim().toLowerCase();
+    if (!cleanType) return "";
+    for (const [k, v] of Object.entries(typePrefixes || {})) {
+      if (k.toLowerCase() === cleanType && v) {
+        return normalizePrefix(v);
+      }
+    }
+    const existingUnit = units.find(
+      (u) =>
+        String(u.category || "").trim().toLowerCase() === cleanType &&
+        extractIdPrefixAndNum(u.unitId)
+    );
+    return existingUnit ? extractIdPrefixAndNum(existingUnit.unitId).prefix : "";
+  };
+
+  const findPrefixConflict = (prefix, currentTypeName) => {
+    const cleanPref = normalizePrefix(prefix);
+    if (!cleanPref) return null;
+    const currentLower = String(currentTypeName || "").trim().toLowerCase();
+
+    for (const [k, v] of Object.entries(typePrefixes || {})) {
+      if (normalizePrefix(v) === cleanPref && k.toLowerCase() !== currentLower) {
+        return k;
+      }
+    }
+
+    const conflictingUnit = units.find((u) => {
+      const parsed = extractIdPrefixAndNum(u.unitId);
+      const uCat = String(u.category || "").trim();
+      return parsed && parsed.prefix === cleanPref && uCat.toLowerCase() !== currentLower;
+    });
+    return conflictingUnit ? conflictingUnit.category : null;
+  };
+
+  const hasExistingUnitsForType = (typeName) => {
+    const cleanType = String(typeName || "").trim().toLowerCase();
+    if (!cleanType) return false;
+    return units.some((u) => String(u.category || "").trim().toLowerCase() === cleanType);
+  };
+
+  const getNextUnitIdForPrefix = (prefix) => {
+    const cleanPref = normalizePrefix(prefix);
+    if (!cleanPref) return "";
+    let maxNum = prefixNextNumbers[cleanPref] ? prefixNextNumbers[cleanPref] - 1 : 0;
+    units.forEach((u) => {
+      const parsed = extractIdPrefixAndNum(u.unitId);
+      if (parsed && parsed.prefix === cleanPref && parsed.num > maxNum) {
+        maxNum = parsed.num;
+      }
+    });
+    const nextNum = maxNum + 1;
+    return `${cleanPref}-${String(nextNum).padStart(3, "0")}`;
+  };
+
   // Open Add Modal
   const openAddModal = () => {
     setEditingUnit(null);
+    const initialCat = EMPTY_UNIT_FORM.category;
+    const savedPref = getSavedPrefixForType(initialCat);
     setUnitForm({
       ...EMPTY_UNIT_FORM,
-      unitId: `U-${Math.floor(100 + Math.random() * 900)}`,
+      category: initialCat,
+      unitPrefix: savedPref,
+      unitId: savedPref ? getNextUnitIdForPrefix(savedPref) : "",
     });
     setFormErrors({});
     setUnitSaveError("");
     setCustomTypeMode(false);
-    setLastSelectedType(EMPTY_UNIT_FORM.category);
+    setLastSelectedType(initialCat);
     setActiveFormTab("basic");
     if (!drivers || drivers.length === 0) {
       fetchDrivers();
@@ -415,10 +509,19 @@ export default function Units() {
   // Open Edit Modal
   const openEditModal = (u) => {
     setEditingUnit(u);
+    const canonicalCat =
+      availableMachineryTypes.find(
+        (t) => t.toLowerCase() === String(u.category || "").trim().toLowerCase()
+      ) ||
+      String(u.category || "").trim() ||
+      "Tractor";
+    const resolvedPref =
+      getSavedPrefixForType(canonicalCat) || extractIdPrefixAndNum(u.unitId)?.prefix || "";
     setUnitForm({
       unitId: u.unitId || "",
+      unitPrefix: resolvedPref,
       name: u.name || "",
-      category: u.category || "Tractor",
+      category: canonicalCat,
       brand: u.brand || "",
       model: u.model || "",
       serialNumber: u.serialNumber || "",
@@ -466,15 +569,6 @@ export default function Units() {
       assignedDriver: u.assignedDriver || "Unassigned",
       driverPhone: u.driverPhone || "",
     });
-    const canonicalCat =
-      availableMachineryTypes.find(
-        (t) => t.toLowerCase() === String(u.category || "").trim().toLowerCase()
-      ) ||
-      String(u.category || "").trim() ||
-      "Tractor";
-    if (canonicalCat !== u.category) {
-      setUnitForm((prev) => ({ ...prev, category: canonicalCat }));
-    }
     setFormErrors({});
     setUnitSaveError("");
     setCustomTypeMode(false);
@@ -689,12 +783,118 @@ export default function Units() {
     if (unitSaveError) setUnitSaveError("");
   };
 
+  const handleTypeSelected = (nextType) => {
+    const savedPref = getSavedPrefixForType(nextType);
+    setUnitForm((prev) => ({
+      ...prev,
+      category: nextType,
+      unitPrefix: editingUnit ? prev.unitPrefix : savedPref,
+      unitId: !editingUnit ? (savedPref ? getNextUnitIdForPrefix(savedPref) : "") : prev.unitId,
+    }));
+    setFormErrors((prev) => {
+      const next = { ...prev };
+      delete next.category;
+      delete next.unitPrefix;
+      delete next.unitId;
+      return next;
+    });
+    if (unitSaveError) setUnitSaveError("");
+  };
+
+  const handleCustomTypeInput = (rawVal) => {
+    const matchedPref = getSavedPrefixForType(rawVal);
+    const effectivePref = matchedPref || unitForm.unitPrefix;
+    const conflict = effectivePref ? findPrefixConflict(effectivePref, rawVal) : null;
+
+    setUnitForm((prev) => ({
+      ...prev,
+      category: rawVal,
+      unitPrefix: matchedPref || prev.unitPrefix,
+      unitId: !editingUnit
+        ? matchedPref && !conflict
+          ? getNextUnitIdForPrefix(matchedPref)
+          : conflict
+          ? ""
+          : prev.unitId
+        : prev.unitId,
+    }));
+
+    setFormErrors((prev) => {
+      const next = { ...prev };
+      delete next.category;
+      if (conflict) {
+        next.unitPrefix = `Used by ${conflict}`;
+      } else if (next.unitPrefix?.startsWith("Used by")) {
+        delete next.unitPrefix;
+      }
+      return next;
+    });
+    if (unitSaveError) setUnitSaveError("");
+  };
+
+  const handlePrefixChange = (rawVal) => {
+    const cleanPref = normalizePrefix(rawVal);
+    const conflict = cleanPref ? findPrefixConflict(cleanPref, unitForm.category) : null;
+    const nextId =
+      !editingUnit && cleanPref && !conflict
+        ? getNextUnitIdForPrefix(cleanPref)
+        : !editingUnit
+        ? ""
+        : unitForm.unitId;
+
+    setUnitForm((prev) => ({
+      ...prev,
+      unitPrefix: cleanPref,
+      unitId: nextId,
+    }));
+
+    setFormErrors((prev) => {
+      const next = { ...prev };
+      if (conflict) {
+        next.unitPrefix = `Used by ${conflict}`;
+      } else {
+        delete next.unitPrefix;
+      }
+      delete next.unitId;
+      return next;
+    });
+    if (unitSaveError) setUnitSaveError("");
+  };
+
   // Client-Side Validation
   const validateForm = () => {
     const errs = {};
-    if (!unitForm.unitId.trim()) errs.unitId = "Required";
-    if (!unitForm.name.trim()) errs.name = "Required";
     if (!String(unitForm.category || "").trim()) errs.category = "Required";
+
+    if (!editingUnit) {
+      const cleanPref = normalizePrefix(unitForm.unitPrefix);
+      if (!cleanPref) {
+        errs.unitPrefix = "Required";
+      } else {
+        const conflict = findPrefixConflict(cleanPref, unitForm.category);
+        if (conflict) errs.unitPrefix = `Used by ${conflict}`;
+      }
+    }
+
+    const cleanUnitId = unitForm.unitId.trim();
+    if (!cleanUnitId) {
+      errs.unitId = "Required";
+    } else if (!editingUnit) {
+      const dupId = units.some(
+        (u) => String(u.unitId || "").trim().toUpperCase() === cleanUnitId.toUpperCase()
+      );
+      if (dupId) {
+        errs.unitId = "Already exists";
+      } else {
+        const parsed = extractIdPrefixAndNum(cleanUnitId);
+        if (parsed) {
+          const idConflict = findPrefixConflict(parsed.prefix, unitForm.category);
+          if (idConflict) errs.unitId = `Prefix used by ${idConflict}`;
+        }
+      }
+    }
+
+    if (!unitForm.name.trim()) errs.name = "Required";
     if (!unitForm.brand.trim()) errs.brand = "Required";
     if (!unitForm.model.trim()) errs.model = "Required";
     if (!unitForm.pricingUnit) errs.pricingUnit = "Required";
@@ -725,6 +925,7 @@ export default function Units() {
     if (Object.keys(errs).length > 0) {
       if (
         errs.unitId ||
+        errs.unitPrefix ||
         errs.name ||
         errs.category ||
         errs.brand ||
@@ -752,7 +953,7 @@ export default function Units() {
     setUnitSaveError("");
 
     if (!validateForm()) {
-      setUnitSaveError("Please fill in required fields.");
+      setUnitSaveError("Please check highlighted fields.");
       return;
     }
 
@@ -763,6 +964,8 @@ export default function Units() {
 
     const payload = {
       ...unitForm,
+      unitId: unitForm.unitId.trim(),
+      unitPrefix: normalizePrefix(unitForm.unitPrefix),
       category: canonicalCategory,
       memberRate: Number(unitForm.memberRate),
       nonmemberRate: unitForm.nonmemberRate !== "" ? Number(unitForm.nonmemberRate) : null,
@@ -800,6 +1003,9 @@ export default function Units() {
         });
 
         if (res.ok) {
+          if (res.data?.typePrefixes) {
+            setTypePrefixes(res.data.typePrefixes);
+          }
           setFeedback({ message: `Unit ${unitForm.unitId} added.`, isError: false });
           setShowAddModal(false);
           fetchUnits();
@@ -1380,6 +1586,7 @@ export default function Units() {
               >
                 <span>Unit &amp; Rate</span>
                 {(formErrors.unitId ||
+                  formErrors.unitPrefix ||
                   formErrors.name ||
                   formErrors.category ||
                   formErrors.brand ||
@@ -1477,22 +1684,128 @@ export default function Units() {
                       </div>
 
                       <div className="wz-unit-identity-fields">
-                        <div className="wz-unit-grid-2">
+                        <div className="wz-unit-identity-top">
                           <div className="wz-unit-field">
                             <label className="wz-unit-label">
-                              Unit Code <span className="req">*</span>
+                              Type <span className="req">*</span>
+                            </label>
+                            {customTypeMode ? (
+                              <div className="wz-unit-combo">
+                                <input
+                                  type="text"
+                                  autoFocus
+                                  placeholder="New type"
+                                  value={unitForm.category}
+                                  onChange={(e) => handleCustomTypeInput(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Escape") {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      handleTypeSelected(
+                                        lastSelectedType || modalMachineryTypes[0] || "Tractor"
+                                      );
+                                      setCustomTypeMode(false);
+                                    }
+                                  }}
+                                  className={`wz-unit-input ${formErrors.category ? "is-error" : ""}`}
+                                />
+                                <button
+                                  type="button"
+                                  className="wz-unit-type-toggle"
+                                  title="Select existing type"
+                                  aria-label="Select existing type"
+                                  onClick={() => {
+                                    const trimmed = String(unitForm.category || "").trim();
+                                    const matched = modalMachineryTypes.find(
+                                      (t) => t.toLowerCase() === trimmed.toLowerCase()
+                                    );
+                                    handleTypeSelected(
+                                      matched || lastSelectedType || modalMachineryTypes[0] || "Tractor"
+                                    );
+                                    setCustomTypeMode(false);
+                                  }}
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="6 9 12 15 18 9" />
+                                  </svg>
+                                </button>
+                              </div>
+                            ) : (
+                              <select
+                                value={unitForm.category}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (val === "__NEW_TYPE__") {
+                                    setLastSelectedType(
+                                      unitForm.category || modalMachineryTypes[0] || "Tractor"
+                                    );
+                                    setUnitForm((prev) => ({
+                                      ...prev,
+                                      category: "",
+                                      unitPrefix: "",
+                                      unitId: "",
+                                    }));
+                                    setFormErrors((prev) => {
+                                      const next = { ...prev };
+                                      delete next.category;
+                                      delete next.unitPrefix;
+                                      delete next.unitId;
+                                      return next;
+                                    });
+                                    setCustomTypeMode(true);
+                                  } else {
+                                    setLastSelectedType(val);
+                                    handleTypeSelected(val);
+                                  }
+                                }}
+                                className={`wz-unit-select ${formErrors.category ? "is-error" : ""}`}
+                              >
+                                {modalMachineryTypes.map((t) => (
+                                  <option key={t} value={t}>{t}</option>
+                                ))}
+                                <option value="__NEW_TYPE__">+ New type...</option>
+                              </select>
+                            )}
+                            {formErrors.category && <span className="wz-unit-error">{formErrors.category}</span>}
+                          </div>
+
+                          <div className="wz-unit-field">
+                            <label className="wz-unit-label">
+                              Prefix <span className="req">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              maxLength={8}
+                              disabled={
+                                Boolean(editingUnit) ||
+                                (Boolean(getSavedPrefixForType(unitForm.category)) &&
+                                  hasExistingUnitsForType(unitForm.category))
+                              }
+                              placeholder="TR"
+                              value={unitForm.unitPrefix}
+                              onChange={(e) => handlePrefixChange(e.target.value)}
+                              className={`wz-unit-input wz-unit-prefix-input ${formErrors.unitPrefix ? "is-error" : ""}`}
+                            />
+                            {formErrors.unitPrefix && <span className="wz-unit-error">{formErrors.unitPrefix}</span>}
+                          </div>
+
+                          <div className="wz-unit-field">
+                            <label className="wz-unit-label">
+                              Unit ID <span className="req">*</span>
                             </label>
                             <input
                               type="text"
                               disabled={Boolean(editingUnit)}
-                              placeholder="TR-01"
+                              placeholder="TR-001"
                               value={unitForm.unitId}
                               onChange={(e) => updateUnitField("unitId", e.target.value)}
                               className={`wz-unit-input ${formErrors.unitId ? "is-error" : ""}`}
                             />
                             {formErrors.unitId && <span className="wz-unit-error">{formErrors.unitId}</span>}
                           </div>
+                        </div>
 
+                        <div className="wz-unit-grid-2">
                           <div className="wz-unit-field">
                             <label className="wz-unit-label">
                               Unit Name <span className="req">*</span>
@@ -1506,94 +1819,23 @@ export default function Units() {
                             />
                             {formErrors.name && <span className="wz-unit-error">{formErrors.name}</span>}
                           </div>
-                        </div>
 
-                        <div className="wz-unit-field">
-                          <input
-                            type="text"
-                            placeholder="Image URL (optional)"
-                            value={unitForm.imageUrl}
-                            onChange={(e) => updateUnitField("imageUrl", e.target.value)}
-                            className="wz-unit-input"
-                          />
+                          <div className="wz-unit-field">
+                            <label className="wz-unit-label">Photo URL</label>
+                            <input
+                              type="text"
+                              placeholder="Optional URL"
+                              value={unitForm.imageUrl}
+                              onChange={(e) => updateUnitField("imageUrl", e.target.value)}
+                              className="wz-unit-input"
+                            />
+                          </div>
                         </div>
                       </div>
                     </div>
 
-                    {/* Type, Brand, Model */}
+                    {/* Brand, Model, Status */}
                     <div className="wz-unit-grid-3">
-                      <div className="wz-unit-field">
-                        <label className="wz-unit-label">
-                          Type <span className="req">*</span>
-                        </label>
-                        {customTypeMode ? (
-                          <div className="wz-unit-combo">
-                            <input
-                              type="text"
-                              autoFocus
-                              placeholder="New type"
-                              value={unitForm.category}
-                              onChange={(e) => updateUnitField("category", e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Escape") {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  updateUnitField(
-                                    "category",
-                                    lastSelectedType || modalMachineryTypes[0] || "Tractor"
-                                  );
-                                  setCustomTypeMode(false);
-                                }
-                              }}
-                              className={`wz-unit-input ${formErrors.category ? "is-error" : ""}`}
-                            />
-                            <button
-                              type="button"
-                              className="wz-unit-type-toggle"
-                              title="Select existing type"
-                              aria-label="Select existing type"
-                              onClick={() => {
-                                const trimmed = String(unitForm.category || "").trim();
-                                const matched = modalMachineryTypes.find(
-                                  (t) => t.toLowerCase() === trimmed.toLowerCase()
-                                );
-                                updateUnitField(
-                                  "category",
-                                  matched || lastSelectedType || modalMachineryTypes[0] || "Tractor"
-                                );
-                                setCustomTypeMode(false);
-                              }}
-                            >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="6 9 12 15 18 9" />
-                              </svg>
-                            </button>
-                          </div>
-                        ) : (
-                          <select
-                            value={unitForm.category}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              if (val === "__NEW_TYPE__") {
-                                setLastSelectedType(unitForm.category || modalMachineryTypes[0] || "Tractor");
-                                updateUnitField("category", "");
-                                setCustomTypeMode(true);
-                              } else {
-                                setLastSelectedType(val);
-                                updateUnitField("category", val);
-                              }
-                            }}
-                            className={`wz-unit-select ${formErrors.category ? "is-error" : ""}`}
-                          >
-                            {modalMachineryTypes.map((t) => (
-                              <option key={t} value={t}>{t}</option>
-                            ))}
-                            <option value="__NEW_TYPE__">+ New type...</option>
-                          </select>
-                        )}
-                        {formErrors.category && <span className="wz-unit-error">{formErrors.category}</span>}
-                      </div>
-
                       <div className="wz-unit-field">
                         <label className="wz-unit-label">
                           Brand <span className="req">*</span>
@@ -1621,11 +1863,26 @@ export default function Units() {
                         />
                         {formErrors.model && <span className="wz-unit-error">{formErrors.model}</span>}
                       </div>
+
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">
+                          Status <span className="req">*</span>
+                        </label>
+                        <select
+                          value={unitForm.operatingCondition}
+                          onChange={(e) => updateUnitField("operatingCondition", e.target.value)}
+                          className="wz-unit-select"
+                        >
+                          {OPERATING_CONDITIONS.map((c) => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
 
-                    {/* Pricing & Status */}
+                    {/* Pricing */}
                     <div className="wz-unit-section-divider">
-                      <div className="wz-unit-grid-4">
+                      <div className="wz-unit-grid-3">
                         <div className="wz-unit-field">
                           <label className="wz-unit-label">
                             Billing <span className="req">*</span>
@@ -1669,21 +1926,6 @@ export default function Units() {
                             className={`wz-unit-input ${formErrors.nonmemberRate ? "is-error" : ""}`}
                           />
                           {formErrors.nonmemberRate && <span className="wz-unit-error">{formErrors.nonmemberRate}</span>}
-                        </div>
-
-                        <div className="wz-unit-field">
-                          <label className="wz-unit-label">
-                            Status <span className="req">*</span>
-                          </label>
-                          <select
-                            value={unitForm.operatingCondition}
-                            onChange={(e) => updateUnitField("operatingCondition", e.target.value)}
-                            className="wz-unit-select"
-                          >
-                            {OPERATING_CONDITIONS.map((c) => (
-                              <option key={c} value={c}>{c}</option>
-                            ))}
-                          </select>
                         </div>
                       </div>
 
