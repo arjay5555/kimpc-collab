@@ -771,1239 +771,457 @@ export default function EquipmentCatalog() {
         {/* ================= KIMPC Machinery Reservation Modal Dialog ================= */}
         {bookingOpen && (
           <div
-            className="member-modal-backdrop"
+            className="member-modal-backdrop mb-book-backdrop"
             role="presentation"
             onMouseDown={(event) => {
               if (event.target === event.currentTarget) setBookingOpen(false);
             }}
-            style={{
-              padding: "20px 14px",
-              background: "rgba(15, 23, 42, 0.65)",
-              backdropFilter: "blur(4px)",
-              zIndex: 10001,
-            }}
           >
             <section
-              className="member-modal"
+              className="member-modal mb-book-modal"
               role="dialog"
               aria-modal="true"
               aria-labelledby="booking-title"
-              style={{
-                width: "min(100%, 620px)",
-                maxHeight: "92vh",
-                overflowY: "auto",
-                background: "#ffffff",
-                borderRadius: "16px",
-                padding: 0,
-                border: "1px solid #e2e8f0",
-                boxShadow: "0 25px 50px -12px rgba(15, 23, 42, 0.25)",
-              }}
             >
-              {/* Modal Header */}
-              <div
-                style={{
-                  padding: "20px 24px 16px",
-                  borderBottom: "1px solid #f1f5f9",
-                  position: "relative",
-                  background: "#ffffff",
-                }}
-              >
+              <div className="mb-book-header">
+                <img
+                  className="mb-book-thumb"
+                  src={selectedImage || unit.imageUrl || "/images/kimpc logo.png"}
+                  alt={unit.name}
+                />
+                <div className="mb-book-head-main">
+                  <h2 id="booking-title" className="mb-book-title">
+                    {unit.name}
+                  </h2>
+                  <p className="mb-book-meta">
+                    {[unit.category, unit.brand, unit.model].filter(Boolean).join(" · ")}
+                  </p>
+                </div>
+                <span className="mb-book-rate-pill">
+                  {formatPrice(unitRatePerHectare)} / ha
+                </span>
                 <button
                   type="button"
+                  className="mb-book-close"
                   aria-label="Close reservation dialog"
                   onClick={() => setBookingOpen(false)}
-                  style={{
-                    position: "absolute",
-                    top: "16px",
-                    right: "18px",
-                    width: "32px",
-                    height: "32px",
-                    borderRadius: "8px",
-                    border: "1px solid #e2e8f0",
-                    background: "#f8fafc",
-                    color: "#64748b",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    cursor: "pointer",
-                    transition: "all 0.15s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "#fee2e2";
-                    e.currentTarget.style.color = "#dc2626";
-                    e.currentTarget.style.borderColor = "#fecdd3";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "#f8fafc";
-                    e.currentTarget.style.color = "#64748b";
-                    e.currentTarget.style.borderColor = "#e2e8f0";
-                  }}
                 >
                   <CloseIcon size={16} />
                 </button>
-
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                  <span
-                    style={{
-                      fontSize: "0.68rem",
-                      fontWeight: 800,
-                      letterSpacing: "0.08em",
-                      textTransform: "uppercase",
-                      color: "#15803d",
-                      background: "#dcfce7",
-                      padding: "2px 8px",
-                      borderRadius: "6px",
-                    }}
-                  >
-                    KIMPC Machinery Service
-                  </span>
-                  <span style={{ fontSize: "0.72rem", color: "#94a3b8" }}>•</span>
-                  <span style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 500 }}>
-                    Official Member Reservation
-                  </span>
-                </div>
-
-                <h2
-                  id="booking-title"
-                  style={{
-                    fontSize: "1.32rem",
-                    fontWeight: 800,
-                    color: "#0f172a",
-                    margin: "0 0 14px",
-                    lineHeight: 1.25,
-                  }}
-                >
-                  Reserve {unit.name}
-                </h2>
-
-                {/* Machinery Identity Card */}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "12px 14px",
-                    borderRadius: "10px",
-                    background: "#f8fafc",
-                    border: "1px solid #e2e8f0",
-                    gap: "12px",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
-                    <img
-                      src={selectedImage || unit.imageUrl || "/images/kimpc logo.png"}
-                      alt={unit.name}
-                      style={{
-                        width: "50px",
-                        height: "50px",
-                        borderRadius: "8px",
-                        objectFit: "cover",
-                        border: "1px solid #cbd5e1",
-                        background: "#ffffff",
-                        flexShrink: 0,
-                      }}
-                    />
-                    <div style={{ minWidth: 0 }}>
-                      <div
-                        style={{
-                          fontSize: "0.92rem",
-                          fontWeight: 700,
-                          color: "#0f172a",
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }}
-                      >
-                        {unit.name}
-                      </div>
-                      <div style={{ fontSize: "0.76rem", color: "#64748b", marginTop: "2px" }}>
-                        {[unit.brand, unit.model].filter(Boolean).length > 0 && (
-                          <>{[unit.brand, unit.model].filter(Boolean).join(" · ")} · </>
-                        )}
-                        <span style={{ color: "#15803d", fontWeight: 600 }}>{unit.category}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ textAlign: "right", flexShrink: 0 }}>
-                    <div style={{ fontSize: "0.68rem", color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>
-                      Coop Member Rate
-                    </div>
-                    <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "#15803d" }}>
-                      {formatPrice(unitRatePerHectare)}
-                      <span style={{ fontSize: "0.74rem", fontWeight: 500, color: "#64748b", marginLeft: "2px" }}>
-                        / ha
-                      </span>
-                    </div>
-                  </div>
-                </div>
               </div>
 
-              {/* Modal Body Form */}
-              <form onSubmit={submitBooking} style={{ padding: "20px 24px" }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-                  
-                  {/* Step 01: Farmland Cultivation Scope */}
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                      <span
-                        style={{
-                          width: "22px",
-                          height: "22px",
-                          borderRadius: "50%",
-                          background: "#dcfce7",
-                          color: "#15803d",
-                          fontSize: "0.72rem",
-                          fontWeight: 800,
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexShrink: 0,
-                        }}
-                      >
-                        1
+              <form className="mb-book-form" onSubmit={submitBooking}>
+                <div className="mb-book-body">
+                  <div className="mb-book-section">
+                    <div className="mb-book-section-head">
+                      <h3 className="mb-book-section-title">Farmland & Location</h3>
+                      <span className="mb-book-subtotal">
+                        {formatPrice(unitRatePerHectare)} × {requestedHectares} ha = {formatPrice(estimatedCost)}
                       </span>
-                      <label style={{ fontSize: "0.86rem", fontWeight: 700, color: "#0f172a", margin: 0 }}>
-                        Farmland Area to Cultivate
-                      </label>
                     </div>
-                    <p className="member-modal-step-content" style={{ fontSize: "0.76rem", color: "#64748b", margin: "0 0 10px 30px" }}>
-                      Machinery services are billed strictly per hectare of cultivated land.
-                    </p>
 
-                    <div className="member-modal-step-content" style={{ marginLeft: "30px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                        {/* Number Input with unit addon */}
-                        <div
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            border: "1px solid #cbd5e1",
-                            borderRadius: "8px",
-                            overflow: "hidden",
-                            background: "#ffffff",
-                            boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
-                          }}
-                        >
-                          <input
-                            type="number"
-                            min="0.1"
-                            step="0.1"
-                            required
-                            placeholder="1.0"
-                            value={booking.hectares}
-                            onChange={(e) => {
-                              const val = parseFloat(e.target.value);
-                              setBooking((prev) => ({
-                                ...prev,
-                                hectares: isNaN(val) ? "" : Math.max(0.1, val),
-                              }));
-                            }}
-                            style={{
-                              width: "110px",
-                              padding: "9px 12px",
-                              border: "none",
-                              outline: "none",
-                              fontSize: "1.05rem",
-                              fontWeight: 800,
-                              color: "#0f172a",
-                            }}
-                          />
-                          <span
-                            style={{
-                              padding: "9px 14px",
-                              background: "#f1f5f9",
-                              fontSize: "0.8rem",
-                              fontWeight: 700,
-                              color: "#475569",
-                              borderLeft: "1px solid #e2e8f0",
-                              userSelect: "none",
-                            }}
-                          >
-                            Hectares (ha)
-                          </span>
-                        </div>
-
-                        {/* Quick Presets */}
-                        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
-                          {[0.5, 1, 2, 3, 5, 10].map((preset) => {
-                            const isCurrent = Number(booking.hectares) === preset;
-                            return (
-                              <button
-                                key={preset}
-                                type="button"
-                                onClick={() => setBooking((prev) => ({ ...prev, hectares: preset }))}
-                                style={{
-                                  padding: "6px 12px",
-                                  borderRadius: "6px",
-                                  border: isCurrent ? "1.5px solid #16a34a" : "1px solid #cbd5e1",
-                                  background: isCurrent ? "#dcfce7" : "#ffffff",
-                                  color: isCurrent ? "#15803d" : "#475569",
-                                  fontSize: "0.78rem",
-                                  fontWeight: 700,
-                                  cursor: "pointer",
-                                  transition: "all 0.12s ease",
-                                }}
-                              >
-                                {preset} ha
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Formula preview */}
-                      <div
-                        style={{
-                          marginTop: "8px",
-                          fontSize: "0.75rem",
-                          color: "#166534",
-                          fontWeight: 600,
-                        }}
-                      >
-                        Subtotal: {formatPrice(unitRatePerHectare)} × {requestedHectares} ha ={" "}
-                        <span style={{ fontWeight: 800 }}>{formatPrice(estimatedCost)}</span>
-                      </div>
-
-                      {/* Farm Location / Dispatch Address */}
-                      <div style={{ marginTop: "16px", paddingTop: "14px", borderTop: "1px dashed #e2e8f0" }}>
-                        <label style={{ fontSize: "0.8rem", fontWeight: 700, color: "#0f172a", display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
-                          <MapPinIcon size={14} color="#15803d" />
-                          <span>Farm Location / Address *</span>
-                        </label>
-
-                        <p style={{ fontSize: "0.74rem", color: "#64748b", margin: "0 0 8px" }}>
-                          Enter the barangay, sitio, or landmark for machinery transport and field operations.
-                        </p>
-
+                    <div className="mb-book-field">
+                      <label className="mb-book-label" htmlFor="booking-hectares">
+                        <span>
+                          Area <span className="mb-book-label-req">*</span>
+                        </span>
+                      </label>
+                      <div className="mb-book-input-wrap">
                         <input
+                          id="booking-hectares"
+                          className="mb-book-input"
+                          type="number"
+                          min="0.1"
+                          step="0.1"
+                          required
+                          placeholder="1.0"
+                          value={booking.hectares}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            setBooking((prev) => ({
+                              ...prev,
+                              hectares: isNaN(val) ? "" : Math.max(0.1, val),
+                            }));
+                          }}
+                        />
+                        <span className="mb-book-unit-tag">ha</span>
+                      </div>
+
+                      <div className="mb-book-presets">
+                        {[0.5, 1, 2, 3, 5, 10].map((preset) => (
+                          <button
+                            key={preset}
+                            type="button"
+                            onClick={() => setBooking((prev) => ({ ...prev, hectares: preset }))}
+                            className={`mb-book-preset-btn${Number(booking.hectares) === preset ? " active" : ""}`}
+                          >
+                            {preset} ha
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="mb-book-field">
+                      <label className="mb-book-label" htmlFor="booking-location">
+                        <span>
+                          Farm Location <span className="mb-book-label-req">*</span>
+                        </span>
+                      </label>
+                      <div className="mb-book-input-wrap">
+                        <MapPinIcon size={15} />
+                        <input
+                          id="booking-location"
+                          className="mb-book-input"
                           type="text"
                           required
-                          placeholder="e.g. Purok 4, Lampanusan, Kalilangan, Bukidnon"
+                          placeholder="Barangay, Purok / Sitio, Landmark"
                           value={booking.location || ""}
                           onChange={(e) => setBooking((prev) => ({ ...prev, location: e.target.value }))}
-                          style={{
-                            width: "100%",
-                            padding: "9px 12px",
-                            borderRadius: "8px",
-                            border: "1px solid #cbd5e1",
-                            fontSize: "0.85rem",
-                            fontWeight: 500,
-                            color: "#0f172a",
-                            background: "#ffffff",
-                            outline: "none",
-                          }}
                         />
                       </div>
                     </div>
                   </div>
 
-                  {/* Step 02: Scheduled Work Dates */}
-                  <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: "16px" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <span
-                          style={{
-                            width: "22px",
-                            height: "22px",
-                            borderRadius: "50%",
-                            background: "#dcfce7",
-                            color: "#15803d",
-                            fontSize: "0.72rem",
-                            fontWeight: 800,
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            flexShrink: 0,
-                          }}
-                        >
-                          2
-                        </span>
-                        <label style={{ fontSize: "0.86rem", fontWeight: 700, color: "#0f172a", margin: 0 }}>
-                          Select Scheduled Work Dates
-                        </label>
-                      </div>
+                  <div className="mb-book-section">
+                    <div className="mb-book-section-head">
+                      <h3 className="mb-book-section-title">Schedule</h3>
                       {booking.start && (
                         <button
                           type="button"
+                          className="mb-book-link-btn"
                           onClick={handleClearDates}
-                          style={{
-                            border: "none",
-                            background: "transparent",
-                            color: "#64748b",
-                            fontSize: "0.74rem",
-                            fontWeight: 600,
-                            cursor: "pointer",
-                            textDecoration: "underline",
-                          }}
                         >
-                          Clear Selection
+                          Clear
                         </button>
                       )}
                     </div>
-                    <p className="member-modal-step-content" style={{ fontSize: "0.76rem", color: "#64748b", margin: "0 0 12px 30px" }}>
-                      Click an open date to set dispatch start, then click your completion date. Reserved dates change color and cannot be selected.
-                    </p>
 
-                    <div className="member-modal-step-content" style={{ marginLeft: "30px" }}>
-                      {/* Interactive Calendar Container */}
-                      <div
-                        style={{
-                          background: "#ffffff",
-                          border: "1px solid #e2e8f0",
-                          borderRadius: "12px",
-                          padding: "14px 16px",
-                          boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
-                        }}
-                      >
-                        {/* Calendar Header with Month Navigation */}
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            marginBottom: "12px",
-                            paddingBottom: "8px",
-                            borderBottom: "1px solid #f1f5f9",
-                          }}
-                        >
-                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            <CalendarIcon size={16} color="#15803d" />
-                            <span style={{ fontSize: "0.95rem", fontWeight: 800, color: "#0f172a" }}>
-                              {monthNameYear}
-                            </span>
-                          </div>
-
-                          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                            <button
-                              type="button"
-                              onClick={handlePrevMonth}
-                              disabled={isPrevDisabled}
-                              aria-label="Previous month"
-                              style={{
-                                width: "28px",
-                                height: "28px",
-                                borderRadius: "6px",
-                                border: "1px solid #e2e8f0",
-                                background: isPrevDisabled ? "#f8fafc" : "#ffffff",
-                                color: isPrevDisabled ? "#cbd5e1" : "#0f172a",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                cursor: isPrevDisabled ? "not-allowed" : "pointer",
-                                transition: "all 0.12s ease",
-                              }}
-                            >
-                              <ChevronLeftIcon size={14} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={handleNextMonth}
-                              aria-label="Next month"
-                              style={{
-                                width: "28px",
-                                height: "28px",
-                                borderRadius: "6px",
-                                border: "1px solid #e2e8f0",
-                                background: "#ffffff",
-                                color: "#0f172a",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                cursor: "pointer",
-                                transition: "all 0.12s ease",
-                              }}
-                            >
-                              <ChevronRightIcon size={14} />
-                            </button>
-                          </div>
+                    <div className="mb-cal-box">
+                      <div className="mb-cal-head">
+                        <span className="mb-cal-month">{monthNameYear}</span>
+                        <div className="mb-cal-nav">
+                          <button
+                            type="button"
+                            className="mb-cal-nav-btn"
+                            onClick={handlePrevMonth}
+                            disabled={isPrevDisabled}
+                            aria-label="Previous month"
+                          >
+                            <ChevronLeftIcon size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            className="mb-cal-nav-btn"
+                            onClick={handleNextMonth}
+                            aria-label="Next month"
+                          >
+                            <ChevronRightIcon size={14} />
+                          </button>
                         </div>
+                      </div>
 
-                        {/* Weekday Row */}
-                        <div
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: "repeat(7, 1fr)",
-                            gap: "4px",
-                            textAlign: "center",
-                            marginBottom: "6px",
-                          }}
-                        >
-                          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((dayName) => (
-                            <div
-                              key={dayName}
-                              style={{
-                                fontSize: "0.7rem",
-                                fontWeight: 700,
-                                color: "#64748b",
-                                padding: "2px 0",
-                                userSelect: "none",
-                              }}
-                            >
-                              {dayName}
-                            </div>
-                          ))}
-                        </div>
+                      <div className="mb-cal-weekdays">
+                        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((dayName) => (
+                          <div key={dayName}>{dayName}</div>
+                        ))}
+                      </div>
 
-                        {/* Calendar Days Grid */}
-                        <div
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: "repeat(7, 1fr)",
-                            gap: "4px",
-                          }}
-                        >
-                          {calendarGrid.map((d) => {
-                            if (d.isBlank) {
-                              return <div key={d.key} style={{ minHeight: "36px" }} />;
-                            }
-
-                            if (d.isPast) {
-                              return (
-                                <div
-                                  key={d.key}
-                                  style={{
-                                    minHeight: "36px",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    borderRadius: "6px",
-                                    color: "#cbd5e1",
-                                    fontSize: "0.8rem",
-                                    userSelect: "none",
-                                    background: "#fafafa",
-                                  }}
-                                >
-                                  {d.dayNum}
-                                </div>
-                              );
-                            }
-
-                            if (d.isBooked) {
-                              return (
-                                <div
-                                  key={d.key}
-                                  title="Reserved — cannot be selected"
-                                  style={{
-                                    minHeight: "36px",
-                                    display: "flex",
-                                    flexDirection: "column",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    borderRadius: "6px",
-                                    background: "#fee2e2",
-                                    border: "1px solid #fca5a5",
-                                    color: "#b91c1c",
-                                    cursor: "not-allowed",
-                                    userSelect: "none",
-                                    padding: "2px 0",
-                                  }}
-                                >
-                                  <span style={{ fontSize: "0.78rem", fontWeight: 700, textDecoration: "line-through" }}>
-                                    {d.dayNum}
-                                  </span>
-                                  <span style={{ fontSize: "0.55rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.02em" }}>
-                                    Reserved
-                                  </span>
-                                </div>
-                              );
-                            }
-
-                            const isStart = booking.start === d.key;
-                            const isEnd = booking.end === d.key;
-                            const isSelectedPoint = isStart || isEnd;
-                            const inRange = Boolean(
-                              booking.start &&
-                              booking.end &&
-                              d.key >= booking.start &&
-                              d.key <= booking.end
+                      <div className="mb-cal-grid">
+                        {calendarGrid.map((d) => {
+                          if (d.isBlank) {
+                            return <div key={d.key} className="mb-cal-day is-blank" />;
+                          }
+                          if (d.isPast) {
+                            return (
+                              <button key={d.key} type="button" disabled className="mb-cal-day is-past">
+                                {d.dayNum}
+                              </button>
                             );
-
+                          }
+                          if (d.isBooked) {
                             return (
                               <button
                                 key={d.key}
                                 type="button"
-                                onClick={() => handleCalendarDayClick(d.key)}
-                                style={{
-                                  minHeight: "36px",
-                                  display: "flex",
-                                  flexDirection: "column",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  borderRadius: isSelectedPoint ? "6px" : inRange ? "4px" : "6px",
-                                  background: isSelectedPoint ? "#15803d" : inRange ? "#dcfce7" : "#ffffff",
-                                  border: isSelectedPoint
-                                    ? "1.5px solid #14532d"
-                                    : inRange
-                                    ? "1px solid #86efac"
-                                    : "1px solid #e2e8f0",
-                                  color: isSelectedPoint ? "#ffffff" : inRange ? "#15803d" : "#0f172a",
-                                  fontSize: "0.82rem",
-                                  fontWeight: isSelectedPoint || inRange ? 800 : 600,
-                                  cursor: "pointer",
-                                  padding: "2px 0",
-                                  transition: "all 0.12s ease",
-                                }}
+                                disabled
+                                title="Reserved"
+                                className="mb-cal-day is-booked"
                               >
-                                <span>{d.dayNum}</span>
-                                {isSelectedPoint && (
-                                  <span style={{ fontSize: "0.52rem", fontWeight: 800, textTransform: "uppercase" }}>
-                                    {isStart && isEnd ? "Day" : isStart ? "Start" : "End"}
-                                  </span>
-                                )}
+                                {d.dayNum}
                               </button>
                             );
-                          })}
-                        </div>
+                          }
 
-                        {/* Calendar Legend Bar */}
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            flexWrap: "wrap",
-                            gap: "8px",
-                            marginTop: "12px",
-                            paddingTop: "8px",
-                            borderTop: "1px solid #f1f5f9",
-                            fontSize: "0.7rem",
-                          }}
-                        >
-                          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", color: "#475569" }}>
-                              <span style={{ width: "10px", height: "10px", borderRadius: "3px", background: "#ffffff", border: "1px solid #cbd5e1", display: "inline-block" }} />
-                              Available
-                            </span>
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", color: "#15803d", fontWeight: 600 }}>
-                              <span style={{ width: "10px", height: "10px", borderRadius: "3px", background: "#15803d", display: "inline-block" }} />
-                              Selected
-                            </span>
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", color: "#b91c1c", fontWeight: 700 }}>
-                              <span style={{ width: "10px", height: "10px", borderRadius: "3px", background: "#fee2e2", border: "1px solid #fca5a5", display: "inline-block" }} />
-                              Reserved (Cannot Select)
-                            </span>
-                          </div>
-                        </div>
+                          const isSelectedPoint = booking.start === d.key || booking.end === d.key;
+                          const inRange = Boolean(
+                            booking.start &&
+                            booking.end &&
+                            d.key >= booking.start &&
+                            d.key <= booking.end
+                          );
+
+                          return (
+                            <button
+                              key={d.key}
+                              type="button"
+                              onClick={() => handleCalendarDayClick(d.key)}
+                              className={`mb-cal-day${isSelectedPoint ? " is-selected" : inRange ? " is-in-range" : ""}`}
+                            >
+                              {d.dayNum}
+                            </button>
+                          );
+                        })}
                       </div>
 
-                      {/* Schedule Summary & Synchronized Inputs */}
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginTop: "10px" }}>
-                        <div>
-                          <label style={{ fontSize: "0.74rem", fontWeight: 700, color: "#475569", marginBottom: "4px", display: "block" }}>
-                            Start Date
-                          </label>
+                      <div className="mb-cal-legend">
+                        <span className="mb-cal-legend-item">
+                          <span className="mb-cal-dot" />
+                          Available
+                        </span>
+                        <span className="mb-cal-legend-item">
+                          <span className="mb-cal-dot selected" />
+                          Selected
+                        </span>
+                        <span className="mb-cal-legend-item">
+                          <span className="mb-cal-dot booked" />
+                          Booked
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="mb-book-date-row">
+                      <div className="mb-book-field">
+                        <label className="mb-book-label" htmlFor="booking-start">
+                          Start Date
+                        </label>
+                        <div
+                          className="mb-book-input-wrap"
+                          style={isStartBooked ? { borderColor: "#dc2626" } : undefined}
+                        >
                           <input
+                            id="booking-start"
+                            className="mb-book-input"
                             required
                             type="date"
                             min={minDate}
                             value={booking.start}
                             onChange={(e) => handleStartDateChange(e.target.value)}
-                            style={{
-                              width: "100%",
-                              padding: "8px 10px",
-                              borderRadius: "8px",
-                              border: isStartBooked ? "2px solid #ef4444" : "1px solid #cbd5e1",
-                              fontSize: "0.85rem",
-                              fontWeight: 600,
-                              color: "#0f172a",
-                              background: "#ffffff",
-                              outline: "none",
-                            }}
                           />
                         </div>
+                      </div>
 
-                        <div>
-                          <label style={{ fontSize: "0.74rem", fontWeight: 700, color: "#475569", marginBottom: "4px", display: "block" }}>
-                            End Date
-                          </label>
+                      <div className="mb-book-field">
+                        <label className="mb-book-label" htmlFor="booking-end">
+                          End Date
+                        </label>
+                        <div
+                          className="mb-book-input-wrap"
+                          style={isEndBooked || isRangeBlocked ? { borderColor: "#dc2626" } : undefined}
+                        >
                           <input
+                            id="booking-end"
+                            className="mb-book-input"
                             required
                             type="date"
                             min={booking.start || minDate}
                             value={booking.end}
                             onChange={(e) => handleEndDateChange(e.target.value)}
-                            style={{
-                              width: "100%",
-                              padding: "8px 10px",
-                              borderRadius: "8px",
-                              border: isEndBooked || isRangeBlocked ? "2px solid #ef4444" : "1px solid #cbd5e1",
-                              fontSize: "0.85rem",
-                              fontWeight: 600,
-                              color: "#0f172a",
-                              background: "#ffffff",
-                              outline: "none",
-                            }}
                           />
                         </div>
                       </div>
-
-                      {/* Selected Schedule Status & Duration */}
-                      {booking.start && booking.end && !isDatesInvalid ? (
-                        <div
-                          style={{
-                            marginTop: "8px",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            padding: "6px 12px",
-                            borderRadius: "6px",
-                            background: "#dcfce7",
-                            color: "#15803d",
-                            fontSize: "0.78rem",
-                            fontWeight: 700,
-                          }}
-                        >
-                          <CheckIcon size={13} />
-                          <span>
-                            {scheduledDaysCount} Calendar Day{scheduledDaysCount > 1 ? "s" : ""} Scheduled:{" "}
-                            {formatDisplayDate(booking.start)} – {formatDisplayDate(booking.end)}
-                          </span>
-                        </div>
-                      ) : booking.start && (!booking.end || booking.start === booking.end) ? (
-                        <div
-                          style={{
-                            marginTop: "8px",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            padding: "6px 12px",
-                            borderRadius: "6px",
-                            background: "#f0fdf4",
-                            border: "1px solid #bbf7d0",
-                            color: "#166534",
-                            fontSize: "0.76rem",
-                            fontWeight: 600,
-                          }}
-                        >
-                          <span>Start Date: <strong>{formatDisplayDate(booking.start)}</strong>. Click completion date on the calendar.</span>
-                        </div>
-                      ) : null}
-
-                      {/* Date Conflict Alert */}
-                      {dateError && (
-                        <div
-                          style={{
-                            marginTop: "8px",
-                            background: "#fef2f2",
-                            border: "1px solid #fecdd3",
-                            color: "#b91c1c",
-                            padding: "8px 12px",
-                            borderRadius: "8px",
-                            fontSize: "0.76rem",
-                            fontWeight: 600,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "8px",
-                          }}
-                        >
-                          <AlertCircleIcon size={16} />
-                          <span>{dateError}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Step 03: Mode of Payment */}
-                  <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: "16px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                      <span
-                        style={{
-                          width: "22px",
-                          height: "22px",
-                          borderRadius: "50%",
-                          background: "#dcfce7",
-                          color: "#15803d",
-                          fontSize: "0.72rem",
-                          fontWeight: 800,
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexShrink: 0,
-                        }}
-                      >
-                        3
-                      </span>
-                      <label style={{ fontSize: "0.86rem", fontWeight: 700, color: "#0f172a", margin: 0 }}>
-                        Payment Method
-                      </label>
-                    </div>
-                    <p className="member-modal-step-content" style={{ fontSize: "0.76rem", color: "#64748b", margin: "0 0 10px 30px" }}>
-                      Choose between Cash settlement or instant cooperative GCash transfer.
-                    </p>
-
-                    <div className="member-modal-step-content" style={{ marginLeft: "30px" }}>
-                      {/* Segmented Cards */}
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
-                        {/* Cash Card */}
-                        <div
-                          onClick={() => setPaymentMethod("Cash")}
-                          style={{
-                            border: `2px solid ${paymentMethod === "Cash" ? "#15803d" : "#e2e8f0"}`,
-                            background: paymentMethod === "Cash" ? "#f0fdf4" : "#ffffff",
-                            borderRadius: "10px",
-                            padding: "12px 14px",
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "12px",
-                            transition: "all 0.15s ease",
-                          }}
-                        >
-                          <div
-                            style={{
-                              width: "38px",
-                              height: "38px",
-                              borderRadius: "8px",
-                              background: paymentMethod === "Cash" ? "#dcfce7" : "#f1f5f9",
-                              color: paymentMethod === "Cash" ? "#15803d" : "#64748b",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              flexShrink: 0,
-                            }}
-                          >
-                            <BanknoteIcon size={20} />
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div
-                              style={{
-                                fontSize: "0.88rem",
-                                fontWeight: 700,
-                                color: paymentMethod === "Cash" ? "#166534" : "#0f172a",
-                              }}
-                            >
-                              Cash Payment
-                            </div>
-                            <div style={{ fontSize: "0.72rem", color: "#64748b", marginTop: "1px" }}>
-                              Coop Depot / Field
-                            </div>
-                          </div>
-                          <div
-                            style={{
-                              width: "16px",
-                              height: "16px",
-                              borderRadius: "50%",
-                              border: `2px solid ${paymentMethod === "Cash" ? "#15803d" : "#cbd5e1"}`,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              flexShrink: 0,
-                            }}
-                          >
-                            {paymentMethod === "Cash" && (
-                              <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#15803d" }} />
-                            )}
-                          </div>
-                        </div>
-
-                        {/* GCash Card */}
-                        <div
-                          onClick={() => setPaymentMethod("GCash")}
-                          style={{
-                            border: `2px solid ${paymentMethod === "GCash" ? "#0284c7" : "#e2e8f0"}`,
-                            background: paymentMethod === "GCash" ? "#f0f9ff" : "#ffffff",
-                            borderRadius: "10px",
-                            padding: "12px 14px",
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "12px",
-                            transition: "all 0.15s ease",
-                          }}
-                        >
-                          <div
-                            style={{
-                              width: "38px",
-                              height: "38px",
-                              borderRadius: "8px",
-                              background: paymentMethod === "GCash" ? "#e0f2fe" : "#f1f5f9",
-                              color: paymentMethod === "GCash" ? "#0284c7" : "#64748b",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              flexShrink: 0,
-                            }}
-                          >
-                            <MobileIcon size={20} />
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div
-                              style={{
-                                fontSize: "0.88rem",
-                                fontWeight: 700,
-                                color: paymentMethod === "GCash" ? "#0369a1" : "#0f172a",
-                              }}
-                            >
-                              GCash E-Wallet
-                            </div>
-                            <div style={{ fontSize: "0.72rem", color: "#64748b", marginTop: "1px" }}>
-                              Instant E-Transfer
-                            </div>
-                          </div>
-                          <div
-                            style={{
-                              width: "16px",
-                              height: "16px",
-                              borderRadius: "50%",
-                              border: `2px solid ${paymentMethod === "GCash" ? "#0284c7" : "#cbd5e1"}`,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              flexShrink: 0,
-                            }}
-                          >
-                            {paymentMethod === "GCash" && (
-                              <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#0284c7" }} />
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Cash Timing Options */}
-                      {paymentMethod === "Cash" && (
-                        <div
-                          style={{
-                            marginTop: "12px",
-                            padding: "12px 14px",
-                            borderRadius: "8px",
-                            background: "#f8fafc",
-                            border: "1px solid #e2e8f0",
-                          }}
-                        >
-                          <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#334155", marginBottom: "8px" }}>
-                            Cash Settlement Timing:
-                          </div>
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-                            <button
-                              type="button"
-                              onClick={() => setCashTiming("Upon Pickup")}
-                              style={{
-                                padding: "8px 12px",
-                                borderRadius: "6px",
-                                border: `1.5px solid ${cashTiming === "Upon Pickup" ? "#15803d" : "#cbd5e1"}`,
-                                background: cashTiming === "Upon Pickup" ? "#ffffff" : "#f8fafc",
-                                color: cashTiming === "Upon Pickup" ? "#15803d" : "#475569",
-                                fontSize: "0.78rem",
-                                fontWeight: 700,
-                                cursor: "pointer",
-                                textAlign: "center",
-                                transition: "all 0.12s ease",
-                              }}
-                            >
-                              Upon Machinery Pickup
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setCashTiming("Upon Return")}
-                              style={{
-                                padding: "8px 12px",
-                                borderRadius: "6px",
-                                border: `1.5px solid ${cashTiming === "Upon Return" ? "#15803d" : "#cbd5e1"}`,
-                                background: cashTiming === "Upon Return" ? "#ffffff" : "#f8fafc",
-                                color: cashTiming === "Upon Return" ? "#15803d" : "#475569",
-                                fontSize: "0.78rem",
-                                fontWeight: 700,
-                                cursor: "pointer",
-                                textAlign: "center",
-                                transition: "all 0.12s ease",
-                              }}
-                            >
-                              Upon Machinery Return
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* GCash Payment Panel */}
-                      {paymentMethod === "GCash" && (
-                        <div
-                          style={{
-                            marginTop: "12px",
-                            padding: "14px",
-                            borderRadius: "10px",
-                            background: "#f0f9ff",
-                            border: "1px solid #bae6fd",
-                          }}
-                        >
-                          {/* Coop GCash Details */}
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              background: "#ffffff",
-                              padding: "10px 14px",
-                              borderRadius: "8px",
-                              border: "1px solid #e0f2fe",
-                              marginBottom: "12px",
-                            }}
-                          >
-                            <div>
-                              <div style={{ fontSize: "0.7rem", color: "#0369a1", fontWeight: 700, textTransform: "uppercase" }}>
-                                KIMPC Official GCash
-                              </div>
-                              <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#0f172a" }}>
-                                Kalilangan Irrigators MPC
-                              </div>
-                              <div style={{ fontSize: "1rem", fontWeight: 800, color: "#0369a1", letterSpacing: "0.04em", marginTop: "2px" }}>
-                                0926 463 8983
-                              </div>
-                            </div>
-
-                            <button
-                              type="button"
-                              onClick={handleCopyGcash}
-                              style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "5px",
-                                padding: "6px 10px",
-                                borderRadius: "6px",
-                                border: "1px solid #bae6fd",
-                                background: copiedGcash ? "#dcfce7" : "#e0f2fe",
-                                color: copiedGcash ? "#15803d" : "#0369a1",
-                                fontSize: "0.72rem",
-                                fontWeight: 700,
-                                cursor: "pointer",
-                              }}
-                            >
-                              <CopyIcon size={12} />
-                              <span>{copiedGcash ? "Copied!" : "Copy Number"}</span>
-                            </button>
-                          </div>
-
-                          {/* Screenshot Upload Dropzone */}
-                          <div>
-                            <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "#0369a1", display: "block", marginBottom: "6px" }}>
-                              Attach GCash Payment Screenshot / Receipt *
-                            </label>
-
-                            {!gcashPreview ? (
-                              <label
-                                style={{
-                                  display: "flex",
-                                  flexDirection: "column",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  padding: "18px 14px",
-                                  borderRadius: "8px",
-                                  border: "2px dashed #93c5fd",
-                                  background: "#ffffff",
-                                  cursor: "pointer",
-                                  transition: "all 0.15s ease",
-                                }}
-                              >
-                                <UploadCloudIcon size={24} />
-                                <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#0284c7", marginTop: "6px" }}>
-                                  Click or tap to upload receipt
-                                </span>
-                                <span style={{ fontSize: "0.7rem", color: "#64748b", marginTop: "2px" }}>
-                                  PNG, JPG or JPEG (Max 5MB)
-                                </span>
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  required={paymentMethod === "GCash"}
-                                  onChange={handleGCashFileChange}
-                                  style={{ display: "none" }}
-                                />
-                              </label>
-                            ) : (
-                              <div
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "space-between",
-                                  padding: "10px 14px",
-                                  background: "#ffffff",
-                                  borderRadius: "8px",
-                                  border: "1px solid #93c5fd",
-                                }}
-                              >
-                                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                                  <img
-                                    src={gcashPreview}
-                                    alt="Receipt proof"
-                                    style={{
-                                      width: "48px",
-                                      height: "64px",
-                                      objectFit: "cover",
-                                      borderRadius: "6px",
-                                      border: "1px solid #cbd5e1",
-                                    }}
-                                  />
-                                  <div>
-                                    <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#15803d", display: "flex", alignItems: "center", gap: "4px" }}>
-                                      <CheckCircleIcon size={14} /> Screenshot Attached
-                                    </div>
-                                    <div style={{ fontSize: "0.7rem", color: "#64748b", marginTop: "2px" }}>
-                                      Ready for verification
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setGcashProof("");
-                                    setGcashPreview("");
-                                  }}
-                                  style={{
-                                    padding: "5px 10px",
-                                    borderRadius: "6px",
-                                    border: "1px solid #fecdd3",
-                                    background: "#fee2e2",
-                                    color: "#dc2626",
-                                    fontSize: "0.72rem",
-                                    fontWeight: 700,
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  Remove
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Step 04: Reservation & Cost Breakdown */}
-                  <div
-                    style={{
-                      border: "1px solid #e2e8f0",
-                      borderRadius: "12px",
-                      background: "#f8fafc",
-                      padding: "14px 18px",
-                      marginTop: "6px",
-                    }}
-                  >
-                    <div style={{ fontSize: "0.74rem", fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "8px" }}>
-                      Reservation Cost Breakdown
                     </div>
 
-                    <div style={{ display: "flex", flexDirection: "column", gap: "6px", fontSize: "0.78rem" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b" }}>
-                        <span>Subsidized Rate ({formatPrice(unitRatePerHectare)} × {requestedHectares} ha)</span>
-                        <span style={{ fontWeight: 600, color: "#0f172a" }}>{formatPrice(estimatedCost)}</span>
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b" }}>
-                        <span>Farm Destination</span>
-                        <span style={{ fontWeight: 600, color: "#0f172a", textAlign: "right", maxWidth: "60%" }}>
-                          {booking.location || "Not specified"}
+                    {booking.start && booking.end && !isDatesInvalid ? (
+                      <div className="mb-book-status-pill">
+                        <CheckIcon size={13} />
+                        <span>
+                          {scheduledDaysCount} day{scheduledDaysCount > 1 ? "s" : ""} ·{" "}
+                          {formatDisplayDate(booking.start)} – {formatDisplayDate(booking.end)}
                         </span>
                       </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b" }}>
-                        <span>Cooperative Machinery Operator</span>
-                        <span style={{ fontWeight: 600, color: "#15803d" }}>Included</span>
+                    ) : booking.start && (!booking.end || booking.start === booking.end) ? (
+                      <div className="mb-book-status-pill">
+                        <span>Start: {formatDisplayDate(booking.start)} — tap an end date</span>
                       </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b" }}>
-                        <span>CDA Cooperative Tax (RA 9520)</span>
-                        <span style={{ fontWeight: 600, color: "#15803d" }}>Tax-Exempt</span>
+                    ) : null}
+
+                    {dateError && (
+                      <div className="mb-book-status-pill is-warn">
+                        <AlertCircleIcon size={14} />
+                        <span>{dateError}</span>
                       </div>
+                    )}
+                  </div>
+
+                  <div className="mb-book-section">
+                    <div className="mb-book-section-head">
+                      <h3 className="mb-book-section-title">Payment</h3>
                     </div>
 
-                    <div
-                      style={{
-                        marginTop: "10px",
-                        paddingTop: "10px",
-                        borderTop: "1px solid #cbd5e1",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "baseline",
-                      }}
-                    >
-                      <div>
-                        <div style={{ fontSize: "0.88rem", fontWeight: 800, color: "#0f172a" }}>
-                          Total Subsidized Amount:
+                    <div className="mb-pay-tabs">
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod("Cash")}
+                        className={`mb-pay-tab${paymentMethod === "Cash" ? " active" : ""}`}
+                      >
+                        <BanknoteIcon size={18} />
+                        <div>
+                          <span className="mb-pay-tab-title">Cash</span>
+                          <span className="mb-pay-tab-sub">Depot or field</span>
                         </div>
-                        <div style={{ fontSize: "0.72rem", color: "#64748b", marginTop: "2px" }}>
-                          Payment: {paymentMethod} {paymentMethod === "Cash" ? `(${cashTiming})` : "(Receipt Verified)"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod("GCash")}
+                        className={`mb-pay-tab${paymentMethod === "GCash" ? " active" : ""}`}
+                      >
+                        <MobileIcon size={18} />
+                        <div>
+                          <span className="mb-pay-tab-title">GCash</span>
+                          <span className="mb-pay-tab-sub">Upload receipt</span>
                         </div>
+                      </button>
+                    </div>
+
+                    {paymentMethod === "Cash" && (
+                      <div className="mb-pay-subrow">
+                        <button
+                          type="button"
+                          onClick={() => setCashTiming("Upon Pickup")}
+                          className={`mb-pay-subbtn${cashTiming === "Upon Pickup" ? " active" : ""}`}
+                        >
+                          Upon Pickup
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCashTiming("Upon Return")}
+                          className={`mb-pay-subbtn${cashTiming === "Upon Return" ? " active" : ""}`}
+                        >
+                          Upon Return
+                        </button>
                       </div>
-                      <div style={{ fontSize: "1.45rem", fontWeight: 800, color: "#15803d" }}>
-                        {formatPrice(estimatedCost)}
+                    )}
+
+                    {paymentMethod === "GCash" && (
+                      <div className="mb-gcash-panel">
+                        <div className="mb-gcash-bar">
+                          <div>
+                            <div className="mb-gcash-num">0926 463 8983</div>
+                            <div className="mb-gcash-name">KIMPC · Kalilangan Irrigators MPC</div>
+                          </div>
+                          <button
+                            type="button"
+                            className="mb-gcash-copy-btn"
+                            onClick={handleCopyGcash}
+                          >
+                            <CopyIcon size={12} />
+                            <span>{copiedGcash ? "Copied" : "Copy"}</span>
+                          </button>
+                        </div>
+
+                        {!gcashPreview ? (
+                          <label className="mb-gcash-upload">
+                            <UploadCloudIcon size={16} />
+                            <span>Upload GCash receipt (PNG/JPG, max 5MB)</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              required={paymentMethod === "GCash"}
+                              onChange={handleGCashFileChange}
+                              style={{ display: "none" }}
+                            />
+                          </label>
+                        ) : (
+                          <div className="mb-gcash-preview">
+                            <div className="mb-gcash-preview-left">
+                              <img
+                                className="mb-gcash-preview-img"
+                                src={gcashPreview}
+                                alt="GCash receipt"
+                              />
+                              <span className="mb-gcash-preview-name">Receipt attached</span>
+                            </div>
+                            <button
+                              type="button"
+                              className="mb-book-link-btn"
+                              style={{ color: "#dc2626" }}
+                              onClick={() => {
+                                setGcashProof("");
+                                setGcashPreview("");
+                              }}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        )}
                       </div>
+                    )}
+                  </div>
+
+                  <div className="mb-book-summary">
+                    <div className="mb-book-summary-row">
+                      <span>
+                        Rate ({formatPrice(unitRatePerHectare)} × {requestedHectares} ha)
+                      </span>
+                      <span className="mb-book-summary-val">{formatPrice(estimatedCost)}</span>
+                    </div>
+                    <div className="mb-book-summary-row">
+                      <span>Operator</span>
+                      <span className="mb-book-summary-val">
+                        {unit.operatorIncluded === false
+                          ? Number(unit.additionalOperatorFee) > 0
+                            ? unit.operatorFeeBasis === "per %"
+                              ? `${Number(unit.additionalOperatorFee)}% of rate`
+                              : `+${formatPrice(unit.additionalOperatorFee)} ${unit.operatorFeeBasis || "per day"}`
+                            : "Not included"
+                          : "Included"}
+                      </span>
+                    </div>
+                    <div className="mb-book-summary-row">
+                      <span>Payment</span>
+                      <span className="mb-book-summary-val">
+                        {paymentMethod === "Cash"
+                          ? `Cash (${cashTiming})`
+                          : gcashProof
+                          ? "GCash (Attached)"
+                          : "GCash (Receipt needed)"}
+                      </span>
+                    </div>
+                    <div className="mb-book-summary-total">
+                      <span>Total Estimate</span>
+                      <span className="mb-book-summary-amount">{formatPrice(estimatedCost)}</span>
                     </div>
                   </div>
 
                   {feedback && (
-                    <div
-                      style={{
-                        padding: "10px 14px",
-                        borderRadius: "8px",
-                        background: "#fef2f2",
-                        border: "1px solid #fecdd3",
-                        color: "#b91c1c",
-                        fontSize: "0.78rem",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {feedback}
+                    <div className="mb-book-error">
+                      <AlertCircleIcon size={15} />
+                      <span>{feedback}</span>
                     </div>
                   )}
                 </div>
 
-                {/* Modal Footer Actions */}
-                <div
-                  style={{
-                    position: "sticky",
-                    bottom: 0,
-                    background: "#ffffff",
-                    zIndex: 20,
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: "12px",
-                    marginTop: "20px",
-                    padding: "14px 24px",
-                    borderTop: "1px solid #e2e8f0",
-                    boxShadow: "0 -4px 12px rgba(0, 0, 0, 0.06)",
-                  }}
-                >
+                <div className="mb-book-footer">
                   <button
                     type="button"
+                    className="mb-book-btn-cancel"
                     onClick={() => setBookingOpen(false)}
-                    style={{
-                      padding: "10px 18px",
-                      borderRadius: "8px",
-                      border: "1px solid #cbd5e1",
-                      background: "#ffffff",
-                      color: "#475569",
-                      fontSize: "0.85rem",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                    }}
                   >
                     Cancel
                   </button>
-
                   <button
                     type="submit"
+                    className="mb-book-btn-submit"
                     disabled={submitting || isDatesInvalid || (paymentMethod === "GCash" && !gcashProof)}
-                    style={{
-                      flex: 1,
-                      padding: "11px 22px",
-                      borderRadius: "8px",
-                      border: "none",
-                      background: isDatesInvalid || (paymentMethod === "GCash" && !gcashProof) ? "#94a3b8" : "#15803d",
-                      color: "#ffffff",
-                      fontSize: "0.9rem",
-                      fontWeight: 800,
-                      cursor: isDatesInvalid || (paymentMethod === "GCash" && !gcashProof) ? "not-allowed" : "pointer",
-                      boxShadow: isDatesInvalid || (paymentMethod === "GCash" && !gcashProof) ? "none" : "0 4px 12px rgba(21, 128, 61, 0.25)",
-                      transition: "all 0.15s ease",
-                    }}
                   >
                     {submitting
-                      ? "Submitting Reservation…"
+                      ? "Submitting…"
                       : isDatesInvalid
-                      ? "Select Available Dates"
+                      ? "Select Dates"
                       : paymentMethod === "GCash" && !gcashProof
-                      ? "Upload GCash Screenshot Proof"
-                      : `Confirm Reservation · ${formatPrice(estimatedCost)}`}
+                      ? "Attach GCash Receipt"
+                      : `Confirm Booking · ${formatPrice(estimatedCost)}`}
                   </button>
                 </div>
               </form>
@@ -2014,153 +1232,86 @@ export default function EquipmentCatalog() {
         {/* ================= Mobile Phone Number Required Modal ================= */}
         {phonePromptOpen && (
           <div
-            className="member-modal-backdrop"
+            className="member-modal-backdrop mb-book-backdrop"
             role="presentation"
             onMouseDown={(e) => {
               if (e.target === e.currentTarget) setPhonePromptOpen(false);
             }}
-            style={{
-              padding: "20px 14px",
-              background: "rgba(15, 23, 42, 0.65)",
-              backdropFilter: "blur(4px)",
-              zIndex: 10001,
-            }}
           >
             <section
-              className="member-modal"
+              className="member-modal mb-book-modal"
               role="dialog"
               aria-modal="true"
               aria-labelledby="phone-prompt-title"
-              style={{
-                maxWidth: "460px",
-                width: "95%",
-                borderRadius: "16px",
-                background: "#ffffff",
-                padding: "24px 28px",
-                border: "1px solid #e2e8f0",
-                boxShadow: "0 20px 45px -10px rgba(15, 23, 42, 0.2)",
-              }}
+              style={{ maxWidth: "420px" }}
             >
-              <button
-                type="button"
-                aria-label="Close dialog"
-                onClick={() => setPhonePromptOpen(false)}
-                style={{
-                  position: "absolute",
-                  top: "16px",
-                  right: "18px",
-                  width: "30px",
-                  height: "30px",
-                  borderRadius: "8px",
-                  border: "1px solid #e2e8f0",
-                  background: "#f8fafc",
-                  color: "#64748b",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  cursor: "pointer",
-                }}
-              >
-                <CloseIcon size={14} />
-              </button>
-              <div style={{ textAlign: "center", marginBottom: "18px" }}>
-                <div
-                  style={{
-                    width: "48px",
-                    height: "48px",
-                    borderRadius: "12px",
-                    background: "#eff6ff",
-                    border: "1px solid #bfdbfe",
-                    color: "#2563eb",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    marginBottom: "12px",
-                  }}
-                >
-                  <MobileIcon size={22} color="#2563eb" />
+              <div className="mb-book-header">
+                <div className="mb-book-thumb-fallback">
+                  <MobileIcon size={18} />
                 </div>
-                <h3
-                  id="phone-prompt-title"
-                  style={{ fontSize: "1.2rem", fontWeight: 800, color: "#0f172a", margin: "0 0 6px" }}
+                <div className="mb-book-head-main">
+                  <h3 id="phone-prompt-title" className="mb-book-title">
+                    Mobile Number Required
+                  </h3>
+                  <p className="mb-book-meta">
+                    Used by operators & dispatchers for coordination
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="mb-book-close"
+                  aria-label="Close dialog"
+                  onClick={() => setPhonePromptOpen(false)}
                 >
-                  Mobile Contact Number Required
-                </h3>
-                <p style={{ fontSize: "0.82rem", color: "#64748b", margin: 0, lineHeight: 1.45 }}>
-                  A verified mobile contact number is required to book cooperative equipment. Our machinery operators and dispatchers will call or SMS you to coordinate field logistics.
-                </p>
+                  <CloseIcon size={14} />
+                </button>
               </div>
 
-              <form onSubmit={handleSavePhone}>
-                <div style={{ marginBottom: "16px" }}>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "0.8rem",
-                      fontWeight: 700,
-                      color: "#334155",
-                      marginBottom: "6px",
-                    }}
-                  >
-                    Your Mobile Number
-                  </label>
-                  <input
-                    type="tel"
-                    required
-                    autoFocus
-                    placeholder="e.g. 09171234567 or +63 917 123 4567"
-                    value={newPhoneInput}
-                    onChange={(e) => setNewPhoneInput(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "10px 14px",
-                      borderRadius: "8px",
-                      border: "1px solid #cbd5e1",
-                      fontSize: "0.95rem",
-                      fontWeight: 600,
-                      color: "#0f172a",
-                      outline: "none",
-                    }}
-                  />
+              <form className="mb-book-form" onSubmit={handleSavePhone}>
+                <div className="mb-book-body">
+                  <div className="mb-book-field">
+                    <label className="mb-book-label" htmlFor="member-phone-input">
+                      <span>
+                        Mobile Number <span className="mb-book-label-req">*</span>
+                      </span>
+                    </label>
+                    <div className="mb-book-input-wrap">
+                      <MobileIcon size={15} />
+                      <input
+                        id="member-phone-input"
+                        className="mb-book-input"
+                        type="tel"
+                        required
+                        autoFocus
+                        placeholder="0917 123 4567"
+                        value={newPhoneInput}
+                        onChange={(e) => setNewPhoneInput(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
                   {phoneSaveError && (
-                    <p style={{ color: "#dc2626", fontSize: "0.78rem", marginTop: "6px", marginBottom: 0 }}>
-                      {phoneSaveError}
-                    </p>
+                    <div className="mb-book-error">
+                      <AlertCircleIcon size={15} />
+                      <span>{phoneSaveError}</span>
+                    </div>
                   )}
                 </div>
 
-                <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+                <div className="mb-book-footer">
                   <button
                     type="button"
+                    className="mb-book-btn-cancel"
                     onClick={() => setPhonePromptOpen(false)}
-                    style={{
-                      padding: "9px 16px",
-                      borderRadius: "8px",
-                      border: "1px solid #cbd5e1",
-                      background: "#ffffff",
-                      color: "#475569",
-                      fontSize: "0.82rem",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                    }}
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
+                    className="mb-book-btn-submit"
                     disabled={savingPhone}
-                    style={{
-                      padding: "9px 18px",
-                      borderRadius: "8px",
-                      border: "none",
-                      background: "#15803d",
-                      color: "#ffffff",
-                      fontSize: "0.82rem",
-                      fontWeight: 700,
-                      cursor: savingPhone ? "wait" : "pointer",
-                    }}
                   >
-                    {savingPhone ? "Saving Profile…" : "Save to Profile & Continue"}
+                    {savingPhone ? "Saving…" : "Save & Continue"}
                   </button>
                 </div>
               </form>
