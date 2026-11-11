@@ -69,41 +69,6 @@ export default function BookingApprovals() {
   const [modalStartDate, setModalStartDate] = useState("2028-08-01");
   const [modalEndDate, setModalEndDate] = useState("2028-08-05");
 
-  // Manager action to verify and settle payment
-  const handleSettlePayment = async (booking) => {
-    if (!booking) return;
-    const currentRawId = booking.rawId;
-    const currentId = booking.id;
-    if (!window.confirm(`Confirm payment settlement for booking ${currentId}? This will verify the payment, issue receipt voucher, and notify the member.`)) {
-      return;
-    }
-    if (currentRawId) {
-      setFeedback({ message: `Settling payment for ${currentId}...`, isError: false });
-      try {
-        const res = await api(`/applications/${currentRawId}`, {
-          method: "PATCH",
-          body: { paymentStatus: "Paid" },
-        });
-        if (res.ok) {
-          setFeedback({ message: `Payment for booking ${currentId} marked as Paid!`, isError: false });
-          setViewingBooking((prev) => prev ? { ...prev, paymentStatus: "Paid" } : null);
-          fetchData();
-        } else {
-          setFeedback({ message: res.data?.error || "Failed to settle payment.", isError: true });
-        }
-      } catch (err) {
-        setFeedback({ message: "Network error settling payment.", isError: true });
-      }
-    } else {
-      setBookingOverrides((prev) => ({
-        ...prev,
-        [currentId]: { ...(prev[currentId] || {}), paymentStatus: "Paid" },
-      }));
-      setViewingBooking((prev) => prev ? { ...prev, paymentStatus: "Paid" } : null);
-      setFeedback({ message: `Payment for booking ${currentId} marked as Paid!`, isError: false });
-    }
-  };
-
   // Helper to extract ISO date strings or fallback
   const getBookingDates = (booking) => {
     let s = booking.startDateISO;
@@ -2241,7 +2206,7 @@ export default function BookingApprovals() {
                       </span>
                     </div>
 
-                    {/* Top Highlight Strip: Total + Quick Settle */}
+                    {/* Top Highlight Strip: Total Payable & Settlement Guidance */}
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px", background: "#f8fafc", padding: "12px 16px", borderRadius: "10px", border: "1px solid #f1f5f9" }}>
                       <div>
                         <span className="wz-clean-kv-label">Total Payable</span>
@@ -2250,32 +2215,25 @@ export default function BookingApprovals() {
                         </div>
                       </div>
 
-                      {viewingBooking.paymentStatus !== "Paid" && (
-                        <button
-                          type="button"
-                          onClick={() => handleSettlePayment(viewingBooking)}
-                          style={{
-                            background: "#059669",
-                            color: "#ffffff",
-                            border: "none",
-                            borderRadius: "8px",
-                            padding: "8px 16px",
-                            fontSize: "0.82rem",
-                            fontWeight: 700,
-                            cursor: "pointer",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            boxShadow: "0 2px 6px rgba(5, 150, 105, 0.25)",
-                          }}
-                          title="Verify payment and issue official receipt"
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                          Confirm &amp; Settle Payment
-                        </button>
-                      )}
+                      <div style={{ textAlign: "right" }}>
+                        <span className="wz-clean-kv-label">Settlement</span>
+                        {viewingBooking.paymentStatus === "Paid" ? (
+                          <div style={{ fontSize: "0.78rem", color: "#059669", fontWeight: 700 }}>
+                            Settled
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: "0.78rem", color: "#64748b", fontWeight: 500 }}>
+                            Manage in{" "}
+                            <Link
+                              to="/manager/financials/payments"
+                              onClick={handleCloseViewModal}
+                              style={{ color: "#0284c7", fontWeight: 600, textDecoration: "none" }}
+                            >
+                              Financials › Payments
+                            </Link>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     {/* Clean 4-column Metadata Grid */}
