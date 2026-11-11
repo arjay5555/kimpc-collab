@@ -499,7 +499,7 @@ router.post("/machinery-units/upload-photo", authManager, async (req, res) => {
  */
 router.get("/machinery-units", optionalAuth, async (req, res) => {
   try {
-    await seedDefaultMachineryUnits();
+    // Auto-seeding disabled so cooperative manager can manage authentic KIMPC machinery units cleanly.
 
     const {
       search,

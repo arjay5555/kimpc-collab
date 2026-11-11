@@ -426,12 +426,12 @@ export default function BookingApprovals() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [machineryUnits, setMachineryUnits] = useState(() => {
     const cached = getCachedApiData("/machinery-units");
-    return Array.isArray(cached) ? cached : [];
+    return Array.isArray(cached?.data) ? cached.data : (Array.isArray(cached) ? cached : []);
   });
   const [newBooking, setNewBooking] = useState({
     farmerName: "",
     farmerPhone: "",
-    equipment: "John Deere 5075E Utility Tractor",
+    equipment: "",
     startDate: new Date().toISOString().split("T")[0],
     endDate: new Date(Date.now() + 86400000 * 2).toISOString().split("T")[0],
     dailyRate: 2800,
@@ -449,8 +449,24 @@ export default function BookingApprovals() {
       if (appRes.ok && Array.isArray(appRes.data)) {
         setLiveBookings(appRes.data);
       }
-      if (machRes.ok && Array.isArray(machRes.data)) {
-        setMachineryUnits(machRes.data);
+      if (machRes.ok && machRes.data) {
+        const unitsList = Array.isArray(machRes.data?.data)
+          ? machRes.data.data
+          : Array.isArray(machRes.data)
+          ? machRes.data
+          : [];
+        setMachineryUnits(unitsList);
+        if (unitsList.length > 0) {
+          setNewBooking((prev) =>
+            prev.equipment
+              ? prev
+              : {
+                  ...prev,
+                  equipment: unitsList[0].name,
+                  dailyRate: Number(unitsList[0].ratePerDay || unitsList[0].memberRate) || 2800,
+                }
+          );
+        }
       }
     } catch (err) {
       console.error("Error loading bookings data:", err);
@@ -1019,6 +1035,10 @@ export default function BookingApprovals() {
       alert("Please enter client/farmer name.");
       return;
     }
+    if (!newBooking.equipment) {
+      alert("Please add a machinery unit first before creating a booking.");
+      return;
+    }
 
     try {
       const res = await api("/pos-booking", {
@@ -1041,10 +1061,10 @@ export default function BookingApprovals() {
         setNewBooking({
           farmerName: "",
           farmerPhone: "",
-          equipment: "John Deere 5075E Utility Tractor",
+          equipment: machineryUnits[0]?.name || "",
           startDate: new Date().toISOString().split("T")[0],
           endDate: new Date(Date.now() + 86400000 * 2).toISOString().split("T")[0],
-          dailyRate: 2800,
+          dailyRate: machineryUnits[0]?.ratePerDay || 2800,
           hasDriver: true,
         });
         fetchData();
@@ -1630,12 +1650,7 @@ export default function BookingApprovals() {
                       </option>
                     ))
                   ) : (
-                    <>
-                      <option value="John Deere 5075E Utility Tractor">John Deere 5075E Utility Tractor (₱2,800/day)</option>
-                      <option value="Kubota DC-70 Plus Combine Harvester">Kubota DC-70 Plus Combine Harvester (₱5,500/day)</option>
-                      <option value="New Holland Roll-Belt 450 Round Baler">New Holland Roll-Belt 450 Round Baler (₱3,200/day)</option>
-                      <option value="Case IH Farmall 90JX 4WD Tractor">Case IH Farmall 90JX 4WD Tractor (₱3,600/day)</option>
-                    </>
+                    <option value="">No machinery units added yet (Add units first)</option>
                   )}
                 </select>
               </div>
@@ -1811,7 +1826,7 @@ export default function BookingApprovals() {
                   <rect x="2" y="5" width="20" height="14" rx="2" />
                   <line x1="2" y1="10" x2="22" y2="10" />
                 </svg>
-                <span>Payment &amp; Receipt</span>
+                <span>Payment Summary</span>
                 <span
                   style={{
                     width: "7px",
@@ -2331,103 +2346,32 @@ export default function BookingApprovals() {
                         </button>
                       </div>
                     )}
-                  </div>
-
-                  {/* Clean Paper-Style Official Receipt */}
-                  <div className="wz-receipt-voucher" style={{ border: "1px solid #e2e8f0", borderRadius: "12px", padding: "18px 20px" }}>
-                    <div className="wz-receipt-header">
-                      <div>
-                        <h5 className="wz-receipt-coop-name">KALILANGAN IRRIGATORS MULTI-PURPOSE COOPERATIVE (KIMPC)</h5>
-                        <p className="wz-receipt-sub">Official Machinery Rental Receipt &amp; Settlement</p>
-                      </div>
-                      <div className="wz-receipt-num-box">
-                        <div className="wz-receipt-num-label">Receipt No.</div>
-                        <div className="wz-receipt-num">{viewingBooking.receiptNo || "REC-2028-0001"}</div>
-                      </div>
+                    {/* Compact Rate & Scope Breakdown */}
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px", paddingTop: "8px", borderTop: "1px solid #f1f5f9", fontSize: "0.8rem", color: "#475569" }}>
+                      <span>
+                        <strong>{viewingBooking.machineryModel}</strong> ({viewingBooking.plan})
+                      </span>
+                      <span>
+                        Daily Rate: <strong style={{ color: "#0f172a" }}>₱{Number(viewingBooking.dailyRate || 2800).toLocaleString()} / day</strong>
+                      </span>
                     </div>
 
-                    {/* Status Notice Banners on Receipt */}
+                    {/* Status Notice Banners */}
                     {(viewingBooking.status === "Rejected" || modalStatus === "Rejected") && (
-                      <div style={{ marginBottom: "12px", padding: "8px 12px", background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: "8px", fontSize: "0.78rem", color: "#991b1b" }}>
+                      <div style={{ padding: "8px 12px", background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: "8px", fontSize: "0.78rem", color: "#991b1b" }}>
                         <strong>Rejected:</strong> {modalRejectionReason || viewingBooking.rejectionReason || "No reason specified"}
                       </div>
                     )}
                     {(viewingBooking.status === "Voided" || modalStatus === "Voided") && (
-                      <div style={{ marginBottom: "12px", padding: "8px 12px", background: "#f1f5f9", border: "1px dashed #cbd5e1", borderRadius: "8px", fontSize: "0.78rem", color: "#475569" }}>
+                      <div style={{ padding: "8px 12px", background: "#f1f5f9", border: "1px dashed #cbd5e1", borderRadius: "8px", fontSize: "0.78rem", color: "#475569" }}>
                         <strong>Voided:</strong> {modalVoidReason || viewingBooking.voidReason || "Administrative Cancellation"}
                       </div>
                     )}
                     {(viewingBooking.status === "Rescheduled" || modalStatus === "Rescheduled") && (
-                      <div style={{ marginBottom: "12px", padding: "8px 12px", background: "#f3e8ff", border: "1px solid #d8b4fe", borderRadius: "8px", fontSize: "0.78rem", color: "#6b21a8" }}>
+                      <div style={{ padding: "8px 12px", background: "#f3e8ff", border: "1px solid #d8b4fe", borderRadius: "8px", fontSize: "0.78rem", color: "#6b21a8" }}>
                         <strong>Rescheduled:</strong> {modalStartDate && modalEndDate ? `${modalStartDate} to ${modalEndDate}` : viewingBooking.dateRange} ({rescheduleDays} Days)
                       </div>
                     )}
-
-                    <table className="wz-receipt-table">
-                      <thead>
-                        <tr>
-                          <th>Description</th>
-                          <th>Terms</th>
-                          <th style={{ textAlign: "right" }}>Amount</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr>
-                          <td>
-                            <strong>{viewingBooking.machineryModel}</strong>
-                            <div style={{ fontSize: "0.72rem", color: "#64748b" }}>
-                              Daily Rate: ₱{Number(viewingBooking.dailyRate || 2800).toLocaleString()} / day
-                            </div>
-                          </td>
-                          <td>{viewingBooking.plan}</td>
-                          <td style={{ textAlign: "right", fontWeight: "600" }}>{viewingBooking.paymentAmount}</td>
-                        </tr>
-                        <tr>
-                          <td>
-                            Assigned Operator Service
-                            <div style={{ fontSize: "0.72rem", color: "#64748b" }}>
-                              {viewingBooking.hasDriver ? (viewingBooking.assignedDriver || "Coop Operator") : "Self-Operated by Member"}
-                            </div>
-                          </td>
-                          <td>{viewingBooking.hasDriver ? "Included" : "N/A"}</td>
-                          <td style={{ textAlign: "right", color: "#059669" }}>₱0.00</td>
-                        </tr>
-                        <tr>
-                          <td>Coop Maintenance & Insurance Guarantee</td>
-                          <td>Coop Benefit</td>
-                          <td style={{ textAlign: "right", color: "#059669" }}>₱0.00</td>
-                        </tr>
-                        <tr>
-                          <td>CDA RA 9520 Member Tax Exemption</td>
-                          <td>Tax Exempt</td>
-                          <td style={{ textAlign: "right", color: "#059669" }}>₱0.00</td>
-                        </tr>
-                      </tbody>
-                      <tfoot>
-                        <tr>
-                          <td colSpan="2">Total Amount Payable:</td>
-                          <td style={{ textAlign: "right", color: "#059669" }}>
-                            {viewingBooking.paymentAmount}
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
-
-                    <div className="wz-receipt-footer-strip">
-                      <div>
-                        <span>Method: </span>
-                        <strong style={{ color: "#0f172a" }}>{viewingBooking.paymentMethod || "Cash"}</strong>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        <span>Status: </span>
-                        <span className={viewingBooking.paymentStatus === "Paid" ? "wz-payment-badge-paid" : "wz-payment-badge-pending"}>
-                          {viewingBooking.paymentStatus}
-                        </span>
-                      </div>
-                      <div style={{ width: "100%", fontSize: "0.7rem", color: "#94a3b8", textAlign: "right", marginTop: "4px" }}>
-                        Authorized by KIMPC Cooperative Fleet Dispatch • Digitally Verified
-                      </div>
-                    </div>
                   </div>
                 </>
               )}
@@ -2472,40 +2416,7 @@ export default function BookingApprovals() {
             </div>
 
             {/* Modal Footer: Save and Close */}
-            <div className="wz-booking-modal-footer">
-              <button
-                type="button"
-                onClick={() => {
-                  if (viewModalTab !== "payment") {
-                    setViewModalTab("payment");
-                    setTimeout(() => window.print(), 120);
-                  } else {
-                    window.print();
-                  }
-                }}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "9px 16px",
-                  borderRadius: "8px",
-                  border: "1px solid #cbd5e1",
-                  background: "#ffffff",
-                  color: "#334155",
-                  fontWeight: "600",
-                  fontSize: "0.82rem",
-                  cursor: "pointer",
-                  transition: "background 0.15s ease",
-                }}
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="6 9 6 2 18 2 18 9" />
-                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                  <rect x="6" y="14" width="12" height="8" />
-                </svg>
-                Print Receipt
-              </button>
-
+            <div className="wz-booking-modal-footer" style={{ justifyContent: "flex-end" }}>
               <div className="wz-modal-footer-actions">
                 <button
                   type="button"
