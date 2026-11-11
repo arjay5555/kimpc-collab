@@ -1452,36 +1452,35 @@ export default function Units() {
                           )}
                         </td>
 
-                        {/* 7. Actions: ONLY Icon Buttons */}
-                        <td>
-                          <div style={{ display: "flex", gap: "6px", justifyContent: "center" }}>
-                            {/* 1. View Icon Button */}
-                            <button
-                              className="wz-action-icon-btn view"
-                              onClick={() => openViewDetails(u)}
-                              title="View Details"
-                              aria-label="View Details"
-                            >
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                                <circle cx="12" cy="12" r="3" />
-                              </svg>
-                            </button>
-
-                            {/* 2. Change Status Icon Button (Operational, Maintenance, Retire) */}
-                            <button
-                              className="wz-action-icon-btn status"
-                              onClick={() => openChangeStatusModal(u)}
-                              title="Change Status (Operational, Maintenance, Retire)"
-                              aria-label="Change Status"
-                            >
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="23 4 23 10 17 10" />
-                                <polyline points="1 20 1 14 7 14" />
-                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                              </svg>
-                            </button>
-                          </div>
+                        {/* 7. Actions: View Details */}
+                        <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
+                          <button
+                            type="button"
+                            onClick={() => openViewDetails(u)}
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              padding: "4px 8px",
+                              color: "#059669",
+                              fontSize: "0.82rem",
+                              fontWeight: "700",
+                              cursor: "pointer",
+                              display: "inline-block",
+                              textDecoration: "none",
+                              transition: "all 0.15s ease",
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.color = "#047857";
+                              e.currentTarget.style.textDecoration = "underline";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.color = "#059669";
+                              e.currentTarget.style.textDecoration = "none";
+                            }}
+                            title="View Details"
+                          >
+                            View Details
+                          </button>
                         </td>
                       </tr>
                     );
