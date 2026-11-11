@@ -8167,3 +8167,245 @@ input::-webkit-contacts-auto-fill-button {
   background: #1e293b;
   color: #cbd5e1;
 }
+
+/* ================= Minimalist Unit View Details Modal ================= */
+.wz-view-hero {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.wz-view-photo-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.wz-view-photo-frame {
+  width: 148px;
+  height: 104px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: #94a3b8;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.wz-view-photo-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.wz-view-photo-thumbs {
+  display: flex;
+  gap: 4px;
+  max-width: 148px;
+  flex-wrap: wrap;
+}
+
+.wz-view-thumb-btn {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 6px;
+  border: 1.5px solid #cbd5e1;
+  overflow: hidden;
+  cursor: pointer;
+  background: #ffffff;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.wz-view-thumb-btn.active {
+  border-color: #0284c7;
+  transform: scale(1.04);
+}
+
+.wz-view-thumb-btn img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.wz-view-hero-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wz-view-hero-rate {
+  font-size: 1.38rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.wz-view-hero-rate span {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #64748b;
+  margin-left: 4px;
+}
+
+.wz-view-hero-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.wz-view-chip {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #475569;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+
+.wz-view-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
+.wz-view-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.wz-view-card-title {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+}
+
+.wz-view-kv-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 18px;
+}
+
+.wz-view-kv {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wz-view-k {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.wz-view-v {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #0f172a;
+  word-break: break-word;
+}
+
+.wz-view-btn-inline {
+  padding: 4px 10px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  border-radius: 7px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #0f172a;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.wz-view-btn-inline:hover {
+  background: #e2e8f0;
+  border-color: #94a3b8;
+}
+
+.wz-view-log-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  font-size: 0.8rem;
+}
+
+@media (max-width: 560px) {
+  .wz-view-hero {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .wz-view-photo-frame {
+    width: 100%;
+    height: 150px;
+  }
+
+  .wz-view-kv-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+[data-theme="dark"] .wz-view-hero,
+[data-theme="dark"] .wz-view-log-row {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+[data-theme="dark"] .wz-view-card,
+[data-theme="dark"] .wz-view-photo-frame,
+[data-theme="dark"] .wz-view-chip {
+  background: #0f172a;
+  border-color: #334155;
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .wz-view-hero-rate,
+[data-theme="dark"] .wz-view-v {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .wz-view-btn-inline {
+  background: #1e293b;
+  border-color: #334155;
+  color: #f1f5f9;
+}
+
+[data-theme="dark"] .wz-view-btn-inline:hover {
+  background: #334155;
+}
+
+[data-theme="dark"] .wz-view-k,
+[data-theme="dark"] .wz-view-card-title {
+  color: #94a3b8;
+}

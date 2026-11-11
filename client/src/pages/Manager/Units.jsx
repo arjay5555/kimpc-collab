@@ -205,6 +205,7 @@ export default function Units() {
   const [viewingUnit, setViewingUnit] = useState(null);
   const [unitDetailsData, setUnitDetailsData] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
+  const [activeViewPhotoIndex, setActiveViewPhotoIndex] = useState(0);
 
   // Retire Modal
   const [retiringUnit, setRetiringUnit] = useState(null);
@@ -609,6 +610,7 @@ export default function Units() {
   // Open View Details Modal
   const openViewDetails = async (u) => {
     setViewingUnit(u);
+    setActiveViewPhotoIndex(0);
     setDetailsLoading(true);
     setUnitDetailsData(null);
     try {
@@ -2418,293 +2420,313 @@ export default function Units() {
         </div>
       )}
 
-      {/* ================= 2. View Details Modal ================= */}
-      {viewingUnit && (
-        <div className="wz-modal-overlay" onClick={() => setViewingUnit(null)}>
-          <div className="wz-modal-content wz-modal-large" onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                <span className="wz-unit-code-badge" style={{ fontSize: "1rem" }}>{viewingUnit.unitId}</span>
-                <h3 style={{ margin: 0, fontSize: "1.3rem", fontWeight: "800", color: "#0f172a" }}>
-                  {viewingUnit.name}
-                </h3>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+      {/* ================= 2. View Details Modal (Minimalist) ================= */}
+      {viewingUnit && (() => {
+        const detailUnit = unitDetailsData?.data
+          ? { ...viewingUnit, ...unitDetailsData.data }
+          : viewingUnit;
+        const cond = detailUnit.operatingCondition || (
+          detailUnit.status === "Available" ? "Operational" :
+          ["Maintenance", "Repair"].includes(detailUnit.status) ? "Under Maintenance" : "Retired"
+        );
+        const condClass =
+          cond === "Operational"
+            ? "wz-cond-operational"
+            : cond === "Under Maintenance"
+            ? "wz-cond-maintenance"
+            : "wz-cond-retired";
+        const unitPhotos = Array.from(
+          new Set(
+            [detailUnit.imageUrl, ...(Array.isArray(detailUnit.photos) ? detailUnit.photos : [])]
+              .map((s) => String(s || "").trim())
+              .filter(Boolean)
+          )
+        ).slice(0, 5);
+        const activePhoto = unitPhotos[activeViewPhotoIndex] || unitPhotos[0] || "";
+        const brandModel = [detailUnit.brand, detailUnit.model].filter(Boolean).join(" ");
+        const billingShort =
+          detailUnit.pricingUnit === "Per Hectare"
+            ? "/ ha"
+            : detailUnit.pricingUnit === "Per Hour"
+            ? "/ hr"
+            : "/ day";
+        const memberRateVal = Number(detailUnit.memberRate ?? detailUnit.ratePerDay ?? 0);
+        const opFeeVal = Number(detailUnit.additionalOperatorFee || 0);
+        const operatorFeeSummary = detailUnit.operatorIncluded
+          ? "Included in rate"
+          : opFeeVal > 0
+          ? detailUnit.operatorFeeBasis === "per %"
+            ? `${opFeeVal}% of rate`
+            : `₱${opFeeVal.toLocaleString()} ${detailUnit.operatorFeeBasis || "per day"}`
+          : "None";
+        const trFeeVal = Number(detailUnit.additionalTransportFee || 0);
+        const transportSummary = detailUnit.transportIncluded
+          ? "Included in rate"
+          : trFeeVal > 0
+          ? `₱${trFeeVal.toLocaleString()} ${detailUnit.transportFeeBasis || "per trip"}`
+          : "Member pickup";
+
+        const infoItems = [];
+        if (detailUnit.brand) infoItems.push({ label: "Brand", val: detailUnit.brand });
+        if (detailUnit.model) infoItems.push({ label: "Model", val: detailUnit.model });
+        if (detailUnit.serialNumber) infoItems.push({ label: "Serial No.", val: detailUnit.serialNumber });
+        if (detailUnit.horsepower) infoItems.push({ label: "Power", val: `${detailUnit.horsepower} HP` });
+        if (detailUnit.capacity) infoItems.push({ label: "Capacity", val: detailUnit.capacity });
+        if (detailUnit.currentMeterReading > 0) {
+          infoItems.push({
+            label: "Meter Reading",
+            val: `${detailUnit.currentMeterReading} ${detailUnit.meterReadingUnit || "hrs"}`,
+          });
+        }
+        if (detailUnit.storageLocation) infoItems.push({ label: "Location", val: detailUnit.storageLocation });
+        if (detailUnit.lastServiceDate) infoItems.push({ label: "Last Service", val: detailUnit.lastServiceDate });
+        if (detailUnit.nextServiceDate) infoItems.push({ label: "Next Service", val: detailUnit.nextServiceDate });
+        if (Array.isArray(detailUnit.attachments) && detailUnit.attachments.length > 0) {
+          infoItems.push({ label: "Attachments", val: detailUnit.attachments.join(", ") });
+        }
+
+        const maintenanceLogs = unitDetailsData?.maintenanceHistory || [];
+
+        return (
+          <div className="wz-booking-modal-overlay" onClick={() => setViewingUnit(null)}>
+            <div
+              className="wz-booking-modal-container wz-unit-modal-container"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="wz-booking-modal-header">
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                    <span className="wz-unit-code-badge">{detailUnit.unitId}</span>
+                    <h3 className="wz-unit-modal-title">{detailUnit.name}</h3>
+                    <span className={`wz-cond-badge ${condClass}`}>{cond}</span>
+                  </div>
+                  <div style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "3px" }}>
+                    {detailUnit.category}
+                    {brandModel ? ` · ${brandModel}` : ""}
+                  </div>
+                </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    const target = (unitDetailsData && unitDetailsData.data) ? { ...viewingUnit, ...unitDetailsData.data } : viewingUnit;
-                    setViewingUnit(null);
-                    openEditModal(target);
-                  }}
-                  title="Edit Unit"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    padding: "6px 14px",
-                    background: "#0284c7",
-                    color: "#ffffff",
-                    border: "none",
-                    borderRadius: "6px",
-                    fontWeight: "700",
-                    fontSize: "0.82rem",
-                    cursor: "pointer",
-                    boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
-                    transition: "background 0.15s ease"
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "#0369a1")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "#0284c7")}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                  </svg>
-                  <span>Edit Unit</span>
-                </button>
-                <button
+                  className="wz-unit-modal-close"
                   onClick={() => setViewingUnit(null)}
-                  style={{ background: "none", border: "none", fontSize: "1.4rem", cursor: "pointer", color: "#94a3b8" }}
                   title="Close"
                   aria-label="Close"
                 >
                   &times;
                 </button>
               </div>
-            </div>
 
-            {detailsLoading ? (
-              <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>Loading full unit history...</div>
-            ) : (
-              <div>
-                {/* Hero Summary Header */}
-                <div style={{ display: "flex", gap: "16px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "16px", marginBottom: "18px", flexWrap: "wrap" }}>
-                  <img
-                    src={viewingUnit.imageUrl || "https://images.unsplash.com/photo-1592982537447-7440770cbfc9?auto=format&fit=crop&w=700&q=80"}
-                    alt={viewingUnit.name}
-                    style={{ width: "130px", height: "95px", objectFit: "cover", borderRadius: "8px", border: "1px solid #cbd5e1" }}
-                  />
-                  <div style={{ flex: 1, minWidth: "200px" }}>
-                    <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "4px" }}>
-                      {[viewingUnit.brand, viewingUnit.model].filter(Boolean).length > 0 && (
-                        <span style={{ fontSize: "0.85rem", fontWeight: "700", color: "#0f172a" }}>
-                          {[viewingUnit.brand, viewingUnit.model].filter(Boolean).join(" ")}
-                        </span>
+              {/* Body */}
+              <div className="wz-unit-modal-body">
+                {/* Photo + Headline Rate */}
+                <div className="wz-view-hero">
+                  <div className="wz-view-photo-col">
+                    <div className="wz-view-photo-frame">
+                      {activePhoto ? (
+                        <img src={activePhoto} alt={detailUnit.name} />
+                      ) : (
+                        <>
+                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="3" />
+                            <circle cx="8.5" cy="8.5" r="1.5" />
+                            <polyline points="21 15 16 10 5 21" />
+                          </svg>
+                          <span>No photo</span>
+                        </>
                       )}
-                      <span style={{ fontSize: "0.78rem", color: "#64748b" }}>
-                        {[viewingUnit.brand, viewingUnit.model].filter(Boolean).length > 0
-                          ? `(${viewingUnit.category})`
-                          : viewingUnit.category}
-                      </span>
                     </div>
+                    {unitPhotos.length > 1 && (
+                      <div className="wz-view-photo-thumbs">
+                        {unitPhotos.map((src, idx) => (
+                          <button
+                            key={`${src}-${idx}`}
+                            type="button"
+                            className={`wz-view-thumb-btn ${idx === activeViewPhotoIndex ? "active" : ""}`}
+                            onClick={() => setActiveViewPhotoIndex(idx)}
+                            aria-label={`View photo ${idx + 1}`}
+                          >
+                            <img src={src} alt="" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
-                    <div style={{ fontSize: "1.1rem", fontWeight: "800", color: "var(--wz-primary-red)", margin: "4px 0" }}>
-                      ₱{Number(viewingUnit.memberRate || viewingUnit.ratePerDay).toLocaleString()}
-                      <span style={{ fontSize: "0.8rem", color: "#64748b", fontWeight: "500" }}>
-                        {" "}{viewingUnit.pricingUnit || "Per Hectare"}
-                      </span>
+                  <div className="wz-view-hero-info">
+                    <div className="wz-view-hero-rate">
+                      ₱{memberRateVal.toLocaleString()}
+                      <span>{billingShort}</span>
                     </div>
-
-                    <div style={{ display: "flex", gap: "12px", fontSize: "0.8rem", color: "#475569", flexWrap: "wrap", marginTop: "6px" }}>
-                      <span>Meter: <strong>{viewingUnit.currentMeterReading || viewingUnit.operatingHours || 0} {viewingUnit.meterReadingUnit || "hrs"}</strong></span>
-                      <span>Fuel: <strong>{viewingUnit.fuelType || "Diesel"}</strong></span>
-                      {viewingUnit.horsepower && <span>Power: <strong>{viewingUnit.horsepower} HP</strong></span>}
-                      {viewingUnit.serialNumber && <span>S/N: <strong>{viewingUnit.serialNumber}</strong></span>}
+                    <div className="wz-view-hero-chips">
+                      <span className="wz-view-chip">{detailUnit.pricingUnit || "Per Hectare"}</span>
+                      <span className="wz-view-chip">
+                        {detailUnit.fuelIncluded ? "Fuel Included" : detailUnit.fuelType || "Diesel"}
+                      </span>
+                      {detailUnit.operatorRequired && (
+                        <span className="wz-view-chip">Operator Required</span>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                {/* Section 1: Brand & Model Details (Transferred to View Action) */}
-                <div className="wz-detail-section">
-                  <div className="wz-detail-sec-title">Brand &amp; Model Specifications</div>
-                  <div className="wz-detail-grid-2">
-                    <div className="wz-detail-item">
-                      <span className="wz-detail-label">Brand</span>
-                      <span className="wz-detail-value" style={{ fontWeight: "700", color: "#0f172a" }}>{viewingUnit.brand || "—"}</span>
+                {/* Pricing */}
+                <div className="wz-view-card">
+                  <div className="wz-view-card-head">
+                    <span className="wz-view-card-title">Pricing</span>
+                  </div>
+                  <div className="wz-view-kv-grid">
+                    <div className="wz-view-kv">
+                      <span className="wz-view-k">Member Rate</span>
+                      <span className="wz-view-v">
+                        ₱{memberRateVal.toLocaleString()} {billingShort}
+                      </span>
                     </div>
-                    <div className="wz-detail-item">
-                      <span className="wz-detail-label">Model</span>
-                      <span className="wz-detail-value" style={{ fontWeight: "700", color: "#0f172a" }}>{viewingUnit.model || "—"}</span>
+                    <div className="wz-view-kv">
+                      <span className="wz-view-k">Non-Member Rate</span>
+                      <span className="wz-view-v">
+                        {detailUnit.nonmemberRate > 0
+                          ? `₱${Number(detailUnit.nonmemberRate).toLocaleString()} ${billingShort}`
+                          : "—"}
+                      </span>
                     </div>
-                    <div className="wz-detail-item">
-                      <span className="wz-detail-label">Model Year</span>
-                      <span className="wz-detail-value">{viewingUnit.modelYear || "—"}</span>
+                    <div className="wz-view-kv">
+                      <span className="wz-view-k">Operator Fee</span>
+                      <span className="wz-view-v">{operatorFeeSummary}</span>
                     </div>
-                    <div className="wz-detail-item">
-                      <span className="wz-detail-label">Serial Number (S/N)</span>
-                      <span className="wz-detail-value">{viewingUnit.serialNumber || "—"}</span>
+                    <div className="wz-view-kv">
+                      <span className="wz-view-k">Transport</span>
+                      <span className="wz-view-v">{transportSummary}</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Section 2: Specifications & Pricing */}
-                <div className="wz-detail-section">
-                  <div className="wz-detail-sec-title">Rental &amp; Pricing Policies</div>
-                  <div className="wz-detail-grid-2">
-                    <div className="wz-detail-item">
-                      <span className="wz-detail-label">Member Rental Rate</span>
-                      <span className="wz-detail-value">₱{Number(viewingUnit.memberRate || viewingUnit.ratePerDay).toLocaleString()} / {viewingUnit.pricingUnit}</span>
-                    </div>
-                    <div className="wz-detail-item">
-                      <span className="wz-detail-label">Non-Member Rate</span>
-                      <span className="wz-detail-value">{viewingUnit.nonmemberRate ? `₱${Number(viewingUnit.nonmemberRate).toLocaleString()}` : "Not configured"}</span>
-                    </div>
-                    <div className="wz-detail-item">
-                      <span className="wz-detail-label">Operator Policy</span>
-                      <span className="wz-detail-value">
-                        {viewingUnit.operatorIncluded
-                          ? "Included in base rate"
-                          : viewingUnit.additionalOperatorFee
-                          ? viewingUnit.operatorFeeBasis === "per %"
-                            ? `${viewingUnit.additionalOperatorFee}% (of rate)`
-                            : `+₱${Number(viewingUnit.additionalOperatorFee).toLocaleString()} (${viewingUnit.operatorFeeBasis || "per day"})`
-                          : "Self-operated"}
-                      </span>
-                    </div>
-                    <div className="wz-detail-item">
-                      <span className="wz-detail-label">Transport Delivery</span>
-                      <span className="wz-detail-value">
-                        {viewingUnit.transportIncluded ? "Included in base rate" : viewingUnit.additionalTransportFee ? `+₱${viewingUnit.additionalTransportFee} (${viewingUnit.transportFeeBasis || "per trip"})` : "Member pickup"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Section 3: Assigned Operator / Driver (Normal Black Styling) */}
-                <div className="wz-detail-section">
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                    <div className="wz-detail-sec-title" style={{ margin: 0 }}>Assigned Operator / Driver</div>
+                {/* Assigned Operator */}
+                <div className="wz-view-card">
+                  <div className="wz-view-card-head">
+                    <span className="wz-view-card-title">Operator</span>
                     <button
                       type="button"
+                      className="wz-view-btn-inline"
                       onClick={() => {
-                        const target = viewingUnit;
                         setViewingUnit(null);
-                        openChangeDriverModal(target);
-                      }}
-                      style={{
-                        padding: "5px 12px",
-                        background: "#0f172a",
-                        border: "1px solid #0f172a",
-                        borderRadius: "6px",
-                        color: "#ffffff",
-                        fontWeight: "700",
-                        fontSize: "0.78rem",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "5px"
+                        openChangeDriverModal(detailUnit);
                       }}
                     >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                      </svg>
-                      Change Driver
+                      {detailUnit.assignedDriver && detailUnit.assignedDriver !== "Unassigned"
+                        ? "Change"
+                        : "Assign"}
                     </button>
                   </div>
-                  <div className="wz-detail-grid-2">
-                    <div className="wz-detail-item">
-                      <span className="wz-detail-label">Designated Driver</span>
-                      <span className="wz-detail-value" style={{ fontWeight: "700", color: "#0f172a" }}>
-                        {viewingUnit.assignedDriver && viewingUnit.assignedDriver !== "Unassigned" ? (
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                            <span style={{ width: "20px", height: "20px", borderRadius: "50%", background: "#0f172a", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "0.7rem", fontWeight: "700" }}>
-                              {viewingUnit.assignedDriver.charAt(0).toUpperCase()}
-                            </span>
-                            {viewingUnit.assignedDriver}
-                          </span>
-                        ) : (
-                          <span style={{ color: "#64748b" }}>Unassigned (No Operator Assigned)</span>
-                        )}
+                  <div className="wz-view-kv-grid">
+                    <div className="wz-view-kv">
+                      <span className="wz-view-k">Assigned Operator</span>
+                      <span className="wz-view-v">
+                        {detailUnit.assignedDriver && detailUnit.assignedDriver !== "Unassigned"
+                          ? detailUnit.assignedDriver
+                          : "Unassigned"}
                       </span>
                     </div>
-                    <div className="wz-detail-item">
-                      <span className="wz-detail-label">Driver Contact Phone</span>
-                      <span className="wz-detail-value">{viewingUnit.driverPhone || "—"}</span>
+                    <div className="wz-view-kv">
+                      <span className="wz-view-k">Contact</span>
+                      <span className="wz-view-v">{detailUnit.driverPhone || "—"}</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Section 4 & 5: Maintenance & Location */}
-                <div className="wz-detail-section">
-                  <div className="wz-detail-sec-title">Condition &amp; Service Tracking</div>
-                  <div className="wz-detail-grid-2">
-                    <div className="wz-detail-item">
-                      <span className="wz-detail-label">Operating Condition</span>
-                      <span className="wz-detail-value">{viewingUnit.operatingCondition || viewingUnit.status}</span>
+                {/* Optional Unit Info & Notes (only shown if populated) */}
+                {(infoItems.length > 0 || detailUnit.notes || detailUnit.operatingRestrictions) && (
+                  <div className="wz-view-card">
+                    <div className="wz-view-card-head">
+                      <span className="wz-view-card-title">Details &amp; Service</span>
                     </div>
-                    <div className="wz-detail-item">
-                      <span className="wz-detail-label">Storage Location</span>
-                      <span className="wz-detail-value">{viewingUnit.storageLocation || "Main Co-op Depot"}</span>
-                    </div>
-                    <div className="wz-detail-item">
-                      <span className="wz-detail-label">Last Service Date</span>
-                      <span className="wz-detail-value">{viewingUnit.lastServiceDate || "None on record"}</span>
-                    </div>
-                    <div className="wz-detail-item">
-                      <span className="wz-detail-label">Next Service Due</span>
-                      <span className="wz-detail-value">{viewingUnit.nextServiceDate || "Routine"}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Related Maintenance Records */}
-                {unitDetailsData && unitDetailsData.maintenanceHistory && unitDetailsData.maintenanceHistory.length > 0 && (
-                  <div className="wz-detail-section">
-                    <div className="wz-detail-sec-title">Service &amp; Maintenance Logs ({unitDetailsData.maintenanceHistory.length})</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                      {unitDetailsData.maintenanceHistory.slice(0, 4).map((m) => (
-                        <div key={m._id} style={{ display: "flex", justifyContent: "space-between", background: "#fff", border: "1px solid #e2e8f0", padding: "8px 12px", borderRadius: "6px", fontSize: "0.82rem" }}>
-                          <div>
-                            <strong>{m.maintenanceType}</strong> — <span style={{ color: "#64748b" }}>{m.reason}</span>
+                    {infoItems.length > 0 && (
+                      <div className="wz-view-kv-grid">
+                        {infoItems.map((item) => (
+                          <div key={item.label} className="wz-view-kv">
+                            <span className="wz-view-k">{item.label}</span>
+                            <span className="wz-view-v">{item.val}</span>
                           </div>
-                          <span style={{ color: "#0284c7", fontWeight: "600" }}>{m.startDate} to {m.endDate}</span>
+                        ))}
+                      </div>
+                    )}
+                    {(detailUnit.operatingRestrictions || detailUnit.notes) && (
+                      <div style={{ marginTop: infoItems.length > 0 ? "10px" : 0, fontSize: "0.8rem", color: "#475569", display: "flex", flexDirection: "column", gap: "4px" }}>
+                        {detailUnit.operatingRestrictions && (
+                          <div><strong>Restrictions:</strong> {detailUnit.operatingRestrictions}</div>
+                        )}
+                        {detailUnit.notes && (
+                          <div><strong>Notes:</strong> {detailUnit.notes}</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Maintenance Logs */}
+                {!detailsLoading && maintenanceLogs.length > 0 && (
+                  <div className="wz-view-card">
+                    <div className="wz-view-card-head">
+                      <span className="wz-view-card-title">Service Logs ({maintenanceLogs.length})</span>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                      {maintenanceLogs.slice(0, 4).map((m) => (
+                        <div key={m._id} className="wz-view-log-row">
+                          <div>
+                            <strong>{m.maintenanceType}</strong>
+                            {m.reason ? <span style={{ color: "#64748b" }}> — {m.reason}</span> : null}
+                          </div>
+                          <span style={{ color: "#0284c7", fontWeight: "600", whiteSpace: "nowrap" }}>
+                            {m.startDate} to {m.endDate}
+                          </span>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
               </div>
-            )}
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "16px" }}>
-              <button
-                type="button"
-                onClick={() => {
-                  const target = (unitDetailsData && unitDetailsData.data) ? { ...viewingUnit, ...unitDetailsData.data } : viewingUnit;
-                  setViewingUnit(null);
-                  openEditModal(target);
-                }}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "8px 18px",
-                  background: "#0284c7",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "8px",
-                  fontWeight: "700",
-                  cursor: "pointer",
-                  fontSize: "0.85rem"
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                </svg>
-                Edit Unit
-              </button>
-              <button
-                onClick={() => setViewingUnit(null)}
-                style={{ padding: "8px 20px", background: "var(--wz-primary-navy)", color: "#fff", border: "none", borderRadius: "8px", fontWeight: "700", cursor: "pointer", fontSize: "0.85rem" }}
-              >
-                Close Details
-              </button>
+              {/* Footer */}
+              <div className="wz-booking-modal-footer">
+                <button
+                  type="button"
+                  className="wz-modal-btn-close"
+                  onClick={() => {
+                    setViewingUnit(null);
+                    openChangeStatusModal(detailUnit);
+                  }}
+                >
+                  Change Status
+                </button>
+
+                <div className="wz-modal-footer-actions">
+                  <button
+                    type="button"
+                    className="wz-modal-btn-close"
+                    onClick={() => setViewingUnit(null)}
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="button"
+                    className="wz-modal-btn-save wz-unit-btn-save"
+                    onClick={() => {
+                      setViewingUnit(null);
+                      openEditModal(detailUnit);
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                    Edit Unit
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ================= 3. Retire Confirmation & Blocker Modal ================= */}
       {retiringUnit && (
