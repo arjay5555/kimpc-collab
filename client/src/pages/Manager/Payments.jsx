@@ -22,11 +22,53 @@ function formatBookingDateRange(startDate, endDate) {
   return `${startDate} to ${endDate}`;
 }
 
+function toLocalDateTimeInputValue(value) {
+  const pad = (n) => String(n).padStart(2, "0");
+  const now = new Date();
+  const currentHHMM = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  if (!value) {
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${currentHHMM}`;
+  }
+  const str = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    return `${str}T${currentHHMM}`;
+  }
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(str)) {
+    return str.slice(0, 16);
+  }
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    return `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}T${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`;
+  }
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${currentHHMM}`;
+}
+
+function formatPaymentDateTimeDisplay(value) {
+  if (!value) return "—";
+  const str = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    const d = new Date(`${str}T00:00:00`);
+    return isNaN(d.getTime())
+      ? str
+      : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  }
+  const d = new Date(str);
+  if (isNaN(d.getTime())) return str;
+  return d.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 const INITIAL_INVOICES = [];
 
 export default function Payments() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const activeReceiverName = user?.fullName || user?.name || user?.email || "Operations Manager";
 
   // Navigation sub-menu toggle
   const [financialsOpen, setFinancialsOpen] = useState(true);
@@ -98,11 +140,12 @@ export default function Payments() {
       const finalAmount = pRec?.amount !== undefined ? Number(pRec.amount) : total;
       const finalMethod = pRec?.paymentMethod || app.paymentMethod || "Cash";
       const finalType = pRec?.paymentType || "Full Rental Payment";
-      const finalDateReceived = pRec?.dateReceived || (finalStatus === "Completed" ? (app.endDate || app.startDate || new Date().toISOString().slice(0, 10)) : "");
-      const finalReceiptNo = pRec?.receiptNo || app.receiptNo || `REC-2026-${String(app._id || idx).slice(-4).toUpperCase()}`;
+      const finalDateReceived = pRec?.dateReceived || app.paymentDateTime || (finalStatus === "Completed" ? (app.endDate || app.startDate || new Date().toISOString().slice(0, 10)) : "");
+      const finalReceiptNo = pRec?.receiptNo || app.receiptNo || `OR-${new Date().getFullYear()}-${String(app._id || idx).slice(-4).toUpperCase()}`;
+      const finalReferenceNumber = pRec?.referenceNumber || app.paymentReference || app.referenceNumber || "";
       const finalProof = pRec?.proofOfPayment || app.gcashProof || null;
       const finalNotes = pRec?.notes || "";
-      const finalRecordedBy = pRec?.recordedBy || user?.fullName || user?.email || "Manager";
+      const finalRecordedBy = pRec?.receivedBy || pRec?.recordedBy || app.receivedBy || activeReceiverName;
 
       return {
         id: bookingId,
@@ -122,8 +165,10 @@ export default function Payments() {
         paymentType: finalType,
         dateReceived: finalDateReceived,
         receiptNo: finalReceiptNo,
+        referenceNumber: finalReferenceNumber,
         proofOfPayment: finalProof,
         notes: finalNotes,
+        receivedBy: finalRecordedBy,
         recordedBy: finalRecordedBy,
         cashPaymentOption: app.cashPaymentOption || (finalMethod === "Cash" ? "Upon Pickup" : ""),
         gcashProof: finalProof,
@@ -143,10 +188,11 @@ export default function Payments() {
       const finalMethod = pRec?.paymentMethod || inv.paymentMethod || "Cash";
       const finalType = pRec?.paymentType || "Full Rental Payment";
       const finalDateReceived = pRec?.dateReceived || (finalStatus === "Completed" ? inv.dueDate : "");
-      const finalReceiptNo = pRec?.receiptNo || inv.receiptNo || `REC-2026-${String(inv.id).replace(/\D/g, "")}`;
+      const finalReceiptNo = pRec?.receiptNo || inv.receiptNo || `OR-${new Date().getFullYear()}-${String(inv.id).replace(/\D/g, "")}`;
+      const finalReferenceNumber = pRec?.referenceNumber || inv.referenceNumber || "";
       const finalProof = pRec?.proofOfPayment || inv.gcashProof || null;
       const finalNotes = pRec?.notes || "";
-      const finalRecordedBy = pRec?.recordedBy || user?.fullName || user?.email || "Manager";
+      const finalRecordedBy = pRec?.receivedBy || pRec?.recordedBy || inv.receivedBy || activeReceiverName;
 
       return {
         ...inv,
@@ -156,15 +202,17 @@ export default function Payments() {
         paymentType: finalType,
         dateReceived: finalDateReceived,
         receiptNo: finalReceiptNo,
+        referenceNumber: finalReferenceNumber,
         proofOfPayment: finalProof,
         gcashProof: finalProof,
         notes: finalNotes,
+        receivedBy: finalRecordedBy,
         recordedBy: finalRecordedBy,
       };
     });
 
     return [...formattedLive, ...formattedMock];
-  }, [liveApplications, invoices, user]);
+  }, [liveApplications, invoices, activeReceiverName]);
 
   // Compute live KPI metrics
   const kpiStats = useMemo(() => {
@@ -201,12 +249,23 @@ export default function Payments() {
 
   // Settle invoice directly from manager financials
   const handleSettleInvoice = async (inv) => {
+    const settledAt = toLocalDateTimeInputValue();
     if (!inv.rawId) {
       setInvoices((prev) =>
-        prev.map((item) => (item.id === inv.id ? { ...item, status: "Completed" } : item))
+        prev.map((item) =>
+          item.id === inv.id
+            ? { ...item, status: "Completed", dateReceived: settledAt, receivedBy: activeReceiverName, recordedBy: activeReceiverName }
+            : item
+        )
       );
       if (viewingPayment && viewingPayment.id === inv.id) {
-        setViewingPayment((prev) => ({ ...prev, status: "Completed" }));
+        setViewingPayment((prev) => ({
+          ...prev,
+          status: "Completed",
+          dateReceived: settledAt,
+          receivedBy: activeReceiverName,
+          recordedBy: activeReceiverName,
+        }));
       }
       setFeedback(`Payment for booking ${inv.id} marked as Completed.`);
       return;
@@ -224,12 +283,23 @@ export default function Payments() {
     try {
       const res = await api(`/applications/${inv.rawId}`, {
         method: "PATCH",
-        body: { paymentStatus: "Paid" },
+        body: {
+          paymentStatus: "Paid",
+          paymentDateTime: settledAt,
+          receivedBy: activeReceiverName,
+          recordedBy: activeReceiverName,
+        },
       });
       if (res.ok) {
         setFeedback(`Payment settled for ${inv.id}! Member notified and receipt ready.`);
         if (viewingPayment && viewingPayment.id === inv.id) {
-          setViewingPayment((prev) => ({ ...prev, status: "Completed" }));
+          setViewingPayment((prev) => ({
+            ...prev,
+            status: "Completed",
+            dateReceived: settledAt,
+            receivedBy: activeReceiverName,
+            recordedBy: activeReceiverName,
+          }));
         }
         fetchApplications();
       } else {
@@ -300,9 +370,10 @@ export default function Payments() {
       "  KALILANGAN IRRIGATORS MULTI-PURPOSE COOPERATIVE (KIMPC)  ",
       "             OFFICIAL PAYMENT TRANSACTION RECEIPT          ",
       "===========================================================",
-      `Receipt No:       ${inv.receiptNo || inv.id}`,
+      `OR / Receipt No:  ${inv.receiptNo || inv.id}`,
       `Booking Ref:      ${inv.id}`,
-      `Date Issued:      ${inv.dateReceived || inv.dueDate || new Date().toISOString().slice(0, 10)}`,
+      ...(inv.referenceNumber ? [`GCash Ref No:     ${inv.referenceNumber}`] : []),
+      `Date & Time Paid: ${formatPaymentDateTimeDisplay(inv.dateReceived || inv.dueDate)}`,
       `Payment Status:   ${inv.status}`,
       "-----------------------------------------------------------",
       `Client / Member:  ${inv.clientName}`,
@@ -314,8 +385,8 @@ export default function Payments() {
       "-----------------------------------------------------------",
       `Payment Method:   ${inv.paymentMethod || "Cash"} ${inv.cashPaymentOption ? `(${inv.cashPaymentOption})` : ""}`,
       `Payment Type:     ${inv.paymentType || "Full Rental Payment"}`,
-      `Total Amount:     PHP ${Number(inv.amount || 0).toLocaleString()}`,
-      `Recorded By:      ${inv.recordedBy || user?.fullName || "Manager"}`,
+      `Amount Paid:      PHP ${Number(inv.amount || 0).toLocaleString()}`,
+      `Received By:      ${inv.receivedBy || inv.recordedBy || activeReceiverName}`,
       `Notes:            ${inv.notes || "None"}`,
       "===========================================================",
       "  This document serves as an electronic transaction copy   ",
@@ -357,15 +428,20 @@ export default function Payments() {
     amount: "",
     paymentType: "Full Rental Payment",
     paymentMethod: "Cash",
-    dateReceived: new Date().toISOString().slice(0, 10),
+    referenceNumber: "",
+    dateReceived: toLocalDateTimeInputValue(),
     receiptNo: "",
     proofOfPayment: "",
     notes: "",
-    recordedBy: "",
   });
+
+  const selectedBookingForForm = useMemo(() => {
+    return allInvoices.find((inv) => inv.id === formData.bookingId) || null;
+  }, [allInvoices, formData.bookingId]);
 
   const handleBookingSelect = (bId) => {
     const selected = allInvoices.find((inv) => inv.id === bId);
+    const currentYear = new Date().getFullYear();
     if (selected) {
       setFormData((prev) => ({
         ...prev,
@@ -375,30 +451,30 @@ export default function Payments() {
         machineryModel: selected.machineryModel || "",
         amount: selected.amount || "",
         paymentMethod: selected.paymentMethod || "Cash",
-        receiptNo: selected.receiptNo || `REC-2026-${String(selected.id).replace(/\D/g, "") || "0001"}`,
+        referenceNumber: selected.referenceNumber || "",
+        receiptNo:
+          selected.receiptNo ||
+          `OR-${currentYear}-${String(selected.id).replace(/\D/g, "") || "0001"}`,
+        proofOfPayment: selected.proofOfPayment || selected.gcashProof || "",
       }));
     } else {
       setFormData((prev) => ({
         ...prev,
-        bookingId: bId,
+        bookingId: "",
+        rawId: "",
+        clientName: "",
+        machineryModel: "",
+        amount: "",
+        referenceNumber: "",
+        proofOfPayment: "",
       }));
-    }
-  };
-
-  const handleProofUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData((prev) => ({ ...prev, proofOfPayment: reader.result }));
-      };
-      reader.readAsDataURL(file);
     }
   };
 
   const openCreateModal = () => {
     setEditingInvoice(null);
-    const today = new Date().toISOString().slice(0, 10);
+    const nowLocal = toLocalDateTimeInputValue();
+    const currentYear = new Date().getFullYear();
     // Find first unsettled/pending booking (never a completed or paid one)
     const pendingBooking = allInvoices.find((i) => {
       const st = (i.status || "").toLowerCase();
@@ -413,11 +489,13 @@ export default function Payments() {
       amount: pendingBooking?.amount || "",
       paymentType: "Full Rental Payment",
       paymentMethod: pendingBooking?.paymentMethod || "Cash",
-      dateReceived: today,
-      receiptNo: pendingBooking ? (pendingBooking.receiptNo || `REC-2026-${String(pendingBooking.id).replace(/\D/g, "") || "0001"}`) : `REC-2026-${Date.now().toString().slice(-4)}`,
-      proofOfPayment: "",
+      referenceNumber: pendingBooking?.referenceNumber || "",
+      dateReceived: nowLocal,
+      receiptNo: pendingBooking
+        ? (pendingBooking.receiptNo || `OR-${currentYear}-${String(pendingBooking.id).replace(/\D/g, "") || "0001"}`)
+        : `OR-${currentYear}-${Date.now().toString().slice(-4)}`,
+      proofOfPayment: pendingBooking?.proofOfPayment || pendingBooking?.gcashProof || "",
       notes: "",
-      recordedBy: user?.fullName || user?.email || "Manager",
     });
     setIsModalOpen(true);
   };
@@ -432,11 +510,11 @@ export default function Payments() {
       amount: inv.amount || "",
       paymentType: inv.paymentType || "Full Rental Payment",
       paymentMethod: inv.paymentMethod || "Cash",
-      dateReceived: inv.dueDate || new Date().toISOString().slice(0, 10),
+      referenceNumber: inv.referenceNumber || "",
+      dateReceived: toLocalDateTimeInputValue(inv.dateReceived || inv.dueDate),
       receiptNo: inv.receiptNo || inv.id,
       proofOfPayment: inv.proofOfPayment || inv.gcashProof || "",
       notes: inv.notes || "",
-      recordedBy: inv.recordedBy || user?.fullName || user?.email || "Manager",
     });
     setIsModalOpen(true);
   };
@@ -450,21 +528,33 @@ export default function Payments() {
 
   const handleSaveModal = async (e) => {
     e.preventDefault();
-    const managerName = user?.fullName || user?.email || "Manager";
+    const receiverName = activeReceiverName;
     const amountNum = Number(formData.amount) || 0;
+    const method = formData.paymentMethod || "Cash";
+    const gcashRef = method === "GCash" ? (formData.referenceNumber || "").trim() : "";
+    const resolvedDateTime = formData.dateReceived || toLocalDateTimeInputValue();
+    const resolvedOrNo =
+      (formData.receiptNo || "").trim() ||
+      `OR-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`;
+    const resolvedClientName = selectedBookingForForm?.clientName || formData.clientName;
+    const resolvedMachineryModel = selectedBookingForForm?.machineryModel || formData.machineryModel;
+    const resolvedRawId = selectedBookingForForm?.rawId || formData.rawId;
+
     const paymentRecord = {
       bookingId: formData.bookingId,
-      rawId: formData.rawId,
-      clientName: formData.clientName,
-      machineryModel: formData.machineryModel,
+      rawId: resolvedRawId,
+      clientName: resolvedClientName,
+      machineryModel: resolvedMachineryModel,
       amount: amountNum,
       paymentType: formData.paymentType || "Full Rental Payment",
-      paymentMethod: formData.paymentMethod || "Cash",
-      dateReceived: formData.dateReceived || new Date().toISOString().slice(0, 10),
-      receiptNo: formData.receiptNo || `REC-2026-${Date.now().toString().slice(-4)}`,
+      paymentMethod: method,
+      referenceNumber: gcashRef,
+      dateReceived: resolvedDateTime,
+      receiptNo: resolvedOrNo,
       proofOfPayment: formData.proofOfPayment || "",
       notes: formData.notes || "",
-      recordedBy: managerName,
+      receivedBy: receiverName,
+      recordedBy: receiverName,
       status: "Completed",
     };
 
@@ -472,25 +562,30 @@ export default function Payments() {
     try {
       const stored = JSON.parse(localStorage.getItem("kimpc_booking_payments") || "{}");
       if (formData.bookingId) stored[formData.bookingId] = paymentRecord;
-      if (formData.rawId) stored[formData.rawId] = paymentRecord;
+      if (resolvedRawId) stored[resolvedRawId] = paymentRecord;
       localStorage.setItem("kimpc_booking_payments", JSON.stringify(stored));
     } catch (err) {
       console.warn("Storage warning:", err);
     }
 
     // If backend application, PATCH backend
-    if (formData.rawId) {
+    if (resolvedRawId) {
       try {
-        await api(`/applications/${formData.rawId}`, {
+        await api(`/applications/${resolvedRawId}`, {
           method: "PATCH",
           body: {
             paymentStatus: "Paid",
+            paymentAmount: amountNum,
             financials: { isSettled: true, totalPaid: amountNum },
             receiptNo: paymentRecord.receiptNo,
             paymentDate: paymentRecord.dateReceived,
+            paymentDateTime: paymentRecord.dateReceived,
             paymentMethod: paymentRecord.paymentMethod,
+            paymentReference: gcashRef,
+            referenceNumber: gcashRef,
             paymentNotes: paymentRecord.notes,
-            recordedBy: managerName,
+            receivedBy: receiverName,
+            recordedBy: receiverName,
           },
         });
         fetchApplications();
@@ -507,16 +602,19 @@ export default function Payments() {
           inv.id === formData.bookingId
             ? {
                 ...inv,
-                clientName: formData.clientName,
-                machineryModel: formData.machineryModel,
+                clientName: resolvedClientName,
+                machineryModel: resolvedMachineryModel,
                 amount: amountNum,
                 paymentMethod: paymentRecord.paymentMethod,
+                referenceNumber: gcashRef,
                 status: "Completed",
                 receiptNo: paymentRecord.receiptNo,
-                dueDate: paymentRecord.dateReceived,
+                dateReceived: paymentRecord.dateReceived,
+                dueDate: paymentRecord.dateReceived.slice(0, 10),
                 notes: paymentRecord.notes,
                 proofOfPayment: paymentRecord.proofOfPayment,
-                recordedBy: managerName,
+                receivedBy: receiverName,
+                recordedBy: receiverName,
               }
             : inv
         );
@@ -524,20 +622,23 @@ export default function Payments() {
         return [
           {
             id: formData.bookingId,
-            rawId: formData.rawId,
-            clientName: formData.clientName,
-            machineryModel: formData.machineryModel,
+            rawId: resolvedRawId,
+            clientName: resolvedClientName,
+            machineryModel: resolvedMachineryModel,
             ratePerDay: amountNum,
             daysCount: 1,
-            rentalPeriod: "1 Day",
+            rentalPeriod: selectedBookingForForm?.rentalPeriod || "1 Day",
             amount: amountNum,
-            dueDate: paymentRecord.dateReceived,
+            dueDate: paymentRecord.dateReceived.slice(0, 10),
+            dateReceived: paymentRecord.dateReceived,
             paymentMethod: paymentRecord.paymentMethod,
+            referenceNumber: gcashRef,
             status: "Completed",
             receiptNo: paymentRecord.receiptNo,
             notes: paymentRecord.notes,
             proofOfPayment: paymentRecord.proofOfPayment,
-            recordedBy: managerName,
+            receivedBy: receiverName,
+            recordedBy: receiverName,
           },
           ...prev,
         ];
@@ -545,7 +646,7 @@ export default function Payments() {
     });
 
     setIsModalOpen(false);
-    setFeedback(`Payment of ₱${amountNum.toLocaleString()} for booking ${formData.bookingId} recorded as Completed by ${managerName}!`);
+    setFeedback(`Payment of ₱${amountNum.toLocaleString()} for booking ${formData.bookingId} recorded by ${receiverName}!`);
   };
 
   return (
@@ -892,369 +993,237 @@ export default function Payments() {
         </div>
       </main>
 
-      {/* ================= MODAL: CREATE / EDIT INVOICE ================= */}
+      {/* ================= MODAL: RECORD / EDIT MEMBER PAYMENT ================= */}
       {isModalOpen && (
         <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            backgroundColor: "rgba(15, 23, 42, 0.4)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-            padding: "20px",
+          className="wz-payrec-overlay"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setIsModalOpen(false);
           }}
         >
-          <div
-            style={{
-              background: "#ffffff",
-              borderRadius: "16px",
-              width: "100%",
-              maxWidth: "520px",
-              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)",
-              overflow: "hidden",
-            }}
+          <section
+            className="wz-payrec-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="record-payment-title"
           >
-            <div
-              style={{
-                padding: "20px 24px",
-                borderBottom: "1px solid #f1f5f9",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <div>
-                <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: "800", color: "#0f172a" }}>
-                  {editingInvoice ? `Edit Payment Record (${editingInvoice.id})` : "Record Member Payment"}
-                </h3>
-                <span style={{ fontSize: "0.76rem", color: "#64748b" }}>
-                  Record official payment, reference details, and issue verified receipt for a booking.
-                </span>
-              </div>
+            <div className="wz-payrec-header">
+              <h3 id="record-payment-title" className="wz-payrec-title">
+                {editingInvoice ? `Edit Payment (${editingInvoice.id})` : "Record Member Payment"}
+              </h3>
               <button
+                type="button"
+                className="wz-payrec-close"
+                aria-label="Close payment modal"
                 onClick={() => setIsModalOpen(false)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  fontSize: "1.2rem",
-                  cursor: "pointer",
-                  color: "#94a3b8",
-                }}
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleSaveModal} style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
-              {/* Select Booking */}
-              <div>
-                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "700", color: "#475569", marginBottom: "6px" }}>
-                  Select Booking *
-                </label>
-                <select
-                  required
-                  value={formData.bookingId}
-                  onChange={(e) => handleBookingSelect(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    borderRadius: "8px",
-                    border: "1px solid #cbd5e1",
-                    fontSize: "0.85rem",
-                    outline: "none",
-                    background: "#ffffff",
-                    fontWeight: "600",
-                    color: "#0f172a",
-                  }}
-                >
-                  <option value="">
-                    {availableBookingsForPayment.length === 0
-                      ? "-- No pending or unpaid bookings to record --"
-                      : "-- Choose an unsettled booking to record payment --"}
-                  </option>
-                  {availableBookingsForPayment.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.id} — {b.clientName} ({b.machineryModel}) • ₱{Number(b.amount).toLocaleString()} [{b.status}]
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Client & Machinery Info (Prefilled) */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "700", color: "#475569", marginBottom: "6px" }}>
-                    Client / Member Name *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Alice Johnson"
-                    value={formData.clientName}
-                    onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
-                    style={{
-                      width: "100%",
-                      padding: "9px 12px",
-                      borderRadius: "8px",
-                      border: "1px solid #cbd5e1",
-                      fontSize: "0.85rem",
-                      outline: "none",
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "700", color: "#475569", marginBottom: "6px" }}>
-                    Machinery / Equipment *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. John Deere 5075E"
-                    value={formData.machineryModel}
-                    onChange={(e) => setFormData({ ...formData, machineryModel: e.target.value })}
-                    style={{
-                      width: "100%",
-                      padding: "9px 12px",
-                      borderRadius: "8px",
-                      border: "1px solid #cbd5e1",
-                      fontSize: "0.85rem",
-                      outline: "none",
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Payment Amount & Payment Method */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "700", color: "#475569", marginBottom: "6px" }}>
-                    Payment Amount (₱ PHP) *
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    required
-                    placeholder="e.g. 5600"
-                    value={formData.amount}
-                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                    style={{
-                      width: "100%",
-                      padding: "9px 12px",
-                      borderRadius: "8px",
-                      border: "1px solid #cbd5e1",
-                      fontSize: "0.95rem",
-                      fontWeight: "800",
-                      color: "#0f172a",
-                      outline: "none",
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "700", color: "#475569", marginBottom: "6px" }}>
-                    Payment Method *
+            <form className="wz-payrec-form" onSubmit={handleSaveModal}>
+              <div className="wz-payrec-body">
+                <div className="wz-payrec-field">
+                  <label className="wz-payrec-label" htmlFor="rec-booking">
+                    <span>
+                      Select Booking <span className="wz-payrec-req">*</span>
+                    </span>
                   </label>
                   <select
-                    value={formData.paymentMethod}
-                    onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
-                    style={{
-                      width: "100%",
-                      padding: "9px 12px",
-                      borderRadius: "8px",
-                      border: "1px solid #cbd5e1",
-                      fontSize: "0.85rem",
-                      outline: "none",
-                      background: "#ffffff",
-                      fontWeight: "600",
-                    }}
+                    id="rec-booking"
+                    className="wz-payrec-control"
+                    required
+                    value={formData.bookingId}
+                    onChange={(e) => handleBookingSelect(e.target.value)}
                   >
-                    <option value="Cash">Cash</option>
-                    <option value="GCash">GCash</option>
-                    <option value="Bank Transfer">Bank Transfer</option>
-                    <option value="Check">Check</option>
+                    <option value="">
+                      {availableBookingsForPayment.length === 0
+                        ? "No unpaid bookings available"
+                        : "Choose a booking..."}
+                    </option>
+                    {availableBookingsForPayment.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.id} — {b.clientName} ({b.machineryModel}) · ₱{Number(b.amount || 0).toLocaleString()}
+                      </option>
+                    ))}
                   </select>
                 </div>
-              </div>
 
-              {/* Date Received & Receipt or Reference Number */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "700", color: "#475569", marginBottom: "6px" }}>
-                    Date Received *
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={formData.dateReceived}
-                    onChange={(e) => setFormData({ ...formData, dateReceived: e.target.value })}
-                    style={{
-                      width: "100%",
-                      padding: "9px 12px",
-                      borderRadius: "8px",
-                      border: "1px solid #cbd5e1",
-                      fontSize: "0.85rem",
-                      outline: "none",
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "700", color: "#475569", marginBottom: "6px" }}>
-                    Receipt or Reference Number *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. REC-2026-0001 or GCash Ref #"
-                    value={formData.receiptNo}
-                    onChange={(e) => setFormData({ ...formData, receiptNo: e.target.value })}
-                    style={{
-                      width: "100%",
-                      padding: "9px 12px",
-                      borderRadius: "8px",
-                      border: "1px solid #cbd5e1",
-                      fontSize: "0.85rem",
-                      outline: "none",
-                      fontFamily: "monospace",
-                      fontWeight: "700",
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Proof of Payment (Optional) */}
-              <div>
-                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "700", color: "#475569", marginBottom: "6px" }}>
-                  Proof of Payment (Optional Upload)
-                </label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleProofUpload}
-                  style={{
-                    width: "100%",
-                    padding: "8px 12px",
-                    borderRadius: "8px",
-                    border: "1px dashed #cbd5e1",
-                    fontSize: "0.82rem",
-                    outline: "none",
-                    background: "#f8fafc",
-                    cursor: "pointer",
-                  }}
-                />
-                {formData.proofOfPayment && (
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "8px" }}>
-                    <img
-                      src={formData.proofOfPayment}
-                      alt="Proof preview"
-                      style={{ width: "50px", height: "50px", objectFit: "cover", borderRadius: "6px", border: "1px solid #cbd5e1" }}
+                <div className="wz-payrec-row">
+                  <div className="wz-payrec-field">
+                    <label className="wz-payrec-label" htmlFor="rec-or-number">
+                      <span>
+                        Official Receipt (OR) Number: <span className="wz-payrec-req">*</span>
+                      </span>
+                    </label>
+                    <input
+                      id="rec-or-number"
+                      className="wz-payrec-control mono"
+                      type="text"
+                      required
+                      placeholder="OR-2026-0001"
+                      value={formData.receiptNo}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, receiptNo: e.target.value }))}
                     />
-                    <button
-                      type="button"
-                      onClick={() => setFormData((prev) => ({ ...prev, proofOfPayment: "" }))}
-                      style={{
-                        background: "#fee2e2",
-                        color: "#991b1b",
-                        border: "1px solid #fca5a5",
-                        borderRadius: "6px",
-                        padding: "4px 10px",
-                        fontSize: "0.74rem",
-                        fontWeight: 600,
-                        cursor: "pointer",
-                      }}
+                  </div>
+
+                  <div className="wz-payrec-field">
+                    <label className="wz-payrec-label" htmlFor="rec-datetime">
+                      <span>
+                        Date and Time <span className="wz-payrec-req">*</span>
+                      </span>
+                    </label>
+                    <input
+                      id="rec-datetime"
+                      className="wz-payrec-control"
+                      type="datetime-local"
+                      required
+                      value={formData.dateReceived}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, dateReceived: e.target.value }))}
+                    />
+                  </div>
+                </div>
+
+                <div className="wz-payrec-row">
+                  <div className="wz-payrec-field">
+                    <label className="wz-payrec-label" htmlFor="rec-amount">
+                      <span>
+                        Amount Paid <span className="wz-payrec-req">*</span>
+                      </span>
+                    </label>
+                    <div className="wz-payrec-input-wrap">
+                      <span className="wz-payrec-prefix">₱</span>
+                      <input
+                        id="rec-amount"
+                        className="wz-payrec-amount-input"
+                        type="number"
+                        min="1"
+                        step="0.01"
+                        required
+                        placeholder="0.00"
+                        value={formData.amount}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, amount: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="wz-payrec-field">
+                    <label className="wz-payrec-label" htmlFor="rec-method">
+                      <span>
+                        Payment Method <span className="wz-payrec-req">*</span>
+                      </span>
+                    </label>
+                    <select
+                      id="rec-method"
+                      className="wz-payrec-control"
+                      value={formData.paymentMethod}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          paymentMethod: e.target.value,
+                          referenceNumber: e.target.value === "GCash" ? prev.referenceNumber : "",
+                        }))
+                      }
                     >
-                      Remove Uploaded Image
-                    </button>
+                      <option value="Cash">Cash</option>
+                      <option value="GCash">GCash</option>
+                      <option value="Bank Transfer">Bank Transfer</option>
+                      <option value="Check">Check</option>
+                    </select>
+                  </div>
+                </div>
+
+                {formData.paymentMethod === "GCash" && (
+                  <div className="wz-payrec-gcash-box">
+                    <div className="wz-payrec-field">
+                      <label className="wz-payrec-label" htmlFor="rec-gcash-ref">
+                        <span>
+                          GCash Reference Number <span className="wz-payrec-req">*</span>
+                        </span>
+                      </label>
+                      <input
+                        id="rec-gcash-ref"
+                        className="wz-payrec-control mono"
+                        type="text"
+                        required
+                        placeholder="Enter GCash reference number"
+                        value={formData.referenceNumber}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, referenceNumber: e.target.value }))
+                        }
+                      />
+                    </div>
                   </div>
                 )}
-              </div>
 
-              {/* Notes */}
-              <div>
-                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "700", color: "#475569", marginBottom: "6px" }}>
-                  Notes &amp; Remarks (Optional)
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="e.g. Paid in cash at office, verified by cashier on duty..."
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  style={{
-                    width: "100%",
-                    padding: "9px 12px",
-                    borderRadius: "8px",
-                    border: "1px solid #cbd5e1",
-                    fontSize: "0.85rem",
-                    outline: "none",
-                    resize: "vertical",
-                  }}
-                />
-              </div>
+                <div className="wz-payrec-summary">
+                  <div className="wz-payrec-summary-head">
+                    <span className="wz-payrec-summary-title">Booking Summary</span>
+                    {selectedBookingForForm && (
+                      <span className="wz-payrec-summary-status">
+                        {selectedBookingForForm.status}
+                      </span>
+                    )}
+                  </div>
 
-              {/* Recorded By (Filled automatically what account of manager used) */}
-              <div
-                style={{
-                  background: "#f8fafc",
-                  padding: "10px 14px",
-                  borderRadius: "8px",
-                  border: "1px solid #e2e8f0",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <div>
-                  <span style={{ fontSize: "0.70rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, display: "block" }}>
-                    Recorded By (Manager Account)
-                  </span>
-                  <span style={{ fontSize: "0.85rem", fontWeight: 800, color: "#166534" }}>
-                    👤 {user?.fullName || user?.email || "Manager"}
-                  </span>
+                  {selectedBookingForForm ? (
+                    <div className="wz-payrec-summary-grid">
+                      <div className="wz-payrec-kv">
+                        <span className="wz-payrec-k">Member</span>
+                        <span className="wz-payrec-v">{selectedBookingForForm.clientName}</span>
+                      </div>
+                      <div className="wz-payrec-kv">
+                        <span className="wz-payrec-k">Machinery</span>
+                        <span className="wz-payrec-v">{selectedBookingForForm.machineryModel}</span>
+                      </div>
+                      <div className="wz-payrec-kv">
+                        <span className="wz-payrec-k">Schedule</span>
+                        <span className="wz-payrec-v">
+                          {formatBookingDateRange(
+                            selectedBookingForForm.startDate,
+                            selectedBookingForForm.endDate
+                          )}
+                        </span>
+                      </div>
+                      <div className="wz-payrec-kv">
+                        <span className="wz-payrec-k">Scope &amp; Booking Total</span>
+                        <span className="wz-payrec-v">
+                          {selectedBookingForForm.rentalPeriod} · ₱
+                          {Number(selectedBookingForForm.amount || 0).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="wz-payrec-summary-empty">
+                      Select a booking above to view its summary.
+                    </div>
+                  )}
                 </div>
-                <span style={{ fontSize: "0.70rem", background: "#dcfce7", color: "#166534", padding: "2px 8px", borderRadius: "6px", fontWeight: 700 }}>
-                  Auto-Filled
-                </span>
+
+                <div className="wz-payrec-receiver" aria-label="Received by account">
+                  <div className="wz-payrec-receiver-left">
+                    <span className="wz-payrec-receiver-label">Received by:</span>
+                    <span className="wz-payrec-receiver-name">{activeReceiverName}</span>
+                  </div>
+                  <span className="wz-payrec-readonly-tag">Account · Read-only</span>
+                </div>
               </div>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>
+              <div className="wz-payrec-footer">
                 <button
                   type="button"
+                  className="wz-payrec-btn-cancel"
                   onClick={() => setIsModalOpen(false)}
-                  style={{
-                    padding: "9px 16px",
-                    borderRadius: "8px",
-                    border: "1px solid #e2e8f0",
-                    background: "transparent",
-                    color: "#64748b",
-                    fontWeight: "600",
-                    fontSize: "0.85rem",
-                    cursor: "pointer",
-                  }}
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  style={{
-                    padding: "9px 18px",
-                    borderRadius: "8px",
-                    border: "none",
-                    background: "#059669",
-                    color: "#ffffff",
-                    fontWeight: "700",
-                    fontSize: "0.85rem",
-                    cursor: "pointer",
-                    boxShadow: "0 2px 6px rgba(5, 150, 105, 0.25)",
-                  }}
-                >
-                  {editingInvoice ? "Save Changes" : "✓ Record Payment"}
+                <button type="submit" className="wz-payrec-btn-save">
+                  {editingInvoice ? "Save Changes" : "Record Payment"}
                 </button>
               </div>
             </form>
-          </div>
+          </section>
         </div>
       )}
 
@@ -1505,23 +1474,28 @@ export default function Payments() {
                     </div>
                   </div>
 
-                  {/* 4. Date Received */}
+                  {/* 4. Date & Time Received */}
                   <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px" }}>
                     <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                      4. Date Received
+                      4. Date &amp; Time Received
                     </span>
                     <div style={{ fontSize: "0.92rem", fontWeight: 800, color: "#0f172a", marginTop: "6px" }}>
-                      📅 {viewingPayment.dateReceived || viewingPayment.dueDate || "—"}
+                      📅 {formatPaymentDateTimeDisplay(viewingPayment.dateReceived || viewingPayment.dueDate)}
                     </div>
                   </div>
 
-                  {/* 5. Receipt or Reference Number */}
+                  {/* 5. Official Receipt (OR) & Reference Number */}
                   <div style={{ gridColumn: "span 2", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px" }}>
                     <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                      5. Receipt or Reference Number
+                      5. Official Receipt (OR) Number {viewingPayment.referenceNumber ? "& Reference No." : ""}
                     </span>
                     <div style={{ fontSize: "0.95rem", fontWeight: 900, fontFamily: "monospace", color: "#0f172a", marginTop: "4px" }}>
-                      {viewingPayment.receiptNo || viewingPayment.referenceNumber || viewingPayment.id}
+                      {viewingPayment.receiptNo || viewingPayment.id}
+                      {viewingPayment.referenceNumber ? (
+                        <span style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#0284c7", marginTop: "3px" }}>
+                          GCash Ref: {viewingPayment.referenceNumber}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
 
@@ -1597,19 +1571,19 @@ export default function Payments() {
                     </div>
                   </div>
 
-                  {/* 7. Recorded By (Filled automatically what account of manager used) */}
+                  {/* 7. Received By (Non-editable manager/cashier account) */}
                   <div style={{ gridColumn: "span 2", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "10px", padding: "12px 14px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "6px" }}>
                       <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#166534", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                        7. Recorded By
+                        7. Received By
                       </span>
                       <span style={{ fontSize: "0.68rem", fontWeight: 700, background: "#dcfce7", color: "#15803d", padding: "2px 8px", borderRadius: "12px", border: "1px solid #86efac" }}>
-                        ✓ Auto-filled with active manager account
+                        ✓ Transaction Account
                       </span>
                     </div>
                     <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#14532d", marginTop: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
                       <span>👤</span>
-                      <span>{viewingPayment.recordedBy || user?.fullName || user?.name || user?.email || "Manager"}</span>
+                      <span>{viewingPayment.receivedBy || viewingPayment.recordedBy || activeReceiverName}</span>
                       {user?.role && (
                         <span style={{ fontSize: "0.70rem", background: "#bbf7d0", color: "#166534", padding: "1px 6px", borderRadius: "4px", fontWeight: 700 }}>
                           {user.role}

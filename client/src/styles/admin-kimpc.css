@@ -8409,3 +8409,384 @@ input::-webkit-contacts-auto-fill-button {
 [data-theme="dark"] .wz-view-card-title {
   color: #94a3b8;
 }
+
+/* ==================== Minimalist Record Member Payment Modal ==================== */
+
+.wz-payrec-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.54);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 16px;
+}
+
+.wz-payrec-modal {
+  width: min(100%, 520px);
+  max-height: 90dvh;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  box-shadow: 0 24px 48px -12px rgba(15, 23, 42, 0.22);
+  overflow: hidden;
+}
+
+.wz-payrec-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1f5f9;
+  flex-shrink: 0;
+}
+
+.wz-payrec-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.wz-payrec-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background: transparent;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.15s, color 0.15s;
+}
+
+.wz-payrec-close:hover {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.wz-payrec-form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.wz-payrec-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.wz-payrec-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.wz-payrec-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.wz-payrec-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #334155;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.wz-payrec-req {
+  color: #dc2626;
+}
+
+.wz-payrec-control {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 0.85rem;
+  font-weight: 500;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+
+.wz-payrec-control:focus {
+  border-color: #059669;
+  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.12);
+  background: #ffffff;
+}
+
+.wz-payrec-control.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 700;
+}
+
+.wz-payrec-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+
+.wz-payrec-input-wrap:focus-within {
+  border-color: #059669;
+  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.12);
+  background: #ffffff;
+}
+
+.wz-payrec-prefix {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #64748b;
+  user-select: none;
+}
+
+.wz-payrec-amount-input {
+  width: 100%;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #0f172a;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.wz-payrec-gcash-box {
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid #bae6fd;
+  background: rgba(14, 165, 233, 0.06);
+}
+
+.wz-payrec-summary {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wz-payrec-summary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.wz-payrec-summary-title {
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+}
+
+.wz-payrec-summary-status {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.wz-payrec-summary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 14px;
+}
+
+.wz-payrec-kv {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.wz-payrec-k {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.wz-payrec-v {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wz-payrec-summary-empty {
+  font-size: 0.8rem;
+  color: #64748b;
+  text-align: center;
+  padding: 4px 0;
+}
+
+.wz-payrec-receiver {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.wz-payrec-receiver-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.wz-payrec-receiver-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.wz-payrec-receiver-name {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.wz-payrec-readonly-tag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #475569;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.wz-payrec-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  border-top: 1px solid #f1f5f9;
+  background: #ffffff;
+  flex-shrink: 0;
+}
+
+.wz-payrec-btn-cancel {
+  padding: 9px 16px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: transparent;
+  color: #475569;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.wz-payrec-btn-save {
+  padding: 9px 18px;
+  border-radius: 10px;
+  border: none;
+  background: #059669;
+  color: #ffffff;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.wz-payrec-btn-save:hover {
+  background: #047857;
+}
+
+[data-theme="dark"] .wz-payrec-modal,
+[data-theme="dark"] .wz-payrec-footer {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+[data-theme="dark"] .wz-payrec-header {
+  border-color: #1e293b;
+}
+
+[data-theme="dark"] .wz-payrec-title,
+[data-theme="dark"] .wz-payrec-v,
+[data-theme="dark"] .wz-payrec-receiver-name,
+[data-theme="dark"] .wz-payrec-control,
+[data-theme="dark"] .wz-payrec-amount-input {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .wz-payrec-label {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .wz-payrec-control,
+[data-theme="dark"] .wz-payrec-input-wrap,
+[data-theme="dark"] .wz-payrec-summary,
+[data-theme="dark"] .wz-payrec-receiver {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+[data-theme="dark"] .wz-payrec-control:focus,
+[data-theme="dark"] .wz-payrec-input-wrap:focus-within {
+  background: #0f172a;
+  border-color: #10b981;
+}
+
+[data-theme="dark"] .wz-payrec-summary-head {
+  border-color: #334155;
+}
+
+[data-theme="dark"] .wz-payrec-summary-status,
+[data-theme="dark"] .wz-payrec-readonly-tag {
+  background: #334155;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .wz-payrec-close,
+[data-theme="dark"] .wz-payrec-btn-cancel {
+  border-color: #334155;
+  color: #cbd5e1;
+}
+
+@media (max-width: 540px) {
+  .wz-payrec-row,
+  .wz-payrec-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}

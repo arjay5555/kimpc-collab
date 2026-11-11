@@ -406,16 +406,52 @@ const handleApplicationUpdate = async (req, res) => {
       existing.paymentStatus = clean(req.body.paymentStatus);
       if (!existing.financials) existing.financials = {};
       existing.financials.isSettled = existing.paymentStatus === "Paid";
-      if (existing.paymentStatus === "Paid" && !existing.receiptNo) {
-        existing.receiptNo = `REC-${new Date().getFullYear()}-${String(existing._id).slice(-4).toUpperCase()}`;
+
+      const incomingMethod = clean(req.body.paymentMethod);
+      if (incomingMethod) {
+        existing.paymentMethod = incomingMethod;
+        existing.financials.paymentMethod = incomingMethod;
       }
+
+      const incomingAmount = Number(req.body.paymentAmount ?? req.body.financials?.totalPaid);
+      if (Number.isFinite(incomingAmount) && incomingAmount > 0) {
+        existing.paymentAmount = incomingAmount;
+        existing.financials.totalPaid = incomingAmount;
+      }
+
+      const incomingReceiptNo = clean(req.body.receiptNo);
+      if (incomingReceiptNo) {
+        existing.receiptNo = incomingReceiptNo;
+      } else if (existing.paymentStatus === "Paid" && !existing.receiptNo) {
+        existing.receiptNo = `OR-${new Date().getFullYear()}-${String(existing._id).slice(-4).toUpperCase()}`;
+      }
+
+      const incomingDateTime = clean(req.body.paymentDateTime || req.body.paymentDate);
+      if (incomingDateTime) {
+        existing.paymentDateTime = incomingDateTime;
+      }
+
+      if (existing.paymentMethod === "GCash") {
+        const incomingRef = clean(req.body.paymentReference || req.body.referenceNumber);
+        if (incomingRef) existing.paymentReference = incomingRef;
+      } else if (req.body.paymentMethod) {
+        existing.paymentReference = "";
+      }
+
+      const receiverName =
+        clean(req.user?.fullName || req.user?.email) ||
+        clean(req.body.receivedBy || req.body.recordedBy);
+      if (receiverName) {
+        existing.receivedBy = receiverName;
+      }
+
       if (!existing.timeline) existing.timeline = [];
       existing.timeline.push({
         event: "payment_settled",
         title: "Payment Settled",
         timestamp: new Date(),
-        actor: ["manager", "admin"].includes(actorRole) ? "Manager" : "System",
-        note: `Payment status updated to ${existing.paymentStatus} (${existing.paymentMethod || "Cash"}). Receipt: ${existing.receiptNo || "N/A"}.`,
+        actor: receiverName || (["manager", "admin"].includes(actorRole) ? "Manager" : "System"),
+        note: `Payment status updated to ${existing.paymentStatus} (${existing.paymentMethod || "Cash"}). OR No: ${existing.receiptNo || "N/A"}${existing.paymentReference ? ` • Ref: ${existing.paymentReference}` : ""}.`,
       });
       await existing.save();
 
@@ -424,7 +460,7 @@ const handleApplicationUpdate = async (req, res) => {
         await Notification.create({
           memberEmail: existing.memberEmail,
           title: "Payment Confirmed & Receipt Ready",
-          message: `Your payment of ₱${Number(existing.totalAmount || 0).toLocaleString()} for ${existing.equipment} has been verified and settled. Receipt #${existing.receiptNo} is now ready for download.`,
+          message: `Your payment of ₱${Number(existing.paymentAmount || existing.totalAmount || 0).toLocaleString()} for ${existing.equipment} has been verified and settled. OR #${existing.receiptNo} is now ready for download.`,
           type: "booking",
           relatedApplicationId: existing._id,
         });
@@ -744,8 +780,8 @@ const handleApplicationUpdate = async (req, res) => {
   }
 };
 
-router.patch("/applications/:id", handleApplicationUpdate);
-router.put("/applications/:id", handleApplicationUpdate);
+router.patch("/applications/:id", optionalAuthentication, handleApplicationUpdate);
+router.put("/applications/:id", optionalAuthentication, handleApplicationUpdate);
 
 // Cancel or request cancellation
 router.delete("/applications/:id", authenticate, async (req, res) => {

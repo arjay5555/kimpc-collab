@@ -518,6 +518,9 @@ export default function BookingApprovals() {
         clientAvatar,
         coopId,
         receiptNo,
+        paymentReference: item.paymentReference || "",
+        paymentDateTime: item.paymentDateTime || "",
+        receivedBy: item.receivedBy || "",
         paymentMethod,
         cashPaymentOption,
         gcashProof,
@@ -575,11 +578,12 @@ export default function BookingApprovals() {
         const paymentAmount = paymentRecord?.amount ? `₱${Number(paymentRecord.amount).toLocaleString()}` : (extra.paymentAmount || b.paymentAmount);
         const paymentMethod = paymentRecord?.paymentMethod || extra.paymentMethod || b.paymentMethod;
         const paymentType = paymentRecord?.paymentType || extra.paymentType || b.paymentType || "Full Rental Payment";
-        const dateReceived = paymentRecord?.dateReceived || extra.dateReceived || b.dateReceived || (paymentStatus === "Paid" ? b.bookingDate : "");
-        const receiptNo = paymentRecord?.receiptNo || extra.receiptNo || b.receiptNo || `REC-2026-${String(b.id).replace(/\D/g, "")}`;
+        const dateReceived = paymentRecord?.dateReceived || extra.dateReceived || b.paymentDateTime || b.dateReceived || (paymentStatus === "Paid" ? b.bookingDate : "");
+        const receiptNo = paymentRecord?.receiptNo || extra.receiptNo || b.receiptNo || `OR-${new Date().getFullYear()}-${String(b.id).replace(/\D/g, "")}`;
+        const referenceNumber = paymentRecord?.referenceNumber || extra.referenceNumber || b.paymentReference || "";
         const proofOfPayment = paymentRecord?.proofOfPayment || extra.proofOfPayment || b.proofOfPayment || b.gcashProof || null;
         const notes = paymentRecord?.notes || extra.notes || b.notes || "";
-        const recordedBy = paymentRecord?.recordedBy || extra.recordedBy || b.recordedBy || user?.fullName || user?.email || "Manager";
+        const recordedBy = paymentRecord?.receivedBy || paymentRecord?.recordedBy || extra.recordedBy || b.receivedBy || b.recordedBy || user?.fullName || user?.email || "Manager";
 
         return {
           ...b,
@@ -591,6 +595,7 @@ export default function BookingApprovals() {
           paymentType,
           dateReceived,
           receiptNo,
+          referenceNumber,
           proofOfPayment,
           notes,
           recordedBy,
@@ -2247,17 +2252,26 @@ export default function BookingApprovals() {
                       <div>
                         <span className="wz-clean-kv-label">Date Received</span>
                         <span className="wz-clean-kv-value" style={{ fontSize: "0.84rem" }}>
-                          {viewingBooking.dateReceived || (viewingBooking.paymentStatus === "Paid" ? viewingBooking.bookingDate : "Pending")}
+                          {viewingBooking.dateReceived
+                            ? (String(viewingBooking.dateReceived).includes("T") && !isNaN(new Date(viewingBooking.dateReceived).getTime())
+                              ? new Date(viewingBooking.dateReceived).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })
+                              : viewingBooking.dateReceived)
+                            : (viewingBooking.paymentStatus === "Paid" ? viewingBooking.bookingDate : "Pending")}
                         </span>
                       </div>
                       <div>
-                        <span className="wz-clean-kv-label">Receipt / Ref No.</span>
+                        <span className="wz-clean-kv-label">OR / Ref No.</span>
                         <span className="wz-clean-kv-value" style={{ fontSize: "0.82rem", fontFamily: "monospace" }}>
-                          {viewingBooking.receiptNo || viewingBooking.referenceNumber || viewingBooking.id}
+                          {viewingBooking.receiptNo || viewingBooking.id}
+                          {viewingBooking.referenceNumber ? (
+                            <span style={{ display: "block", fontSize: "0.72rem", color: "#0284c7" }}>
+                              Ref: {viewingBooking.referenceNumber}
+                            </span>
+                          ) : null}
                         </span>
                       </div>
                       <div>
-                        <span className="wz-clean-kv-label">Recorded By</span>
+                        <span className="wz-clean-kv-label">Received By</span>
                         <span className="wz-clean-kv-value" style={{ fontSize: "0.82rem", color: "#059669" }}>
                           {viewingBooking.recordedBy || user?.fullName || "Manager"}
                         </span>
