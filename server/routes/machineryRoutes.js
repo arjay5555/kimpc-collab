@@ -410,7 +410,7 @@ async function seedDefaultMachineryUnits() {
  */
 function normalizeUnit(unit) {
   const obj = unit.toObject ? unit.toObject() : { ...unit };
-  if (!obj.brand || !obj.model || obj.brand === "Generic" || obj.model === "Standard") {
+  if (obj.brand === "Generic" || obj.model === "Standard") {
     const rawName = obj.name || "";
     if (rawName.includes("John Deere")) {
       obj.brand = "John Deere";
@@ -866,9 +866,9 @@ router.post("/machinery-units", authManager, async (req, res) => {
     const memberRate = Number(body.memberRate !== undefined ? body.memberRate : body.ratePerDay);
     const operatingCondition = clean(body.operatingCondition) || "Operational";
 
-    // Required fields check
-    if (!unitId || !name || !brand || !model) {
-      return fail(res, 400, "Asset Code (Unit ID), Machinery Name, Brand, and Model are required.");
+    // Required fields check (Unit Name, Unit ID, Type, and Billing rate)
+    if (!unitId || !name) {
+      return fail(res, 400, "Unit ID and Unit Name are required.");
     }
     if (!category) {
       return fail(res, 400, "Machinery Type / Category is required.");
@@ -884,7 +884,10 @@ router.post("/machinery-units", authManager, async (req, res) => {
     }
 
     // Numeric validation checks
-    const nonmemberRate = body.nonmemberRate !== undefined && body.nonmemberRate !== "" ? Number(body.nonmemberRate) : null;
+    const nonmemberRate =
+      body.nonmemberRate !== undefined && body.nonmemberRate !== "" && body.nonmemberRate !== null
+        ? Number(body.nonmemberRate)
+        : null;
     if (nonmemberRate !== null && (isNaN(nonmemberRate) || nonmemberRate < 0)) {
       return fail(res, 400, "Non-member rate cannot be negative.");
     }
@@ -915,11 +918,14 @@ router.post("/machinery-units", authManager, async (req, res) => {
     const transportIncluded = Boolean(body.transportIncluded);
     const operatorRequired = Boolean(body.operatorRequired);
 
+    const operatorFeeBasis = clean(body.operatorFeeBasis) || "per day";
     let additionalOperatorFee = Number(body.additionalOperatorFee || 0);
     if (operatorIncluded) {
       additionalOperatorFee = 0; // Prevent charging if included in rate
-    } else if (additionalOperatorFee < 0) {
+    } else if (isNaN(additionalOperatorFee) || additionalOperatorFee < 0) {
       return fail(res, 400, "Additional operator fee cannot be negative.");
+    } else if (operatorFeeBasis === "per %" && additionalOperatorFee > 100) {
+      return fail(res, 400, "Operator percentage fee cannot exceed 100%.");
     }
 
     let additionalTransportFee = Number(body.additionalTransportFee || 0);
@@ -1042,7 +1048,7 @@ router.post("/machinery-units", authManager, async (req, res) => {
       fuelIncluded,
       transportIncluded,
       additionalOperatorFee,
-      operatorFeeBasis: clean(body.operatorFeeBasis) || "per day",
+      operatorFeeBasis,
       additionalTransportFee,
       transportFeeBasis: clean(body.transportFeeBasis) || "per trip",
       operatingCondition,
@@ -1083,12 +1089,13 @@ router.post("/machinery-units", authManager, async (req, res) => {
       }
     }
 
+    const modelLabel = [name, [brand, model].filter(Boolean).join(" ")].filter(Boolean).join(" - ");
     await logAudit({
       action: "MACHINERY_UNIT_CREATED",
       actorEmail: managerEmail,
       actorRole: req.user?.role || "manager",
       actorId: req.user?._id,
-      details: `Registered machinery unit ${unitId} (${name}, ${brand} ${model}). Condition: ${operatingCondition}, Rate: ₱${memberRate}/${pricingUnit}.`,
+      details: `Registered machinery unit ${unitId} (${modelLabel}). Condition: ${operatingCondition}, Rate: ₱${memberRate}/${pricingUnit}.`,
       req,
     });
 
@@ -1161,8 +1168,8 @@ router.put("/machinery-units/:id", authManager, async (req, res) => {
     // Update Basic Information
     if (body.name) unit.name = clean(body.name);
     if (body.category) unit.category = clean(body.category);
-    if (body.brand) unit.brand = clean(body.brand);
-    if (body.model) unit.model = clean(body.model);
+    if (body.brand !== undefined) unit.brand = clean(body.brand);
+    if (body.model !== undefined) unit.model = clean(body.model);
     if (body.serialNumber !== undefined) unit.serialNumber = newSerial;
     if (body.modelYear !== undefined) unit.modelYear = clean(body.modelYear);
     if (body.photos !== undefined || body.imageUrl !== undefined) {
@@ -1200,12 +1207,13 @@ router.put("/machinery-units/:id", authManager, async (req, res) => {
       unit.ratePerHour = unit.pricingUnit === "Per Hour" ? rate : Math.round(rate / 6);
     }
     if (body.nonmemberRate !== undefined) {
-      const nmRate = Number(body.nonmemberRate);
-      if (isNaN(nmRate) || nmRate < 0) return fail(res, 400, "Non-member rate cannot be negative.");
+      const nmRate =
+        body.nonmemberRate === "" || body.nonmemberRate === null ? null : Number(body.nonmemberRate);
+      if (nmRate !== null && (isNaN(nmRate) || nmRate < 0)) return fail(res, 400, "Non-member rate cannot be negative.");
       unit.nonmemberRate = nmRate;
     }
     if (body.minRentalQuantity !== undefined) {
-      const minQty = Number(body.minRentalQuantity);
+      const minQty = Number(body.minRentalQuantity || 1);
       if (isNaN(minQty) || minQty <= 0) return fail(res, 400, "Minimum rental quantity must be greater than zero.");
       unit.minRentalQuantity = minQty;
     }
@@ -1215,14 +1223,17 @@ router.put("/machinery-units/:id", authManager, async (req, res) => {
     if (body.fuelIncluded !== undefined) unit.fuelIncluded = Boolean(body.fuelIncluded);
     if (body.transportIncluded !== undefined) unit.transportIncluded = Boolean(body.transportIncluded);
 
+    if (body.operatorFeeBasis) unit.operatorFeeBasis = clean(body.operatorFeeBasis);
     if (unit.operatorIncluded) {
       unit.additionalOperatorFee = 0;
     } else if (body.additionalOperatorFee !== undefined) {
-      const fee = Number(body.additionalOperatorFee);
-      if (fee < 0) return fail(res, 400, "Additional operator fee cannot be negative.");
+      const fee = body.additionalOperatorFee === "" || body.additionalOperatorFee === null ? 0 : Number(body.additionalOperatorFee);
+      if (isNaN(fee) || fee < 0) return fail(res, 400, "Additional operator fee cannot be negative.");
+      if ((unit.operatorFeeBasis || "per day") === "per %" && fee > 100) {
+        return fail(res, 400, "Operator percentage fee cannot exceed 100%.");
+      }
       unit.additionalOperatorFee = fee;
     }
-    if (body.operatorFeeBasis) unit.operatorFeeBasis = clean(body.operatorFeeBasis);
 
     if (unit.transportIncluded) {
       unit.additionalTransportFee = 0;

@@ -25,15 +25,13 @@ const machineryUnitSchema = new mongoose.Schema(
     },
     brand: {
       type: String,
-      required: [true, "Brand is required"],
       trim: true,
-      default: "Generic"
+      default: ""
     },
     model: {
       type: String,
-      required: [true, "Model is required"],
       trim: true,
-      default: "Standard"
+      default: ""
     },
     serialNumber: {
       type: String,
@@ -120,7 +118,7 @@ const machineryUnitSchema = new mongoose.Schema(
     },
     operatorFeeBasis: {
       type: String,
-      enum: ["per booking", "per hectare", "per hour", "per day", "per trip"],
+      enum: ["per %", "per booking", "per hectare", "per hour", "per day", "per trip"],
       default: "per day"
     },
     additionalTransportFee: {

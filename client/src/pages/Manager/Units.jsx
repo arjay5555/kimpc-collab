@@ -25,7 +25,7 @@ const FUEL_TYPES = ["Diesel", "Gasoline", "Electric", "Hybrid", "Biofuel", "Othe
 // Pricing units
 const PRICING_UNITS = ["Per Hectare", "Per Hour", "Per Day"];
 
-// Fee basis options
+// Fee basis options (Transport Fee)
 const FEE_BASIS_OPTIONS = [
   "per booking",
   "per hectare",
@@ -33,6 +33,19 @@ const FEE_BASIS_OPTIONS = [
   "per day",
   "per trip",
 ];
+
+// Operator fee billing basis options (dynamic label & unit depending on choice)
+const OPERATOR_FEE_OPTIONS = [
+  { value: "per %", label: "Per % (%)", inputLabel: "Operator Percentage (%)", unit: "%", placeholder: "15", step: "0.5", max: "100" },
+  { value: "per day", label: "Per Day (₱)", inputLabel: "Rate per Day (₱)", unit: "₱ / day", placeholder: "500", step: "50" },
+  { value: "per trip", label: "Per Trip (₱)", inputLabel: "Rate per Trip (₱)", unit: "₱ / trip", placeholder: "300", step: "50" },
+  { value: "per hectare", label: "Per Hectare (₱)", inputLabel: "Rate per Hectare (₱)", unit: "₱ / ha", placeholder: "250", step: "50" },
+  { value: "per hour", label: "Per Hour (₱)", inputLabel: "Rate per Hour (₱)", unit: "₱ / hr", placeholder: "100", step: "10" },
+  { value: "per booking", label: "Per Booking (₱)", inputLabel: "Flat Fee / Booking (₱)", unit: "₱ / booking", placeholder: "500", step: "50" },
+];
+
+const getOperatorFeeMeta = (basis) =>
+  OPERATOR_FEE_OPTIONS.find((opt) => opt.value === basis) || OPERATOR_FEE_OPTIONS[1];
 
 // Operating condition options
 const OPERATING_CONDITIONS = ["Operational", "Under Maintenance", "Retired"];
@@ -69,16 +82,16 @@ const EMPTY_UNIT_FORM = {
 
   // 3. Rental & Pricing
   pricingUnit: "Per Hectare",
-  memberRate: 2800,
-  nonmemberRate: 3500,
+  memberRate: "",
+  nonmemberRate: "",
   minRentalQuantity: 1,
   operatorRequired: false,
   operatorIncluded: false,
   fuelIncluded: false,
   transportIncluded: false,
-  additionalOperatorFee: 0,
+  additionalOperatorFee: "",
   operatorFeeBasis: "per day",
-  additionalTransportFee: 0,
+  additionalTransportFee: "",
   transportFeeBasis: "per trip",
 
   // 4. Condition & Maintenance
@@ -551,16 +564,16 @@ export default function Units() {
       attachments: Array.isArray(u.attachments) ? u.attachments.join(", ") : (u.attachments || ""),
 
       pricingUnit: u.pricingUnit || "Per Hectare",
-      memberRate: u.memberRate !== undefined ? u.memberRate : (u.ratePerDay || 2500),
+      memberRate: u.memberRate !== undefined && u.memberRate !== null ? u.memberRate : (u.ratePerDay ?? ""),
       nonmemberRate: u.nonmemberRate !== undefined && u.nonmemberRate !== null ? u.nonmemberRate : "",
       minRentalQuantity: u.minRentalQuantity || 1,
       operatorRequired: Boolean(u.operatorRequired),
       operatorIncluded: Boolean(u.operatorIncluded),
       fuelIncluded: Boolean(u.fuelIncluded),
       transportIncluded: Boolean(u.transportIncluded),
-      additionalOperatorFee: u.additionalOperatorFee || 0,
+      additionalOperatorFee: u.additionalOperatorFee > 0 ? u.additionalOperatorFee : "",
       operatorFeeBasis: u.operatorFeeBasis || "per day",
-      additionalTransportFee: u.additionalTransportFee || 0,
+      additionalTransportFee: u.additionalTransportFee > 0 ? u.additionalTransportFee : "",
       transportFeeBasis: u.transportFeeBasis || "per trip",
 
       operatingCondition: u.operatingCondition || (
@@ -867,10 +880,11 @@ export default function Units() {
 
   const updateUnitField = (field, value) => {
     setUnitForm((prev) => ({ ...prev, [field]: value }));
-    if (formErrors[field]) {
+    if (formErrors[field] || (field === "operatorFeeBasis" && formErrors.additionalOperatorFee)) {
       setFormErrors((prev) => {
         const next = { ...prev };
         delete next[field];
+        if (field === "operatorFeeBasis") delete next.additionalOperatorFee;
         return next;
       });
     }
@@ -955,16 +969,14 @@ export default function Units() {
     if (unitSaveError) setUnitSaveError("");
   };
 
-  // Client-Side Validation
+  // Client-Side Validation (only Type, Unit ID, Unit Name, Billing, and Member Rate are required)
   const validateForm = () => {
     const errs = {};
     if (!String(unitForm.category || "").trim()) errs.category = "Required";
 
     if (!editingUnit) {
       const cleanPref = normalizePrefix(unitForm.unitPrefix);
-      if (!cleanPref) {
-        errs.unitPrefix = "Required";
-      } else {
+      if (cleanPref) {
         const conflict = findPrefixConflict(cleanPref, unitForm.category);
         if (conflict) errs.unitPrefix = `Used by ${conflict}`;
       }
@@ -989,29 +1001,47 @@ export default function Units() {
     }
 
     if (!unitForm.name.trim()) errs.name = "Required";
-    if (!unitForm.brand.trim()) errs.brand = "Required";
-    if (!unitForm.model.trim()) errs.model = "Required";
     if (!unitForm.pricingUnit) errs.pricingUnit = "Required";
 
     const rate = Number(unitForm.memberRate);
-    if (unitForm.memberRate === "" || isNaN(rate) || rate < 0) errs.memberRate = "Invalid rate";
+    if (unitForm.memberRate === "" || isNaN(rate) || rate < 0) errs.memberRate = "Required";
 
-    if (unitForm.nonmemberRate !== "" && Number(unitForm.nonmemberRate) < 0) {
+    if (unitForm.nonmemberRate !== "" && (isNaN(Number(unitForm.nonmemberRate)) || Number(unitForm.nonmemberRate) < 0)) {
       errs.nonmemberRate = "Invalid rate";
     }
 
-    const minQty = Number(unitForm.minRentalQuantity);
-    if (isNaN(minQty) || minQty <= 0) errs.minRentalQuantity = "Must be > 0";
+    if (
+      unitForm.minRentalQuantity !== "" &&
+      (isNaN(Number(unitForm.minRentalQuantity)) || Number(unitForm.minRentalQuantity) <= 0)
+    ) {
+      errs.minRentalQuantity = "Must be > 0";
+    }
+
+    if (!unitForm.operatorIncluded && unitForm.additionalOperatorFee !== "") {
+      const opFee = Number(unitForm.additionalOperatorFee);
+      if (isNaN(opFee) || opFee < 0) {
+        errs.additionalOperatorFee = "Invalid fee";
+      } else if (unitForm.operatorFeeBasis === "per %" && opFee > 100) {
+        errs.additionalOperatorFee = "Max 100%";
+      }
+    }
+
+    if (!unitForm.transportIncluded && unitForm.additionalTransportFee !== "") {
+      const trFee = Number(unitForm.additionalTransportFee);
+      if (isNaN(trFee) || trFee < 0) {
+        errs.additionalTransportFee = "Invalid fee";
+      }
+    }
 
     if (unitForm.horsepower !== "" && Number(unitForm.horsepower) < 0) {
       errs.horsepower = "Invalid value";
     }
 
-    if (Number(unitForm.currentMeterReading) < 0) {
+    if (unitForm.currentMeterReading !== "" && Number(unitForm.currentMeterReading) < 0) {
       errs.currentMeterReading = "Invalid value";
     }
 
-    if (Number(unitForm.acquisitionCost) < 0) {
+    if (unitForm.acquisitionCost !== "" && Number(unitForm.acquisitionCost) < 0) {
       errs.acquisitionCost = "Invalid value";
     }
 
@@ -1022,12 +1052,12 @@ export default function Units() {
         errs.unitPrefix ||
         errs.name ||
         errs.category ||
-        errs.brand ||
-        errs.model ||
         errs.pricingUnit ||
         errs.memberRate ||
         errs.nonmemberRate ||
-        errs.minRentalQuantity
+        errs.minRentalQuantity ||
+        errs.additionalOperatorFee ||
+        errs.additionalTransportFee
       ) {
         setActiveFormTab("basic");
       } else if (errs.horsepower || errs.currentMeterReading) {
@@ -1406,7 +1436,7 @@ export default function Units() {
                               {u.pricingUnit === "Per Hectare" ? "/hec" : u.pricingUnit === "Per Hour" ? "/hr" : "/day"}
                             </span>
                           </div>
-                          {u.nonmemberRate && (
+                          {u.nonmemberRate > 0 && (
                             <div style={{ fontSize: "0.7rem", color: "#94a3b8" }}>
                               Non-member: ₱{Number(u.nonmemberRate).toLocaleString()}
                             </div>
@@ -1511,7 +1541,7 @@ export default function Units() {
                   {/* Brand & Name */}
                   <div className="wz-unit-col-brand">
                     <span className="wz-unit-code-badge" style={{ marginBottom: "4px" }}>{u.unitId}</span>
-                    <span className="wz-unit-brand-name">{u.brand}</span>
+                    {u.brand && <span className="wz-unit-brand-name">{u.brand}</span>}
                     <h3 className="wz-unit-model-title">{u.name}</h3>
                     <div style={{ marginTop: "4px" }}>
                       {cond === "Operational" ? (
@@ -1692,12 +1722,12 @@ export default function Units() {
                   formErrors.unitPrefix ||
                   formErrors.name ||
                   formErrors.category ||
-                  formErrors.brand ||
-                  formErrors.model ||
                   formErrors.pricingUnit ||
                   formErrors.memberRate ||
                   formErrors.nonmemberRate ||
-                  formErrors.minRentalQuantity) && <span className="wz-unit-tab-dot" />}
+                  formErrors.minRentalQuantity ||
+                  formErrors.additionalOperatorFee ||
+                  formErrors.additionalTransportFee) && <span className="wz-unit-tab-dot" />}
               </button>
               <button
                 type="button"
@@ -1834,9 +1864,7 @@ export default function Units() {
                       </div>
 
                       <div className="wz-unit-field">
-                        <label className="wz-unit-label">
-                          Prefix <span className="req">*</span>
-                        </label>
+                        <label className="wz-unit-label">Prefix</label>
                         <input
                           type="text"
                           maxLength={8}
@@ -2001,37 +2029,29 @@ export default function Units() {
                     {/* Brand, Model, Status */}
                     <div className="wz-unit-grid-3">
                       <div className="wz-unit-field">
-                        <label className="wz-unit-label">
-                          Brand <span className="req">*</span>
-                        </label>
+                        <label className="wz-unit-label">Brand</label>
                         <input
                           type="text"
-                          placeholder="Kubota"
+                          placeholder="Optional"
                           value={unitForm.brand}
                           onChange={(e) => updateUnitField("brand", e.target.value)}
-                          className={`wz-unit-input ${formErrors.brand ? "is-error" : ""}`}
+                          className="wz-unit-input"
                         />
-                        {formErrors.brand && <span className="wz-unit-error">{formErrors.brand}</span>}
                       </div>
 
                       <div className="wz-unit-field">
-                        <label className="wz-unit-label">
-                          Model <span className="req">*</span>
-                        </label>
+                        <label className="wz-unit-label">Model</label>
                         <input
                           type="text"
-                          placeholder="L4508"
+                          placeholder="Optional"
                           value={unitForm.model}
                           onChange={(e) => updateUnitField("model", e.target.value)}
-                          className={`wz-unit-input ${formErrors.model ? "is-error" : ""}`}
+                          className="wz-unit-input"
                         />
-                        {formErrors.model && <span className="wz-unit-error">{formErrors.model}</span>}
                       </div>
 
                       <div className="wz-unit-field">
-                        <label className="wz-unit-label">
-                          Status <span className="req">*</span>
-                        </label>
+                        <label className="wz-unit-label">Status</label>
                         <select
                           value={unitForm.operatingCondition}
                           onChange={(e) => updateUnitField("operatingCondition", e.target.value)}
@@ -2084,7 +2104,7 @@ export default function Units() {
                             type="number"
                             min="0"
                             step="1"
-                            placeholder="3500"
+                            placeholder="Optional"
                             value={unitForm.nonmemberRate}
                             onChange={(e) => updateUnitField("nonmemberRate", e.target.value)}
                             className={`wz-unit-input ${formErrors.nonmemberRate ? "is-error" : ""}`}
@@ -2166,58 +2186,71 @@ export default function Units() {
                         })}
                       </div>
 
-                      {(!unitForm.operatorIncluded || !unitForm.transportIncluded) && (
-                        <div className="wz-unit-grid-2">
-                          {!unitForm.operatorIncluded && (
+                      {!unitForm.operatorIncluded && (() => {
+                        const opMeta = getOperatorFeeMeta(unitForm.operatorFeeBasis);
+                        return (
+                          <div className="wz-unit-grid-2">
                             <div className="wz-unit-field">
-                              <label className="wz-unit-label">Operator Fee (₱)</label>
-                              <div className="wz-unit-combo">
+                              <label className="wz-unit-label">Operator Fee Billing</label>
+                              <select
+                                value={unitForm.operatorFeeBasis}
+                                onChange={(e) => updateUnitField("operatorFeeBasis", e.target.value)}
+                                className="wz-unit-select"
+                              >
+                                {OPERATOR_FEE_OPTIONS.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div className="wz-unit-field">
+                              <label className="wz-unit-label">{opMeta.inputLabel}</label>
+                              <div className="wz-unit-input-with-suffix">
                                 <input
                                   type="number"
                                   min="0"
-                                  step="50"
-                                  placeholder="0"
+                                  max={opMeta.max}
+                                  step={opMeta.step}
+                                  placeholder={opMeta.placeholder}
                                   value={unitForm.additionalOperatorFee}
                                   onChange={(e) => updateUnitField("additionalOperatorFee", e.target.value)}
-                                  className="wz-unit-input"
+                                  className={`wz-unit-input ${formErrors.additionalOperatorFee ? "is-error" : ""}`}
                                 />
-                                <select
-                                  value={unitForm.operatorFeeBasis}
-                                  onChange={(e) => updateUnitField("operatorFeeBasis", e.target.value)}
-                                  className="wz-unit-select"
-                                >
-                                  {FEE_BASIS_OPTIONS.map((b) => (
-                                    <option key={b} value={b}>{b}</option>
-                                  ))}
-                                </select>
+                                <span className="wz-unit-input-suffix">{opMeta.unit}</span>
                               </div>
+                              {formErrors.additionalOperatorFee && (
+                                <span className="wz-unit-error">{formErrors.additionalOperatorFee}</span>
+                              )}
                             </div>
-                          )}
+                          </div>
+                        );
+                      })()}
 
-                          {!unitForm.transportIncluded && (
-                            <div className="wz-unit-field">
-                              <label className="wz-unit-label">Transport Fee (₱)</label>
-                              <div className="wz-unit-combo">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="50"
-                                  placeholder="0"
-                                  value={unitForm.additionalTransportFee}
-                                  onChange={(e) => updateUnitField("additionalTransportFee", e.target.value)}
-                                  className="wz-unit-input"
-                                />
-                                <select
-                                  value={unitForm.transportFeeBasis}
-                                  onChange={(e) => updateUnitField("transportFeeBasis", e.target.value)}
-                                  className="wz-unit-select"
-                                >
-                                  {FEE_BASIS_OPTIONS.map((b) => (
-                                    <option key={b} value={b}>{b}</option>
-                                  ))}
-                                </select>
-                              </div>
-                            </div>
+                      {!unitForm.transportIncluded && (
+                        <div className="wz-unit-field">
+                          <label className="wz-unit-label">Transport Fee (₱)</label>
+                          <div className="wz-unit-combo">
+                            <input
+                              type="number"
+                              min="0"
+                              step="50"
+                              placeholder="0"
+                              value={unitForm.additionalTransportFee}
+                              onChange={(e) => updateUnitField("additionalTransportFee", e.target.value)}
+                              className={`wz-unit-input ${formErrors.additionalTransportFee ? "is-error" : ""}`}
+                            />
+                            <select
+                              value={unitForm.transportFeeBasis}
+                              onChange={(e) => updateUnitField("transportFeeBasis", e.target.value)}
+                              className="wz-unit-select"
+                            >
+                              {FEE_BASIS_OPTIONS.map((b) => (
+                                <option key={b} value={b}>{b}</option>
+                              ))}
+                            </select>
+                          </div>
+                          {formErrors.additionalTransportFee && (
+                            <span className="wz-unit-error">{formErrors.additionalTransportFee}</span>
                           )}
                         </div>
                       )}
@@ -2586,10 +2619,16 @@ export default function Units() {
                   />
                   <div style={{ flex: 1, minWidth: "200px" }}>
                     <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "4px" }}>
-                      <span style={{ fontSize: "0.85rem", fontWeight: "700", color: "#0f172a" }}>
-                        {viewingUnit.brand} {viewingUnit.model}
+                      {[viewingUnit.brand, viewingUnit.model].filter(Boolean).length > 0 && (
+                        <span style={{ fontSize: "0.85rem", fontWeight: "700", color: "#0f172a" }}>
+                          {[viewingUnit.brand, viewingUnit.model].filter(Boolean).join(" ")}
+                        </span>
+                      )}
+                      <span style={{ fontSize: "0.78rem", color: "#64748b" }}>
+                        {[viewingUnit.brand, viewingUnit.model].filter(Boolean).length > 0
+                          ? `(${viewingUnit.category})`
+                          : viewingUnit.category}
                       </span>
-                      <span style={{ fontSize: "0.78rem", color: "#64748b" }}>({viewingUnit.category})</span>
                     </div>
 
                     <div style={{ fontSize: "1.1rem", fontWeight: "800", color: "var(--wz-primary-red)", margin: "4px 0" }}>
@@ -2646,7 +2685,13 @@ export default function Units() {
                     <div className="wz-detail-item">
                       <span className="wz-detail-label">Operator Policy</span>
                       <span className="wz-detail-value">
-                        {viewingUnit.operatorIncluded ? "Included in base rate" : viewingUnit.additionalOperatorFee ? `+₱${viewingUnit.additionalOperatorFee} (${viewingUnit.operatorFeeBasis || "per day"})` : "Self-operated"}
+                        {viewingUnit.operatorIncluded
+                          ? "Included in base rate"
+                          : viewingUnit.additionalOperatorFee
+                          ? viewingUnit.operatorFeeBasis === "per %"
+                            ? `${viewingUnit.additionalOperatorFee}% (of rate)`
+                            : `+₱${Number(viewingUnit.additionalOperatorFee).toLocaleString()} (${viewingUnit.operatorFeeBasis || "per day"})`
+                          : "Self-operated"}
                       </span>
                     </div>
                     <div className="wz-detail-item">

@@ -205,7 +205,8 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
 
     const ratePerHectare = Number(req.body.ratePerHectare) || Number(targetUnit?.memberRate) || Number(targetUnit?.ratePerHectare) || 2500;
     const totalAmount = Math.round(ratePerHectare * hectares);
-    const machineryModel = clean(targetUnit?.model || req.body.machineryModel || targetUnit?.brand ? `${targetUnit.brand} ${targetUnit.model}` : "Standard Model");
+    const unitBrandModel = [targetUnit?.brand, targetUnit?.model].map((s) => clean(s)).filter(Boolean).join(" ");
+    const machineryModel = clean(unitBrandModel || req.body.machineryModel || targetUnit?.name || "Standard Model");
     const assignedDriver = clean(targetUnit?.assignedDriver || (targetUnit?.operatorIncluded ? "Coop Operator Assigned" : "Self-Operated"));
     const driverPhone = clean(targetUnit?.driverPhone || "");
     const now = new Date();

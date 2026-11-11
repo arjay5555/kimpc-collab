@@ -668,7 +668,9 @@ export default function EquipmentCatalog() {
           <section className="member-product-copy">
             <p className="member-eyebrow">{unit.category || "Cooperative equipment"}</p>
             <h1 style={{ margin: "0 0 6px", fontSize: "1.85rem", fontWeight: 800, color: "#0f172a" }}>{unit.name}</h1>
-            <p className="member-muted">{unit.brand} · {unit.model}</p>
+            {[unit.brand, unit.model].filter(Boolean).length > 0 && (
+              <p className="member-muted">{[unit.brand, unit.model].filter(Boolean).join(" · ")}</p>
+            )}
             <div className={`member-availability member-availability-${availability === "Available" ? "available" : "unavailable"}`}>
               <i />
               {availability}
@@ -915,7 +917,10 @@ export default function EquipmentCatalog() {
                         {unit.name}
                       </div>
                       <div style={{ fontSize: "0.76rem", color: "#64748b", marginTop: "2px" }}>
-                        {unit.brand} · {unit.model} · <span style={{ color: "#15803d", fontWeight: 600 }}>{unit.category}</span>
+                        {[unit.brand, unit.model].filter(Boolean).length > 0 && (
+                          <>{[unit.brand, unit.model].filter(Boolean).join(" · ")} · </>
+                        )}
+                        <span style={{ color: "#15803d", fontWeight: 600 }}>{unit.category}</span>
                       </div>
                     </div>
                   </div>
@@ -2249,7 +2254,9 @@ export default function EquipmentCatalog() {
                 <div className="member-product-card-copy">
                   <span className="member-product-category">{item.category}</span>
                   <h2>{item.name}</h2>
-                  <p>{item.brand} · {item.model}</p>
+                  {[item.brand, item.model].filter(Boolean).length > 0 && (
+                    <p>{[item.brand, item.model].filter(Boolean).join(" · ")}</p>
+                  )}
 
                   {/* Clean Per-Hectare Pricing */}
                   <div

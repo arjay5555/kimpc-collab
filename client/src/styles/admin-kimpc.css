@@ -8138,3 +8138,32 @@ input::-webkit-contacts-auto-fill-button {
 [data-theme="dark"] .wz-unit-url-toggle-btn:hover {
   background: #0f172a;
 }
+
+.wz-unit-input-with-suffix {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.wz-unit-input-with-suffix .wz-unit-input {
+  width: 100%;
+  padding-right: 76px;
+}
+
+.wz-unit-input-suffix {
+  position: absolute;
+  right: 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #475569;
+  background: #f1f5f9;
+  padding: 2px 7px;
+  border-radius: 5px;
+  pointer-events: none;
+  line-height: 1.3;
+}
+
+[data-theme="dark"] .wz-unit-input-suffix {
+  background: #1e293b;
+  color: #cbd5e1;
+}
