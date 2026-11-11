@@ -210,6 +210,9 @@ export default function Units() {
 
   // Image Upload State
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [showPhotoUrlInput, setShowPhotoUrlInput] = useState(false);
+  const [photoUrlDraft, setPhotoUrlDraft] = useState("");
+  const [photoError, setPhotoError] = useState("");
   const fileInputRef = useRef(null);
 
   // Fetch registered drivers from API
@@ -500,6 +503,9 @@ export default function Units() {
     setCustomTypeMode(false);
     setLastSelectedType(initialCat);
     setActiveFormTab("basic");
+    setShowPhotoUrlInput(false);
+    setPhotoUrlDraft("");
+    setPhotoError("");
     if (!drivers || drivers.length === 0) {
       fetchDrivers();
     }
@@ -509,6 +515,9 @@ export default function Units() {
   // Open Edit Modal
   const openEditModal = (u) => {
     setEditingUnit(u);
+    setShowPhotoUrlInput(false);
+    setPhotoUrlDraft("");
+    setPhotoError("");
     const canonicalCat =
       availableMachineryTypes.find(
         (t) => t.toLowerCase() === String(u.category || "").trim().toLowerCase()
@@ -517,6 +526,13 @@ export default function Units() {
       "Tractor";
     const resolvedPref =
       getSavedPrefixForType(canonicalCat) || extractIdPrefixAndNum(u.unitId)?.prefix || "";
+    const mergedPhotos = Array.from(
+      new Set(
+        [u.imageUrl, ...(Array.isArray(u.photos) ? u.photos : [])]
+          .map((s) => String(s || "").trim())
+          .filter(Boolean)
+      )
+    ).slice(0, 5);
     setUnitForm({
       unitId: u.unitId || "",
       unitPrefix: resolvedPref,
@@ -526,8 +542,8 @@ export default function Units() {
       model: u.model || "",
       serialNumber: u.serialNumber || "",
       modelYear: u.modelYear || String(new Date().getFullYear()),
-      imageUrl: u.imageUrl || "",
-      photos: Array.isArray(u.photos) ? u.photos : (u.imageUrl ? [u.imageUrl] : []),
+      imageUrl: mergedPhotos[0] || "",
+      photos: mergedPhotos,
 
       horsepower: u.horsepower !== null && u.horsepower !== undefined ? u.horsepower : "",
       capacity: u.capacity || "",
@@ -692,83 +708,161 @@ export default function Units() {
     }
   };
 
-  // Image Upload and Canvas Optimization
-  const handleFileChange = (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
+  // Image Upload and Canvas Optimization (up to 5 photos; index 0 is main)
+  const optimizeImageToBase64 = (file) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("Failed to read image file."));
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("Invalid image file."));
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const MAX_WIDTH = 1200;
+          const MAX_HEIGHT = 1200;
+          let width = img.width;
+          let height = img.height;
 
-    // Validate type
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      alert("Invalid image type. Please select a JPEG, PNG, or WebP photo.");
-      return;
-    }
-
-    // Validate size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      alert("File size exceeds 5MB limit. Please choose a smaller image.");
-      return;
-    }
-
-    // Optimize image using HTML5 Canvas
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const MAX_WIDTH = 1200;
-        const MAX_HEIGHT = 1200;
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > MAX_WIDTH) {
-            height = Math.round((height * MAX_WIDTH) / width);
-            width = MAX_WIDTH;
-          }
-        } else {
-          if (height > MAX_HEIGHT) {
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height = Math.round((height * MAX_WIDTH) / width);
+              width = MAX_WIDTH;
+            }
+          } else if (height > MAX_HEIGHT) {
             width = Math.round((width * MAX_HEIGHT) / height);
             height = MAX_HEIGHT;
           }
-        }
 
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0, width, height);
-
-        const optimizedBase64 = canvas.toDataURL("image/jpeg", 0.85);
-
-        // Upload to server
-        uploadOptimizedPhoto(optimizedBase64, file.name);
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", 0.85));
+        };
+        img.src = event.target.result;
       };
-      img.src = event.target.result;
-    };
-    reader.readAsDataURL(file);
-  };
+      reader.readAsDataURL(file);
+    });
 
-  const uploadOptimizedPhoto = async (base64Data, filename) => {
+  const handleFileChange = async (e) => {
+    const selectedFiles = Array.from(e.target.files || []);
+    if (selectedFiles.length === 0) return;
+
+    const currentCount = (unitForm.photos || []).filter(Boolean).length;
+    const remainingSlots = 5 - currentCount;
+    if (remainingSlots <= 0) {
+      setPhotoError("Maximum 5 photos allowed.");
+      e.target.value = "";
+      return;
+    }
+
+    const errors = [];
+    const validFiles = [];
+    for (const file of selectedFiles) {
+      if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+        errors.push(`${file.name}: use JPEG, PNG, or WebP.`);
+        continue;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        errors.push(`${file.name}: exceeds 5MB limit.`);
+        continue;
+      }
+      validFiles.push(file);
+    }
+
+    if (validFiles.length > remainingSlots) {
+      errors.push(`Max 5 photos. Added first ${remainingSlots}.`);
+    }
+
+    const queue = validFiles.slice(0, remainingSlots);
+    setPhotoError(errors[0] || "");
+    if (queue.length === 0) {
+      e.target.value = "";
+      return;
+    }
+
     setUploadingImage(true);
     try {
-      const res = await api("/machinery-units/upload-photo", {
-        method: "POST",
-        body: { image: base64Data, filename },
-      });
-
-      if (res.ok && res.data?.imageUrl) {
-        setUnitForm((prev) => ({
-          ...prev,
-          imageUrl: res.data.imageUrl,
-          photos: [res.data.imageUrl, ...(prev.photos || []).filter((p) => p !== res.data.imageUrl)],
-        }));
-      } else {
-        alert(res.data?.error || "Failed to upload photo to server.");
+      for (const file of queue) {
+        const base64Data = await optimizeImageToBase64(file);
+        const res = await api("/machinery-units/upload-photo", {
+          method: "POST",
+          body: { image: base64Data, filename: file.name },
+        });
+        if (res.ok && res.data?.imageUrl) {
+          const uploadedUrl = res.data.imageUrl;
+          setUnitForm((prev) => {
+            const current = (prev.photos || []).filter(Boolean);
+            if (current.length >= 5 || current.includes(uploadedUrl)) return prev;
+            const nextPhotos = [...current, uploadedUrl].slice(0, 5);
+            return {
+              ...prev,
+              photos: nextPhotos,
+              imageUrl: nextPhotos[0] || "",
+            };
+          });
+        } else {
+          setPhotoError(res.data?.error || `Failed to upload ${file.name}.`);
+        }
       }
     } catch {
-      alert("Error uploading machinery photo.");
+      setPhotoError("Error uploading machinery photo.");
     } finally {
       setUploadingImage(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
+  };
+
+  const handleRemovePhoto = (index) => {
+    setPhotoError("");
+    setUnitForm((prev) => {
+      const nextPhotos = (prev.photos || []).filter((_, i) => i !== index);
+      return {
+        ...prev,
+        photos: nextPhotos,
+        imageUrl: nextPhotos[0] || "",
+      };
+    });
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleSetMainPhoto = (index) => {
+    if (index <= 0) return;
+    setPhotoError("");
+    setUnitForm((prev) => {
+      const current = [...(prev.photos || [])];
+      const [chosen] = current.splice(index, 1);
+      if (!chosen) return prev;
+      const nextPhotos = [chosen, ...current].slice(0, 5);
+      return {
+        ...prev,
+        photos: nextPhotos,
+        imageUrl: nextPhotos[0] || "",
+      };
+    });
+  };
+
+  const handleAddPhotoUrl = () => {
+    const trimmed = String(photoUrlDraft || "").trim();
+    if (!trimmed) return;
+    const current = (unitForm.photos || []).filter(Boolean);
+    if (current.length >= 5) {
+      setPhotoError("Maximum 5 photos allowed.");
+      return;
+    }
+    if (current.includes(trimmed)) {
+      setPhotoError("Photo already added.");
+      return;
+    }
+    const nextPhotos = [...current, trimmed].slice(0, 5);
+    setUnitForm((prev) => ({
+      ...prev,
+      photos: nextPhotos,
+      imageUrl: nextPhotos[0] || "",
+    }));
+    setPhotoUrlDraft("");
+    setPhotoError("");
+    setShowPhotoUrlInput(false);
   };
 
   const updateUnitField = (field, value) => {
@@ -961,12 +1055,21 @@ export default function Units() {
     const canonicalCategory =
       availableMachineryTypes.find((t) => t.toLowerCase() === rawCategory.toLowerCase()) ||
       rawCategory;
+    const normalizedPhotos = Array.from(
+      new Set(
+        (Array.isArray(unitForm.photos) ? unitForm.photos : [])
+          .map((p) => String(p || "").trim())
+          .filter(Boolean)
+      )
+    ).slice(0, 5);
 
     const payload = {
       ...unitForm,
       unitId: unitForm.unitId.trim(),
       unitPrefix: normalizePrefix(unitForm.unitPrefix),
       category: canonicalCategory,
+      photos: normalizedPhotos,
+      imageUrl: normalizedPhotos[0] || "",
       memberRate: Number(unitForm.memberRate),
       nonmemberRate: unitForm.nonmemberRate !== "" ? Number(unitForm.nonmemberRate) : null,
       minRentalQuantity: Number(unitForm.minRentalQuantity || 1),
@@ -1629,209 +1732,270 @@ export default function Units() {
               <div className="wz-unit-modal-body">
                 {activeFormTab === "basic" && (
                   <>
-                    {/* Photo + Code + Name */}
-                    <div className="wz-unit-photo-row">
+                    {/* Unit Name at top */}
+                    <div className="wz-unit-field">
+                      <label className="wz-unit-label">
+                        Unit Name <span className="req">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Utility Tractor"
+                        value={unitForm.name}
+                        onChange={(e) => updateUnitField("name", e.target.value)}
+                        className={`wz-unit-input ${formErrors.name ? "is-error" : ""}`}
+                      />
+                      {formErrors.name && <span className="wz-unit-error">{formErrors.name}</span>}
+                    </div>
+
+                    {/* Type + Compact Prefix + Unit ID */}
+                    <div className="wz-unit-identity-top">
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">
+                          Type <span className="req">*</span>
+                        </label>
+                        {customTypeMode ? (
+                          <div className="wz-unit-combo">
+                            <input
+                              type="text"
+                              autoFocus
+                              placeholder="New type"
+                              value={unitForm.category}
+                              onChange={(e) => handleCustomTypeInput(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Escape") {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleTypeSelected(
+                                    lastSelectedType || modalMachineryTypes[0] || "Tractor"
+                                  );
+                                  setCustomTypeMode(false);
+                                }
+                              }}
+                              className={`wz-unit-input ${formErrors.category ? "is-error" : ""}`}
+                            />
+                            <button
+                              type="button"
+                              className="wz-unit-type-toggle"
+                              title="Select existing type"
+                              aria-label="Select existing type"
+                              onClick={() => {
+                                const trimmed = String(unitForm.category || "").trim();
+                                const matched = modalMachineryTypes.find(
+                                  (t) => t.toLowerCase() === trimmed.toLowerCase()
+                                );
+                                handleTypeSelected(
+                                  matched || lastSelectedType || modalMachineryTypes[0] || "Tractor"
+                                );
+                                setCustomTypeMode(false);
+                              }}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="6 9 12 15 18 9" />
+                              </svg>
+                            </button>
+                          </div>
+                        ) : (
+                          <select
+                            value={unitForm.category}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === "__NEW_TYPE__") {
+                                setLastSelectedType(
+                                  unitForm.category || modalMachineryTypes[0] || "Tractor"
+                                );
+                                setUnitForm((prev) => ({
+                                  ...prev,
+                                  category: "",
+                                  unitPrefix: "",
+                                  unitId: "",
+                                }));
+                                setFormErrors((prev) => {
+                                  const next = { ...prev };
+                                  delete next.category;
+                                  delete next.unitPrefix;
+                                  delete next.unitId;
+                                  return next;
+                                });
+                                setCustomTypeMode(true);
+                              } else {
+                                setLastSelectedType(val);
+                                handleTypeSelected(val);
+                              }
+                            }}
+                            className={`wz-unit-select ${formErrors.category ? "is-error" : ""}`}
+                          >
+                            {modalMachineryTypes.map((t) => (
+                              <option key={t} value={t}>{t}</option>
+                            ))}
+                            <option value="__NEW_TYPE__">+ New type...</option>
+                          </select>
+                        )}
+                        {formErrors.category && <span className="wz-unit-error">{formErrors.category}</span>}
+                      </div>
+
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">
+                          Prefix <span className="req">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          maxLength={8}
+                          disabled={
+                            Boolean(editingUnit) ||
+                            (Boolean(getSavedPrefixForType(unitForm.category)) &&
+                              hasExistingUnitsForType(unitForm.category))
+                          }
+                          placeholder="TR"
+                          value={unitForm.unitPrefix}
+                          onChange={(e) => handlePrefixChange(e.target.value)}
+                          className={`wz-unit-input wz-unit-prefix-input ${formErrors.unitPrefix ? "is-error" : ""}`}
+                        />
+                        {formErrors.unitPrefix && <span className="wz-unit-error">{formErrors.unitPrefix}</span>}
+                      </div>
+
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">
+                          Unit ID <span className="req">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          disabled={Boolean(editingUnit)}
+                          placeholder="TR-001"
+                          value={unitForm.unitId}
+                          onChange={(e) => updateUnitField("unitId", e.target.value)}
+                          className={`wz-unit-input ${formErrors.unitId ? "is-error" : ""}`}
+                        />
+                        {formErrors.unitId && <span className="wz-unit-error">{formErrors.unitId}</span>}
+                      </div>
+                    </div>
+
+                    {/* Up to 5 Photos (1st is Main) */}
+                    <div className="wz-unit-photos-section">
                       <input
                         type="file"
                         accept="image/jpeg,image/png,image/webp"
+                        multiple
                         ref={fileInputRef}
                         style={{ display: "none" }}
                         onChange={handleFileChange}
                       />
-                      <div
-                        role="button"
-                        tabIndex={0}
-                        className={`wz-unit-photo-box ${unitForm.imageUrl ? "has-photo" : ""}`}
-                        onClick={() => !uploadingImage && fileInputRef.current?.click()}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            if (!uploadingImage) fileInputRef.current?.click();
-                          }
-                        }}
-                        title="Upload photo"
-                      >
-                        {unitForm.imageUrl ? (
-                          <>
-                            <img src={unitForm.imageUrl} alt="Unit" />
-                            <button
-                              type="button"
-                              className="wz-unit-photo-remove"
-                              aria-label="Remove photo"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setUnitForm((prev) => ({
-                                  ...prev,
-                                  imageUrl: "",
-                                  photos: (prev.photos || []).filter((p) => p !== prev.imageUrl),
-                                }));
-                                if (fileInputRef.current) fileInputRef.current.value = "";
-                              }}
-                            >
-                              &times;
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-                              <rect x="3" y="3" width="18" height="18" rx="3" />
-                              <circle cx="8.5" cy="8.5" r="1.5" />
-                              <polyline points="21 15 16 10 5 21" />
-                            </svg>
-                            <span>{uploadingImage ? "Uploading..." : "Add Photo"}</span>
-                          </>
+                      <div className="wz-unit-photos-header">
+                        <label className="wz-unit-label">
+                          Photos
+                          <span className="wz-unit-photo-count">
+                            {(unitForm.photos || []).filter(Boolean).length}/5
+                          </span>
+                        </label>
+                        {(unitForm.photos || []).filter(Boolean).length < 5 && (
+                          <button
+                            type="button"
+                            className="wz-unit-url-toggle-btn"
+                            onClick={() => setShowPhotoUrlInput((v) => !v)}
+                          >
+                            {showPhotoUrlInput ? "Close" : "+ URL"}
+                          </button>
                         )}
                       </div>
 
-                      <div className="wz-unit-identity-fields">
-                        <div className="wz-unit-identity-top">
-                          <div className="wz-unit-field">
-                            <label className="wz-unit-label">
-                              Type <span className="req">*</span>
-                            </label>
-                            {customTypeMode ? (
-                              <div className="wz-unit-combo">
-                                <input
-                                  type="text"
-                                  autoFocus
-                                  placeholder="New type"
-                                  value={unitForm.category}
-                                  onChange={(e) => handleCustomTypeInput(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Escape") {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      handleTypeSelected(
-                                        lastSelectedType || modalMachineryTypes[0] || "Tractor"
-                                      );
-                                      setCustomTypeMode(false);
-                                    }
-                                  }}
-                                  className={`wz-unit-input ${formErrors.category ? "is-error" : ""}`}
-                                />
-                                <button
-                                  type="button"
-                                  className="wz-unit-type-toggle"
-                                  title="Select existing type"
-                                  aria-label="Select existing type"
-                                  onClick={() => {
-                                    const trimmed = String(unitForm.category || "").trim();
-                                    const matched = modalMachineryTypes.find(
-                                      (t) => t.toLowerCase() === trimmed.toLowerCase()
-                                    );
-                                    handleTypeSelected(
-                                      matched || lastSelectedType || modalMachineryTypes[0] || "Tractor"
-                                    );
-                                    setCustomTypeMode(false);
-                                  }}
-                                >
-                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
-                                    <polyline points="6 9 12 15 18 9" />
-                                  </svg>
-                                </button>
-                              </div>
-                            ) : (
-                              <select
-                                value={unitForm.category}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  if (val === "__NEW_TYPE__") {
-                                    setLastSelectedType(
-                                      unitForm.category || modalMachineryTypes[0] || "Tractor"
-                                    );
-                                    setUnitForm((prev) => ({
-                                      ...prev,
-                                      category: "",
-                                      unitPrefix: "",
-                                      unitId: "",
-                                    }));
-                                    setFormErrors((prev) => {
-                                      const next = { ...prev };
-                                      delete next.category;
-                                      delete next.unitPrefix;
-                                      delete next.unitId;
-                                      return next;
-                                    });
-                                    setCustomTypeMode(true);
-                                  } else {
-                                    setLastSelectedType(val);
-                                    handleTypeSelected(val);
+                      {showPhotoUrlInput && (
+                        <div className="wz-unit-photo-url-row">
+                          <input
+                            type="text"
+                            placeholder="Paste image URL"
+                            value={photoUrlDraft}
+                            onChange={(e) => setPhotoUrlDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleAddPhotoUrl();
+                              }
+                            }}
+                            className="wz-unit-input"
+                          />
+                          <button
+                            type="button"
+                            className="wz-unit-url-add-btn"
+                            onClick={handleAddPhotoUrl}
+                          >
+                            Add
+                          </button>
+                        </div>
+                      )}
+
+                      <div className="wz-unit-photo-grid">
+                        {Array.from({ length: 5 }, (_, idx) => {
+                          const currentPhotos = (unitForm.photos || []).filter(Boolean);
+                          const src = currentPhotos[idx] || "";
+                          const isMain = idx === 0 && Boolean(src);
+                          const isNextSlot = !src && idx === currentPhotos.length;
+
+                          if (src) {
+                            return (
+                              <div
+                                key={`${src}-${idx}`}
+                                role={isMain ? undefined : "button"}
+                                tabIndex={isMain ? undefined : 0}
+                                className={`wz-unit-photo-slot has-photo ${isMain ? "is-main" : ""}`}
+                                onClick={() => {
+                                  if (!isMain) handleSetMainPhoto(idx);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (!isMain && (e.key === "Enter" || e.key === " ")) {
+                                    e.preventDefault();
+                                    handleSetMainPhoto(idx);
                                   }
                                 }}
-                                className={`wz-unit-select ${formErrors.category ? "is-error" : ""}`}
+                                title={isMain ? "Main photo" : "Click to set as main"}
                               >
-                                {modalMachineryTypes.map((t) => (
-                                  <option key={t} value={t}>{t}</option>
-                                ))}
-                                <option value="__NEW_TYPE__">+ New type...</option>
-                              </select>
-                            )}
-                            {formErrors.category && <span className="wz-unit-error">{formErrors.category}</span>}
-                          </div>
+                                <img src={src} alt={isMain ? "Main photo" : `Photo ${idx + 1}`} />
+                                {isMain && <span className="wz-unit-main-badge">Main</span>}
+                                <button
+                                  type="button"
+                                  className="wz-unit-photo-remove"
+                                  aria-label="Remove photo"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRemovePhoto(idx);
+                                  }}
+                                >
+                                  &times;
+                                </button>
+                              </div>
+                            );
+                          }
 
-                          <div className="wz-unit-field">
-                            <label className="wz-unit-label">
-                              Prefix <span className="req">*</span>
-                            </label>
-                            <input
-                              type="text"
-                              maxLength={8}
-                              disabled={
-                                Boolean(editingUnit) ||
-                                (Boolean(getSavedPrefixForType(unitForm.category)) &&
-                                  hasExistingUnitsForType(unitForm.category))
-                              }
-                              placeholder="TR"
-                              value={unitForm.unitPrefix}
-                              onChange={(e) => handlePrefixChange(e.target.value)}
-                              className={`wz-unit-input wz-unit-prefix-input ${formErrors.unitPrefix ? "is-error" : ""}`}
-                            />
-                            {formErrors.unitPrefix && <span className="wz-unit-error">{formErrors.unitPrefix}</span>}
-                          </div>
-
-                          <div className="wz-unit-field">
-                            <label className="wz-unit-label">
-                              Unit ID <span className="req">*</span>
-                            </label>
-                            <input
-                              type="text"
-                              disabled={Boolean(editingUnit)}
-                              placeholder="TR-001"
-                              value={unitForm.unitId}
-                              onChange={(e) => updateUnitField("unitId", e.target.value)}
-                              className={`wz-unit-input ${formErrors.unitId ? "is-error" : ""}`}
-                            />
-                            {formErrors.unitId && <span className="wz-unit-error">{formErrors.unitId}</span>}
-                          </div>
-                        </div>
-
-                        <div className="wz-unit-grid-2">
-                          <div className="wz-unit-field">
-                            <label className="wz-unit-label">
-                              Unit Name <span className="req">*</span>
-                            </label>
-                            <input
-                              type="text"
-                              placeholder="Utility Tractor"
-                              value={unitForm.name}
-                              onChange={(e) => updateUnitField("name", e.target.value)}
-                              className={`wz-unit-input ${formErrors.name ? "is-error" : ""}`}
-                            />
-                            {formErrors.name && <span className="wz-unit-error">{formErrors.name}</span>}
-                          </div>
-
-                          <div className="wz-unit-field">
-                            <label className="wz-unit-label">Photo URL</label>
-                            <input
-                              type="text"
-                              placeholder="Optional URL"
-                              value={unitForm.imageUrl}
-                              onChange={(e) => updateUnitField("imageUrl", e.target.value)}
-                              className="wz-unit-input"
-                            />
-                          </div>
-                        </div>
+                          return (
+                            <div
+                              key={`empty-slot-${idx}`}
+                              role="button"
+                              tabIndex={0}
+                              className={`wz-unit-photo-slot ${isNextSlot ? "" : "is-placeholder"}`}
+                              onClick={() => !uploadingImage && fileInputRef.current?.click()}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  if (!uploadingImage) fileInputRef.current?.click();
+                                }
+                              }}
+                              title="Upload photos"
+                            >
+                              {isNextSlot ? (
+                                <>
+                                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="3" y="3" width="18" height="18" rx="3" />
+                                    <circle cx="8.5" cy="8.5" r="1.5" />
+                                    <polyline points="21 15 16 10 5 21" />
+                                  </svg>
+                                  <span>{uploadingImage ? "Uploading..." : "Add"}</span>
+                                </>
+                              ) : (
+                                <span style={{ fontSize: "1rem", lineHeight: 1 }}>+</span>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
+                      {photoError && <span className="wz-unit-error">{photoError}</span>}
                     </div>
 
                     {/* Brand, Model, Status */}

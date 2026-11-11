@@ -516,6 +516,29 @@ function extractIdPrefixAndNumber(unitId) {
   return { prefix: match[1], num: parseInt(match[2], 10) };
 }
 
+function normalizePhotosInput(rawPhotos, rawImageUrl) {
+  const seen = new Set();
+  const list = [];
+  if (Array.isArray(rawPhotos)) {
+    rawPhotos.forEach((p) => {
+      const val = clean(p);
+      if (val && !seen.has(val)) {
+        seen.add(val);
+        list.push(val);
+      }
+    });
+  }
+  const fallbackMain = clean(rawImageUrl);
+  if (fallbackMain && list.length === 0) {
+    list.push(fallbackMain);
+  }
+  const capped = list.slice(0, 5);
+  return {
+    photos: capped,
+    imageUrl: capped[0] || "",
+  };
+}
+
 async function loadTypePrefixesAndNextNumbers() {
   const saved = await SystemSetting.getSystemSetting(TYPE_PREFIXES_SETTING_KEY, {});
   const typePrefixes = {};
@@ -989,6 +1012,11 @@ router.post("/machinery-units", authManager, async (req, res) => {
       ? body.attachments.split(",").map((s) => s.trim()).filter(Boolean)
       : [];
 
+    const { photos: normalizedPhotos, imageUrl: mainImageUrl } = normalizePhotosInput(
+      body.photos,
+      body.imageUrl
+    );
+
     const newUnit = await MachineryUnit.create({
       unitId,
       name,
@@ -997,8 +1025,8 @@ router.post("/machinery-units", authManager, async (req, res) => {
       model,
       serialNumber,
       modelYear: clean(body.modelYear) || String(new Date().getFullYear()),
-      imageUrl: clean(body.imageUrl),
-      photos: Array.isArray(body.photos) ? body.photos : (body.imageUrl ? [body.imageUrl] : []),
+      imageUrl: mainImageUrl,
+      photos: normalizedPhotos,
       horsepower,
       capacity: clean(body.capacity),
       fuelType: clean(body.fuelType) || "Diesel",
@@ -1137,9 +1165,13 @@ router.put("/machinery-units/:id", authManager, async (req, res) => {
     if (body.model) unit.model = clean(body.model);
     if (body.serialNumber !== undefined) unit.serialNumber = newSerial;
     if (body.modelYear !== undefined) unit.modelYear = clean(body.modelYear);
-    if (body.imageUrl !== undefined) unit.imageUrl = clean(body.imageUrl);
-    if (body.photos !== undefined) {
-      unit.photos = Array.isArray(body.photos) ? body.photos : (body.imageUrl ? [body.imageUrl] : []);
+    if (body.photos !== undefined || body.imageUrl !== undefined) {
+      const { photos: normalizedPhotos, imageUrl: mainImageUrl } = normalizePhotosInput(
+        body.photos !== undefined ? body.photos : unit.photos,
+        body.imageUrl !== undefined ? body.imageUrl : unit.imageUrl
+      );
+      unit.photos = normalizedPhotos;
+      unit.imageUrl = mainImageUrl;
     }
 
     // Update Specifications
