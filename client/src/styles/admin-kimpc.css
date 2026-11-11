@@ -7510,3 +7510,413 @@ input::-webkit-contacts-auto-fill-button {
   border-color: #334155;
   color: #f1f5f9;
 }
+
+
+/* ================= Minimalist Machinery Unit Modal ================= */
+.wz-unit-modal-container {
+  max-width: 660px;
+}
+
+.wz-unit-modal-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wz-unit-modal-title {
+  margin: 0;
+  font-size: 1.12rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.wz-unit-modal-pill {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+
+.wz-unit-modal-pill.is-new {
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+}
+
+.wz-unit-modal-pill.is-edit {
+  background: #eff6ff;
+  color: #0284c7;
+  border: 1px solid #bae6fd;
+}
+
+.wz-unit-modal-close {
+  background: #f1f5f9;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.wz-unit-modal-close:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.wz-unit-modal-body {
+  flex: 1;
+  min-height: 0;
+  padding: 18px 24px 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: #ffffff;
+}
+
+.wz-unit-photo-row {
+  display: flex;
+  gap: 14px;
+  align-items: stretch;
+}
+
+.wz-unit-photo-box {
+  position: relative;
+  width: 96px;
+  min-width: 96px;
+  height: 92px;
+  border-radius: 12px;
+  border: 1.5px dashed #cbd5e1;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.wz-unit-photo-box:hover {
+  border-color: #0284c7;
+  background: #f0f9ff;
+  color: #0284c7;
+}
+
+.wz-unit-photo-box.has-photo {
+  border-style: solid;
+  border-color: #cbd5e1;
+  padding: 0;
+}
+
+.wz-unit-photo-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.wz-unit-photo-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(15, 23, 42, 0.72);
+  color: #ffffff;
+  font-size: 0.78rem;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wz-unit-identity-fields {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.wz-unit-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.wz-unit-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.wz-unit-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.wz-unit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.wz-unit-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.wz-unit-label .req {
+  color: #e11d48;
+}
+
+.wz-unit-input,
+.wz-unit-select,
+.wz-unit-textarea {
+  width: 100%;
+  padding: 8px 11px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: #0f172a;
+  background: #ffffff;
+  font-family: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
+}
+
+.wz-unit-input:focus,
+.wz-unit-select:focus,
+.wz-unit-textarea:focus {
+  outline: none;
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.12);
+}
+
+.wz-unit-input:disabled {
+  background: #f1f5f9;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
+.wz-unit-input.is-error,
+.wz-unit-select.is-error {
+  border-color: #e11d48;
+}
+
+.wz-unit-error {
+  color: #e11d48;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.wz-unit-section-divider {
+  border-top: 1px solid #f1f5f9;
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wz-unit-eyebrow {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #94a3b8;
+}
+
+.wz-unit-toggle-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wz-unit-toggle-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.wz-unit-toggle-pill:hover {
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.wz-unit-toggle-pill.active {
+  background: #ecfdf5;
+  border-color: #6ee7b7;
+  color: #065f46;
+}
+
+.wz-unit-combo {
+  display: flex;
+  gap: 6px;
+}
+
+.wz-unit-combo > .wz-unit-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.wz-unit-combo > .wz-unit-select {
+  width: auto;
+  min-width: 104px;
+  flex-shrink: 0;
+}
+
+.wz-unit-tab-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #e11d48;
+  display: inline-block;
+}
+
+.wz-unit-btn-save {
+  background: var(--wz-primary-navy, #0f172a);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.2);
+}
+
+.wz-unit-btn-save:hover:not(:disabled) {
+  background: #1e293b;
+}
+
+.wz-unit-btn-save:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
+@media (max-width: 640px) {
+  .wz-unit-photo-row {
+    flex-direction: column;
+  }
+
+  .wz-unit-photo-box {
+    width: 100%;
+    height: 84px;
+  }
+
+  .wz-unit-grid-4,
+  .wz-unit-grid-3,
+  .wz-unit-grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Dark mode support for Minimalist Machinery Unit Modal */
+[data-theme="dark"] .wz-booking-modal-container {
+  background: #1e293b;
+  border: 1px solid #334155;
+}
+
+[data-theme="dark"] .wz-booking-modal-header,
+[data-theme="dark"] .wz-booking-modal-footer {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+[data-theme="dark"] .wz-unit-modal-title {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .wz-unit-modal-close {
+  background: #1e293b;
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .wz-unit-modal-close:hover {
+  background: #334155;
+  color: #ffffff;
+}
+
+[data-theme="dark"] .wz-modal-tab-bar {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+[data-theme="dark"] .wz-modal-tab-btn {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .wz-modal-tab-btn.active {
+  background: #1e293b;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .wz-unit-modal-body {
+  background: #1e293b;
+}
+
+[data-theme="dark"] .wz-unit-label {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .wz-unit-input,
+[data-theme="dark"] .wz-unit-select,
+[data-theme="dark"] .wz-unit-textarea {
+  background: #0f172a;
+  border-color: #334155;
+  color: #f1f5f9;
+}
+
+[data-theme="dark"] .wz-unit-photo-box {
+  background: #0f172a;
+  border-color: #334155;
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .wz-unit-section-divider {
+  border-color: #334155;
+}
+
+[data-theme="dark"] .wz-unit-toggle-pill {
+  background: #0f172a;
+  border-color: #334155;
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .wz-unit-toggle-pill.active {
+  background: #064e3b;
+  border-color: #10b981;
+  color: #d1fae5;
+}
+
+[data-theme="dark"] .wz-modal-btn-close {
+  background: #1e293b;
+  border-color: #334155;
+  color: #cbd5e1;
+}

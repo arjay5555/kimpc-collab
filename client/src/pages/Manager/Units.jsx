@@ -170,9 +170,11 @@ export default function Units() {
   // Modals
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingUnit, setEditingUnit] = useState(null);
-  const [activeFormTab, setActiveFormTab] = useState("basic"); // basic | specs | pricing | condition | ownership | other
+  const [activeFormTab, setActiveFormTab] = useState("basic"); // basic | specs | service
   const [unitForm, setUnitForm] = useState(EMPTY_UNIT_FORM);
   const [formErrors, setFormErrors] = useState({});
+  const [savingUnit, setSavingUnit] = useState(false);
+  const [unitSaveError, setUnitSaveError] = useState("");
 
   // View Details Modal
   const [viewingUnit, setViewingUnit] = useState(null);
@@ -372,6 +374,7 @@ export default function Units() {
       unitId: `U-${Math.floor(100 + Math.random() * 900)}`,
     });
     setFormErrors({});
+    setUnitSaveError("");
     setActiveFormTab("basic");
     if (!drivers || drivers.length === 0) {
       fetchDrivers();
@@ -434,6 +437,7 @@ export default function Units() {
       driverPhone: u.driverPhone || "",
     });
     setFormErrors({});
+    setUnitSaveError("");
     setActiveFormTab("basic");
     if (!drivers || drivers.length === 0) {
       fetchDrivers();
@@ -632,46 +636,80 @@ export default function Units() {
     }
   };
 
+  const updateUnitField = (field, value) => {
+    setUnitForm((prev) => ({ ...prev, [field]: value }));
+    if (formErrors[field]) {
+      setFormErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+    if (unitSaveError) setUnitSaveError("");
+  };
+
   // Client-Side Validation
   const validateForm = () => {
     const errs = {};
-    if (!unitForm.unitId.trim()) errs.unitId = "Asset Code is required.";
-    if (!unitForm.name.trim()) errs.name = "Machinery Name is required.";
-    if (!unitForm.brand.trim()) errs.brand = "Brand is required.";
-    if (!unitForm.model.trim()) errs.model = "Model is required.";
-    if (!unitForm.pricingUnit) errs.pricingUnit = "Pricing Unit is required.";
+    if (!unitForm.unitId.trim()) errs.unitId = "Required";
+    if (!unitForm.name.trim()) errs.name = "Required";
+    if (!unitForm.brand.trim()) errs.brand = "Required";
+    if (!unitForm.model.trim()) errs.model = "Required";
+    if (!unitForm.pricingUnit) errs.pricingUnit = "Required";
 
     const rate = Number(unitForm.memberRate);
-    if (isNaN(rate) || rate < 0) errs.memberRate = "Member rate must be a non-negative number.";
+    if (unitForm.memberRate === "" || isNaN(rate) || rate < 0) errs.memberRate = "Invalid rate";
 
     if (unitForm.nonmemberRate !== "" && Number(unitForm.nonmemberRate) < 0) {
-      errs.nonmemberRate = "Non-member rate cannot be negative.";
+      errs.nonmemberRate = "Invalid rate";
     }
 
     const minQty = Number(unitForm.minRentalQuantity);
-    if (isNaN(minQty) || minQty <= 0) errs.minRentalQuantity = "Minimum quantity must be greater than zero.";
+    if (isNaN(minQty) || minQty <= 0) errs.minRentalQuantity = "Must be > 0";
 
     if (unitForm.horsepower !== "" && Number(unitForm.horsepower) < 0) {
-      errs.horsepower = "Horsepower cannot be negative.";
+      errs.horsepower = "Invalid value";
     }
 
     if (Number(unitForm.currentMeterReading) < 0) {
-      errs.currentMeterReading = "Meter reading cannot be negative.";
+      errs.currentMeterReading = "Invalid value";
     }
 
     if (Number(unitForm.acquisitionCost) < 0) {
-      errs.acquisitionCost = "Acquisition cost cannot be negative.";
+      errs.acquisitionCost = "Invalid value";
     }
 
     setFormErrors(errs);
-    return Object.keys(errs).length === 0;
+    if (Object.keys(errs).length > 0) {
+      if (
+        errs.unitId ||
+        errs.name ||
+        errs.brand ||
+        errs.model ||
+        errs.pricingUnit ||
+        errs.memberRate ||
+        errs.nonmemberRate ||
+        errs.minRentalQuantity
+      ) {
+        setActiveFormTab("basic");
+      } else if (errs.horsepower || errs.currentMeterReading) {
+        setActiveFormTab("specs");
+      } else if (errs.acquisitionCost) {
+        setActiveFormTab("service");
+      }
+      return false;
+    }
+    return true;
   };
 
   // Handle Save (Add or Edit)
   const handleSaveUnit = async (e) => {
     e.preventDefault();
+    if (savingUnit) return;
+    setUnitSaveError("");
+
     if (!validateForm()) {
-      alert("Please check the form for errors before saving.");
+      setUnitSaveError("Please fill in required fields.");
       return;
     }
 
@@ -691,38 +729,39 @@ export default function Units() {
     };
 
     try {
+      setSavingUnit(true);
       if (editingUnit) {
-        // Edit Unit
         const res = await api(`/machinery-units/${editingUnit._id || editingUnit.id || editingUnit.unitId}`, {
           method: "PUT",
           body: payload,
         });
 
         if (res.ok) {
-          setFeedback({ message: `Unit ${unitForm.unitId} (${unitForm.name}) updated successfully!`, isError: false });
+          setFeedback({ message: `Unit ${unitForm.unitId} updated.`, isError: false });
           setShowAddModal(false);
           setEditingUnit(null);
           fetchUnits();
         } else {
-          alert(res.data?.error || "Failed to update machinery unit.");
+          setUnitSaveError(res.data?.error || "Failed to update unit.");
         }
       } else {
-        // Add Unit
         const res = await api("/machinery-units", {
           method: "POST",
           body: payload,
         });
 
         if (res.ok) {
-          setFeedback({ message: `Machinery unit ${unitForm.unitId} added successfully!`, isError: false });
+          setFeedback({ message: `Unit ${unitForm.unitId} added.`, isError: false });
           setShowAddModal(false);
           fetchUnits();
         } else {
-          alert(res.data?.error || "Failed to create machinery unit.");
+          setUnitSaveError(res.data?.error || "Failed to register unit.");
         }
       }
     } catch {
-      alert("Network error saving unit.");
+      setUnitSaveError("Network error while saving unit.");
+    } finally {
+      setSavingUnit(false);
     }
   };
 
@@ -1253,923 +1292,711 @@ export default function Units() {
         </div>
       </main>
 
-      {/* ================= 1. Add / Edit Unit Modal (Single Unified Scrollable Form) ================= */}
+      {/* ================= 1. Add / Edit Unit Modal (Minimalist 3-Tab Layout) ================= */}
       {showAddModal && (
-        <div className="wz-modal-overlay" onClick={() => setShowAddModal(false)}>
+        <div className="wz-booking-modal-overlay" onClick={() => !savingUnit && setShowAddModal(false)}>
           <div
-            className="wz-modal-content wz-modal-large"
+            className="wz-booking-modal-container wz-unit-modal-container"
             onClick={(e) => e.stopPropagation()}
-            style={{
-              maxWidth: "880px",
-              width: "95%",
-              maxHeight: "92vh",
-              display: "flex",
-              flexDirection: "column",
-              padding: 0,
-              overflow: "hidden",
-              borderRadius: "14px",
-              background: "#ffffff",
-              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
-            }}
           >
-            {/* Sticky Header */}
-            <div
-              style={{
-                padding: "16px 24px",
-                borderBottom: "1px solid #e2e8f0",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                background: "#ffffff",
-                flexShrink: 0,
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                {editingUnit ? (
-                  <span
-                    style={{
-                      background: "#eff6ff",
-                      color: "#0284c7",
-                      padding: "4px 10px",
-                      borderRadius: "6px",
-                      fontWeight: "800",
-                      fontSize: "0.85rem",
-                      border: "1px solid #bae6fd",
-                    }}
-                  >
-                    {unitForm.unitId}
-                  </span>
-                ) : (
-                  <span
-                    style={{
-                      background: "#f0fdf4",
-                      color: "#16a34a",
-                      padding: "4px 10px",
-                      borderRadius: "6px",
-                      fontWeight: "800",
-                      fontSize: "0.82rem",
-                      border: "1px solid #bbf7d0",
-                    }}
-                  >
-                    NEW ASSET
-                  </span>
-                )}
-                <div>
-                  <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: "800", color: "#0f172a" }}>
-                    {editingUnit ? `Edit Machinery Unit` : "Register New Machinery Unit"}
-                  </h3>
-                  <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
-                    Configure equipment specifications, pricing, and maintenance details. Scroll down to review all fields.
-                  </span>
-                </div>
+            {/* Header */}
+            <div className="wz-booking-modal-header">
+              <div className="wz-unit-modal-title-row">
+                <h3 className="wz-unit-modal-title">
+                  {editingUnit ? "Edit Unit" : "Register Unit"}
+                </h3>
+                <span className={`wz-unit-modal-pill ${editingUnit ? "is-edit" : "is-new"}`}>
+                  {editingUnit ? unitForm.unitId : "NEW"}
+                </span>
               </div>
               <button
                 type="button"
+                className="wz-unit-modal-close"
+                disabled={savingUnit}
                 onClick={() => setShowAddModal(false)}
-                style={{
-                  background: "#f1f5f9",
-                  border: "none",
-                  width: "32px",
-                  height: "32px",
-                  borderRadius: "8px",
-                  fontSize: "1.3rem",
-                  cursor: "pointer",
-                  color: "#64748b",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-                title="Close Modal"
-                aria-label="Close Modal"
+                aria-label="Close"
               >
                 &times;
               </button>
             </div>
 
-            {/* Form with Scrollable Body & Sticky Footer */}
-            <form onSubmit={handleSaveUnit} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-              <div
-                style={{
-                  flex: 1,
-                  overflowY: "auto",
-                  padding: "20px 24px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "18px",
-                  background: "#f8fafc",
-                }}
+            {/* 3-Tab Switcher */}
+            <div className="wz-modal-tab-bar" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeFormTab === "basic"}
+                className={`wz-modal-tab-btn ${activeFormTab === "basic" ? "active" : ""}`}
+                onClick={() => setActiveFormTab("basic")}
               >
-                {/* 1. Basic Information Card */}
-                <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "18px 20px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid #f1f5f9" }}>
-                    <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: "#eff6ff", color: "#0284c7", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
-                        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
-                      </svg>
-                    </div>
-                    <div>
-                      <h4 style={{ margin: 0, fontSize: "0.96rem", fontWeight: "800", color: "#0f172a" }}>1. Basic Information &amp; Operator</h4>
-                      <span style={{ fontSize: "0.76rem", color: "#64748b" }}>Core machinery identification, model details, driver assignment, and photo</span>
-                    </div>
-                  </div>
+                <span>Unit &amp; Rate</span>
+                {(formErrors.unitId ||
+                  formErrors.name ||
+                  formErrors.brand ||
+                  formErrors.model ||
+                  formErrors.pricingUnit ||
+                  formErrors.memberRate ||
+                  formErrors.nonmemberRate ||
+                  formErrors.minRentalQuantity) && <span className="wz-unit-tab-dot" />}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeFormTab === "specs"}
+                className={`wz-modal-tab-btn ${activeFormTab === "specs" ? "active" : ""}`}
+                onClick={() => setActiveFormTab("specs")}
+              >
+                <span>Specs &amp; Notes</span>
+                {(formErrors.horsepower || formErrors.currentMeterReading) && (
+                  <span className="wz-unit-tab-dot" />
+                )}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeFormTab === "service"}
+                className={`wz-modal-tab-btn ${activeFormTab === "service" ? "active" : ""}`}
+                onClick={() => setActiveFormTab("service")}
+              >
+                <span>Service &amp; Asset</span>
+                {formErrors.acquisitionCost && <span className="wz-unit-tab-dot" />}
+              </button>
+            </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Unit / Asset Code *
-                      </label>
+            {/* Form */}
+            <form
+              noValidate
+              onSubmit={handleSaveUnit}
+              style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}
+            >
+              <div className="wz-unit-modal-body">
+                {activeFormTab === "basic" && (
+                  <>
+                    {/* Photo + Code + Name */}
+                    <div className="wz-unit-photo-row">
                       <input
-                        type="text"
-                        required
-                        disabled={Boolean(editingUnit)}
-                        placeholder="e.g. JD-5075-01"
-                        value={unitForm.unitId}
-                        onChange={(e) => setUnitForm({ ...unitForm, unitId: e.target.value })}
-                        style={{
-                          width: "100%",
-                          padding: "9px 12px",
-                          border: "1px solid #cbd5e1",
-                          borderRadius: "8px",
-                          fontSize: "0.88rem",
-                          background: editingUnit ? "#f1f5f9" : "#fff",
-                          cursor: editingUnit ? "not-allowed" : "text",
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        ref={fileInputRef}
+                        style={{ display: "none" }}
+                        onChange={handleFileChange}
+                      />
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        className={`wz-unit-photo-box ${unitForm.imageUrl ? "has-photo" : ""}`}
+                        onClick={() => !uploadingImage && fileInputRef.current?.click()}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            if (!uploadingImage) fileInputRef.current?.click();
+                          }
                         }}
-                      />
-                      {formErrors.unitId && <span style={{ color: "#e11d48", fontSize: "0.75rem" }}>{formErrors.unitId}</span>}
-                      {editingUnit && <span style={{ fontSize: "0.72rem", color: "#64748b" }}>Unit ID is fixed and cannot be changed.</span>}
-                    </div>
-
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Machinery Name *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. 5075E Utility Tractor"
-                        value={unitForm.name}
-                        onChange={(e) => setUnitForm({ ...unitForm, name: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
-                      {formErrors.name && <span style={{ color: "#e11d48", fontSize: "0.75rem" }}>{formErrors.name}</span>}
-                    </div>
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Machinery Type *
-                      </label>
-                      <select
-                        required
-                        value={unitForm.category}
-                        onChange={(e) => setUnitForm({ ...unitForm, category: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem", background: "#fff" }}
+                        title="Upload photo"
                       >
-                        {MACHINERY_TYPES.map((t) => (
-                          <option key={t} value={t}>{t}</option>
-                        ))}
-                      </select>
-                    </div>
+                        {unitForm.imageUrl ? (
+                          <>
+                            <img src={unitForm.imageUrl} alt="Unit" />
+                            <button
+                              type="button"
+                              className="wz-unit-photo-remove"
+                              aria-label="Remove photo"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setUnitForm((prev) => ({
+                                  ...prev,
+                                  imageUrl: "",
+                                  photos: (prev.photos || []).filter((p) => p !== prev.imageUrl),
+                                }));
+                                if (fileInputRef.current) fileInputRef.current.value = "";
+                              }}
+                            >
+                              &times;
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="3" y="3" width="18" height="18" rx="3" />
+                              <circle cx="8.5" cy="8.5" r="1.5" />
+                              <polyline points="21 15 16 10 5 21" />
+                            </svg>
+                            <span>{uploadingImage ? "Uploading..." : "Add Photo"}</span>
+                          </>
+                        )}
+                      </div>
 
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Brand *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. John Deere, Kubota"
-                        value={unitForm.brand}
-                        onChange={(e) => setUnitForm({ ...unitForm, brand: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
-                      {formErrors.brand && <span style={{ color: "#e11d48", fontSize: "0.75rem" }}>{formErrors.brand}</span>}
-                    </div>
+                      <div className="wz-unit-identity-fields">
+                        <div className="wz-unit-grid-2">
+                          <div className="wz-unit-field">
+                            <label className="wz-unit-label">
+                              Unit Code <span className="req">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              disabled={Boolean(editingUnit)}
+                              placeholder="TR-01"
+                              value={unitForm.unitId}
+                              onChange={(e) => updateUnitField("unitId", e.target.value)}
+                              className={`wz-unit-input ${formErrors.unitId ? "is-error" : ""}`}
+                            />
+                            {formErrors.unitId && <span className="wz-unit-error">{formErrors.unitId}</span>}
+                          </div>
 
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Model *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. 5075E, DC-70"
-                        value={unitForm.model}
-                        onChange={(e) => setUnitForm({ ...unitForm, model: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
-                      {formErrors.model && <span style={{ color: "#e11d48", fontSize: "0.75rem" }}>{formErrors.model}</span>}
-                    </div>
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Serial Number (Optional)
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. 1PY5075EKP012894"
-                        value={unitForm.serialNumber}
-                        onChange={(e) => setUnitForm({ ...unitForm, serialNumber: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Year Manufactured
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. 2023"
-                        value={unitForm.modelYear}
-                        onChange={(e) => setUnitForm({ ...unitForm, modelYear: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
-                    </div>
-                  </div>
-
-                  <div style={{ marginBottom: "16px" }}>
-                    <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                      Assigned Driver / Operator
-                    </label>
-                    <select
-                      value={unitForm.assignedDriver || "Unassigned"}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        const match = drivers.find((d) => d.name === val);
-                        setUnitForm({
-                          ...unitForm,
-                          assignedDriver: val,
-                          driverPhone: match ? (match.phone || "") : "",
-                        });
-                      }}
-                      style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem", background: "#fff" }}
-                    >
-                      <option value="Unassigned">Unassigned (No Operator Assigned)</option>
-                      {drivers.map((d) => (
-                        <option key={d._id || d.id || d.name} value={d.name}>
-                          {d.name} {d.phone ? `(${d.phone})` : ""} — {d.status || "Active"}
-                        </option>
-                      ))}
-                    </select>
-                    <span style={{ fontSize: "0.72rem", color: "#64748b" }}>
-                      Choose from registered KIMPC Drivers.
-                    </span>
-                  </div>
-
-                  {/* Photo Upload & URL */}
-                  <div style={{ border: "1px dashed #cbd5e1", borderRadius: "10px", padding: "14px 16px", background: "#f8fafc" }}>
-                    <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "8px" }}>
-                      Machinery Photo
-                    </label>
-
-                    <div style={{ display: "flex", gap: "14px", alignItems: "center", flexWrap: "wrap" }}>
-                      {unitForm.imageUrl ? (
-                        <img
-                          src={unitForm.imageUrl}
-                          alt="Preview"
-                          style={{ width: "90px", height: "68px", objectFit: "cover", borderRadius: "8px", border: "1px solid #cbd5e1", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}
-                        />
-                      ) : (
-                        <div style={{ width: "90px", height: "68px", background: "#e2e8f0", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", color: "#94a3b8", fontSize: "0.75rem", border: "1px solid #cbd5e1" }}>
-                          No Photo
+                          <div className="wz-unit-field">
+                            <label className="wz-unit-label">
+                              Unit Name <span className="req">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="Utility Tractor"
+                              value={unitForm.name}
+                              onChange={(e) => updateUnitField("name", e.target.value)}
+                              className={`wz-unit-input ${formErrors.name ? "is-error" : ""}`}
+                            />
+                            {formErrors.name && <span className="wz-unit-error">{formErrors.name}</span>}
+                          </div>
                         </div>
-                      )}
 
-                      <div style={{ flex: 1, minWidth: "220px" }}>
-                        <input
-                          type="file"
-                          accept="image/jpeg,image/png,image/webp"
-                          ref={fileInputRef}
-                          style={{ display: "none" }}
-                          onChange={handleFileChange}
-                        />
-                        <button
-                          type="button"
-                          disabled={uploadingImage}
-                          onClick={() => fileInputRef.current && fileInputRef.current.click()}
-                          style={{
-                            padding: "7px 15px",
-                            background: "#0284c7",
-                            color: "#fff",
-                            border: "none",
-                            borderRadius: "6px",
-                            fontSize: "0.82rem",
-                            fontWeight: "600",
-                            cursor: "pointer",
-                            marginRight: "8px",
-                          }}
-                        >
-                          {uploadingImage ? "Uploading & Optimizing..." : "Upload Photo"}
-                        </button>
-                        <span style={{ fontSize: "0.75rem", color: "#64748b" }}>Max 5MB (JPG, PNG, WebP)</span>
-
-                        <div style={{ marginTop: "8px" }}>
+                        <div className="wz-unit-field">
                           <input
                             type="text"
-                            placeholder="Or paste direct image URL (https://...)"
+                            placeholder="Image URL (optional)"
                             value={unitForm.imageUrl}
-                            onChange={(e) => setUnitForm({ ...unitForm, imageUrl: e.target.value })}
-                            style={{ width: "100%", padding: "7px 10px", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "0.82rem" }}
+                            onChange={(e) => updateUnitField("imageUrl", e.target.value)}
+                            className="wz-unit-input"
                           />
                         </div>
                       </div>
                     </div>
-                  </div>
-                </div>
 
-                {/* 2. Technical Specifications Card */}
-                <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "18px 20px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid #f1f5f9" }}>
-                    <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: "#f0fdf4", color: "#16a34a", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="3" />
-                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <h4 style={{ margin: 0, fontSize: "0.96rem", fontWeight: "800", color: "#0f172a" }}>2. Technical Specifications</h4>
-                      <span style={{ fontSize: "0.76rem", color: "#64748b" }}>Engine power, payload capacity, fuel requirements, and attached equipment</span>
-                    </div>
-                  </div>
+                    {/* Type, Brand, Model */}
+                    <div className="wz-unit-grid-3">
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">
+                          Type <span className="req">*</span>
+                        </label>
+                        <select
+                          value={unitForm.category}
+                          onChange={(e) => updateUnitField("category", e.target.value)}
+                          className="wz-unit-select"
+                        >
+                          {MACHINERY_TYPES.map((t) => (
+                            <option key={t} value={t}>{t}</option>
+                          ))}
+                        </select>
+                      </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Horsepower (HP)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        placeholder="e.g. 75"
-                        value={unitForm.horsepower}
-                        onChange={(e) => setUnitForm({ ...unitForm, horsepower: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Capacity (Tank, payload, or width)
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. 600L tank, 2.075m cutter width"
-                        value={unitForm.capacity}
-                        onChange={(e) => setUnitForm({ ...unitForm, capacity: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Fuel Type
-                      </label>
-                      <select
-                        value={unitForm.fuelType}
-                        onChange={(e) => setUnitForm({ ...unitForm, fuelType: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem", background: "#fff" }}
-                      >
-                        {FUEL_TYPES.map((f) => (
-                          <option key={f} value={f}>{f}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                      Attachments / Accessories
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Disc plough, Rotary tiller, Bale chute (comma-separated)"
-                      value={unitForm.attachments}
-                      onChange={(e) => setUnitForm({ ...unitForm, attachments: e.target.value })}
-                      style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                    />
-                  </div>
-                </div>
-
-                {/* 3. Rental & Pricing Card */}
-                <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "18px 20px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid #f1f5f9" }}>
-                    <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: "#fefce8", color: "#ca8a04", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <line x1="12" y1="1" x2="12" y2="23" />
-                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                      </svg>
-                    </div>
-                    <div>
-                      <h4 style={{ margin: 0, fontSize: "0.96rem", fontWeight: "800", color: "#0f172a" }}>3. Rental Rates &amp; Pricing</h4>
-                      <span style={{ fontSize: "0.76rem", color: "#64748b" }}>Member and non-member rates, minimum rental requirements, and included services</span>
-                    </div>
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Pricing Unit *
-                      </label>
-                      <select
-                        required
-                        value={unitForm.pricingUnit}
-                        onChange={(e) => setUnitForm({ ...unitForm, pricingUnit: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem", background: "#fff" }}
-                      >
-                        {PRICING_UNITS.map((p) => (
-                          <option key={p} value={p}>{p}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Member Rental Rate (₱) *
-                      </label>
-                      <input
-                        type="number"
-                        required
-                        min="0"
-                        step="1"
-                        placeholder="e.g. 2800"
-                        value={unitForm.memberRate}
-                        onChange={(e) => setUnitForm({ ...unitForm, memberRate: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
-                      {formErrors.memberRate && <span style={{ color: "#e11d48", fontSize: "0.75rem" }}>{formErrors.memberRate}</span>}
-                    </div>
-
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Non-Member Rental Rate (₱)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        placeholder="e.g. 3500"
-                        value={unitForm.nonmemberRate}
-                        onChange={(e) => setUnitForm({ ...unitForm, nonmemberRate: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
-                    </div>
-                  </div>
-
-                  <div style={{ marginBottom: "14px" }}>
-                    <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                      Minimum Rental Quantity * (e.g. Minimum Hectares / Hours / Days)
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      min="0.1"
-                      step="0.5"
-                      placeholder="1"
-                      value={unitForm.minRentalQuantity}
-                      onChange={(e) => setUnitForm({ ...unitForm, minRentalQuantity: e.target.value })}
-                      style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                    />
-                  </div>
-
-                  {/* Included Services Checkboxes */}
-                  <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "14px 16px", marginBottom: "14px" }}>
-                    <span style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "10px" }}>
-                      Included In Rental Rate Settings:
-                    </span>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                      <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.84rem", cursor: "pointer" }}>
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">
+                          Brand <span className="req">*</span>
+                        </label>
                         <input
-                          type="checkbox"
-                          checked={unitForm.operatorRequired}
-                          onChange={(e) => setUnitForm({ ...unitForm, operatorRequired: e.target.checked })}
+                          type="text"
+                          placeholder="Kubota"
+                          value={unitForm.brand}
+                          onChange={(e) => updateUnitField("brand", e.target.value)}
+                          className={`wz-unit-input ${formErrors.brand ? "is-error" : ""}`}
                         />
-                        <span>Operator Required for this Unit</span>
-                      </label>
+                        {formErrors.brand && <span className="wz-unit-error">{formErrors.brand}</span>}
+                      </div>
 
-                      <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.84rem", cursor: "pointer" }}>
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">
+                          Model <span className="req">*</span>
+                        </label>
                         <input
-                          type="checkbox"
-                          checked={unitForm.operatorIncluded}
-                          onChange={(e) => setUnitForm({ ...unitForm, operatorIncluded: e.target.checked })}
+                          type="text"
+                          placeholder="L4508"
+                          value={unitForm.model}
+                          onChange={(e) => updateUnitField("model", e.target.value)}
+                          className={`wz-unit-input ${formErrors.model ? "is-error" : ""}`}
                         />
-                        <span>Operator Included in Base Rate</span>
-                      </label>
-
-                      <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.84rem", cursor: "pointer" }}>
-                        <input
-                          type="checkbox"
-                          checked={unitForm.fuelIncluded}
-                          onChange={(e) => setUnitForm({ ...unitForm, fuelIncluded: e.target.checked })}
-                        />
-                        <span>Fuel Included in Base Rate</span>
-                      </label>
-
-                      <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.84rem", cursor: "pointer" }}>
-                        <input
-                          type="checkbox"
-                          checked={unitForm.transportIncluded}
-                          onChange={(e) => setUnitForm({ ...unitForm, transportIncluded: e.target.checked })}
-                        />
-                        <span>Transport Delivery Included in Base Rate</span>
-                      </label>
+                        {formErrors.model && <span className="wz-unit-error">{formErrors.model}</span>}
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Conditional Fees */}
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Additional Operator Fee (₱)
-                      </label>
-                      {unitForm.operatorIncluded ? (
-                        <div style={{ padding: "8px 12px", background: "#ecfdf5", border: "1px solid #a7f3d0", borderRadius: "8px", color: "#065f46", fontSize: "0.82rem" }}>
-                          ✓ Included in base rental rate (₱0 fee)
+                    {/* Pricing & Status */}
+                    <div className="wz-unit-section-divider">
+                      <div className="wz-unit-grid-4">
+                        <div className="wz-unit-field">
+                          <label className="wz-unit-label">
+                            Billing <span className="req">*</span>
+                          </label>
+                          <select
+                            value={unitForm.pricingUnit}
+                            onChange={(e) => updateUnitField("pricingUnit", e.target.value)}
+                            className="wz-unit-select"
+                          >
+                            {PRICING_UNITS.map((p) => (
+                              <option key={p} value={p}>{p}</option>
+                            ))}
+                          </select>
                         </div>
-                      ) : (
+
+                        <div className="wz-unit-field">
+                          <label className="wz-unit-label">
+                            Member (₱) <span className="req">*</span>
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            placeholder="2800"
+                            value={unitForm.memberRate}
+                            onChange={(e) => updateUnitField("memberRate", e.target.value)}
+                            className={`wz-unit-input ${formErrors.memberRate ? "is-error" : ""}`}
+                          />
+                          {formErrors.memberRate && <span className="wz-unit-error">{formErrors.memberRate}</span>}
+                        </div>
+
+                        <div className="wz-unit-field">
+                          <label className="wz-unit-label">Non-Member (₱)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            placeholder="3500"
+                            value={unitForm.nonmemberRate}
+                            onChange={(e) => updateUnitField("nonmemberRate", e.target.value)}
+                            className={`wz-unit-input ${formErrors.nonmemberRate ? "is-error" : ""}`}
+                          />
+                          {formErrors.nonmemberRate && <span className="wz-unit-error">{formErrors.nonmemberRate}</span>}
+                        </div>
+
+                        <div className="wz-unit-field">
+                          <label className="wz-unit-label">
+                            Status <span className="req">*</span>
+                          </label>
+                          <select
+                            value={unitForm.operatingCondition}
+                            onChange={(e) => updateUnitField("operatingCondition", e.target.value)}
+                            className="wz-unit-select"
+                          >
+                            {OPERATING_CONDITIONS.map((c) => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="wz-unit-grid-2">
+                        <div className="wz-unit-field">
+                          <label className="wz-unit-label">Operator</label>
+                          <select
+                            value={unitForm.assignedDriver || "Unassigned"}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const match = drivers.find((d) => d.name === val);
+                              setUnitForm((prev) => ({
+                                ...prev,
+                                assignedDriver: val,
+                                driverPhone: match ? (match.phone || "") : "",
+                              }));
+                            }}
+                            className="wz-unit-select"
+                          >
+                            <option value="Unassigned">Unassigned</option>
+                            {drivers.map((d) => (
+                              <option key={d._id || d.id || d.name} value={d.name}>
+                                {d.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="wz-unit-field">
+                          <label className="wz-unit-label">Min. Qty</label>
+                          <input
+                            type="number"
+                            min="0.1"
+                            step="0.5"
+                            placeholder="1"
+                            value={unitForm.minRentalQuantity}
+                            onChange={(e) => updateUnitField("minRentalQuantity", e.target.value)}
+                            className={`wz-unit-input ${formErrors.minRentalQuantity ? "is-error" : ""}`}
+                          />
+                          {formErrors.minRentalQuantity && (
+                            <span className="wz-unit-error">{formErrors.minRentalQuantity}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Inclusions & Conditional Add-on Fees */}
+                    <div className="wz-unit-section-divider">
+                      <span className="wz-unit-eyebrow">Rate Options</span>
+                      <div className="wz-unit-toggle-grid">
+                        {[
+                          { key: "operatorRequired", label: "Operator Required" },
+                          { key: "operatorIncluded", label: "Operator Included" },
+                          { key: "fuelIncluded", label: "Fuel Included" },
+                          { key: "transportIncluded", label: "Transport Included" },
+                        ].map((opt) => {
+                          const active = Boolean(unitForm[opt.key]);
+                          return (
+                            <button
+                              key={opt.key}
+                              type="button"
+                              aria-pressed={active}
+                              className={`wz-unit-toggle-pill ${active ? "active" : ""}`}
+                              onClick={() => updateUnitField(opt.key, !active)}
+                            >
+                              {active && (
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
+                                  <polyline points="20 6 9 17 4 12" />
+                                </svg>
+                              )}
+                              <span>{opt.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {(!unitForm.operatorIncluded || !unitForm.transportIncluded) && (
+                        <div className="wz-unit-grid-2">
+                          {!unitForm.operatorIncluded && (
+                            <div className="wz-unit-field">
+                              <label className="wz-unit-label">Operator Fee (₱)</label>
+                              <div className="wz-unit-combo">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="50"
+                                  placeholder="0"
+                                  value={unitForm.additionalOperatorFee}
+                                  onChange={(e) => updateUnitField("additionalOperatorFee", e.target.value)}
+                                  className="wz-unit-input"
+                                />
+                                <select
+                                  value={unitForm.operatorFeeBasis}
+                                  onChange={(e) => updateUnitField("operatorFeeBasis", e.target.value)}
+                                  className="wz-unit-select"
+                                >
+                                  {FEE_BASIS_OPTIONS.map((b) => (
+                                    <option key={b} value={b}>{b}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                          )}
+
+                          {!unitForm.transportIncluded && (
+                            <div className="wz-unit-field">
+                              <label className="wz-unit-label">Transport Fee (₱)</label>
+                              <div className="wz-unit-combo">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="50"
+                                  placeholder="0"
+                                  value={unitForm.additionalTransportFee}
+                                  onChange={(e) => updateUnitField("additionalTransportFee", e.target.value)}
+                                  className="wz-unit-input"
+                                />
+                                <select
+                                  value={unitForm.transportFeeBasis}
+                                  onChange={(e) => updateUnitField("transportFeeBasis", e.target.value)}
+                                  className="wz-unit-select"
+                                >
+                                  {FEE_BASIS_OPTIONS.map((b) => (
+                                    <option key={b} value={b}>{b}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {activeFormTab === "specs" && (
+                  <>
+                    <div className="wz-unit-grid-3">
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">Power (HP)</label>
                         <input
                           type="number"
                           min="0"
-                          step="50"
-                          placeholder="e.g. 500"
-                          value={unitForm.additionalOperatorFee}
-                          onChange={(e) => setUnitForm({ ...unitForm, additionalOperatorFee: e.target.value })}
-                          style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
+                          step="1"
+                          placeholder="75"
+                          value={unitForm.horsepower}
+                          onChange={(e) => updateUnitField("horsepower", e.target.value)}
+                          className={`wz-unit-input ${formErrors.horsepower ? "is-error" : ""}`}
                         />
-                      )}
+                        {formErrors.horsepower && <span className="wz-unit-error">{formErrors.horsepower}</span>}
+                      </div>
+
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">Fuel</label>
+                        <select
+                          value={unitForm.fuelType}
+                          onChange={(e) => updateUnitField("fuelType", e.target.value)}
+                          className="wz-unit-select"
+                        >
+                          {FUEL_TYPES.map((f) => (
+                            <option key={f} value={f}>{f}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">Year</label>
+                        <input
+                          type="text"
+                          placeholder="2024"
+                          value={unitForm.modelYear}
+                          onChange={(e) => updateUnitField("modelYear", e.target.value)}
+                          className="wz-unit-input"
+                        />
+                      </div>
                     </div>
 
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Operator Fee Pricing Basis
-                      </label>
-                      <select
-                        disabled={unitForm.operatorIncluded}
-                        value={unitForm.operatorFeeBasis}
-                        onChange={(e) => setUnitForm({ ...unitForm, operatorFeeBasis: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem", background: unitForm.operatorIncluded ? "#f1f5f9" : "#fff" }}
-                      >
-                        {FEE_BASIS_OPTIONS.map((b) => (
-                          <option key={b} value={b}>{b}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
+                    <div className="wz-unit-grid-2">
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">Serial No.</label>
+                        <input
+                          type="text"
+                          placeholder="Optional"
+                          value={unitForm.serialNumber}
+                          onChange={(e) => updateUnitField("serialNumber", e.target.value)}
+                          className="wz-unit-input"
+                        />
+                      </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Additional Transport Fee (₱)
-                      </label>
-                      {unitForm.transportIncluded ? (
-                        <div style={{ padding: "8px 12px", background: "#ecfdf5", border: "1px solid #a7f3d0", borderRadius: "8px", color: "#065f46", fontSize: "0.82rem" }}>
-                          ✓ Included in base rental rate (₱0 fee)
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">Capacity</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 600L tank"
+                          value={unitForm.capacity}
+                          onChange={(e) => updateUnitField("capacity", e.target.value)}
+                          className="wz-unit-input"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="wz-unit-grid-2">
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">Depot</label>
+                        <input
+                          type="text"
+                          placeholder="Main Co-op Depot"
+                          value={unitForm.storageLocation}
+                          onChange={(e) => updateUnitField("storageLocation", e.target.value)}
+                          className="wz-unit-input"
+                        />
+                      </div>
+
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">Meter Reading</label>
+                        <div className="wz-unit-combo">
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            placeholder="0"
+                            value={unitForm.currentMeterReading}
+                            onChange={(e) => updateUnitField("currentMeterReading", e.target.value)}
+                            className={`wz-unit-input ${formErrors.currentMeterReading ? "is-error" : ""}`}
+                          />
+                          <select
+                            value={unitForm.meterReadingUnit}
+                            onChange={(e) => updateUnitField("meterReadingUnit", e.target.value)}
+                            className="wz-unit-select"
+                          >
+                            <option value="Hours">Hours</option>
+                            <option value="Kilometers">Kilometers</option>
+                            <option value="Hectares">Hectares</option>
+                          </select>
                         </div>
-                      ) : (
+                        {formErrors.currentMeterReading && (
+                          <span className="wz-unit-error">{formErrors.currentMeterReading}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="wz-unit-field">
+                      <label className="wz-unit-label">Attachments</label>
+                      <input
+                        type="text"
+                        placeholder="Disc plough, rotary tiller (comma-separated)"
+                        value={unitForm.attachments}
+                        onChange={(e) => updateUnitField("attachments", e.target.value)}
+                        className="wz-unit-input"
+                      />
+                    </div>
+
+                    <div className="wz-unit-section-divider">
+                      <div className="wz-unit-grid-2">
+                        <div className="wz-unit-field">
+                          <label className="wz-unit-label">Restrictions</label>
+                          <textarea
+                            rows="2"
+                            placeholder="Usage limits (optional)"
+                            value={unitForm.operatingRestrictions}
+                            onChange={(e) => updateUnitField("operatingRestrictions", e.target.value)}
+                            className="wz-unit-textarea"
+                          />
+                        </div>
+
+                        <div className="wz-unit-field">
+                          <label className="wz-unit-label">Internal Notes</label>
+                          <textarea
+                            rows="2"
+                            placeholder="Staff notes (optional)"
+                            value={unitForm.notes}
+                            onChange={(e) => updateUnitField("notes", e.target.value)}
+                            className="wz-unit-textarea"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {activeFormTab === "service" && (
+                  <>
+                    <span className="wz-unit-eyebrow">Service Schedule</span>
+                    <div className="wz-unit-grid-2">
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">Last Service Date</label>
+                        <input
+                          type="date"
+                          value={unitForm.lastServiceDate}
+                          onChange={(e) => updateUnitField("lastServiceDate", e.target.value)}
+                          className="wz-unit-input"
+                        />
+                      </div>
+
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">Last Service Meter</label>
                         <input
                           type="number"
                           min="0"
-                          step="50"
-                          placeholder="e.g. 1000"
-                          value={unitForm.additionalTransportFee}
-                          onChange={(e) => setUnitForm({ ...unitForm, additionalTransportFee: e.target.value })}
-                          style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
+                          placeholder="0"
+                          value={unitForm.lastServiceMeterReading}
+                          onChange={(e) => updateUnitField("lastServiceMeterReading", e.target.value)}
+                          className="wz-unit-input"
                         />
-                      )}
+                      </div>
                     </div>
 
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Transport Fee Pricing Basis
-                      </label>
-                      <select
-                        disabled={unitForm.transportIncluded}
-                        value={unitForm.transportFeeBasis}
-                        onChange={(e) => setUnitForm({ ...unitForm, transportFeeBasis: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem", background: unitForm.transportIncluded ? "#f1f5f9" : "#fff" }}
-                      >
-                        {FEE_BASIS_OPTIONS.map((b) => (
-                          <option key={b} value={b}>{b}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </div>
+                    <div className="wz-unit-grid-2">
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">Next Service Date</label>
+                        <input
+                          type="date"
+                          value={unitForm.nextServiceDate}
+                          onChange={(e) => updateUnitField("nextServiceDate", e.target.value)}
+                          className="wz-unit-input"
+                        />
+                      </div>
 
-                {/* 4. Condition & Maintenance Card */}
-                <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "18px 20px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid #f1f5f9" }}>
-                    <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: "#fff7ed", color: "#ea580c", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <h4 style={{ margin: 0, fontSize: "0.96rem", fontWeight: "800", color: "#0f172a" }}>4. Condition &amp; Maintenance</h4>
-                      <span style={{ fontSize: "0.76rem", color: "#64748b" }}>Readings, operational status, and service dates</span>
-                    </div>
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Operating Condition *
-                      </label>
-                      <select
-                        required
-                        value={unitForm.operatingCondition}
-                        onChange={(e) => setUnitForm({ ...unitForm, operatingCondition: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem", background: "#fff" }}
-                      >
-                        {OPERATING_CONDITIONS.map((c) => (
-                          <option key={c} value={c}>{c}</option>
-                        ))}
-                      </select>
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">Next Service Meter</label>
+                        <input
+                          type="number"
+                          min="0"
+                          placeholder="0"
+                          value={unitForm.nextServiceMeterReading}
+                          onChange={(e) => updateUnitField("nextServiceMeterReading", e.target.value)}
+                          className="wz-unit-input"
+                        />
+                      </div>
                     </div>
 
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Current Meter Reading
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        placeholder="e.g. 640"
-                        value={unitForm.currentMeterReading}
-                        onChange={(e) => setUnitForm({ ...unitForm, currentMeterReading: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
+                    <div className="wz-unit-field">
+                      <label className="wz-unit-label">Service Notes</label>
+                      <textarea
+                        rows="2"
+                        placeholder="Workshop remarks (optional)"
+                        value={unitForm.conditionNotes}
+                        onChange={(e) => updateUnitField("conditionNotes", e.target.value)}
+                        className="wz-unit-textarea"
                       />
                     </div>
 
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Meter Reading Unit
-                      </label>
-                      <select
-                        value={unitForm.meterReadingUnit}
-                        onChange={(e) => setUnitForm({ ...unitForm, meterReadingUnit: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem", background: "#fff" }}
-                      >
-                        <option value="Hours">Hours</option>
-                        <option value="Kilometers">Kilometers</option>
-                        <option value="Hectares">Hectares</option>
-                      </select>
-                    </div>
-                  </div>
+                    <div className="wz-unit-section-divider">
+                      <span className="wz-unit-eyebrow">Ownership</span>
+                      <div className="wz-unit-grid-3">
+                        <div className="wz-unit-field">
+                          <label className="wz-unit-label">Acquired Date</label>
+                          <input
+                            type="date"
+                            value={unitForm.acquisitionDate}
+                            onChange={(e) => updateUnitField("acquisitionDate", e.target.value)}
+                            className="wz-unit-input"
+                          />
+                        </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Last Service Date
-                      </label>
-                      <input
-                        type="date"
-                        value={unitForm.lastServiceDate}
-                        onChange={(e) => setUnitForm({ ...unitForm, lastServiceDate: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
-                    </div>
+                        <div className="wz-unit-field">
+                          <label className="wz-unit-label">Cost (₱)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1000"
+                            placeholder="0"
+                            value={unitForm.acquisitionCost}
+                            onChange={(e) => updateUnitField("acquisitionCost", e.target.value)}
+                            className={`wz-unit-input ${formErrors.acquisitionCost ? "is-error" : ""}`}
+                          />
+                          {formErrors.acquisitionCost && (
+                            <span className="wz-unit-error">{formErrors.acquisitionCost}</span>
+                          )}
+                        </div>
 
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Last Service Meter Reading
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder="e.g. 500"
-                        value={unitForm.lastServiceMeterReading}
-                        onChange={(e) => setUnitForm({ ...unitForm, lastServiceMeterReading: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
+                        <div className="wz-unit-field">
+                          <label className="wz-unit-label">Source</label>
+                          <select
+                            value={unitForm.acquisitionSource}
+                            onChange={(e) => updateUnitField("acquisitionSource", e.target.value)}
+                            className="wz-unit-select"
+                          >
+                            {ACQUISITION_SOURCES.map((s) => (
+                              <option key={s} value={s}>{s}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Next Service Date
-                      </label>
-                      <input
-                        type="date"
-                        value={unitForm.nextServiceDate}
-                        onChange={(e) => setUnitForm({ ...unitForm, nextServiceDate: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Next Service Meter Reading
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder="e.g. 750"
-                        value={unitForm.nextServiceMeterReading}
-                        onChange={(e) => setUnitForm({ ...unitForm, nextServiceMeterReading: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                      Condition &amp; Workshop Notes
-                    </label>
-                    <textarea
-                      rows="2"
-                      placeholder="e.g. Tier-4 diesel filter replaced; hydraulics pressure calibrated."
-                      value={unitForm.conditionNotes}
-                      onChange={(e) => setUnitForm({ ...unitForm, conditionNotes: e.target.value })}
-                      style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem", fontFamily: "inherit" }}
-                    />
-                  </div>
-                </div>
-
-                {/* 5. Ownership & Location Card */}
-                <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "18px 20px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid #f1f5f9" }}>
-                    <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: "#f5f3ff", color: "#7c3aed", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                        <polyline points="9 22 9 12 15 12 15 22" />
-                      </svg>
-                    </div>
-                    <div>
-                      <h4 style={{ margin: 0, fontSize: "0.96rem", fontWeight: "800", color: "#0f172a" }}>5. Ownership &amp; Location</h4>
-                      <span style={{ fontSize: "0.76rem", color: "#64748b" }}>Acquisition details, asset costs, and primary storage depot</span>
-                    </div>
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Acquisition Date
-                      </label>
-                      <input
-                        type="date"
-                        value={unitForm.acquisitionDate}
-                        onChange={(e) => setUnitForm({ ...unitForm, acquisitionDate: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Acquisition Cost (₱) — Manager Only
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="1000"
-                        placeholder="e.g. 1850000"
-                        value={unitForm.acquisitionCost}
-                        onChange={(e) => setUnitForm({ ...unitForm, acquisitionCost: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
-                    </div>
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Acquisition Source
-                      </label>
-                      <select
-                        value={unitForm.acquisitionSource}
-                        onChange={(e) => setUnitForm({ ...unitForm, acquisitionSource: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem", background: "#fff" }}
-                      >
-                        {ACQUISITION_SOURCES.map((s) => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Storage Depot Location
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Main Depot Shed A, Malaybalay"
-                        value={unitForm.storageLocation}
-                        onChange={(e) => setUnitForm({ ...unitForm, storageLocation: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* 6. Other Info Card */}
-                <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "18px 20px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid #f1f5f9" }}>
-                    <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: "#f1f5f9", color: "#475569", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                        <polyline points="14 2 14 8 20 8" />
-                        <line x1="16" y1="13" x2="8" y2="13" />
-                        <line x1="16" y1="17" x2="8" y2="17" />
-                        <polyline points="10 9 9 9 8 9" />
-                      </svg>
-                    </div>
-                    <div>
-                      <h4 style={{ margin: 0, fontSize: "0.96rem", fontWeight: "800", color: "#0f172a" }}>6. Restrictions &amp; Internal Notes</h4>
-                      <span style={{ fontSize: "0.76rem", color: "#64748b" }}>Operational limitations for farmers and internal staff documentation</span>
-                    </div>
-                  </div>
-
-                  <div style={{ marginBottom: "14px" }}>
-                    <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                      Operating Restrictions (Shown to farmers &amp; booking staff)
-                    </label>
-                    <textarea
-                      rows="2"
-                      placeholder="e.g. Requires dry field conditions. Incline limit 15°. Flatbed hauler delivery mandatory."
-                      value={unitForm.operatingRestrictions}
-                      onChange={(e) => setUnitForm({ ...unitForm, operatingRestrictions: e.target.value })}
-                      style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem", fontFamily: "inherit" }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                      Staff &amp; Internal Notes (Manager / Staff Only)
-                    </label>
-                    <textarea
-                      rows="2"
-                      placeholder="e.g. Operator manual kept in office cabinet 3. Insurance policy renews annually in December."
-                      value={unitForm.notes}
-                      onChange={(e) => setUnitForm({ ...unitForm, notes: e.target.value })}
-                      style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem", fontFamily: "inherit" }}
-                    />
-                  </div>
-                </div>
+                  </>
+                )}
               </div>
 
-              {/* Sticky Bottom Actions Footer */}
-              <div
-                style={{
-                  padding: "14px 24px",
-                  borderTop: "1px solid #e2e8f0",
-                  background: "#ffffff",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  flexShrink: 0,
-                  boxShadow: "0 -2px 8px rgba(0,0,0,0.03)",
-                }}
-              >
-                <div style={{ fontSize: "0.8rem", color: "#64748b" }}>
-                  <span style={{ color: "#e11d48", fontWeight: "700" }}>*</span> Required fields must be completed
+              {/* Footer */}
+              <div className="wz-booking-modal-footer">
+                <div style={{ fontSize: "0.78rem", color: unitSaveError ? "#e11d48" : "#64748b", fontWeight: unitSaveError ? 600 : 500 }}>
+                  {unitSaveError ? (
+                    unitSaveError
+                  ) : (
+                    <>
+                      <span style={{ color: "#e11d48", fontWeight: 700 }}>*</span> Required
+                    </>
+                  )}
                 </div>
 
-                <div style={{ display: "flex", gap: "10px" }}>
+                <div className="wz-modal-footer-actions">
                   <button
                     type="button"
+                    disabled={savingUnit}
                     onClick={() => setShowAddModal(false)}
-                    style={{
-                      padding: "9px 20px",
-                      background: "#f1f5f9",
-                      color: "#475569",
-                      border: "1px solid #cbd5e1",
-                      borderRadius: "8px",
-                      fontSize: "0.85rem",
-                      cursor: "pointer",
-                      fontWeight: "600",
-                    }}
+                    className="wz-modal-btn-close"
                   >
                     Cancel
                   </button>
 
                   <button
                     type="submit"
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      padding: "9px 26px",
-                      background: "var(--wz-primary-navy)",
-                      color: "#ffffff",
-                      border: "none",
-                      borderRadius: "8px",
-                      fontSize: "0.85rem",
-                      cursor: "pointer",
-                      fontWeight: "700",
-                      boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                    }}
+                    disabled={savingUnit}
+                    className="wz-modal-btn-save wz-unit-btn-save"
                   >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
-                    {editingUnit ? "Update Unit" : "Save Machinery Unit"}
+                    {savingUnit ? "Saving..." : editingUnit ? "Update Unit" : "Save Unit"}
                   </button>
                 </div>
               </div>
