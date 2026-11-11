@@ -183,9 +183,6 @@ export default function Units() {
   const [filterCondition, setFilterCondition] = useState("All");
   const [sortBy, setSortBy] = useState("newest");
 
-  // View Mode: 'table' (primary required view) or 'grid' (cards)
-  const [viewMode, setViewMode] = useState("table");
-
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(() => {
@@ -1305,33 +1302,6 @@ export default function Units() {
           </div>
 
           <div className="wz-units-right-actions">
-            {/* View Mode Toggle (Table / Grid) */}
-            <div className="wz-view-toggle">
-              <button
-                className={`wz-view-btn ${viewMode === "table" ? "active" : ""}`}
-                onClick={() => setViewMode("table")}
-                title="Table View"
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <line x1="3" y1="6" x2="21" y2="6" />
-                  <line x1="3" y1="12" x2="21" y2="12" />
-                  <line x1="3" y1="18" x2="21" y2="18" />
-                </svg>
-              </button>
-              <button
-                className={`wz-view-btn ${viewMode === "grid" ? "active" : ""}`}
-                onClick={() => setViewMode("grid")}
-                title="Card Grid View"
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <rect x="3" y="3" width="7" height="7" rx="1" />
-                  <rect x="14" y="3" width="7" height="7" rx="1" />
-                  <rect x="14" y="14" width="7" height="7" rx="1" />
-                  <rect x="3" y="14" width="7" height="7" rx="1" />
-                </svg>
-              </button>
-            </div>
-
             {/* Add Unit Button */}
             <button
               className="wz-btn-add-unit"
@@ -1342,7 +1312,7 @@ export default function Units() {
           </div>
         </div>
 
-        {/* ================= Primary Content: Table or Grid View ================= */}
+        {/* ================= Primary Content: List / Table View ================= */}
         {loading ? (
           <div
             style={{
@@ -1373,7 +1343,7 @@ export default function Units() {
               No units matched your filter or search query. Try clearing your search or adding a new unit.
             </p>
           </div>
-        ) : viewMode === "table" ? (
+        ) : (
           /* ================= Primary Table View ================= */
           <div className="wz-table-card" style={{ padding: 0, overflow: "hidden" }}>
             <div className="wz-table-responsive">
@@ -1517,109 +1487,6 @@ export default function Units() {
                 </tbody>
               </table>
             </div>
-          </div>
-        ) : (
-          /* ================= Optional Card Grid View ================= */
-          <div className="wz-units-container">
-            {paginatedUnits.map((u) => {
-              const cond = u.operatingCondition || (
-                u.status === "Available" ? "Operational" :
-                ["Maintenance", "Repair"].includes(u.status) ? "Under Maintenance" : "Retired"
-              );
-
-              return (
-                <div key={u._id || u.id || u.unitId} className="wz-unit-row-card">
-                  {/* Photo */}
-                  <div className="wz-unit-thumb-wrap">
-                    <img
-                      src={u.imageUrl || "https://images.unsplash.com/photo-1592982537447-7440770cbfc9?auto=format&fit=crop&w=700&q=80"}
-                      alt={u.name}
-                      className="wz-unit-thumb"
-                    />
-                  </div>
-
-                  {/* Brand & Name */}
-                  <div className="wz-unit-col-brand">
-                    <span className="wz-unit-code-badge" style={{ marginBottom: "4px" }}>{u.unitId}</span>
-                    {u.brand && <span className="wz-unit-brand-name">{u.brand}</span>}
-                    <h3 className="wz-unit-model-title">{u.name}</h3>
-                    <div style={{ marginTop: "4px" }}>
-                      {cond === "Operational" ? (
-                        <span className="wz-cond-badge wz-cond-operational">Operational</span>
-                      ) : cond === "Under Maintenance" ? (
-                        <span className="wz-cond-badge wz-cond-maintenance">Under Maintenance</span>
-                      ) : (
-                        <span className="wz-cond-badge wz-cond-retired">Retired</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Specs: Type */}
-                  <div className="wz-unit-col-spec">
-                    <span className="wz-unit-spec-label">Type</span>
-                    <span className="wz-unit-spec-value">{u.category}</span>
-                  </div>
-
-                  {/* Specs: Meter */}
-                  <div className="wz-unit-col-spec">
-                    <span className="wz-unit-spec-label">Meter</span>
-                    <span className="wz-unit-spec-value">{u.currentMeterReading || u.operatingHours || 0} {u.meterReadingUnit || "hrs"}</span>
-                  </div>
-
-                  {/* Price */}
-                  <div className="wz-unit-col-price">
-                    <span className="wz-unit-price-label">Rental Rate</span>
-                    <div>
-                      <span className="wz-unit-price-val">₱{Number(u.memberRate || u.ratePerDay).toLocaleString()}</span>
-                      <span className="wz-unit-price-unit"> {u.pricingUnit === "Per Hectare" ? "/hec" : u.pricingUnit === "Per Hour" ? "/hr" : "/day"}</span>
-                    </div>
-                  </div>
-
-                  {/* Assigned Driver */}
-                  <div className="wz-unit-col-spec" style={{ minWidth: "130px" }}>
-                    <span className="wz-unit-spec-label">Assigned Driver</span>
-                    <div
-                      className="wz-unit-spec-val"
-                      style={{
-                        fontWeight: "700",
-                        color: u.assignedDriver && u.assignedDriver !== "Unassigned" ? "#0f172a" : "#94a3b8",
-                        fontStyle: u.assignedDriver && u.assignedDriver !== "Unassigned" ? "normal" : "italic",
-                      }}
-                    >
-                      {u.assignedDriver && u.assignedDriver !== "Unassigned" ? u.assignedDriver : "Unassigned"}
-                    </div>
-                  </div>
-
-                  {/* Actions: ONLY Icon Buttons */}
-                  <div style={{ display: "flex", gap: "6px" }}>
-                    <button
-                      className="wz-action-icon-btn view"
-                      onClick={() => openViewDetails(u)}
-                      title="View Details"
-                      aria-label="View Details"
-                    >
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                        <circle cx="12" cy="12" r="3" />
-                      </svg>
-                    </button>
-
-                    <button
-                      className="wz-action-icon-btn status"
-                      onClick={() => openChangeStatusModal(u)}
-                      title="Change Status (Operational, Maintenance, Retire)"
-                      aria-label="Change Status"
-                    >
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="23 4 23 10 17 10" />
-                        <polyline points="1 20 1 14 7 14" />
-                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
           </div>
         )}
 
