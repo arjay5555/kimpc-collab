@@ -261,7 +261,7 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
       farmFormattedAddress,
       status: "Pending",
       paymentStatus,
-      paymentAmount: totalAmount,
+      paymentAmount: paymentStatus === "Paid" ? totalAmount : 0,
       paymentMethod,
       cashPaymentOption,
       gcashProof,
@@ -275,7 +275,7 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
         dailyRate: ratePerHectare,
         ratePerHectare,
         hectares,
-        totalPaid: totalAmount,
+        totalPaid: paymentStatus === "Paid" ? totalAmount : 0,
         paymentMethod,
         isSettled: paymentStatus === "Paid",
       },
@@ -673,7 +673,9 @@ const handleApplicationUpdate = async (req, res) => {
         if (!existing.financials) existing.financials = {};
         existing.financials.hectares = existing.hectares;
         existing.financials.ratePerHectare = rate;
-        existing.financials.totalPaid = existing.totalAmount;
+        if (existing.paymentStatus === "Paid" || existing.paymentStatus === "Settled") {
+          existing.financials.totalPaid = existing.totalAmount;
+        }
       }
       await existing.save();
 

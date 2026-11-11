@@ -474,7 +474,7 @@ export default function BookingApprovals() {
       else if (eq.includes("hauler") || eq.includes("truck")) cat = "Transport";
 
       const dailyRate = item.financials?.dailyRate || item.ratePerHectare || 2800;
-      const totalAmount = item.totalAmount || item.financials?.totalPaid || dailyRate * days;
+      const totalAmount = item.totalAmount || (dailyRate * days) || item.financials?.totalPaid;
 
       const clientName = item.memberName || item.farmerName || item.memberEmail || "Member";
       const clientEmail = item.memberEmail || item.clientEmail || `${clientName.toLowerCase().replace(/\s+/g, ".")}@example.com`;

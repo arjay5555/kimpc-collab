@@ -128,7 +128,7 @@ export default function Payments() {
     const formattedLive = liveApplications.map((app, idx) => {
       const dailyRate = app.financials?.dailyRate || app.ratePerHectare || 2800;
       const days = getDaysCount(app.startDate, app.endDate);
-      const total = Number(app.totalAmount || app.financials?.totalPaid || dailyRate * days) || 0;
+      const total = Number(app.totalAmount || (dailyRate * days) || app.financials?.totalPaid) || 0;
 
       const bookingId =
         app.displayId || (app._id ? `BK-${String(app._id).slice(-6).toUpperCase()}` : `BK-WZ${1010 + idx}`);
@@ -141,7 +141,9 @@ export default function Payments() {
 
       const dbStatusLower = String(app.paymentStatus || "").toLowerCase();
       const dbSettled =
-        dbStatusLower === "paid" || dbStatusLower === "settled" || Boolean(app.financials?.isSettled);
+        dbStatusLower === "paid" ||
+        dbStatusLower === "settled" ||
+        (!dbStatusLower && Boolean(app.financials?.isSettled) && Number(app.paymentAmount || 0) > 0);
 
       let dbPaid = 0;
       if (dbHistory.length > 0) {
