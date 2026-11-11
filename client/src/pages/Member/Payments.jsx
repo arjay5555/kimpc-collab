@@ -74,10 +74,25 @@ export default function MemberPayments() {
           (app.ratePerHectare || app.dailyRate || 2500) * (app.hectares || 1)
       ) || 0;
 
-      const isPaid = (app.paymentStatus || "").toLowerCase() === "paid" || app.isPaid;
+      const pStatus = (app.paymentStatus || "pending").toLowerCase();
+      const isPaid = pStatus === "paid" || pStatus === "settled" || app.isPaid;
+      const isPartial = !isPaid && pStatus === "partial";
+      const paidSoFar = isPaid
+        ? totalAmount
+        : isPartial
+        ? Math.min(totalAmount, Number(app.financials?.totalPaid ?? app.paymentAmount ?? 0) || 0)
+        : 0;
+      const balanceDue = Math.max(0, totalAmount - paidSoFar);
+
       if (isPaid) {
         totalPaid += totalAmount;
         paidCount++;
+      } else if (isPartial) {
+        totalPaid += paidSoFar;
+        if (!["rejected", "cancelled", "voided"].includes((app.status || "").toLowerCase())) {
+          pendingDue += balanceDue;
+          pendingCount++;
+        }
       } else if (!["rejected", "cancelled", "voided"].includes((app.status || "").toLowerCase())) {
         pendingDue += totalAmount;
         pendingCount++;
@@ -91,7 +106,7 @@ export default function MemberPayments() {
   const filteredApps = useMemo(() => {
     return applications.filter((app) => {
       const pStatus = (app.paymentStatus || "pending").toLowerCase();
-      const isPaid = pStatus === "paid" || app.isPaid;
+      const isPaid = pStatus === "paid" || pStatus === "settled" || app.isPaid;
 
       if (filter === "paid" && !isPaid) return false;
       if (filter === "pending" && isPaid) return false;
@@ -375,12 +390,20 @@ export default function MemberPayments() {
             </thead>
             <tbody>
               {filteredApps.map((app) => {
-                const isPaid = (app.paymentStatus || "").toLowerCase() === "paid" || app.isPaid;
+                const pStatus = (app.paymentStatus || "pending").toLowerCase();
+                const isPaid = pStatus === "paid" || pStatus === "settled" || app.isPaid;
+                const isPartial = !isPaid && pStatus === "partial";
                 const totalAmount = Number(
                   app.totalAmount ||
                     app.financials?.totalPaid ||
                     (app.ratePerHectare || app.dailyRate || 2500) * (app.hectares || 1)
                 ) || 0;
+                const paidAmount = isPaid
+                  ? totalAmount
+                  : isPartial
+                  ? Math.min(totalAmount, Number(app.financials?.totalPaid ?? app.paymentAmount ?? 0) || 0)
+                  : 0;
+                const balanceDue = Math.max(0, totalAmount - paidAmount);
                 const receiptNo =
                   app.receiptNo ||
                   `REC-2026-${String(app._id || "1001").slice(-4).toUpperCase()}`;
@@ -393,6 +416,8 @@ export default function MemberPayments() {
                         className={
                           isPaid
                             ? "wz-payment-badge-paid"
+                            : isPartial
+                            ? "wz-payment-badge-partial"
                             : "wz-payment-badge-pending"
                         }
                         style={{
@@ -401,9 +426,10 @@ export default function MemberPayments() {
                           fontSize: "0.75rem",
                           fontWeight: 700,
                           display: "inline-block",
+                          ...(isPartial ? { background: "#fef3c7", color: "#b45309" } : {}),
                         }}
                       >
-                        {isPaid ? "Paid" : "Pending"}
+                        {isPaid ? "Paid" : isPartial ? "Partial" : "Pending"}
                       </span>
                     </td>
 
@@ -459,6 +485,11 @@ export default function MemberPayments() {
                       <strong style={{ fontSize: "0.95rem", color: "#0f172a" }}>
                         ₱{totalAmount.toLocaleString()}
                       </strong>
+                      {isPartial && (
+                        <span style={{ display: "block", fontSize: "0.72rem", color: "#b45309", fontWeight: 600 }}>
+                          Paid ₱{paidAmount.toLocaleString()} · Bal ₱{balanceDue.toLocaleString()}
+                        </span>
+                      )}
                     </td>
 
                     {/* 7. Action: Receipt Voucher Modal */}
@@ -517,10 +548,16 @@ export default function MemberPayments() {
         {/* Mobile Phone Payment Cards View (Visible only on phone screens <= 768px) */}
         <div className="member-mobile-payments-list member-mobile-only" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           {filteredApps.map((app) => {
-            const isPaid = (app.paymentStatus || "").toLowerCase() === "paid" || (app.paymentStatus || "").toLowerCase() === "settled";
+            const pStatus = (app.paymentStatus || "pending").toLowerCase();
+            const isPaid = pStatus === "paid" || pStatus === "settled" || app.isPaid;
+            const isPartial = !isPaid && pStatus === "partial";
             const receiptNo = app.receiptNo || (app._id ? `INV-${String(app._id).slice(-6).toUpperCase()}` : "INV-001");
             const total = Number(app.totalAmount || (app.ratePerHectare || 2500) * (app.hectares || 1));
-            const paid = isPaid ? total : Number(app.paymentAmount || 0);
+            const paid = isPaid
+              ? total
+              : isPartial
+              ? Math.min(total, Number(app.financials?.totalPaid ?? app.paymentAmount ?? 0) || 0)
+              : 0;
             const balance = Math.max(0, total - paid);
 
             return (
@@ -545,15 +582,22 @@ export default function MemberPayments() {
                     </span>
                   </div>
                   <span
-                    className={isPaid ? "wz-payment-badge-paid" : "wz-payment-badge-pending"}
+                    className={
+                      isPaid
+                        ? "wz-payment-badge-paid"
+                        : isPartial
+                        ? "wz-payment-badge-partial"
+                        : "wz-payment-badge-pending"
+                    }
                     style={{
                       padding: "3px 10px",
                       borderRadius: "20px",
                       fontSize: "0.74rem",
                       fontWeight: 700,
+                      ...(isPartial ? { background: "#fef3c7", color: "#b45309" } : {}),
                     }}
                   >
-                    {isPaid ? "Paid" : "Pending"}
+                    {isPaid ? "Paid" : isPartial ? "Partial" : "Pending"}
                   </span>
                 </div>
 
@@ -807,6 +851,15 @@ export default function MemberPayments() {
                   <span style={{ background: "#166534", color: "#ffffff", padding: "6px 14px", borderRadius: "20px", fontWeight: 800, fontSize: "0.78rem", letterSpacing: "1px", textTransform: "uppercase" }}>
                     ✓ PAID
                   </span>
+                ) : (receiptApp.paymentStatus || "").toLowerCase() === "partial" ? (
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px" }}>
+                    <span style={{ background: "#b45309", color: "#ffffff", padding: "6px 14px", borderRadius: "20px", fontWeight: 800, fontSize: "0.78rem", letterSpacing: "1px", textTransform: "uppercase" }}>
+                      PARTIAL
+                    </span>
+                    <span style={{ fontSize: "0.74rem", color: "#92400e", fontWeight: 700 }}>
+                      Paid ₱{Number(receiptApp.financials?.totalPaid ?? receiptApp.paymentAmount ?? 0).toLocaleString()} · Balance ₱{Math.max(0, Number(receiptApp.totalAmount || 0) - Number(receiptApp.financials?.totalPaid ?? receiptApp.paymentAmount ?? 0)).toLocaleString()}
+                    </span>
+                  </div>
                 ) : (
                   <span style={{ background: "#d97706", color: "#ffffff", padding: "6px 14px", borderRadius: "20px", fontWeight: 800, fontSize: "0.78rem", letterSpacing: "1px", textTransform: "uppercase" }}>
                     PENDING

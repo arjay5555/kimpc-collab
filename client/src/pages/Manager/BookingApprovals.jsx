@@ -538,6 +538,15 @@ export default function BookingApprovals() {
         dateRange: `${item.startDate} to ${item.endDate}`,
         hasDriver,
         paymentAmount: `₱${Number(totalAmount).toLocaleString()}`,
+        totalAmountNum: Number(totalAmount) || 0,
+        paidAmountNum: (() => {
+          const hist = Array.isArray(item.paymentHistory) ? item.paymentHistory : [];
+          if (hist.length > 0) return hist.reduce((s, h) => s + (Number(h.amount) || 0), 0);
+          const pSt = String(item.paymentStatus || "").toLowerCase();
+          if (pSt === "paid" || pSt === "settled" || item.financials?.isSettled) return Number(totalAmount) || 0;
+          if (pSt === "partial") return Number(item.financials?.totalPaid ?? item.paymentAmount ?? 0) || 0;
+          return 0;
+        })(),
         paymentStatus: item.paymentStatus || (item.financials?.isSettled ? "Paid" : "Pending"),
         status: displayStatus,
         cancellationRequested: Boolean(item.cancellationRequested || s === "cancellation requested"),
@@ -574,8 +583,22 @@ export default function BookingApprovals() {
 
         const extra = bookingOverrides[b.id] || (b.rawId && bookingOverrides[b.rawId]) || {};
         const st = statusOverrides[b.id] || (b.rawId && statusOverrides[b.rawId]) || extra.status || b.status;
-        const paymentStatus = paymentRecord?.status || extra.paymentStatus || b.paymentStatus;
-        const paymentAmount = paymentRecord?.amount ? `₱${Number(paymentRecord.amount).toLocaleString()}` : (extra.paymentAmount || b.paymentAmount);
+        const normalizedLocalStatus =
+          paymentRecord?.status === "Completed"
+            ? "Paid"
+            : paymentRecord?.status === "Partial"
+            ? "Partial"
+            : null;
+        const paymentStatus = normalizedLocalStatus || extra.paymentStatus || b.paymentStatus;
+        const totalAmtNum = Number(paymentRecord?.totalAmount ?? b.totalAmountNum ?? 0) || 0;
+        const paidAmtNum =
+          paymentRecord?.amountPaid !== undefined
+            ? Number(paymentRecord.amountPaid) || 0
+            : paymentStatus === "Paid"
+            ? totalAmtNum
+            : Number(b.paidAmountNum || 0) || 0;
+        const balanceAmtNum = Math.max(0, totalAmtNum - paidAmtNum);
+        const paymentAmount = totalAmtNum > 0 ? `₱${totalAmtNum.toLocaleString()}` : extra.paymentAmount || b.paymentAmount;
         const paymentMethod = paymentRecord?.paymentMethod || extra.paymentMethod || b.paymentMethod;
         const paymentType = paymentRecord?.paymentType || extra.paymentType || b.paymentType || "Full Rental Payment";
         const dateReceived = paymentRecord?.dateReceived || extra.dateReceived || b.paymentDateTime || b.dateReceived || (paymentStatus === "Paid" ? b.bookingDate : "");
@@ -591,6 +614,8 @@ export default function BookingApprovals() {
           status: st,
           paymentStatus,
           paymentAmount,
+          paidAmountNum: paidAmtNum,
+          balanceAmountNum: balanceAmtNum,
           paymentMethod,
           paymentType,
           dateReceived,
@@ -1738,7 +1763,13 @@ export default function BookingApprovals() {
                     {viewingBooking.status}
                   </span>
                   <span
-                    className={viewingBooking.paymentStatus === "Paid" ? "wz-payment-badge-paid" : "wz-payment-badge-pending"}
+                    className={
+                      viewingBooking.paymentStatus === "Paid"
+                        ? "wz-payment-badge-paid"
+                        : viewingBooking.paymentStatus === "Partial"
+                        ? "wz-payment-badge-partial"
+                        : "wz-payment-badge-pending"
+                    }
                     style={{ fontSize: "0.72rem", padding: "3px 8px" }}
                   >
                     {viewingBooking.paymentStatus}
@@ -2206,7 +2237,16 @@ export default function BookingApprovals() {
                   <div className="wz-clean-card">
                     <div className="wz-clean-card-title">
                       <span>Payment Summary</span>
-                      <span className={viewingBooking.paymentStatus === "Paid" ? "wz-payment-badge-paid" : "wz-payment-badge-pending"} style={{ fontSize: "0.72rem", padding: "3px 9px" }}>
+                      <span
+                        className={
+                          viewingBooking.paymentStatus === "Paid"
+                            ? "wz-payment-badge-paid"
+                            : viewingBooking.paymentStatus === "Partial"
+                            ? "wz-payment-badge-partial"
+                            : "wz-payment-badge-pending"
+                        }
+                        style={{ fontSize: "0.72rem", padding: "3px 9px" }}
+                      >
                         {viewingBooking.paymentStatus}
                       </span>
                     </div>
@@ -2218,6 +2258,11 @@ export default function BookingApprovals() {
                         <div style={{ fontSize: "1.4rem", fontWeight: 900, color: "#0f172a", lineHeight: 1.15 }}>
                           {viewingBooking.paymentAmount || "₱0.00"}
                         </div>
+                        {viewingBooking.paymentStatus === "Partial" && (
+                          <div style={{ fontSize: "0.74rem", fontWeight: 600, color: "#b45309", marginTop: "3px" }}>
+                            Paid ₱{Number(viewingBooking.paidAmountNum || 0).toLocaleString()} · Balance ₱{Number(viewingBooking.balanceAmountNum || 0).toLocaleString()}
+                          </div>
+                        )}
                       </div>
 
                       <div style={{ textAlign: "right" }}>

@@ -118,7 +118,7 @@ export default function Payments() {
     return () => clearInterval(interval);
   }, []);
 
-  // Merge live applications into invoices
+  // Merge live applications into invoices (strictly 1 transaction row per booking)
   const allInvoices = useMemo(() => {
     let storedPayments = {};
     try {
@@ -128,24 +128,82 @@ export default function Payments() {
     const formattedLive = liveApplications.map((app, idx) => {
       const dailyRate = app.financials?.dailyRate || app.ratePerHectare || 2800;
       const days = getDaysCount(app.startDate, app.endDate);
-      const total = app.totalAmount || app.financials?.totalPaid || dailyRate * days;
-      const isPaid = app.paymentStatus === "Paid" || app.financials?.isSettled;
-      const isOverdue = !isPaid && app.endDate && new Date(app.endDate) < new Date();
+      const total = Number(app.totalAmount || app.financials?.totalPaid || dailyRate * days) || 0;
 
-      const bookingId = app.displayId || (app._id ? `BK-${String(app._id).slice(-6).toUpperCase()}` : `BK-WZ${1010 + idx}`);
+      const bookingId =
+        app.displayId || (app._id ? `BK-${String(app._id).slice(-6).toUpperCase()}` : `BK-WZ${1010 + idx}`);
       const rawId = app._id || app.id;
       const pRec = storedPayments[bookingId] || (rawId && storedPayments[rawId]) || null;
 
-      const finalStatus = pRec?.status || (isPaid ? "Completed" : (isOverdue ? "Overdue" : "Awaiting"));
-      const finalAmount = pRec?.amount !== undefined ? Number(pRec.amount) : total;
-      const finalMethod = pRec?.paymentMethod || app.paymentMethod || "Cash";
-      const finalType = pRec?.paymentType || "Full Rental Payment";
-      const finalDateReceived = pRec?.dateReceived || app.paymentDateTime || (finalStatus === "Completed" ? (app.endDate || app.startDate || new Date().toISOString().slice(0, 10)) : "");
-      const finalReceiptNo = pRec?.receiptNo || app.receiptNo || `OR-${new Date().getFullYear()}-${String(app._id || idx).slice(-4).toUpperCase()}`;
-      const finalReferenceNumber = pRec?.referenceNumber || app.paymentReference || app.referenceNumber || "";
+      const dbHistory = Array.isArray(app.paymentHistory) ? app.paymentHistory : [];
+      const localHistory = Array.isArray(pRec?.paymentHistory) ? pRec.paymentHistory : [];
+      const paymentHistory = dbHistory.length >= localHistory.length ? dbHistory : localHistory;
+
+      const dbStatusLower = String(app.paymentStatus || "").toLowerCase();
+      const dbSettled =
+        dbStatusLower === "paid" || dbStatusLower === "settled" || Boolean(app.financials?.isSettled);
+
+      let dbPaid = 0;
+      if (dbHistory.length > 0) {
+        dbPaid = dbHistory.reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
+      } else if (dbSettled) {
+        dbPaid = total;
+      } else if (dbStatusLower === "partial") {
+        dbPaid = Number(app.financials?.totalPaid ?? app.paymentAmount ?? 0) || 0;
+      }
+
+      let localPaid = 0;
+      if (pRec) {
+        if (pRec.amountPaid !== undefined) {
+          localPaid = Number(pRec.amountPaid) || 0;
+        } else if (localHistory.length > 0) {
+          localPaid = localHistory.reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
+        } else if (pRec.status === "Completed" && pRec.totalAmount !== undefined) {
+          localPaid = Number(pRec.totalAmount) || total;
+        }
+      }
+
+      const useLocalAhead =
+        localHistory.length > dbHistory.length ||
+        (pRec?.amountPaid !== undefined && localPaid > dbPaid);
+      const rawPaid = useLocalAhead ? localPaid : dbPaid;
+      const amountPaid = total > 0 ? Math.min(total, Math.max(0, rawPaid)) : Math.max(0, rawPaid);
+      const balance = Math.max(0, total - amountPaid);
+
+      const isPaid = dbSettled || (total > 0 && amountPaid >= total);
+      const isPartial = !isPaid && amountPaid > 0;
+      const isOverdue = !isPaid && !isPartial && app.endDate && new Date(app.endDate) < new Date();
+      const finalStatus = isPaid ? "Completed" : isPartial ? "Partial" : isOverdue ? "Overdue" : "Awaiting";
+
+      const latestInstallment = paymentHistory.length > 0 ? paymentHistory[paymentHistory.length - 1] : null;
+      const finalMethod =
+        latestInstallment?.paymentMethod || pRec?.paymentMethod || app.paymentMethod || "Cash";
+      const finalType =
+        isPartial ? "Partial Rental Payment" : pRec?.paymentType || "Full Rental Payment";
+      const finalDateReceived =
+        latestInstallment?.dateTime ||
+        pRec?.dateReceived ||
+        app.paymentDateTime ||
+        (finalStatus === "Completed" ? app.endDate || app.startDate || new Date().toISOString().slice(0, 10) : "");
+      const finalReceiptNo =
+        latestInstallment?.receiptNo ||
+        pRec?.receiptNo ||
+        app.receiptNo ||
+        `OR-${new Date().getFullYear()}-${String(app._id || idx).slice(-4).toUpperCase()}`;
+      const finalReferenceNumber =
+        latestInstallment?.referenceNumber ??
+        pRec?.referenceNumber ??
+        app.paymentReference ??
+        app.referenceNumber ??
+        "";
       const finalProof = pRec?.proofOfPayment || app.gcashProof || null;
       const finalNotes = pRec?.notes || "";
-      const finalRecordedBy = pRec?.receivedBy || pRec?.recordedBy || app.receivedBy || activeReceiverName;
+      const finalRecordedBy =
+        latestInstallment?.receivedBy ||
+        pRec?.receivedBy ||
+        pRec?.recordedBy ||
+        app.receivedBy ||
+        activeReceiverName;
 
       return {
         id: bookingId,
@@ -159,7 +217,11 @@ export default function Payments() {
         daysCount: days,
         hectares: app.hectares || 1,
         rentalPeriod: app.hectares ? `${app.hectares} ha (${days}d)` : `${days} Day${days > 1 ? "s" : ""}`,
-        amount: finalAmount,
+        amount: total,
+        totalAmount: total,
+        amountPaid,
+        balance,
+        paymentHistory,
         dueDate: app.endDate || app.startDate || "2028-08-15",
         paymentMethod: finalMethod,
         paymentType: finalType,
@@ -181,40 +243,73 @@ export default function Payments() {
       };
     });
 
-    const formattedMock = invoices.map((inv) => {
-      const pRec = storedPayments[inv.id] || null;
-      const finalStatus = pRec?.status || inv.status;
-      const finalAmount = pRec?.amount !== undefined ? Number(pRec.amount) : inv.amount;
-      const finalMethod = pRec?.paymentMethod || inv.paymentMethod || "Cash";
-      const finalType = pRec?.paymentType || "Full Rental Payment";
-      const finalDateReceived = pRec?.dateReceived || (finalStatus === "Completed" ? inv.dueDate : "");
-      const finalReceiptNo = pRec?.receiptNo || inv.receiptNo || `OR-${new Date().getFullYear()}-${String(inv.id).replace(/\D/g, "")}`;
-      const finalReferenceNumber = pRec?.referenceNumber || inv.referenceNumber || "";
-      const finalProof = pRec?.proofOfPayment || inv.gcashProof || null;
-      const finalNotes = pRec?.notes || "";
-      const finalRecordedBy = pRec?.receivedBy || pRec?.recordedBy || inv.receivedBy || activeReceiverName;
+    const liveIdSet = new Set(formattedLive.map((item) => item.id));
+    const liveRawIdSet = new Set(formattedLive.map((item) => String(item.rawId || "")).filter(Boolean));
 
-      return {
-        ...inv,
-        amount: finalAmount,
-        status: finalStatus,
-        paymentMethod: finalMethod,
-        paymentType: finalType,
-        dateReceived: finalDateReceived,
-        receiptNo: finalReceiptNo,
-        referenceNumber: finalReferenceNumber,
-        proofOfPayment: finalProof,
-        gcashProof: finalProof,
-        notes: finalNotes,
-        receivedBy: finalRecordedBy,
-        recordedBy: finalRecordedBy,
-      };
-    });
+    const formattedMock = invoices
+      .filter((inv) => !liveIdSet.has(inv.id) && (!inv.rawId || !liveRawIdSet.has(String(inv.rawId))))
+      .map((inv) => {
+        const pRec = storedPayments[inv.id] || null;
+        const baseTotal = Number(inv.totalAmount ?? inv.amount ?? 0) || 0;
+        const localHist = Array.isArray(pRec?.paymentHistory)
+          ? pRec.paymentHistory
+          : Array.isArray(inv.paymentHistory)
+          ? inv.paymentHistory
+          : [];
+        const mockPaid =
+          pRec?.amountPaid !== undefined
+            ? Number(pRec.amountPaid) || 0
+            : inv.amountPaid !== undefined
+            ? Number(inv.amountPaid) || 0
+            : pRec?.status === "Completed" || inv.status === "Completed"
+            ? baseTotal
+            : 0;
+        const amountPaid = baseTotal > 0 ? Math.min(baseTotal, Math.max(0, mockPaid)) : Math.max(0, mockPaid);
+        const balance = Math.max(0, baseTotal - amountPaid);
+        const finalStatus =
+          baseTotal > 0 && amountPaid >= baseTotal
+            ? "Completed"
+            : amountPaid > 0
+            ? "Partial"
+            : pRec?.status || inv.status;
+        const finalMethod = pRec?.paymentMethod || inv.paymentMethod || "Cash";
+        const finalType =
+          finalStatus === "Partial" ? "Partial Rental Payment" : pRec?.paymentType || "Full Rental Payment";
+        const finalDateReceived = pRec?.dateReceived || (finalStatus === "Completed" ? inv.dueDate : "");
+        const finalReceiptNo =
+          pRec?.receiptNo ||
+          inv.receiptNo ||
+          `OR-${new Date().getFullYear()}-${String(inv.id).replace(/\D/g, "")}`;
+        const finalReferenceNumber = pRec?.referenceNumber || inv.referenceNumber || "";
+        const finalProof = pRec?.proofOfPayment || inv.gcashProof || null;
+        const finalNotes = pRec?.notes || "";
+        const finalRecordedBy = pRec?.receivedBy || pRec?.recordedBy || inv.receivedBy || activeReceiverName;
+
+        return {
+          ...inv,
+          amount: baseTotal,
+          totalAmount: baseTotal,
+          amountPaid,
+          balance,
+          paymentHistory: localHist,
+          status: finalStatus,
+          paymentMethod: finalMethod,
+          paymentType: finalType,
+          dateReceived: finalDateReceived,
+          receiptNo: finalReceiptNo,
+          referenceNumber: finalReferenceNumber,
+          proofOfPayment: finalProof,
+          gcashProof: finalProof,
+          notes: finalNotes,
+          receivedBy: finalRecordedBy,
+          recordedBy: finalRecordedBy,
+        };
+      });
 
     return [...formattedLive, ...formattedMock];
   }, [liveApplications, invoices, activeReceiverName]);
 
-  // Compute live KPI metrics
+  // Compute live KPI metrics (collected cash vs remaining balances)
   const kpiStats = useMemo(() => {
     let completedSum = 0;
     let completedCount = 0;
@@ -224,15 +319,18 @@ export default function Payments() {
     let overdueCount = 0;
 
     allInvoices.forEach((inv) => {
-      const amt = Number(inv.amount) || 0;
+      const total = Number(inv.amount) || 0;
+      const paid = Number(inv.amountPaid ?? (inv.status === "Completed" ? total : 0)) || 0;
+      const remaining = Math.max(0, total - paid);
+
+      completedSum += paid;
       if (inv.status === "Completed") {
-        completedSum += amt;
         completedCount += 1;
       } else if (inv.status === "Overdue") {
-        overdueSum += amt;
+        overdueSum += remaining;
         overdueCount += 1;
       } else {
-        awaitingSum += amt;
+        awaitingSum += remaining;
         awaitingCount += 1;
       }
     });
@@ -247,14 +345,41 @@ export default function Payments() {
     };
   }, [allInvoices]);
 
-  // Settle invoice directly from manager financials
+  // Settle remaining invoice balance directly from manager financials
   const handleSettleInvoice = async (inv) => {
     const settledAt = toLocalDateTimeInputValue();
+    const total = Number(inv.amount) || 0;
+    const paidSoFar = Number(inv.amountPaid || 0) || 0;
+    const remaining = Math.max(0, total - paidSoFar);
+    const updatedHistory =
+      remaining > 0
+        ? [
+            ...(Array.isArray(inv.paymentHistory) ? inv.paymentHistory : []),
+            {
+              receiptNo: inv.receiptNo || `OR-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`,
+              amount: remaining,
+              paymentMethod: inv.paymentMethod || "Cash",
+              referenceNumber: inv.referenceNumber || "",
+              dateTime: settledAt,
+              receivedBy: activeReceiverName,
+            },
+          ]
+        : inv.paymentHistory || [];
+
     if (!inv.rawId) {
       setInvoices((prev) =>
         prev.map((item) =>
           item.id === inv.id
-            ? { ...item, status: "Completed", dateReceived: settledAt, receivedBy: activeReceiverName, recordedBy: activeReceiverName }
+            ? {
+                ...item,
+                status: "Completed",
+                amountPaid: total,
+                balance: 0,
+                paymentHistory: updatedHistory,
+                dateReceived: settledAt,
+                receivedBy: activeReceiverName,
+                recordedBy: activeReceiverName,
+              }
             : item
         )
       );
@@ -262,6 +387,9 @@ export default function Payments() {
         setViewingPayment((prev) => ({
           ...prev,
           status: "Completed",
+          amountPaid: total,
+          balance: 0,
+          paymentHistory: updatedHistory,
           dateReceived: settledAt,
           receivedBy: activeReceiverName,
           recordedBy: activeReceiverName,
@@ -273,7 +401,7 @@ export default function Payments() {
 
     if (
       !window.confirm(
-        `Mark payment for booking ${inv.id} (${inv.clientName}) as Completed (Paid)? This will verify payment, issue official receipt, and notify the member.`
+        `Mark remaining balance (₱${remaining.toLocaleString()}) for booking ${inv.id} (${inv.clientName}) as Completed (Paid)?`
       )
     ) {
       return;
@@ -291,11 +419,39 @@ export default function Payments() {
         },
       });
       if (res.ok) {
+        try {
+          const stored = JSON.parse(localStorage.getItem("kimpc_booking_payments") || "{}");
+          const settledRecord = {
+            bookingId: inv.id,
+            rawId: inv.rawId,
+            clientName: inv.clientName,
+            machineryModel: inv.machineryModel,
+            totalAmount: total,
+            amount: total,
+            amountPaid: total,
+            balance: 0,
+            paymentType: "Full Rental Payment",
+            paymentMethod: inv.paymentMethod || "Cash",
+            referenceNumber: inv.referenceNumber || "",
+            dateReceived: settledAt,
+            receiptNo: inv.receiptNo,
+            receivedBy: activeReceiverName,
+            recordedBy: activeReceiverName,
+            status: "Completed",
+            paymentHistory: updatedHistory,
+          };
+          stored[inv.id] = settledRecord;
+          stored[inv.rawId] = settledRecord;
+          localStorage.setItem("kimpc_booking_payments", JSON.stringify(stored));
+        } catch (err) {}
         setFeedback(`Payment settled for ${inv.id}! Member notified and receipt ready.`);
         if (viewingPayment && viewingPayment.id === inv.id) {
           setViewingPayment((prev) => ({
             ...prev,
             status: "Completed",
+            amountPaid: total,
+            balance: 0,
+            paymentHistory: updatedHistory,
             dateReceived: settledAt,
             receivedBy: activeReceiverName,
             recordedBy: activeReceiverName,
@@ -365,6 +521,20 @@ export default function Payments() {
   // Download individual transaction receipt summary (.txt)
   const handleDownloadSingleTransaction = (inv) => {
     if (!inv) return;
+    const totalFee = Number(inv.amount || 0);
+    const paidTotal = Number(inv.amountPaid ?? (inv.status === "Completed" ? totalFee : 0)) || 0;
+    const remainingBal = Math.max(0, totalFee - paidTotal);
+    const historyLines =
+      Array.isArray(inv.paymentHistory) && inv.paymentHistory.length > 0
+        ? [
+            "-----------------------------------------------------------",
+            "INSTALLMENT HISTORY:",
+            ...inv.paymentHistory.map(
+              (h, idx) =>
+                `  #${idx + 1} ${h.receiptNo || "OR"} | PHP ${Number(h.amount || 0).toLocaleString()} | ${h.paymentMethod || "Cash"}${h.referenceNumber ? ` (Ref: ${h.referenceNumber})` : ""} | ${formatPaymentDateTimeDisplay(h.dateTime)} | By: ${h.receivedBy || activeReceiverName}`
+            ),
+          ]
+        : [];
     const lines = [
       "===========================================================",
       "  KALILANGAN IRRIGATORS MULTI-PURPOSE COOPERATIVE (KIMPC)  ",
@@ -385,9 +555,12 @@ export default function Payments() {
       "-----------------------------------------------------------",
       `Payment Method:   ${inv.paymentMethod || "Cash"} ${inv.cashPaymentOption ? `(${inv.cashPaymentOption})` : ""}`,
       `Payment Type:     ${inv.paymentType || "Full Rental Payment"}`,
-      `Amount Paid:      PHP ${Number(inv.amount || 0).toLocaleString()}`,
+      `Total Booking:    PHP ${totalFee.toLocaleString()}`,
+      `Amount Paid:      PHP ${paidTotal.toLocaleString()}`,
+      `Balance Due:      PHP ${remainingBal.toLocaleString()}`,
       `Received By:      ${inv.receivedBy || inv.recordedBy || activeReceiverName}`,
       `Notes:            ${inv.notes || "None"}`,
+      ...historyLines,
       "===========================================================",
       "  This document serves as an electronic transaction copy   ",
       "        Pursuant to CDA & RA 9520 Cooperative Rules        ",
@@ -443,18 +616,24 @@ export default function Payments() {
     const selected = allInvoices.find((inv) => inv.id === bId);
     const currentYear = new Date().getFullYear();
     if (selected) {
+      const isPartialSelected = (selected.status || "").toLowerCase() === "partial";
+      const remaining =
+        selected.balance !== undefined
+          ? Number(selected.balance)
+          : Math.max(0, Number(selected.amount || 0) - Number(selected.amountPaid || 0));
       setFormData((prev) => ({
         ...prev,
         bookingId: selected.id,
         rawId: selected.rawId || "",
         clientName: selected.clientName || "",
         machineryModel: selected.machineryModel || "",
-        amount: selected.amount || "",
+        amount: remaining > 0 ? remaining : selected.amount || "",
+        paymentType: isPartialSelected ? "Partial Rental Payment" : "Full Rental Payment",
         paymentMethod: selected.paymentMethod || "Cash",
-        referenceNumber: selected.referenceNumber || "",
-        receiptNo:
-          selected.receiptNo ||
-          `OR-${currentYear}-${String(selected.id).replace(/\D/g, "") || "0001"}`,
+        referenceNumber: isPartialSelected ? "" : selected.referenceNumber || "",
+        receiptNo: isPartialSelected
+          ? `OR-${currentYear}-${Date.now().toString().slice(-4)}`
+          : selected.receiptNo || `OR-${currentYear}-${String(selected.id).replace(/\D/g, "") || "0001"}`,
         proofOfPayment: selected.proofOfPayment || selected.gcashProof || "",
       }));
     } else {
@@ -471,34 +650,46 @@ export default function Payments() {
     }
   };
 
-  const openCreateModal = () => {
+  const openRecordModalForBooking = (targetBooking = null) => {
     setEditingInvoice(null);
     const nowLocal = toLocalDateTimeInputValue();
     const currentYear = new Date().getFullYear();
-    // Find first unsettled/pending booking (never a completed or paid one)
-    const pendingBooking = allInvoices.find((i) => {
-      const st = (i.status || "").toLowerCase();
-      return st !== "completed" && st !== "paid";
-    }) || null;
+    // Pick specific booking if passed, else first unsettled (Awaiting, Overdue, or Partial) booking
+    const fallbackBooking =
+      allInvoices.find((i) => {
+        const st = (i.status || "").toLowerCase();
+        return st !== "completed" && st !== "paid";
+      }) || null;
+    const picked = targetBooking && targetBooking.id ? targetBooking : fallbackBooking;
+    const isPartialPicked = (picked?.status || "").toLowerCase() === "partial";
+    const payable = picked
+      ? picked.balance !== undefined
+        ? Number(picked.balance)
+        : Math.max(0, Number(picked.amount || 0) - Number(picked.amountPaid || 0))
+      : "";
 
     setFormData({
-      bookingId: pendingBooking ? pendingBooking.id : "",
-      rawId: pendingBooking?.rawId || "",
-      clientName: pendingBooking?.clientName || "",
-      machineryModel: pendingBooking?.machineryModel || "",
-      amount: pendingBooking?.amount || "",
-      paymentType: "Full Rental Payment",
-      paymentMethod: pendingBooking?.paymentMethod || "Cash",
-      referenceNumber: pendingBooking?.referenceNumber || "",
+      bookingId: picked ? picked.id : "",
+      rawId: picked?.rawId || "",
+      clientName: picked?.clientName || "",
+      machineryModel: picked?.machineryModel || "",
+      amount: payable > 0 ? payable : picked?.amount || "",
+      paymentType: isPartialPicked ? "Partial Rental Payment" : "Full Rental Payment",
+      paymentMethod: picked?.paymentMethod || "Cash",
+      referenceNumber: isPartialPicked ? "" : picked?.referenceNumber || "",
       dateReceived: nowLocal,
-      receiptNo: pendingBooking
-        ? (pendingBooking.receiptNo || `OR-${currentYear}-${String(pendingBooking.id).replace(/\D/g, "") || "0001"}`)
+      receiptNo: picked
+        ? isPartialPicked
+          ? `OR-${currentYear}-${Date.now().toString().slice(-4)}`
+          : picked.receiptNo || `OR-${currentYear}-${String(picked.id).replace(/\D/g, "") || "0001"}`
         : `OR-${currentYear}-${Date.now().toString().slice(-4)}`,
-      proofOfPayment: pendingBooking?.proofOfPayment || pendingBooking?.gcashProof || "",
+      proofOfPayment: picked?.proofOfPayment || picked?.gcashProof || "",
       notes: "",
     });
     setIsModalOpen(true);
   };
+
+  const openCreateModal = () => openRecordModalForBooking(null);
 
   const openEditModal = (inv) => {
     setEditingInvoice(inv);
@@ -507,7 +698,7 @@ export default function Payments() {
       rawId: inv.rawId || "",
       clientName: inv.clientName || "",
       machineryModel: inv.machineryModel || "",
-      amount: inv.amount || "",
+      amount: inv.amountPaid ?? inv.amount ?? "",
       paymentType: inv.paymentType || "Full Rental Payment",
       paymentMethod: inv.paymentMethod || "Cash",
       referenceNumber: inv.referenceNumber || "",
@@ -530,6 +721,11 @@ export default function Payments() {
     e.preventDefault();
     const receiverName = activeReceiverName;
     const amountNum = Number(formData.amount) || 0;
+    if (!formData.bookingId || amountNum <= 0) {
+      setFeedback("Please select a booking and enter a payment amount greater than ₱0.");
+      return;
+    }
+
     const method = formData.paymentMethod || "Cash";
     const gcashRef = method === "GCash" ? (formData.referenceNumber || "").trim() : "";
     const resolvedDateTime = formData.dateReceived || toLocalDateTimeInputValue();
@@ -540,13 +736,57 @@ export default function Payments() {
     const resolvedMachineryModel = selectedBookingForForm?.machineryModel || formData.machineryModel;
     const resolvedRawId = selectedBookingForForm?.rawId || formData.rawId;
 
+    const totalBookingFee =
+      Number(selectedBookingForForm?.totalAmount ?? selectedBookingForForm?.amount ?? amountNum) || amountNum;
+    const existingPaid = Number(selectedBookingForForm?.amountPaid || 0) || 0;
+    const remainingBefore = totalBookingFee > 0 ? Math.max(0, totalBookingFee - existingPaid) : 0;
+
+    if (!editingInvoice && selectedBookingForForm && remainingBefore > 0 && amountNum > remainingBefore) {
+      setFeedback(
+        `Amount entered (₱${amountNum.toLocaleString()}) exceeds remaining balance of ₱${remainingBefore.toLocaleString()}.`
+      );
+      return;
+    }
+
+    const appliedPayment =
+      !editingInvoice && remainingBefore > 0 ? Math.min(amountNum, remainingBefore) : amountNum;
+    const newAmountPaid = editingInvoice
+      ? Math.min(totalBookingFee || amountNum, amountNum)
+      : existingPaid + appliedPayment;
+    const newBalance = totalBookingFee > 0 ? Math.max(0, totalBookingFee - newAmountPaid) : 0;
+    const newTableStatus =
+      newBalance <= 0 && newAmountPaid > 0
+        ? "Completed"
+        : newAmountPaid > 0
+        ? "Partial"
+        : "Awaiting";
+    const newBackendStatus =
+      newTableStatus === "Completed" ? "Paid" : newTableStatus === "Partial" ? "Partial" : "Pending";
+
+    const existingHistory = Array.isArray(selectedBookingForForm?.paymentHistory)
+      ? selectedBookingForForm.paymentHistory
+      : [];
+    const installmentEntry = {
+      receiptNo: resolvedOrNo,
+      amount: appliedPayment,
+      paymentMethod: method,
+      referenceNumber: gcashRef,
+      dateTime: resolvedDateTime,
+      receivedBy: receiverName,
+    };
+    const updatedHistory = editingInvoice ? existingHistory : [...existingHistory, installmentEntry];
+
     const paymentRecord = {
       bookingId: formData.bookingId,
       rawId: resolvedRawId,
       clientName: resolvedClientName,
       machineryModel: resolvedMachineryModel,
-      amount: amountNum,
-      paymentType: formData.paymentType || "Full Rental Payment",
+      totalAmount: totalBookingFee,
+      amount: totalBookingFee,
+      amountPaid: newAmountPaid,
+      balance: newBalance,
+      lastPaymentAmount: appliedPayment,
+      paymentType: newBalance <= 0 ? "Full Rental Payment" : "Partial Rental Payment",
       paymentMethod: method,
       referenceNumber: gcashRef,
       dateReceived: resolvedDateTime,
@@ -555,10 +795,11 @@ export default function Payments() {
       notes: formData.notes || "",
       receivedBy: receiverName,
       recordedBy: receiverName,
-      status: "Completed",
+      status: newTableStatus,
+      paymentHistory: updatedHistory,
     };
 
-    // Store in shared localStorage for Bookings
+    // Store in shared localStorage for Bookings & immediate reload sync
     try {
       const stored = JSON.parse(localStorage.getItem("kimpc_booking_payments") || "{}");
       if (formData.bookingId) stored[formData.bookingId] = paymentRecord;
@@ -568,15 +809,41 @@ export default function Payments() {
       console.warn("Storage warning:", err);
     }
 
-    // If backend application, PATCH backend
+    // If backend application, update the existing booking record cleanly without duplicating rows
     if (resolvedRawId) {
+      setLiveApplications((prev) =>
+        prev.map((app) =>
+          String(app._id || app.id) === String(resolvedRawId)
+            ? {
+                ...app,
+                paymentStatus: newBackendStatus,
+                paymentAmount: newAmountPaid,
+                paymentMethod: method,
+                receiptNo: resolvedOrNo,
+                paymentReference: gcashRef,
+                paymentDateTime: resolvedDateTime,
+                receivedBy: receiverName,
+                paymentHistory: updatedHistory,
+                financials: {
+                  ...(app.financials || {}),
+                  isSettled: newBackendStatus === "Paid",
+                  totalPaid: newAmountPaid,
+                  paymentMethod: method,
+                },
+              }
+            : app
+        )
+      );
+
       try {
         await api(`/applications/${resolvedRawId}`, {
           method: "PATCH",
           body: {
-            paymentStatus: "Paid",
-            paymentAmount: amountNum,
-            financials: { isSettled: true, totalPaid: amountNum },
+            paymentStatus: newBackendStatus,
+            paymentMode: editingInvoice ? "override" : "installment",
+            installmentAmount: appliedPayment,
+            paymentAmount: newAmountPaid,
+            financials: { isSettled: newBackendStatus === "Paid", totalPaid: newAmountPaid },
             receiptNo: paymentRecord.receiptNo,
             paymentDate: paymentRecord.dateReceived,
             paymentDateTime: paymentRecord.dateReceived,
@@ -592,48 +859,57 @@ export default function Payments() {
       } catch (err) {
         console.error("Error updating application:", err);
       }
-    }
-
-    // Update in invoices state
-    setInvoices((prev) => {
-      const exists = prev.some((inv) => inv.id === formData.bookingId);
-      if (exists) {
-        return prev.map((inv) =>
-          inv.id === formData.bookingId
-            ? {
-                ...inv,
-                clientName: resolvedClientName,
-                machineryModel: resolvedMachineryModel,
-                amount: amountNum,
-                paymentMethod: paymentRecord.paymentMethod,
-                referenceNumber: gcashRef,
-                status: "Completed",
-                receiptNo: paymentRecord.receiptNo,
-                dateReceived: paymentRecord.dateReceived,
-                dueDate: paymentRecord.dateReceived.slice(0, 10),
-                notes: paymentRecord.notes,
-                proofOfPayment: paymentRecord.proofOfPayment,
-                receivedBy: receiverName,
-                recordedBy: receiverName,
-              }
-            : inv
-        );
-      } else {
+    } else {
+      // Offline / manual-only rows update in-place without duplicating live bookings
+      setInvoices((prev) => {
+        const exists = prev.some((inv) => inv.id === formData.bookingId);
+        if (exists) {
+          return prev.map((inv) =>
+            inv.id === formData.bookingId
+              ? {
+                  ...inv,
+                  clientName: resolvedClientName,
+                  machineryModel: resolvedMachineryModel,
+                  amount: totalBookingFee,
+                  totalAmount: totalBookingFee,
+                  amountPaid: newAmountPaid,
+                  balance: newBalance,
+                  paymentHistory: updatedHistory,
+                  paymentMethod: paymentRecord.paymentMethod,
+                  paymentType: paymentRecord.paymentType,
+                  referenceNumber: gcashRef,
+                  status: newTableStatus,
+                  receiptNo: paymentRecord.receiptNo,
+                  dateReceived: paymentRecord.dateReceived,
+                  dueDate: paymentRecord.dateReceived.slice(0, 10),
+                  notes: paymentRecord.notes,
+                  proofOfPayment: paymentRecord.proofOfPayment,
+                  receivedBy: receiverName,
+                  recordedBy: receiverName,
+                }
+              : inv
+          );
+        }
         return [
           {
             id: formData.bookingId,
             rawId: resolvedRawId,
             clientName: resolvedClientName,
             machineryModel: resolvedMachineryModel,
-            ratePerDay: amountNum,
+            ratePerDay: totalBookingFee,
             daysCount: 1,
             rentalPeriod: selectedBookingForForm?.rentalPeriod || "1 Day",
-            amount: amountNum,
+            amount: totalBookingFee,
+            totalAmount: totalBookingFee,
+            amountPaid: newAmountPaid,
+            balance: newBalance,
+            paymentHistory: updatedHistory,
             dueDate: paymentRecord.dateReceived.slice(0, 10),
             dateReceived: paymentRecord.dateReceived,
             paymentMethod: paymentRecord.paymentMethod,
+            paymentType: paymentRecord.paymentType,
             referenceNumber: gcashRef,
-            status: "Completed",
+            status: newTableStatus,
             receiptNo: paymentRecord.receiptNo,
             notes: paymentRecord.notes,
             proofOfPayment: paymentRecord.proofOfPayment,
@@ -642,11 +918,15 @@ export default function Payments() {
           },
           ...prev,
         ];
-      }
-    });
+      });
+    }
 
     setIsModalOpen(false);
-    setFeedback(`Payment of ₱${amountNum.toLocaleString()} for booking ${formData.bookingId} recorded by ${receiverName}!`);
+    setFeedback(
+      newTableStatus === "Partial"
+        ? `Partial payment of ₱${appliedPayment.toLocaleString()} recorded for ${formData.bookingId}. Paid: ₱${newAmountPaid.toLocaleString()} · Balance: ₱${newBalance.toLocaleString()}.`
+        : `Payment of ₱${appliedPayment.toLocaleString()} settled for ${formData.bookingId} (Received by ${receiverName}).`
+    );
   };
 
   return (
@@ -776,6 +1056,7 @@ export default function Payments() {
                     options: [
                       { value: "All", label: "All Statuses" },
                       { value: "Completed", label: "Completed" },
+                      { value: "Partial", label: "Partial" },
                       { value: "Awaiting", label: "Awaiting" },
                       { value: "Overdue", label: "Overdue" },
                     ],
@@ -869,6 +1150,9 @@ export default function Payments() {
                             {inv.status === "Completed" && (
                               <span className="wz-status-completed">Completed</span>
                             )}
+                            {inv.status === "Partial" && (
+                              <span className="wz-status-partial">Partial</span>
+                            )}
                             {inv.status === "Awaiting" && (
                               <span className="wz-status-awaiting">Awaiting</span>
                             )}
@@ -893,6 +1177,11 @@ export default function Payments() {
                           <td style={{ whiteSpace: "nowrap", fontSize: "0.74rem" }}>{inv.rentalPeriod}</td>
                           <td style={{ fontWeight: "800", color: "#0f172a", whiteSpace: "nowrap" }}>
                             ₱{Number(inv.amount).toLocaleString()}
+                            {inv.status === "Partial" && (
+                              <span className="wz-fin-amt-sub">
+                                Paid ₱{Number(inv.amountPaid || 0).toLocaleString()} · Bal ₱{Number(inv.balance || 0).toLocaleString()}
+                              </span>
+                            )}
                           </td>
                           <td style={{ color: "#64748b", whiteSpace: "nowrap", fontSize: "0.74rem" }}>{inv.dueDate}</td>
                           <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
@@ -1044,7 +1333,10 @@ export default function Payments() {
                     </option>
                     {availableBookingsForPayment.map((b) => (
                       <option key={b.id} value={b.id}>
-                        {b.id} — {b.clientName} ({b.machineryModel}) · ₱{Number(b.amount || 0).toLocaleString()}
+                        {b.id} — {b.clientName} ({b.machineryModel}) ·{" "}
+                        {b.status === "Partial"
+                          ? `Bal ₱${Number(b.balance || 0).toLocaleString()} of ₱${Number(b.amount || 0).toLocaleString()}`
+                          : `₱${Number(b.amount || 0).toLocaleString()}`}
                       </option>
                     ))}
                   </select>
@@ -1099,6 +1391,11 @@ export default function Payments() {
                         className="wz-payrec-amount-input"
                         type="number"
                         min="1"
+                        max={
+                          !editingInvoice && selectedBookingForForm?.balance > 0
+                            ? selectedBookingForForm.balance
+                            : undefined
+                        }
                         step="0.01"
                         required
                         placeholder="0.00"
@@ -1106,6 +1403,30 @@ export default function Payments() {
                         onChange={(e) => setFormData((prev) => ({ ...prev, amount: e.target.value }))}
                       />
                     </div>
+                    {selectedBookingForForm && !editingInvoice && (
+                      <div className="wz-payrec-hint">
+                        <span>
+                          Remaining balance:{" "}
+                          <strong>
+                            ₱{Number(selectedBookingForForm.balance ?? selectedBookingForForm.amount ?? 0).toLocaleString()}
+                          </strong>
+                        </span>
+                        {Number(selectedBookingForForm.balance ?? selectedBookingForForm.amount ?? 0) > 0 && (
+                          <button
+                            type="button"
+                            className="wz-payrec-max-btn"
+                            onClick={() =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                amount: Number(selectedBookingForForm.balance ?? selectedBookingForForm.amount ?? 0),
+                              }))
+                            }
+                          >
+                            Full balance
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="wz-payrec-field">
@@ -1168,32 +1489,58 @@ export default function Payments() {
                   </div>
 
                   {selectedBookingForForm ? (
-                    <div className="wz-payrec-summary-grid">
-                      <div className="wz-payrec-kv">
-                        <span className="wz-payrec-k">Member</span>
-                        <span className="wz-payrec-v">{selectedBookingForForm.clientName}</span>
-                      </div>
-                      <div className="wz-payrec-kv">
-                        <span className="wz-payrec-k">Machinery</span>
-                        <span className="wz-payrec-v">{selectedBookingForForm.machineryModel}</span>
-                      </div>
-                      <div className="wz-payrec-kv">
-                        <span className="wz-payrec-k">Schedule</span>
-                        <span className="wz-payrec-v">
-                          {formatBookingDateRange(
-                            selectedBookingForForm.startDate,
-                            selectedBookingForForm.endDate
-                          )}
-                        </span>
-                      </div>
-                      <div className="wz-payrec-kv">
-                        <span className="wz-payrec-k">Scope &amp; Booking Total</span>
-                        <span className="wz-payrec-v">
-                          {selectedBookingForForm.rentalPeriod} · ₱
-                          {Number(selectedBookingForForm.amount || 0).toLocaleString()}
-                        </span>
-                      </div>
-                    </div>
+                    (() => {
+                      const totalFee = Number(selectedBookingForForm.amount || 0);
+                      const alreadyPaid = Number(selectedBookingForForm.amountPaid || 0);
+                      const enteredAmt = Math.max(0, Number(formData.amount) || 0);
+                      const balanceAfter = editingInvoice
+                        ? Math.max(0, totalFee - enteredAmt)
+                        : Math.max(0, totalFee - alreadyPaid - enteredAmt);
+                      return (
+                        <div className="wz-payrec-summary-grid">
+                          <div className="wz-payrec-kv">
+                            <span className="wz-payrec-k">Member</span>
+                            <span className="wz-payrec-v">{selectedBookingForForm.clientName}</span>
+                          </div>
+                          <div className="wz-payrec-kv">
+                            <span className="wz-payrec-k">Machinery</span>
+                            <span className="wz-payrec-v">{selectedBookingForForm.machineryModel}</span>
+                          </div>
+                          <div className="wz-payrec-kv">
+                            <span className="wz-payrec-k">Booking Total</span>
+                            <span className="wz-payrec-v">
+                              ₱{totalFee.toLocaleString()} ({selectedBookingForForm.rentalPeriod})
+                            </span>
+                          </div>
+                          <div className="wz-payrec-kv">
+                            <span className="wz-payrec-k">Paid So Far</span>
+                            <span className="wz-payrec-v wz-payrec-v-paid">
+                              ₱{alreadyPaid.toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="wz-payrec-kv">
+                            <span className="wz-payrec-k">Schedule</span>
+                            <span className="wz-payrec-v">
+                              {formatBookingDateRange(
+                                selectedBookingForForm.startDate,
+                                selectedBookingForForm.endDate
+                              )}
+                            </span>
+                          </div>
+                          <div className="wz-payrec-kv">
+                            <span className="wz-payrec-k">Balance After Payment</span>
+                            <span className={`wz-payrec-v ${balanceAfter > 0 ? "wz-payrec-v-bal" : "wz-payrec-v-paid"}`}>
+                              ₱{balanceAfter.toLocaleString()}
+                              {balanceAfter > 0 && enteredAmt > 0
+                                ? " (Partial)"
+                                : balanceAfter === 0 && totalFee > 0
+                                ? " (Settled)"
+                                : ""}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })()
                   ) : (
                     <div className="wz-payrec-summary-empty">
                       Select a booking above to view its summary.
@@ -1227,488 +1574,312 @@ export default function Payments() {
         </div>
       )}
 
-      {/* ================= MODAL: PAYMENT VIEW DETAILS & AUDIT ================= */}
-      {viewingPayment && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            backgroundColor: "rgba(15, 23, 42, 0.65)",
-            backdropFilter: "blur(4px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 10000,
-            padding: "20px",
-          }}
-          onClick={() => setViewingPayment(null)}
-        >
-          <div
-            style={{
-              background: "#ffffff",
-              borderRadius: "16px",
-              width: "100%",
-              maxWidth: "640px",
-              maxHeight: "92vh",
-              overflowY: "auto",
-              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
-              border: "1px solid #e2e8f0",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
+      {/* ================= MODAL: PAYMENT VIEW DETAILS ================= */}
+      {viewingPayment &&
+        (() => {
+          const totalFee = Number(viewingPayment.amount || 0);
+          const paidAmount = Number(
+            viewingPayment.amountPaid ?? (viewingPayment.status === "Completed" ? totalFee : 0)
+          );
+          const balanceDue = Math.max(0, totalFee - paidAmount);
+          const history = Array.isArray(viewingPayment.paymentHistory)
+            ? viewingPayment.paymentHistory
+            : [];
+          const proofSrc = viewingPayment.proofOfPayment || viewingPayment.gcashProof;
+          const scheduleDisplay = formatBookingDateRange(
+            viewingPayment.startDate,
+            viewingPayment.endDate
+          );
+
+          return (
             <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "20px 24px",
-                borderBottom: "1px solid #e2e8f0",
-                background: "#f8fafc",
-                borderRadius: "16px 16px 0 0",
+              className="wz-payview-overlay"
+              role="presentation"
+              onMouseDown={(e) => {
+                if (e.target === e.currentTarget) setViewingPayment(null);
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                <div
-                  style={{
-                    width: "42px",
-                    height: "42px",
-                    borderRadius: "10px",
-                    background: "#ecfdf5",
-                    color: "#059669",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "1.3rem",
-                    fontWeight: 800,
-                    border: "1px solid #a7f3d0",
-                  }}
-                >
-                  💳
-                </div>
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: "800", color: "#0f172a" }}>
-                      Payment Audit &amp; Details
-                    </h3>
-                    <span
-                      style={{
-                        fontSize: "0.72rem",
-                        fontFamily: "monospace",
-                        background: "#e2e8f0",
-                        color: "#334155",
-                        padding: "2px 6px",
-                        borderRadius: "4px",
-                        fontWeight: 700,
-                      }}
-                    >
-                      {viewingPayment.id}
-                    </span>
-                  </div>
-                  <p style={{ margin: "2px 0 0", fontSize: "0.78rem", color: "#64748b" }}>
-                    Official transaction breakdown and payment verification record
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setViewingPayment(null)}
-                style={{
-                  background: "#f1f5f9",
-                  border: "none",
-                  borderRadius: "50%",
-                  width: "32px",
-                  height: "32px",
-                  fontSize: "1rem",
-                  color: "#64748b",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-                title="Close details"
+              <section
+                className="wz-payview-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="payment-view-title"
               >
-                ✕
-              </button>
-            </div>
-
-            {/* Modal Content */}
-            <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "18px" }}>
-              {/* Status Strip & Member Quick Glance */}
-              <div
-                style={{
-                  background: "#f8fafc",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "12px",
-                  padding: "14px 18px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  flexWrap: "wrap",
-                  gap: "12px",
-                }}
-              >
-                <div>
-                  <span style={{ fontSize: "0.72rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.5px" }}>
-                    Billed Member
-                  </span>
-                  <div style={{ fontWeight: 800, color: "#0f172a", fontSize: "1rem" }}>
-                    {viewingPayment.clientName}
-                  </div>
-                  {viewingPayment.clientPhone && viewingPayment.clientPhone !== "—" && (
-                    <div style={{ fontSize: "0.76rem", color: "#475569" }}>📞 {viewingPayment.clientPhone}</div>
-                  )}
-                </div>
-
-                <div style={{ textAlign: "right" }}>
-                  <span style={{ fontSize: "0.72rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.5px" }}>
-                    Settlement Status
-                  </span>
-                  <div style={{ marginTop: "4px" }}>
-                    {viewingPayment.status === "Completed" && (
-                      <span className="wz-status-completed" style={{ fontSize: "0.78rem", padding: "4px 10px" }}>
-                        ✓ Paid &amp; Completed
-                      </span>
-                    )}
-                    {viewingPayment.status === "Awaiting" && (
-                      <span className="wz-status-awaiting" style={{ fontSize: "0.78rem", padding: "4px 10px" }}>
-                        ⏳ Awaiting Payment
-                      </span>
-                    )}
-                    {viewingPayment.status === "Overdue" && (
-                      <span className="wz-status-overdue" style={{ fontSize: "0.78rem", padding: "4px 10px" }}>
-                        ⚠️ Overdue Settlement
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Machinery & Rental Context */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "12px",
-                  padding: "12px 16px",
-                  background: "#ffffff",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "10px",
-                }}
-              >
-                <div>
-                  <span style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600 }}>Rented Machinery Unit:</span>
-                  <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.85rem", marginTop: "2px" }}>
-                    🚜 {viewingPayment.machineryModel}
-                  </div>
-                </div>
-                <div>
-                  <span style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600 }}>Rental Period / Schedule:</span>
-                  <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.85rem", marginTop: "2px" }}>
-                    📅 {viewingPayment.rentalPeriod || "Standard Rental"}
-                  </div>
-                </div>
-              </div>
-
-              {/* The 7 Core Requested Audit Fields */}
-              <div
-                style={{
-                  background: "#ffffff",
-                  border: "1.5px solid #cbd5e1",
-                  borderRadius: "12px",
-                  padding: "18px",
-                  boxShadow: "0 2px 8px rgba(15, 23, 42, 0.04)",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", borderBottom: "1px solid #f1f5f9", paddingBottom: "10px", marginBottom: "14px" }}>
-                  <span style={{ fontSize: "1.1rem" }}>📋</span>
-                  <h4 style={{ margin: 0, fontSize: "0.88rem", fontWeight: "800", color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                    Payment Information &amp; Audit Trail
-                  </h4>
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "14px" }}>
-                  {/* 1. Payment Amount */}
-                  <div style={{ background: "#ecfdf5", border: "1px solid #a7f3d0", borderRadius: "10px", padding: "12px 14px" }}>
-                    <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#047857", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                      1. Payment Amount
-                    </span>
-                    <div style={{ fontSize: "1.35rem", fontWeight: 900, color: "#065f46", marginTop: "4px" }}>
-                      ₱{Number(viewingPayment.amount || 0).toLocaleString()}
-                    </div>
-                  </div>
-
-                  {/* 2. Payment Type */}
-                  <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px" }}>
-                    <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                      2. Payment Type
-                    </span>
-                    <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#0f172a", marginTop: "6px" }}>
-                      {viewingPayment.paymentType || "Full Rental Payment"}
-                    </div>
-                  </div>
-
-                  {/* 3. Payment Method */}
-                  <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px" }}>
-                    <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                      3. Payment Method
-                    </span>
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "6px" }}>
-                      <span
-                        style={{
-                          background: viewingPayment.paymentMethod === "GCash" ? "#ecfdf5" : (viewingPayment.paymentMethod === "Bank Transfer" ? "#eff6ff" : "#f1f5f9"),
-                          color: viewingPayment.paymentMethod === "GCash" ? "#047857" : (viewingPayment.paymentMethod === "Bank Transfer" ? "#1d4ed8" : "#334155"),
-                          border: `1px solid ${viewingPayment.paymentMethod === "GCash" ? "#a7f3d0" : (viewingPayment.paymentMethod === "Bank Transfer" ? "#bfdbfe" : "#cbd5e1")}`,
-                          padding: "3px 8px",
-                          borderRadius: "6px",
-                          fontWeight: 800,
-                          fontSize: "0.80rem",
-                        }}
-                      >
-                        {viewingPayment.paymentMethod || "Cash"}
-                      </span>
-                      {viewingPayment.cashPaymentOption && viewingPayment.paymentMethod === "Cash" && (
-                        <span style={{ fontSize: "0.72rem", color: "#0284c7", fontWeight: 600 }}>• {viewingPayment.cashPaymentOption}</span>
+                <div className="wz-payview-header">
+                  <div>
+                    <div className="wz-payview-kicker">Payment Details</div>
+                    <div className="wz-payview-title-row">
+                      <h3 id="payment-view-title" className="wz-payview-title">
+                        {viewingPayment.id}
+                      </h3>
+                      {viewingPayment.status === "Completed" && (
+                        <span className="wz-status-completed">Completed</span>
+                      )}
+                      {viewingPayment.status === "Partial" && (
+                        <span className="wz-status-partial">Partial</span>
+                      )}
+                      {viewingPayment.status === "Awaiting" && (
+                        <span className="wz-status-awaiting">Awaiting</span>
+                      )}
+                      {viewingPayment.status === "Overdue" && (
+                        <span className="wz-status-overdue">Overdue</span>
                       )}
                     </div>
+                    <p className="wz-payview-sub">
+                      {viewingPayment.clientName}
+                      {viewingPayment.clientPhone && viewingPayment.clientPhone !== "—"
+                        ? ` · ${viewingPayment.clientPhone}`
+                        : ""}{" "}
+                      · {viewingPayment.machineryModel}
+                    </p>
                   </div>
 
-                  {/* 4. Date & Time Received */}
-                  <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px" }}>
-                    <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                      4. Date &amp; Time Received
-                    </span>
-                    <div style={{ fontSize: "0.92rem", fontWeight: 800, color: "#0f172a", marginTop: "6px" }}>
-                      📅 {formatPaymentDateTimeDisplay(viewingPayment.dateReceived || viewingPayment.dueDate)}
-                    </div>
-                  </div>
-
-                  {/* 5. Official Receipt (OR) & Reference Number */}
-                  <div style={{ gridColumn: "span 2", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px" }}>
-                    <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                      5. Official Receipt (OR) Number {viewingPayment.referenceNumber ? "& Reference No." : ""}
-                    </span>
-                    <div style={{ fontSize: "0.95rem", fontWeight: 900, fontFamily: "monospace", color: "#0f172a", marginTop: "4px" }}>
-                      {viewingPayment.receiptNo || viewingPayment.id}
-                      {viewingPayment.referenceNumber ? (
-                        <span style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#0284c7", marginTop: "3px" }}>
-                          GCash Ref: {viewingPayment.referenceNumber}
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  {/* 6. Proof of Payment or Notes with View button */}
-                  <div style={{ gridColumn: "span 2", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "14px" }}>
-                    <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px", display: "block", marginBottom: "8px" }}>
-                      6. Proof of Payment or Notes
-                    </span>
-                    
-                    <div style={{ display: "grid", gridTemplateColumns: (viewingPayment.proofOfPayment || viewingPayment.gcashProof) ? "1fr 1fr" : "1fr", gap: "12px" }}>
-                      {/* Notes box */}
-                      <div>
-                        <span style={{ fontSize: "0.72rem", color: "#475569", fontWeight: 600, display: "block", marginBottom: "4px" }}>
-                          📝 Remarks / Payment Notes:
-                        </span>
-                        <div style={{ background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "6px", padding: "8px 10px", fontSize: "0.80rem", color: "#334155", minHeight: "42px" }}>
-                          {viewingPayment.notes || "Standard payment record for KIMPC machinery rental."}
-                        </div>
-                      </div>
-
-                      {/* Proof of Payment with View button */}
-                      {(viewingPayment.proofOfPayment || viewingPayment.gcashProof) ? (
-                        <div>
-                          <span style={{ fontSize: "0.72rem", color: "#475569", fontWeight: 600, display: "block", marginBottom: "4px" }}>
-                            📷 Attached Proof Screenshot:
-                          </span>
-                          <div style={{ display: "flex", alignItems: "center", gap: "10px", background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "6px", padding: "6px 10px" }}>
-                            <img
-                              src={viewingPayment.proofOfPayment || viewingPayment.gcashProof}
-                              alt="Proof of Payment"
-                              onClick={() => setPreviewGcashImage(viewingPayment.proofOfPayment || viewingPayment.gcashProof)}
-                              style={{
-                                width: "44px",
-                                height: "44px",
-                                objectFit: "cover",
-                                borderRadius: "6px",
-                                border: "2px solid #059669",
-                                cursor: "pointer",
-                              }}
-                              title="Click to view full image"
-                            />
-                            <div>
-                              <div style={{ fontSize: "0.72rem", color: "#065f46", fontWeight: 700, marginBottom: "3px" }}>
-                                ✓ Proof Uploaded
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => setPreviewGcashImage(viewingPayment.proofOfPayment || viewingPayment.gcashProof)}
-                                style={{
-                                  background: "#0284c7",
-                                  color: "#ffffff",
-                                  border: "none",
-                                  borderRadius: "5px",
-                                  padding: "3px 8px",
-                                  fontSize: "0.72rem",
-                                  fontWeight: 700,
-                                  cursor: "pointer",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: "4px",
-                                }}
-                              >
-                                🔍 View Proof
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "#f1f5f9", border: "1px dashed #cbd5e1", borderRadius: "6px", padding: "8px 10px", fontSize: "0.75rem", color: "#64748b" }}>
-                          <span>ℹ️</span> No digital screenshot attached (Cash / In-person payment recorded).
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* 7. Received By (Non-editable manager/cashier account) */}
-                  <div style={{ gridColumn: "span 2", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "10px", padding: "12px 14px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "6px" }}>
-                      <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#166534", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                        7. Received By
-                      </span>
-                      <span style={{ fontSize: "0.68rem", fontWeight: 700, background: "#dcfce7", color: "#15803d", padding: "2px 8px", borderRadius: "12px", border: "1px solid #86efac" }}>
-                        ✓ Transaction Account
-                      </span>
-                    </div>
-                    <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#14532d", marginTop: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
-                      <span>👤</span>
-                      <span>{viewingPayment.receivedBy || viewingPayment.recordedBy || activeReceiverName}</span>
-                      {user?.role && (
-                        <span style={{ fontSize: "0.70rem", background: "#bbf7d0", color: "#166534", padding: "1px 6px", borderRadius: "4px", fontWeight: 700 }}>
-                          {user.role}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Footer with Actions */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                flexWrap: "wrap",
-                gap: "10px",
-                padding: "16px 24px",
-                borderTop: "1px solid #e2e8f0",
-                background: "#f8fafc",
-                borderRadius: "0 0 16px 16px",
-              }}
-            >
-              <div>
-                {viewingPayment.status !== "Completed" ? (
                   <button
                     type="button"
-                    onClick={() => {
-                      handleSettleInvoice(viewingPayment);
-                      setViewingPayment(null);
-                    }}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      background: "#059669",
-                      color: "#ffffff",
-                      border: "none",
-                      borderRadius: "8px",
-                      padding: "8px 16px",
-                      fontWeight: 700,
-                      fontSize: "0.82rem",
-                      cursor: "pointer",
-                      boxShadow: "0 2px 6px rgba(5, 150, 105, 0.25)",
-                    }}
+                    className="wz-payview-close"
+                    aria-label="Close payment details"
+                    onClick={() => setViewingPayment(null)}
                   >
-                    ✓ Confirm &amp; Settle Payment
+                    ✕
                   </button>
-                ) : (
-                  <span style={{ fontSize: "0.76rem", color: "#059669", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                    ✓ Verified &amp; Settled in Cooperative Ledger
-                  </span>
-                )}
-              </div>
+                </div>
 
-              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                <button
-                  type="button"
-                  onClick={() => handleDownloadSingleTransaction(viewingPayment)}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    background: "#ffffff",
-                    color: "#0f172a",
-                    border: "1px solid #cbd5e1",
-                    borderRadius: "8px",
-                    padding: "8px 14px",
-                    fontWeight: 700,
-                    fontSize: "0.82rem",
-                    cursor: "pointer",
-                  }}
-                  title="Download Transaction Receipt (.txt)"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" />
-                  </svg>
-                  Download Receipt
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setReceiptInvoice(viewingPayment);
-                  }}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    background: "#ffffff",
-                    color: "#0f172a",
-                    border: "1px solid #cbd5e1",
-                    borderRadius: "8px",
-                    padding: "8px 14px",
-                    fontWeight: 700,
-                    fontSize: "0.82rem",
-                    cursor: "pointer",
-                  }}
-                >
-                  🖨️ Receipt Voucher
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewingPayment(null)}
-                  style={{
-                    padding: "8px 16px",
-                    borderRadius: "8px",
-                    border: "1px solid #cbd5e1",
-                    background: "#ffffff",
-                    color: "#64748b",
-                    fontWeight: 600,
-                    fontSize: "0.82rem",
-                    cursor: "pointer",
-                  }}
-                >
-                  Close
-                </button>
-              </div>
+                <div className="wz-payview-body">
+                  {/* Financial Summary */}
+                  <div className="wz-payview-metrics">
+                    <div className="wz-payview-metric">
+                      <span className="wz-payview-metric-label">Total Booking</span>
+                      <span className="wz-payview-metric-val">
+                        ₱{totalFee.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="wz-payview-metric">
+                      <span className="wz-payview-metric-label">Amount Paid</span>
+                      <span
+                        className={`wz-payview-metric-val ${
+                          paidAmount > 0 ? "is-paid" : ""
+                        }`}
+                      >
+                        ₱{paidAmount.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="wz-payview-metric">
+                      <span className="wz-payview-metric-label">Balance Due</span>
+                      <span
+                        className={`wz-payview-metric-val ${
+                          balanceDue > 0 ? "is-balance" : ""
+                        }`}
+                      >
+                        ₱{balanceDue.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Transaction Info */}
+                  <div className="wz-payview-card">
+                    <div className="wz-payview-section-title">
+                      <span>Transaction Information</span>
+                    </div>
+                    <div className="wz-payview-grid">
+                      <div className="wz-payview-kv">
+                        <span className="wz-payview-k">Official Receipt (OR) No.</span>
+                        <span className="wz-payview-v mono">
+                          {viewingPayment.receiptNo || viewingPayment.id}
+                        </span>
+                      </div>
+                      <div className="wz-payview-kv">
+                        <span className="wz-payview-k">Date &amp; Time</span>
+                        <span className="wz-payview-v">
+                          {formatPaymentDateTimeDisplay(
+                            viewingPayment.dateReceived || viewingPayment.dueDate
+                          )}
+                        </span>
+                      </div>
+                      <div className="wz-payview-kv">
+                        <span className="wz-payview-k">Payment Method</span>
+                        <span className="wz-payview-v">
+                          {viewingPayment.paymentMethod || "Cash"}
+                          {viewingPayment.paymentMethod === "Cash" &&
+                          viewingPayment.cashPaymentOption
+                            ? ` (${viewingPayment.cashPaymentOption})`
+                            : ""}
+                        </span>
+                      </div>
+                      {viewingPayment.referenceNumber ? (
+                        <div className="wz-payview-kv">
+                          <span className="wz-payview-k">GCash Reference No.</span>
+                          <span className="wz-payview-v mono">
+                            {viewingPayment.referenceNumber}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="wz-payview-kv">
+                          <span className="wz-payview-k">Scope</span>
+                          <span className="wz-payview-v">
+                            {viewingPayment.rentalPeriod || "Standard Rental"}
+                          </span>
+                        </div>
+                      )}
+                      <div className="wz-payview-kv">
+                        <span className="wz-payview-k">Received By</span>
+                        <span className="wz-payview-v accent">
+                          {viewingPayment.receivedBy ||
+                            viewingPayment.recordedBy ||
+                            activeReceiverName}
+                        </span>
+                      </div>
+                      <div className="wz-payview-kv">
+                        <span className="wz-payview-k">Rental Schedule</span>
+                        <span className="wz-payview-v">
+                          {scheduleDisplay !== "—"
+                            ? scheduleDisplay
+                            : viewingPayment.dueDate || "—"}
+                        </span>
+                      </div>
+                      {viewingPayment.notes && (
+                        <div className="wz-payview-kv" style={{ gridColumn: "1 / -1" }}>
+                          <span className="wz-payview-k">Notes</span>
+                          <span className="wz-payview-v">{viewingPayment.notes}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {proofSrc && (
+                      <div className="wz-payview-proof">
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                          <img
+                            src={proofSrc}
+                            alt="Proof of Payment"
+                            className="wz-payview-proof-thumb"
+                          />
+                          <div className="wz-payview-kv">
+                            <span className="wz-payview-k">Payment Proof</span>
+                            <span className="wz-payview-v">Screenshot attached</span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="wz-payview-btn-ghost"
+                          onClick={() => setPreviewGcashImage(proofSrc)}
+                        >
+                          View Image
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Payment Installment History */}
+                  <div className="wz-payview-card">
+                    <div className="wz-payview-section-title">
+                      <span>Payment History</span>
+                      <span>
+                        {history.length}{" "}
+                        {history.length === 1 ? "payment" : "payments"}
+                      </span>
+                    </div>
+
+                    {history.length > 0 ? (
+                      <div className="wz-payview-history-list">
+                        {history.map((entry, idx) => (
+                          <div
+                            key={`${entry.receiptNo || "pay"}-${idx}`}
+                            className="wz-payview-history-item"
+                          >
+                            <div className="wz-payview-history-left">
+                              <div className="wz-payview-history-top">
+                                #{idx + 1} · {entry.receiptNo || "OR"} ·{" "}
+                                {entry.paymentMethod || "Cash"}
+                                {entry.referenceNumber
+                                  ? ` · Ref ${entry.referenceNumber}`
+                                  : ""}
+                              </div>
+                              <div className="wz-payview-history-sub">
+                                {formatPaymentDateTimeDisplay(entry.dateTime)} · Received by{" "}
+                                {entry.receivedBy || activeReceiverName}
+                              </div>
+                            </div>
+                            <span className="wz-payview-history-amt">
+                              +₱{Number(entry.amount || 0).toLocaleString()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : paidAmount > 0 ? (
+                      <div className="wz-payview-history-list">
+                        <div className="wz-payview-history-item">
+                          <div className="wz-payview-history-left">
+                            <div className="wz-payview-history-top">
+                              {viewingPayment.receiptNo || viewingPayment.id} ·{" "}
+                              {viewingPayment.paymentMethod || "Cash"}
+                            </div>
+                            <div className="wz-payview-history-sub">
+                              {formatPaymentDateTimeDisplay(
+                                viewingPayment.dateReceived || viewingPayment.dueDate
+                              )}{" "}
+                              · Received by{" "}
+                              {viewingPayment.receivedBy ||
+                                viewingPayment.recordedBy ||
+                                activeReceiverName}
+                            </div>
+                          </div>
+                          <span className="wz-payview-history-amt">
+                            ₱{paidAmount.toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="wz-payview-empty">
+                        No payment has been recorded for this booking yet.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="wz-payview-footer">
+                  <div className="wz-payview-footer-group">
+                    <button
+                      type="button"
+                      className="wz-payview-btn-ghost"
+                      onClick={() => handleDownloadSingleTransaction(viewingPayment)}
+                    >
+                      Download (.txt)
+                    </button>
+                    <button
+                      type="button"
+                      className="wz-payview-btn-ghost"
+                      onClick={() => setReceiptInvoice(viewingPayment)}
+                    >
+                      Receipt Voucher
+                    </button>
+                  </div>
+
+                  <div className="wz-payview-footer-group">
+                    {balanceDue > 0 && viewingPayment.status !== "Completed" && (
+                      <button
+                        type="button"
+                        className="wz-payview-btn-primary"
+                        onClick={() => {
+                          const target = viewingPayment;
+                          setViewingPayment(null);
+                          openRecordModalForBooking(target);
+                        }}
+                      >
+                        Record Payment
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="wz-payview-btn-ghost"
+                      onClick={() => setViewingPayment(null)}
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              </section>
             </div>
-          </div>
-        </div>
-      )}
+          );
+        })()}
 
       {/* ================= MODAL: OFFICIAL KIMPC RECEIPT & BILLING VOUCHER ================= */}
       {receiptInvoice && (
@@ -1865,6 +2036,16 @@ export default function Payments() {
                     ₱{Number(receiptInvoice.amount).toLocaleString()}
                   </td>
                 </tr>
+                {receiptInvoice.status === "Partial" && (
+                  <tr>
+                    <td colSpan="2" style={{ padding: "4px 12px 12px", fontSize: "0.82rem", color: "#475569", fontWeight: 600 }}>
+                      Amount Paid / Remaining Balance:
+                    </td>
+                    <td style={{ padding: "4px 12px 12px", textAlign: "right", fontSize: "0.84rem", fontWeight: 700, color: "#b45309" }}>
+                      Paid ₱{Number(receiptInvoice.amountPaid || 0).toLocaleString()} · Balance ₱{Number(receiptInvoice.balance || 0).toLocaleString()}
+                    </td>
+                  </tr>
+                )}
               </tfoot>
             </table>
 
@@ -1881,6 +2062,10 @@ export default function Payments() {
                 {receiptInvoice.status === "Completed" ? (
                   <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "#059669", color: "#ffffff", padding: "6px 14px", borderRadius: "8px", fontWeight: 800, fontSize: "0.85rem", letterSpacing: "0.5px" }}>
                     <span>✓</span> PAID &amp; SETTLED
+                  </div>
+                ) : receiptInvoice.status === "Partial" ? (
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "#b45309", color: "#ffffff", padding: "6px 14px", borderRadius: "8px", fontWeight: 800, fontSize: "0.85rem", letterSpacing: "0.5px" }}>
+                    PARTIAL PAYMENT
                   </div>
                 ) : (
                   <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "#d97706", color: "#ffffff", padding: "6px 14px", borderRadius: "8px", fontWeight: 800, fontSize: "0.85rem", letterSpacing: "0.5px" }}>

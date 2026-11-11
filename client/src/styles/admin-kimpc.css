@@ -8790,3 +8790,409 @@ input::-webkit-contacts-auto-fill-button {
     grid-template-columns: 1fr;
   }
 }
+
+/* ================= CLEAN MINIMALIST PAYMENT VIEW DETAILS MODAL ================= */
+.wz-status-partial {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 12px;
+  background: #fef3c7;
+  color: #b45309;
+  font-size: 0.70rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.wz-payment-badge-partial {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #d97706;
+}
+
+.wz-fin-amt-sub {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.wz-payrec-hint {
+  margin-top: 5px;
+  font-size: 0.73rem;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.wz-payrec-hint strong {
+  color: #0f172a;
+}
+
+.wz-payrec-max-btn {
+  border: none;
+  background: transparent;
+  color: #059669;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.wz-payrec-max-btn:hover {
+  text-decoration: underline;
+}
+
+.wz-payrec-v-paid {
+  color: #059669;
+}
+
+.wz-payrec-v-bal {
+  color: #d97706;
+}
+
+.wz-payview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.wz-payview-modal {
+  width: 100%;
+  max-width: 580px;
+  max-height: 92vh;
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 20px 44px rgba(15, 23, 42, 0.16);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.wz-payview-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.wz-payview-kicker {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+
+.wz-payview-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.wz-payview-title {
+  margin: 0;
+  font-size: 1.08rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.wz-payview-sub {
+  margin: 3px 0 0;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.wz-payview-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.95rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.wz-payview-close:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.wz-payview-body {
+  padding: 18px 22px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.wz-payview-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.wz-payview-metric {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 11px 13px;
+}
+
+.wz-payview-metric-label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.wz-payview-metric-val {
+  display: block;
+  font-size: 1.12rem;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.wz-payview-metric-val.is-paid {
+  color: #059669;
+}
+
+.wz-payview-metric-val.is-balance {
+  color: #d97706;
+}
+
+.wz-payview-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 13px 15px;
+}
+
+.wz-payview-section-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wz-payview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+}
+
+.wz-payview-kv {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.wz-payview-k {
+  font-size: 0.71rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.wz-payview-v {
+  font-size: 0.84rem;
+  color: #0f172a;
+  font-weight: 700;
+  word-break: break-word;
+}
+
+.wz-payview-v.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.wz-payview-v.accent {
+  color: #059669;
+}
+
+.wz-payview-proof {
+  margin-top: 12px;
+  padding-top: 11px;
+  border-top: 1px dashed #cbd5e1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.wz-payview-proof-thumb {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid #cbd5e1;
+}
+
+.wz-payview-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wz-payview-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 11px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+}
+
+.wz-payview-history-left {
+  min-width: 0;
+}
+
+.wz-payview-history-top {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.wz-payview-history-sub {
+  font-size: 0.73rem;
+  color: #64748b;
+  margin-top: 1px;
+}
+
+.wz-payview-history-amt {
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: #059669;
+  white-space: nowrap;
+}
+
+.wz-payview-empty {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.wz-payview-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 14px 22px;
+  border-top: 1px solid #f1f5f9;
+  background: #ffffff;
+}
+
+.wz-payview-footer-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.wz-payview-btn-ghost {
+  padding: 8px 13px;
+  border-radius: 9px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #334155;
+  font-size: 0.81rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.wz-payview-btn-ghost:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.wz-payview-btn-primary {
+  padding: 8px 15px;
+  border-radius: 9px;
+  border: none;
+  background: #10b981;
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.wz-payview-btn-primary:hover {
+  background: #059669;
+}
+
+[data-theme="dark"] .wz-payview-modal,
+[data-theme="dark"] .wz-payview-footer {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+[data-theme="dark"] .wz-payview-header {
+  border-color: #1e293b;
+}
+
+[data-theme="dark"] .wz-payview-title,
+[data-theme="dark"] .wz-payview-metric-val,
+[data-theme="dark"] .wz-payview-v,
+[data-theme="dark"] .wz-payview-history-top,
+[data-theme="dark"] .wz-payrec-hint strong {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .wz-payview-metric,
+[data-theme="dark"] .wz-payview-card,
+[data-theme="dark"] .wz-payview-history-item,
+[data-theme="dark"] .wz-payview-btn-ghost {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+[data-theme="dark"] .wz-payview-btn-ghost,
+[data-theme="dark"] .wz-payview-close {
+  color: #cbd5e1;
+  border-color: #334155;
+}
+
+@media (max-width: 560px) {
+  .wz-payview-metrics,
+  .wz-payview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wz-payview-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .wz-payview-footer-group {
+    justify-content: flex-end;
+  }
+}

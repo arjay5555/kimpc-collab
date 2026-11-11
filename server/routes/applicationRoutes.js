@@ -403,27 +403,27 @@ const handleApplicationUpdate = async (req, res) => {
 
     // Check if manager is updating payment status
     if (req.body.paymentStatus && !req.body.status && !req.body.startDate) {
-      existing.paymentStatus = clean(req.body.paymentStatus);
       if (!existing.financials) existing.financials = {};
-      existing.financials.isSettled = existing.paymentStatus === "Paid";
+      const totalBookingFee = Number(existing.totalAmount || existing.financials.totalPaid || 0) || 0;
+      const prevStatus = clean(existing.paymentStatus || "Pending");
+      const existingHistory = Array.isArray(existing.paymentHistory) ? existing.paymentHistory : [];
+
+      let previousPaid = 0;
+      if (existingHistory.length > 0) {
+        previousPaid = existingHistory.reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
+      } else if (prevStatus === "Paid" || prevStatus === "Settled" || existing.financials.isSettled) {
+        previousPaid = Number(existing.financials.totalPaid || existing.paymentAmount || totalBookingFee) || 0;
+      } else if (prevStatus === "Partial") {
+        previousPaid = Number(existing.financials.totalPaid || existing.paymentAmount || 0) || 0;
+      } else {
+        // Pending bookings initialize paymentAmount with totalAmount on creation before any cash is collected
+        previousPaid = 0;
+      }
 
       const incomingMethod = clean(req.body.paymentMethod);
       if (incomingMethod) {
         existing.paymentMethod = incomingMethod;
         existing.financials.paymentMethod = incomingMethod;
-      }
-
-      const incomingAmount = Number(req.body.paymentAmount ?? req.body.financials?.totalPaid);
-      if (Number.isFinite(incomingAmount) && incomingAmount > 0) {
-        existing.paymentAmount = incomingAmount;
-        existing.financials.totalPaid = incomingAmount;
-      }
-
-      const incomingReceiptNo = clean(req.body.receiptNo);
-      if (incomingReceiptNo) {
-        existing.receiptNo = incomingReceiptNo;
-      } else if (existing.paymentStatus === "Paid" && !existing.receiptNo) {
-        existing.receiptNo = `OR-${new Date().getFullYear()}-${String(existing._id).slice(-4).toUpperCase()}`;
       }
 
       const incomingDateTime = clean(req.body.paymentDateTime || req.body.paymentDate);
@@ -445,13 +445,104 @@ const handleApplicationUpdate = async (req, res) => {
         existing.receivedBy = receiverName;
       }
 
+      const incomingReceiptNo = clean(req.body.receiptNo);
+      if (incomingReceiptNo) {
+        existing.receiptNo = incomingReceiptNo;
+      } else if (!existing.receiptNo) {
+        existing.receiptNo = `OR-${new Date().getFullYear()}-${String(existing._id).slice(-4).toUpperCase()}`;
+      }
+
+      const incomingInstallment = Number(req.body.installmentAmount);
+      const isInstallmentMode =
+        req.body.paymentMode === "installment" ||
+        (Number.isFinite(incomingInstallment) && incomingInstallment > 0);
+
+      let cumulativePaid = previousPaid;
+      let appliedPaymentAmount = 0;
+
+      if (isInstallmentMode) {
+        const stepAmount =
+          Number.isFinite(incomingInstallment) && incomingInstallment > 0
+            ? incomingInstallment
+            : Number(req.body.paymentAmount ?? 0) || 0;
+        const maxRemaining = totalBookingFee > 0 ? Math.max(0, totalBookingFee - previousPaid) : stepAmount;
+        appliedPaymentAmount = totalBookingFee > 0 ? Math.min(stepAmount, maxRemaining || stepAmount) : stepAmount;
+        cumulativePaid = previousPaid + appliedPaymentAmount;
+
+        if (appliedPaymentAmount > 0) {
+          existing.paymentHistory = [
+            ...existingHistory,
+            {
+              receiptNo: existing.receiptNo,
+              amount: appliedPaymentAmount,
+              paymentMethod: existing.paymentMethod || "Cash",
+              referenceNumber: existing.paymentReference || "",
+              dateTime: existing.paymentDateTime || new Date().toISOString(),
+              receivedBy: receiverName || "Manager",
+              recordedAt: new Date(),
+            },
+          ];
+        }
+      } else {
+        const requestedStatus = clean(req.body.paymentStatus);
+        const explicitTotal = Number(req.body.paymentAmount ?? req.body.financials?.totalPaid);
+        if (requestedStatus === "Paid" || requestedStatus === "Settled") {
+          cumulativePaid =
+            totalBookingFee > 0
+              ? totalBookingFee
+              : Number.isFinite(explicitTotal) && explicitTotal > 0
+              ? explicitTotal
+              : previousPaid;
+          appliedPaymentAmount = Math.max(0, cumulativePaid - previousPaid);
+          if (appliedPaymentAmount > 0) {
+            existing.paymentHistory = [
+              ...existingHistory,
+              {
+                receiptNo: existing.receiptNo,
+                amount: appliedPaymentAmount,
+                paymentMethod: existing.paymentMethod || "Cash",
+                referenceNumber: existing.paymentReference || "",
+                dateTime: existing.paymentDateTime || new Date().toISOString(),
+                receivedBy: receiverName || "Manager",
+                recordedAt: new Date(),
+              },
+            ];
+          }
+        } else if (Number.isFinite(explicitTotal) && explicitTotal > 0) {
+          cumulativePaid = totalBookingFee > 0 ? Math.min(explicitTotal, totalBookingFee) : explicitTotal;
+          appliedPaymentAmount = Math.max(0, cumulativePaid - previousPaid);
+        }
+      }
+
+      const effectiveTotal = totalBookingFee > 0 ? totalBookingFee : cumulativePaid;
+      const remainingBalance = Math.max(0, effectiveTotal - cumulativePaid);
+      const isNowSettled = cumulativePaid > 0 && remainingBalance <= 0;
+      const requestedStatus = clean(req.body.paymentStatus);
+
+      if (requestedStatus === "Refunded") {
+        existing.paymentStatus = "Refunded";
+      } else if (isNowSettled || (requestedStatus === "Paid" && !isInstallmentMode)) {
+        existing.paymentStatus = "Paid";
+      } else if (cumulativePaid > 0) {
+        existing.paymentStatus = "Partial";
+      } else {
+        existing.paymentStatus = requestedStatus || "Pending";
+      }
+
+      existing.financials.isSettled = existing.paymentStatus === "Paid";
+      existing.paymentAmount = cumulativePaid;
+      existing.financials.totalPaid = cumulativePaid;
+
       if (!existing.timeline) existing.timeline = [];
       existing.timeline.push({
-        event: "payment_settled",
-        title: "Payment Settled",
+        event: existing.paymentStatus === "Partial" ? "payment_partial" : "payment_settled",
+        title: existing.paymentStatus === "Partial" ? "Partial Payment Recorded" : "Payment Settled",
         timestamp: new Date(),
         actor: receiverName || (["manager", "admin"].includes(actorRole) ? "Manager" : "System"),
-        note: `Payment status updated to ${existing.paymentStatus} (${existing.paymentMethod || "Cash"}). OR No: ${existing.receiptNo || "N/A"}${existing.paymentReference ? ` • Ref: ${existing.paymentReference}` : ""}.`,
+        note:
+          existing.paymentStatus === "Partial"
+            ? `Partial payment of ₱${appliedPaymentAmount.toLocaleString()} recorded (${existing.paymentMethod || "Cash"}). Paid: ₱${cumulativePaid.toLocaleString()} / ₱${effectiveTotal.toLocaleString()} · Balance: ₱${remainingBalance.toLocaleString()}. OR No: ${existing.receiptNo || "N/A"}${existing.paymentReference ? ` • Ref: ${existing.paymentReference}` : ""}.`
+            : `Payment settled (${existing.paymentMethod || "Cash"}). Total Paid: ₱${cumulativePaid.toLocaleString()}. OR No: ${existing.receiptNo || "N/A"}${existing.paymentReference ? ` • Ref: ${existing.paymentReference}` : ""}.`,
       });
       await existing.save();
 
@@ -459,8 +550,14 @@ const handleApplicationUpdate = async (req, res) => {
       try {
         await Notification.create({
           memberEmail: existing.memberEmail,
-          title: "Payment Confirmed & Receipt Ready",
-          message: `Your payment of ₱${Number(existing.paymentAmount || existing.totalAmount || 0).toLocaleString()} for ${existing.equipment} has been verified and settled. OR #${existing.receiptNo} is now ready for download.`,
+          title:
+            existing.paymentStatus === "Partial"
+              ? "Partial Payment Recorded"
+              : "Payment Confirmed & Receipt Ready",
+          message:
+            existing.paymentStatus === "Partial"
+              ? `Partial payment of ₱${appliedPaymentAmount.toLocaleString()} for ${existing.equipment} has been recorded (${cumulativePaid.toLocaleString()} paid of ₱${effectiveTotal.toLocaleString()}; Remaining balance: ₱${remainingBalance.toLocaleString()}). OR #${existing.receiptNo}.`
+              : `Your payment of ₱${Number(existing.paymentAmount || existing.totalAmount || 0).toLocaleString()} for ${existing.equipment} has been verified and settled. OR #${existing.receiptNo} is now ready for download.`,
           type: "booking",
           relatedApplicationId: existing._id,
         });
