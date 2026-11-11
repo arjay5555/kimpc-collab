@@ -7920,3 +7920,34 @@ input::-webkit-contacts-auto-fill-button {
   border-color: #334155;
   color: #cbd5e1;
 }
+
+.wz-unit-type-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  flex-shrink: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.wz-unit-type-toggle:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+[data-theme="dark"] .wz-unit-type-toggle {
+  background: #0f172a;
+  border-color: #334155;
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .wz-unit-type-toggle:hover {
+  background: #334155;
+  color: #f8fafc;
+}

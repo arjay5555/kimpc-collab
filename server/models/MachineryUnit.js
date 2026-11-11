@@ -18,9 +18,9 @@ const machineryUnitSchema = new mongoose.Schema(
     },
     category: {
       type: String,
-      enum: ["Tractor", "Harvester", "Baler", "Planter / Seeder", "Sprayer", "Mower / Rake", "Transport / Truck", "Other"],
       default: "Tractor",
-      required: true,
+      required: [true, "Machinery Type is required"],
+      trim: true,
       index: true
     },
     brand: {

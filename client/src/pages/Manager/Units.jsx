@@ -175,6 +175,8 @@ export default function Units() {
   const [formErrors, setFormErrors] = useState({});
   const [savingUnit, setSavingUnit] = useState(false);
   const [unitSaveError, setUnitSaveError] = useState("");
+  const [customTypeMode, setCustomTypeMode] = useState(false);
+  const [lastSelectedType, setLastSelectedType] = useState("Tractor");
 
   // View Details Modal
   const [viewingUnit, setViewingUnit] = useState(null);
@@ -346,6 +348,32 @@ export default function Units() {
     return result;
   }, [units, searchQuery, filterType, filterCondition, sortBy]);
 
+  // Existing machinery types (defaults + any custom types saved in inventory)
+  const availableMachineryTypes = useMemo(() => {
+    const baseWithoutOther = MACHINERY_TYPES.filter((t) => t !== "Other");
+    const seen = new Set(baseWithoutOther.map((t) => t.toLowerCase()));
+    const result = [...baseWithoutOther];
+
+    units.forEach((u) => {
+      const cat = String(u.category || "").trim();
+      if (cat && !seen.has(cat.toLowerCase()) && cat.toLowerCase() !== "other") {
+        seen.add(cat.toLowerCase());
+        result.push(cat);
+      }
+    });
+
+    result.push("Other");
+    return result;
+  }, [units]);
+
+  const modalMachineryTypes = useMemo(() => {
+    const trimmed = String(unitForm.category || "").trim();
+    if (!trimmed || customTypeMode) return availableMachineryTypes;
+    return availableMachineryTypes.includes(trimmed)
+      ? availableMachineryTypes
+      : [trimmed, ...availableMachineryTypes];
+  }, [availableMachineryTypes, unitForm.category, customTypeMode]);
+
   // Paginated units
   const totalPages = Math.max(1, Math.ceil(filteredUnits.length / pageSize));
   const paginatedUnits = useMemo(() => {
@@ -375,6 +403,8 @@ export default function Units() {
     });
     setFormErrors({});
     setUnitSaveError("");
+    setCustomTypeMode(false);
+    setLastSelectedType(EMPTY_UNIT_FORM.category);
     setActiveFormTab("basic");
     if (!drivers || drivers.length === 0) {
       fetchDrivers();
@@ -436,8 +466,19 @@ export default function Units() {
       assignedDriver: u.assignedDriver || "Unassigned",
       driverPhone: u.driverPhone || "",
     });
+    const canonicalCat =
+      availableMachineryTypes.find(
+        (t) => t.toLowerCase() === String(u.category || "").trim().toLowerCase()
+      ) ||
+      String(u.category || "").trim() ||
+      "Tractor";
+    if (canonicalCat !== u.category) {
+      setUnitForm((prev) => ({ ...prev, category: canonicalCat }));
+    }
     setFormErrors({});
     setUnitSaveError("");
+    setCustomTypeMode(false);
+    setLastSelectedType(canonicalCat);
     setActiveFormTab("basic");
     if (!drivers || drivers.length === 0) {
       fetchDrivers();
@@ -653,6 +694,7 @@ export default function Units() {
     const errs = {};
     if (!unitForm.unitId.trim()) errs.unitId = "Required";
     if (!unitForm.name.trim()) errs.name = "Required";
+    if (!String(unitForm.category || "").trim()) errs.category = "Required";
     if (!unitForm.brand.trim()) errs.brand = "Required";
     if (!unitForm.model.trim()) errs.model = "Required";
     if (!unitForm.pricingUnit) errs.pricingUnit = "Required";
@@ -684,6 +726,7 @@ export default function Units() {
       if (
         errs.unitId ||
         errs.name ||
+        errs.category ||
         errs.brand ||
         errs.model ||
         errs.pricingUnit ||
@@ -713,8 +756,14 @@ export default function Units() {
       return;
     }
 
+    const rawCategory = String(unitForm.category || "").trim();
+    const canonicalCategory =
+      availableMachineryTypes.find((t) => t.toLowerCase() === rawCategory.toLowerCase()) ||
+      rawCategory;
+
     const payload = {
       ...unitForm,
+      category: canonicalCategory,
       memberRate: Number(unitForm.memberRate),
       nonmemberRate: unitForm.nonmemberRate !== "" ? Number(unitForm.nonmemberRate) : null,
       minRentalQuantity: Number(unitForm.minRentalQuantity || 1),
@@ -885,7 +934,7 @@ export default function Units() {
                   onChange: setFilterType,
                   options: [
                     { value: "All", label: "All Machinery Types" },
-                    ...MACHINERY_TYPES.map((t) => ({ value: t, label: t })),
+                    ...availableMachineryTypes.map((t) => ({ value: t, label: t })),
                   ],
                 },
                 {
@@ -1332,6 +1381,7 @@ export default function Units() {
                 <span>Unit &amp; Rate</span>
                 {(formErrors.unitId ||
                   formErrors.name ||
+                  formErrors.category ||
                   formErrors.brand ||
                   formErrors.model ||
                   formErrors.pricingUnit ||
@@ -1476,15 +1526,72 @@ export default function Units() {
                         <label className="wz-unit-label">
                           Type <span className="req">*</span>
                         </label>
-                        <select
-                          value={unitForm.category}
-                          onChange={(e) => updateUnitField("category", e.target.value)}
-                          className="wz-unit-select"
-                        >
-                          {MACHINERY_TYPES.map((t) => (
-                            <option key={t} value={t}>{t}</option>
-                          ))}
-                        </select>
+                        {customTypeMode ? (
+                          <div className="wz-unit-combo">
+                            <input
+                              type="text"
+                              autoFocus
+                              placeholder="New type"
+                              value={unitForm.category}
+                              onChange={(e) => updateUnitField("category", e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Escape") {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  updateUnitField(
+                                    "category",
+                                    lastSelectedType || modalMachineryTypes[0] || "Tractor"
+                                  );
+                                  setCustomTypeMode(false);
+                                }
+                              }}
+                              className={`wz-unit-input ${formErrors.category ? "is-error" : ""}`}
+                            />
+                            <button
+                              type="button"
+                              className="wz-unit-type-toggle"
+                              title="Select existing type"
+                              aria-label="Select existing type"
+                              onClick={() => {
+                                const trimmed = String(unitForm.category || "").trim();
+                                const matched = modalMachineryTypes.find(
+                                  (t) => t.toLowerCase() === trimmed.toLowerCase()
+                                );
+                                updateUnitField(
+                                  "category",
+                                  matched || lastSelectedType || modalMachineryTypes[0] || "Tractor"
+                                );
+                                setCustomTypeMode(false);
+                              }}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="6 9 12 15 18 9" />
+                              </svg>
+                            </button>
+                          </div>
+                        ) : (
+                          <select
+                            value={unitForm.category}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === "__NEW_TYPE__") {
+                                setLastSelectedType(unitForm.category || modalMachineryTypes[0] || "Tractor");
+                                updateUnitField("category", "");
+                                setCustomTypeMode(true);
+                              } else {
+                                setLastSelectedType(val);
+                                updateUnitField("category", val);
+                              }
+                            }}
+                            className={`wz-unit-select ${formErrors.category ? "is-error" : ""}`}
+                          >
+                            {modalMachineryTypes.map((t) => (
+                              <option key={t} value={t}>{t}</option>
+                            ))}
+                            <option value="__NEW_TYPE__">+ New type...</option>
+                          </select>
+                        )}
+                        {formErrors.category && <span className="wz-unit-error">{formErrors.category}</span>}
                       </div>
 
                       <div className="wz-unit-field">
