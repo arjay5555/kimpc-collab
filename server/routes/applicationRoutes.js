@@ -384,26 +384,32 @@ router.get("/applications/:id", optionalAuthentication, async (req, res) => {
   }
 });
 
+async function findApplicationByAnyId(rawIdInput) {
+  const rawId = clean(rawIdInput);
+  if (!rawId) return null;
+  let existing = null;
+  if (mongoose.isValidObjectId(rawId)) {
+    existing = await Application.findById(rawId);
+  }
+  if (!existing) {
+    existing = await Application.findOne({
+      $or: [
+        { displayId: rawId },
+        { displayId: rawId.toUpperCase() },
+      ],
+    });
+  }
+  if (!existing) {
+    const suffix = rawId.replace(/^APP-/i, "").toLowerCase();
+    const apps = await Application.find().sort({ createdAt: -1 }).limit(200);
+    existing = apps.find((a) => String(a._id).slice(-6).toLowerCase() === suffix || String(a._id) === rawId) || null;
+  }
+  return existing;
+}
+
 const handleApplicationUpdate = async (req, res) => {
   try {
-    let existing = null;
-    const rawId = (req.params.id || "").trim();
-    if (mongoose.isValidObjectId(rawId)) {
-      existing = await Application.findById(rawId);
-    }
-    if (!existing) {
-      existing = await Application.findOne({
-        $or: [
-          { displayId: rawId },
-          { displayId: rawId.toUpperCase() },
-        ],
-      });
-    }
-    if (!existing) {
-      const suffix = rawId.replace(/^APP-/i, "").toLowerCase();
-      const apps = await Application.find().sort({ createdAt: -1 }).limit(200);
-      existing = apps.find((a) => String(a._id).slice(-6).toLowerCase() === suffix || String(a._id) === rawId);
-    }
+    const existing = await findApplicationByAnyId(req.params.id);
     if (!existing) return fail(res, 404, "Application not found.");
 
     const actorEmail = cleanEmail(req.body.actorEmail || req.headers["x-actor-email"] || existing.memberEmail);
@@ -415,13 +421,14 @@ const handleApplicationUpdate = async (req, res) => {
       const totalBookingFee = Number(existing.totalAmount || existing.financials.totalPaid || 0) || 0;
       const prevStatus = clean(existing.paymentStatus || "Pending");
       const existingHistory = Array.isArray(existing.paymentHistory) ? existing.paymentHistory : [];
+      const activeHistory = existingHistory.filter((entry) => !entry.isVoided);
 
       let previousPaid = 0;
-      if (existingHistory.length > 0) {
-        previousPaid = existingHistory.reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
-      } else if (prevStatus === "Paid" || prevStatus === "Settled" || existing.financials.isSettled) {
+      if (activeHistory.length > 0) {
+        previousPaid = activeHistory.reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
+      } else if (existingHistory.length === 0 && (prevStatus === "Paid" || prevStatus === "Settled" || existing.financials.isSettled)) {
         previousPaid = Number(existing.financials.totalPaid || existing.paymentAmount || totalBookingFee) || 0;
-      } else if (prevStatus === "Partial") {
+      } else if (existingHistory.length === 0 && prevStatus === "Partial") {
         previousPaid = Number(existing.financials.totalPaid || existing.paymentAmount || 0) || 0;
       } else {
         // Pending bookings initialize paymentAmount with totalAmount on creation before any cash is collected
@@ -1268,6 +1275,156 @@ router.patch("/applications/:id/inspection", authManager, async (req, res) => {
   } catch (error) {
     console.error("Error updating inspection:", error);
     res.status(500).json({ error: "Failed to record inspection." });
+  }
+});
+
+// Void an incorrect payment transaction in paymentHistory and recalculate balances
+router.post("/applications/:id/void-payment", authManager, async (req, res) => {
+  try {
+    const existing = await findApplicationByAnyId(req.params.id);
+    if (!existing) return fail(res, 404, "Booking record not found.");
+    if (!existing.financials) existing.financials = {};
+    if (!Array.isArray(existing.paymentHistory)) existing.paymentHistory = [];
+
+    const voidedBy = clean(req.user?.fullName || req.user?.email || req.body.voidedBy) || "Manager";
+    const reason = clean(req.body.reason) || "Wrong payment transaction voided";
+    const now = new Date();
+    const totalBookingFee = Number(existing.totalAmount || existing.financials.totalPaid || 0) || 0;
+
+    let target = null;
+    if (req.body.entryId) {
+      target = existing.paymentHistory.find((entry) => String(entry._id) === String(req.body.entryId));
+    }
+    if (!target && req.body.index !== undefined && req.body.index !== null) {
+      const idx = Number(req.body.index);
+      if (Number.isInteger(idx) && idx >= 0 && idx < existing.paymentHistory.length) {
+        target = existing.paymentHistory[idx];
+      }
+    }
+
+    let voidedAmount = 0;
+    let voidedReceiptNo = "";
+
+    if (target) {
+      if (target.isVoided) {
+        return fail(res, 400, "This payment transaction has already been voided.");
+      }
+      voidedAmount = Number(target.amount) || 0;
+      voidedReceiptNo = clean(target.receiptNo) || existing.receiptNo || "";
+      target.isVoided = true;
+      target.voidedAt = now;
+      target.voidedBy = voidedBy;
+      target.voidReason = reason;
+    } else if (
+      existing.paymentHistory.length === 0 &&
+      (req.body.legacyFallback ||
+        ["Paid", "Settled", "Partial"].includes(clean(existing.paymentStatus)) ||
+        existing.financials.isSettled)
+    ) {
+      const prevPaid = Number(
+        existing.financials.totalPaid ||
+          existing.paymentAmount ||
+          (existing.financials.isSettled ? totalBookingFee : 0) ||
+          0
+      );
+      if (prevPaid <= 0) {
+        return fail(res, 404, "No recorded payment amount found to void.");
+      }
+      voidedAmount = prevPaid;
+      voidedReceiptNo =
+        clean(existing.receiptNo) ||
+        `OR-${now.getFullYear()}-${String(existing._id).slice(-4).toUpperCase()}`;
+      existing.paymentHistory.push({
+        receiptNo: voidedReceiptNo,
+        amount: prevPaid,
+        paymentMethod: existing.paymentMethod || "Cash",
+        referenceNumber: existing.paymentReference || "",
+        dateTime: existing.paymentDateTime || existing.createdAt?.toISOString() || now.toISOString(),
+        receivedBy: existing.receivedBy || "System",
+        recordedAt: existing.createdAt || now,
+        isVoided: true,
+        voidedAt: now,
+        voidedBy,
+        voidReason: reason,
+      });
+    } else {
+      return fail(res, 404, "Payment history transaction was not found.");
+    }
+
+    const activeEntries = existing.paymentHistory.filter((entry) => !entry.isVoided);
+    const cumulativePaid = activeEntries.reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
+    const remainingBalance = totalBookingFee > 0 ? Math.max(0, totalBookingFee - cumulativePaid) : 0;
+    const isNowSettled = cumulativePaid > 0 && remainingBalance <= 0;
+
+    existing.paymentStatus = isNowSettled ? "Paid" : cumulativePaid > 0 ? "Partial" : "Pending";
+    existing.paymentAmount = cumulativePaid;
+    existing.financials.totalPaid = cumulativePaid;
+    existing.financials.isSettled = isNowSettled;
+
+    const latestActive = activeEntries.length > 0 ? activeEntries[activeEntries.length - 1] : null;
+    if (latestActive) {
+      existing.receiptNo = latestActive.receiptNo || existing.receiptNo;
+      existing.paymentMethod = latestActive.paymentMethod || existing.paymentMethod;
+      existing.financials.paymentMethod = existing.paymentMethod;
+      existing.paymentReference = latestActive.referenceNumber || "";
+      existing.paymentDateTime = latestActive.dateTime || "";
+      existing.receivedBy = latestActive.receivedBy || existing.receivedBy;
+    } else {
+      existing.paymentReference = "";
+      existing.paymentDateTime = "";
+      existing.receivedBy = "";
+    }
+
+    if (!existing.timeline) existing.timeline = [];
+    existing.timeline.push({
+      event: "payment_voided",
+      title: "Payment Transaction Voided",
+      timestamp: now,
+      actor: voidedBy,
+      note: `Voided ₱${voidedAmount.toLocaleString()} (${voidedReceiptNo || "OR"}). Total Paid: ₱${cumulativePaid.toLocaleString()} / ₱${totalBookingFee.toLocaleString()} · Balance Due: ₱${remainingBalance.toLocaleString()}.`,
+    });
+
+    await existing.save();
+
+    await logAudit({
+      action: "PAYMENT_VOIDED",
+      actorEmail: req.user?.email || "manager",
+      actorRole: req.user?.role || "manager",
+      actorId: req.user?._id,
+      targetEmail: existing.memberEmail,
+      targetName: existing.memberName,
+      details: {
+        applicationId: existing.id,
+        voidedAmount,
+        voidedReceiptNo,
+        remainingPaid: cumulativePaid,
+        remainingBalance,
+        paymentStatus: existing.paymentStatus,
+        reason,
+      },
+      req,
+    });
+
+    try {
+      await Notification.create({
+        memberEmail: existing.memberEmail,
+        title: "Payment Transaction Voided",
+        message: `A payment entry of ₱${voidedAmount.toLocaleString()} (${voidedReceiptNo || "OR"}) for ${existing.equipment} was voided by ${voidedBy}. Remaining balance: ₱${remainingBalance.toLocaleString()}.`,
+        type: "booking",
+        relatedApplicationId: existing._id,
+      });
+    } catch (notifErr) {
+      console.warn("Could not notify member of voided payment:", notifErr.message);
+    }
+
+    return res.json({
+      ok: true,
+      message: `Voided payment of ₱${voidedAmount.toLocaleString()}.`,
+      application: existing,
+    });
+  } catch (error) {
+    console.error("Error voiding payment transaction:", error);
+    return res.status(500).json({ error: "Failed to void payment transaction." });
   }
 });
 

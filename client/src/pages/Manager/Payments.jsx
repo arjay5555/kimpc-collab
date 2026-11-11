@@ -138,6 +138,9 @@ export default function Payments() {
       const dbHistory = Array.isArray(app.paymentHistory) ? app.paymentHistory : [];
       const localHistory = Array.isArray(pRec?.paymentHistory) ? pRec.paymentHistory : [];
       const paymentHistory = dbHistory.length >= localHistory.length ? dbHistory : localHistory;
+      const activeDbHistory = dbHistory.filter((entry) => !entry.isVoided);
+      const activeLocalHistory = localHistory.filter((entry) => !entry.isVoided);
+      const activeHistory = paymentHistory.filter((entry) => !entry.isVoided);
 
       const dbStatusLower = String(app.paymentStatus || "").toLowerCase();
       const dbSettled =
@@ -147,7 +150,7 @@ export default function Payments() {
 
       let dbPaid = 0;
       if (dbHistory.length > 0) {
-        dbPaid = dbHistory.reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
+        dbPaid = activeDbHistory.reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
       } else if (dbSettled) {
         dbPaid = total;
       } else if (dbStatusLower === "partial") {
@@ -156,10 +159,10 @@ export default function Payments() {
 
       let localPaid = 0;
       if (pRec) {
-        if (pRec.amountPaid !== undefined) {
+        if (localHistory.length > 0) {
+          localPaid = activeLocalHistory.reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
+        } else if (pRec.amountPaid !== undefined) {
           localPaid = Number(pRec.amountPaid) || 0;
-        } else if (localHistory.length > 0) {
-          localPaid = localHistory.reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
         } else if (pRec.status === "Completed" && pRec.totalAmount !== undefined) {
           localPaid = Number(pRec.totalAmount) || total;
         }
@@ -167,21 +170,21 @@ export default function Payments() {
 
       const useLocalAhead =
         localHistory.length > dbHistory.length ||
-        (pRec?.amountPaid !== undefined && localPaid > dbPaid);
+        (dbHistory.length === 0 && pRec?.amountPaid !== undefined && localPaid > dbPaid);
       const rawPaid = useLocalAhead ? localPaid : dbPaid;
       const amountPaid = total > 0 ? Math.min(total, Math.max(0, rawPaid)) : Math.max(0, rawPaid);
       const balance = Math.max(0, total - amountPaid);
 
-      const isPaid = dbSettled || (total > 0 && amountPaid >= total);
+      const isPaid = (dbSettled && dbHistory.length === 0) || (total > 0 && amountPaid >= total);
       const isPartial = !isPaid && amountPaid > 0;
       const isOverdue = !isPaid && !isPartial && app.endDate && new Date(app.endDate) < new Date();
       const finalStatus = isPaid ? "Completed" : isPartial ? "Partial" : isOverdue ? "Overdue" : "Awaiting";
 
-      const latestInstallment = paymentHistory.length > 0 ? paymentHistory[paymentHistory.length - 1] : null;
+      const latestInstallment = activeHistory.length > 0 ? activeHistory[activeHistory.length - 1] : null;
       const finalMethod =
         latestInstallment?.paymentMethod || pRec?.paymentMethod || app.paymentMethod || "Cash";
       const finalType =
-        isPartial ? "Partial Rental Payment" : pRec?.paymentType || "Full Rental Payment";
+        isPartial ? "Partial Rental Payment" : isPaid ? (pRec?.paymentType || "Full Rental Payment") : "Awaiting Payment";
       const finalDateReceived =
         latestInstallment?.dateTime ||
         pRec?.dateReceived ||
@@ -258,9 +261,15 @@ export default function Payments() {
           : Array.isArray(inv.paymentHistory)
           ? inv.paymentHistory
           : [];
+        const localPaidVal =
+          localHist.length > 0
+            ? localHist.filter((entry) => !entry.isVoided).reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0)
+            : undefined;
         const mockPaid =
           pRec?.amountPaid !== undefined
             ? Number(pRec.amountPaid) || 0
+            : localPaidVal !== undefined
+            ? localPaidVal
             : inv.amountPaid !== undefined
             ? Number(inv.amountPaid) || 0
             : pRec?.status === "Completed" || inv.status === "Completed"
@@ -533,7 +542,7 @@ export default function Payments() {
             "INSTALLMENT HISTORY:",
             ...inv.paymentHistory.map(
               (h, idx) =>
-                `  #${idx + 1} ${h.receiptNo || "OR"} | PHP ${Number(h.amount || 0).toLocaleString()} | ${h.paymentMethod || "Cash"}${h.referenceNumber ? ` (Ref: ${h.referenceNumber})` : ""} | ${formatPaymentDateTimeDisplay(h.dateTime)} | By: ${h.receivedBy || activeReceiverName}`
+                `  #${idx + 1} ${h.receiptNo || "OR"} | PHP ${Number(h.amount || 0).toLocaleString()} | ${h.paymentMethod || "Cash"}${h.referenceNumber ? ` (Ref: ${h.referenceNumber})` : ""} | ${formatPaymentDateTimeDisplay(h.dateTime)} | By: ${h.receivedBy || activeReceiverName}${h.isVoided ? " [VOIDED]" : ""}`
             ),
           ]
         : [];
@@ -584,6 +593,7 @@ export default function Payments() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
   const [viewingPayment, setViewingPayment] = useState(null);
+  const [voidingEntryKey, setVoidingEntryKey] = useState(null);
 
   // Bookings available for recording payment (strictly exclude already Completed or Paid bookings)
   const availableBookingsForPayment = useMemo(() => {
@@ -716,6 +726,176 @@ export default function Payments() {
     if (window.confirm(`Are you sure you want to delete payment record for booking ${id}?`)) {
       setInvoices((prev) => prev.filter((inv) => inv.id !== id));
       setSelectedIds((prev) => prev.filter((item) => item !== id));
+    }
+  };
+
+  // Void a wrong payment entry from Payment History and recalculate balance due
+  const handleVoidPaymentEntry = async (paymentRow, entry, idx, isLegacyFallback = false) => {
+    if (!paymentRow || entry?.isVoided) return;
+    const entryAmt = Number(entry?.amount || 0);
+    const orLabel = entry?.receiptNo || paymentRow.receiptNo || "OR";
+    if (
+      !window.confirm(
+        `Void transaction #${idx + 1} (${orLabel} · ₱${entryAmt.toLocaleString()})?\n\nThis will mark the entry as voided and restore ₱${entryAmt.toLocaleString()} to the remaining balance.`
+      )
+    ) {
+      return;
+    }
+
+    const rowKey = `${paymentRow.id}-${idx}`;
+    setVoidingEntryKey(rowKey);
+
+    const applyLocalSync = (updatedHistory, nextPaid, updatedApp) => {
+      const totalFee = Number(paymentRow.amount || updatedApp?.totalAmount || 0) || 0;
+      const nextBalance = totalFee > 0 ? Math.max(0, totalFee - nextPaid) : 0;
+      const isOverdue =
+        nextPaid <= 0 && paymentRow.endDate && new Date(paymentRow.endDate) < new Date();
+      const nextStatus =
+        nextPaid > 0 && (totalFee <= 0 || nextBalance <= 0)
+          ? "Completed"
+          : nextPaid > 0
+          ? "Partial"
+          : isOverdue
+          ? "Overdue"
+          : "Awaiting";
+      const activeEntries = updatedHistory.filter((h) => !h.isVoided);
+      const latestActive =
+        activeEntries.length > 0 ? activeEntries[activeEntries.length - 1] : null;
+      const nextMethod = latestActive?.paymentMethod || paymentRow.paymentMethod || "Cash";
+      const nextRef = latestActive?.referenceNumber || "";
+      const nextDate = latestActive?.dateTime || "";
+      const nextReceipt = latestActive?.receiptNo || updatedApp?.receiptNo || paymentRow.receiptNo;
+      const nextReceiver = latestActive?.receivedBy || "";
+
+      try {
+        const stored = JSON.parse(localStorage.getItem("kimpc_booking_payments") || "{}");
+        const updatedRecord = {
+          bookingId: paymentRow.id,
+          rawId: paymentRow.rawId,
+          clientName: paymentRow.clientName,
+          machineryModel: paymentRow.machineryModel,
+          totalAmount: totalFee,
+          amount: totalFee,
+          amountPaid: nextPaid,
+          balance: nextBalance,
+          paymentType:
+            nextStatus === "Completed"
+              ? "Full Rental Payment"
+              : nextStatus === "Partial"
+              ? "Partial Rental Payment"
+              : "Awaiting Payment",
+          paymentMethod: nextMethod,
+          referenceNumber: nextRef,
+          dateReceived: nextDate,
+          receiptNo: nextReceipt,
+          receivedBy: nextReceiver,
+          recordedBy: nextReceiver,
+          status: nextStatus,
+          paymentHistory: updatedHistory,
+        };
+        if (paymentRow.id) stored[paymentRow.id] = updatedRecord;
+        if (paymentRow.rawId) stored[paymentRow.rawId] = updatedRecord;
+        localStorage.setItem("kimpc_booking_payments", JSON.stringify(stored));
+      } catch (err) {}
+
+      setViewingPayment((prev) =>
+        prev && prev.id === paymentRow.id
+          ? {
+              ...prev,
+              amountPaid: nextPaid,
+              balance: nextBalance,
+              status: nextStatus,
+              paymentHistory: updatedHistory,
+              paymentMethod: nextMethod,
+              referenceNumber: nextRef,
+              dateReceived: nextDate,
+              receiptNo: nextReceipt,
+              receivedBy: nextReceiver || activeReceiverName,
+              recordedBy: nextReceiver || activeReceiverName,
+            }
+          : prev
+      );
+    };
+
+    try {
+      if (paymentRow.rawId) {
+        const res = await api(`/applications/${paymentRow.rawId}/void-payment`, {
+          method: "POST",
+          body: {
+            entryId: entry?._id,
+            index: idx,
+            legacyFallback: Boolean(isLegacyFallback),
+          },
+        });
+        if (!res.ok) {
+          setFeedback(res.data?.error || "Failed to void payment transaction.");
+          return;
+        }
+        const updatedApp = res.data?.application;
+        const nextHistory = Array.isArray(updatedApp?.paymentHistory)
+          ? updatedApp.paymentHistory
+          : [];
+        const nextPaid = Number(updatedApp?.paymentAmount ?? updatedApp?.financials?.totalPaid ?? 0) || 0;
+
+        if (updatedApp) {
+          setLiveApplications((prev) =>
+            prev.map((app) =>
+              String(app._id || app.id) === String(paymentRow.rawId) ? updatedApp : app
+            )
+          );
+        }
+        applyLocalSync(nextHistory, nextPaid, updatedApp);
+        setFeedback(`Voided payment of ₱${entryAmt.toLocaleString()} (${orLabel}) for ${paymentRow.id}.`);
+        fetchApplications();
+      } else {
+        const existingHist = Array.isArray(paymentRow.paymentHistory)
+          ? paymentRow.paymentHistory
+          : [];
+        const baseHist =
+          existingHist.length > 0
+            ? existingHist
+            : [
+                {
+                  receiptNo: orLabel,
+                  amount: entryAmt,
+                  paymentMethod: paymentRow.paymentMethod || "Cash",
+                  referenceNumber: paymentRow.referenceNumber || "",
+                  dateTime: paymentRow.dateReceived || paymentRow.dueDate || new Date().toISOString(),
+                  receivedBy: paymentRow.receivedBy || activeReceiverName,
+                },
+              ];
+        const nextHistory = baseHist.map((item, i) =>
+          i === idx
+            ? {
+                ...item,
+                isVoided: true,
+                voidedAt: new Date().toISOString(),
+                voidedBy: activeReceiverName,
+              }
+            : item
+        );
+        const nextPaid = nextHistory
+          .filter((h) => !h.isVoided)
+          .reduce((sum, h) => sum + (Number(h.amount) || 0), 0);
+        applyLocalSync(nextHistory, nextPaid, null);
+        setInvoices((prev) =>
+          prev.map((inv) =>
+            inv.id === paymentRow.id
+              ? {
+                  ...inv,
+                  amountPaid: nextPaid,
+                  balance: Math.max(0, (Number(inv.amount) || 0) - nextPaid),
+                  paymentHistory: nextHistory,
+                }
+              : inv
+          )
+        );
+        setFeedback(`Voided payment of ₱${entryAmt.toLocaleString()} (${orLabel}) for ${paymentRow.id}.`);
+      }
+    } catch (err) {
+      setFeedback("Network error while voiding payment transaction.");
+    } finally {
+      setVoidingEntryKey(null);
     }
   };
 
@@ -1587,6 +1767,8 @@ export default function Payments() {
           const history = Array.isArray(viewingPayment.paymentHistory)
             ? viewingPayment.paymentHistory
             : [];
+          const activeHistoryCount = history.filter((entry) => !entry.isVoided).length;
+          const voidedHistoryCount = history.length - activeHistoryCount;
           const proofSrc = viewingPayment.proofOfPayment || viewingPayment.gcashProof;
           const scheduleDisplay = formatBookingDateRange(
             viewingPayment.startDate,
@@ -1775,36 +1957,82 @@ export default function Payments() {
                     <div className="wz-payview-section-title">
                       <span>Payment History</span>
                       <span>
-                        {history.length}{" "}
-                        {history.length === 1 ? "payment" : "payments"}
+                        {history.length > 0
+                          ? `${activeHistoryCount} ${activeHistoryCount === 1 ? "payment" : "payments"}${
+                              voidedHistoryCount > 0 ? ` · ${voidedHistoryCount} voided` : ""
+                            }`
+                          : paidAmount > 0
+                          ? "1 payment"
+                          : "0 payments"}
                       </span>
                     </div>
 
                     {history.length > 0 ? (
                       <div className="wz-payview-history-list">
-                        {history.map((entry, idx) => (
-                          <div
-                            key={`${entry.receiptNo || "pay"}-${idx}`}
-                            className="wz-payview-history-item"
-                          >
-                            <div className="wz-payview-history-left">
-                              <div className="wz-payview-history-top">
-                                #{idx + 1} · {entry.receiptNo || "OR"} ·{" "}
-                                {entry.paymentMethod || "Cash"}
-                                {entry.referenceNumber
-                                  ? ` · Ref ${entry.referenceNumber}`
-                                  : ""}
+                        {history.map((entry, idx) => {
+                          const entryKey = `${viewingPayment.id}-${idx}`;
+                          const isVoided = Boolean(entry.isVoided);
+                          return (
+                            <div
+                              key={`${entry.receiptNo || "pay"}-${idx}`}
+                              className={`wz-payview-history-item${isVoided ? " is-voided" : ""}`}
+                            >
+                              <div className="wz-payview-history-left">
+                                <div className="wz-payview-history-top" style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                                  <span>
+                                    #{idx + 1} · {entry.receiptNo || "OR"} ·{" "}
+                                    {entry.paymentMethod || "Cash"}
+                                    {entry.referenceNumber
+                                      ? ` · Ref ${entry.referenceNumber}`
+                                      : ""}
+                                  </span>
+                                  {isVoided && (
+                                    <span className="wz-payview-void-badge">Voided</span>
+                                  )}
+                                </div>
+                                <div className="wz-payview-history-sub">
+                                  {formatPaymentDateTimeDisplay(entry.dateTime)} · Received by{" "}
+                                  {entry.receivedBy || activeReceiverName}
+                                  {isVoided && entry.voidedBy
+                                    ? ` · Voided by ${entry.voidedBy}`
+                                    : ""}
+                                </div>
                               </div>
-                              <div className="wz-payview-history-sub">
-                                {formatPaymentDateTimeDisplay(entry.dateTime)} · Received by{" "}
-                                {entry.receivedBy || activeReceiverName}
+                              <div className="wz-payview-history-right">
+                                <span className="wz-payview-history-amt">
+                                  +₱{Number(entry.amount || 0).toLocaleString()}
+                                </span>
+                                {!isVoided && (
+                                  <button
+                                    type="button"
+                                    className="wz-payview-void-btn"
+                                    title="Void transaction"
+                                    aria-label="Void transaction"
+                                    disabled={Boolean(voidingEntryKey)}
+                                    onClick={() =>
+                                      handleVoidPaymentEntry(viewingPayment, entry, idx, false)
+                                    }
+                                  >
+                                    <svg
+                                      width="13"
+                                      height="13"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2.2"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      aria-hidden="true"
+                                    >
+                                      <circle cx="12" cy="12" r="9" />
+                                      <line x1="5.6" y1="5.6" x2="18.4" y2="18.4" />
+                                    </svg>
+                                  </button>
+                                )}
                               </div>
                             </div>
-                            <span className="wz-payview-history-amt">
-                              +₱{Number(entry.amount || 0).toLocaleString()}
-                            </span>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ) : paidAmount > 0 ? (
                       <div className="wz-payview-history-list">
@@ -1824,9 +2052,52 @@ export default function Payments() {
                                 activeReceiverName}
                             </div>
                           </div>
-                          <span className="wz-payview-history-amt">
-                            ₱{paidAmount.toLocaleString()}
-                          </span>
+                          <div className="wz-payview-history-right">
+                            <span className="wz-payview-history-amt">
+                              ₱{paidAmount.toLocaleString()}
+                            </span>
+                            <button
+                              type="button"
+                              className="wz-payview-void-btn"
+                              title="Void transaction"
+                              aria-label="Void transaction"
+                              disabled={Boolean(voidingEntryKey)}
+                              onClick={() =>
+                                handleVoidPaymentEntry(
+                                  viewingPayment,
+                                  {
+                                    receiptNo: viewingPayment.receiptNo || viewingPayment.id,
+                                    amount: paidAmount,
+                                    paymentMethod: viewingPayment.paymentMethod || "Cash",
+                                    referenceNumber: viewingPayment.referenceNumber || "",
+                                    dateTime:
+                                      viewingPayment.dateReceived || viewingPayment.dueDate,
+                                    receivedBy:
+                                      viewingPayment.receivedBy ||
+                                      viewingPayment.recordedBy ||
+                                      activeReceiverName,
+                                  },
+                                  0,
+                                  true
+                                )
+                              }
+                            >
+                              <svg
+                                width="13"
+                                height="13"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2.2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                aria-hidden="true"
+                              >
+                                <circle cx="12" cy="12" r="9" />
+                                <line x1="5.6" y1="5.6" x2="18.4" y2="18.4" />
+                              </svg>
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ) : (

@@ -763,7 +763,11 @@ export default function BookingApprovals() {
         totalAmountNum: Number(totalAmount) || 0,
         paidAmountNum: (() => {
           const hist = Array.isArray(item.paymentHistory) ? item.paymentHistory : [];
-          if (hist.length > 0) return hist.reduce((s, h) => s + (Number(h.amount) || 0), 0);
+          if (hist.length > 0) {
+            return hist
+              .filter((h) => !h.isVoided)
+              .reduce((s, h) => s + (Number(h.amount) || 0), 0);
+          }
           const pSt = String(item.paymentStatus || "").toLowerCase();
           if (pSt === "paid" || pSt === "settled" || item.financials?.isSettled) return Number(totalAmount) || 0;
           if (pSt === "partial") return Number(item.financials?.totalPaid ?? item.paymentAmount ?? 0) || 0;

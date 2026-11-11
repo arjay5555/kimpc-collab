@@ -9094,6 +9094,70 @@ input::-webkit-contacts-auto-fill-button {
   white-space: nowrap;
 }
 
+.wz-payview-history-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.wz-payview-void-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #94a3b8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.wz-payview-void-btn:hover:not(:disabled) {
+  background: rgba(220, 38, 38, 0.1);
+  border-color: rgba(220, 38, 38, 0.25);
+  color: #dc2626;
+}
+
+.wz-payview-void-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.wz-payview-history-item.is-voided {
+  opacity: 0.65;
+  background: #f8fafc;
+}
+
+.wz-payview-history-item.is-voided .wz-payview-history-amt {
+  color: #94a3b8;
+  text-decoration: line-through;
+}
+
+.wz-payview-void-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+[data-theme="dark"] .wz-payview-history-item.is-voided {
+  background: rgba(15, 23, 42, 0.7);
+}
+
+[data-theme="dark"] .wz-payview-void-badge {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.15);
+}
+
 .wz-payview-empty {
   font-size: 0.8rem;
   color: #64748b;
