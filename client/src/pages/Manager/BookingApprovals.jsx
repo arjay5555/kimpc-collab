@@ -61,6 +61,7 @@ export default function BookingApprovals() {
   const [bookingOverrides, setBookingOverrides] = useState({});
   const [deletedIds, setDeletedIds] = useState([]);
   const [viewingBooking, setViewingBooking] = useState(null);
+  const [viewModalTab, setViewModalTab] = useState("overview"); // "overview" | "payment" | "history"
   const [previewGcashImage, setPreviewGcashImage] = useState(null);
   const [modalStatus, setModalStatus] = useState("");
   const [modalRejectionReason, setModalRejectionReason] = useState("");
@@ -128,6 +129,7 @@ export default function BookingApprovals() {
   const handleOpenViewModal = (booking) => {
     const dates = getBookingDates(booking);
     setViewingBooking(booking);
+    setViewModalTab("overview");
     setModalStatus(booking.status);
     setModalRejectionReason(booking.rejectionReason || "");
     setModalVoidReason(booking.voidReason || "");
@@ -139,6 +141,7 @@ export default function BookingApprovals() {
   const handleOpenRejectModal = (booking) => {
     const dates = getBookingDates(booking);
     setViewingBooking(booking);
+    setViewModalTab("overview");
     setModalStatus("Rejected");
     setModalRejectionReason(booking.rejectionReason || "Machinery Under Maintenance");
     setModalVoidReason(booking.voidReason || "");
@@ -1737,26 +1740,31 @@ export default function BookingApprovals() {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="wz-booking-modal-header">
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <div>
-                  <span style={{ fontSize: "0.72rem", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                    Machinery Booking & Receipt Details
+            <div className="wz-booking-modal-header" style={{ padding: "16px 24px" }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: "800", color: "#0f172a" }}>
+                    {viewingBooking.id}
+                  </h3>
+                  <span
+                    className={`wz-status-pill wz-status-${viewingBooking.status.toLowerCase().replace(/\s+/g, "-")}`}
+                    style={{ fontSize: "0.74rem" }}
+                  >
+                    {viewingBooking.status}
                   </span>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "2px" }}>
-                    <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: "800", color: "#0f172a" }}>
-                      {viewingBooking.id}
-                    </h3>
-                    <span
-                      className={`wz-status-pill wz-status-${viewingBooking.status.toLowerCase()}`}
-                      style={{ fontSize: "0.74rem" }}
-                    >
-                      {viewingBooking.status}
-                    </span>
-                  </div>
+                  <span
+                    className={viewingBooking.paymentStatus === "Paid" ? "wz-payment-badge-paid" : "wz-payment-badge-pending"}
+                    style={{ fontSize: "0.72rem", padding: "3px 8px" }}
+                  >
+                    {viewingBooking.paymentStatus}
+                  </span>
+                </div>
+                <div style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "3px" }}>
+                  Booked on {viewingBooking.bookingDate} • {viewingBooking.machineryModel}
                 </div>
               </div>
               <button
+                type="button"
                 onClick={handleCloseViewModal}
                 style={{
                   background: "#f1f5f9",
@@ -1767,7 +1775,7 @@ export default function BookingApprovals() {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: "1rem",
+                  fontSize: "0.95rem",
                   cursor: "pointer",
                   color: "#64748b",
                   transition: "all 0.15s ease",
@@ -1778,736 +1786,703 @@ export default function BookingApprovals() {
               </button>
             </div>
 
+            {/* Clean Segmented Tab Bar */}
+            <div className="wz-modal-tab-bar">
+              <button
+                type="button"
+                className={`wz-modal-tab-btn ${viewModalTab === "overview" ? "active" : ""}`}
+                onClick={() => setViewModalTab("overview")}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="7" height="7" />
+                  <rect x="14" y="3" width="7" height="7" />
+                  <rect x="14" y="14" width="7" height="7" />
+                  <rect x="3" y="14" width="7" height="7" />
+                </svg>
+                <span>Overview</span>
+              </button>
+
+              <button
+                type="button"
+                className={`wz-modal-tab-btn ${viewModalTab === "payment" ? "active" : ""}`}
+                onClick={() => setViewModalTab("payment")}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="5" width="20" height="14" rx="2" />
+                  <line x1="2" y1="10" x2="22" y2="10" />
+                </svg>
+                <span>Payment &amp; Receipt</span>
+                <span
+                  style={{
+                    width: "7px",
+                    height: "7px",
+                    borderRadius: "50%",
+                    background: viewingBooking.paymentStatus === "Paid" ? "#059669" : "#d97706",
+                  }}
+                />
+              </button>
+
+              <button
+                type="button"
+                className={`wz-modal-tab-btn ${viewModalTab === "history" ? "active" : ""}`}
+                onClick={() => setViewModalTab("history")}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+                <span>Activity History</span>
+              </button>
+            </div>
+
             {/* Modal Body */}
-            <div className="wz-booking-modal-body">
-              {/* ================= 1. BOOKING SUMMARY ================= */}
-              <div className="wz-modal-section-card">
-                <div className="wz-modal-section-header">
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <span className="wz-modal-section-badge">1</span>
+            <div className="wz-booking-modal-body" style={{ padding: "18px 24px", gap: "16px" }}>
+              {viewModalTab === "overview" && (
+                <>
+                  {/* 1. Clean Booking Summary Strip */}
+                  <div className="wz-clean-summary-strip">
                     <div>
-                      <h4 className="wz-modal-section-heading">Booking Summary</h4>
-                      <span className="wz-modal-section-sub">Booking identification, schedule dates, duration, and status</span>
+                      <span className="wz-clean-kv-label">Booking Placed</span>
+                      <span className="wz-clean-kv-value">{viewingBooking.bookingDate}</span>
                     </div>
-                  </div>
-                  <span
-                    className={`wz-status-pill wz-status-${viewingBooking.status.toLowerCase().replace(/\s+/g, "-")}`}
-                    style={{ fontSize: "0.74rem" }}
-                  >
-                    {viewingBooking.status}
-                  </span>
-                </div>
-
-                {/* Key Summary Badges */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px" }}>
-                  <div style={{ background: "#f8fafc", padding: "10px 12px", borderRadius: "8px", border: "1px solid #f1f5f9" }}>
-                    <span style={{ fontSize: "0.70rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, display: "block", marginBottom: "2px" }}>
-                      Booking ID
-                    </span>
-                    <strong style={{ fontSize: "0.95rem", color: "#0f172a" }}>{viewingBooking.id}</strong>
-                  </div>
-
-                  <div style={{ background: "#f8fafc", padding: "10px 12px", borderRadius: "8px", border: "1px solid #f1f5f9" }}>
-                    <span style={{ fontSize: "0.70rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, display: "block", marginBottom: "2px" }}>
-                      Booking Placed Date
-                    </span>
-                    <strong style={{ fontSize: "0.88rem", color: "#334155" }}>{viewingBooking.bookingDate}</strong>
-                  </div>
-
-                  <div style={{ background: "#f8fafc", padding: "10px 12px", borderRadius: "8px", border: "1px solid #f1f5f9" }}>
-                    <span style={{ fontSize: "0.70rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, display: "block", marginBottom: "2px" }}>
-                      Rental Dates
-                    </span>
-                    <strong style={{ fontSize: "0.85rem", color: "#0f172a" }}>{viewingBooking.dateRange}</strong>
-                  </div>
-
-                  <div style={{ background: "#f8fafc", padding: "10px 12px", borderRadius: "8px", border: "1px solid #f1f5f9" }}>
-                    <span style={{ fontSize: "0.70rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, display: "block", marginBottom: "2px" }}>
-                      Duration &amp; Scope
-                    </span>
-                    <strong style={{ fontSize: "0.85rem", color: "#059669" }}>{viewingBooking.plan}</strong>
-                  </div>
-                </div>
-
-                {/* Cancellation Requested Alert & Actions */}
-                {(viewingBooking.status === "Cancellation Requested" || viewingBooking.cancellationRequested) && (
-                  <div
-                    style={{
-                      background: "#fff1f2",
-                      border: "1px solid #fecdd3",
-                      borderRadius: "10px",
-                      padding: "14px",
-                      marginTop: "4px",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "gap", gap: "8px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <span style={{ fontSize: "1.2rem" }}>⚠️</span>
-                        <strong style={{ color: "#9f1239", fontSize: "0.92rem" }}>
-                          Member Requested Booking Cancellation
-                        </strong>
-                      </div>
-                      {viewingBooking.cancellationRequestedAt && (
-                        <span style={{ fontSize: "0.76rem", color: "#9f1239" }}>
-                          Requested {new Date(viewingBooking.cancellationRequestedAt).toLocaleDateString()}
-                        </span>
-                      )}
-                    </div>
-                    <p style={{ margin: "6px 0 12px", fontSize: "0.84rem", color: "#881337" }}>
-                      <strong>Reason given:</strong>{" "}
-                      {viewingBooking.cancellationReason || "Member requested cancellation through the member portal."}
-                    </p>
-                    <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                      <button
-                        type="button"
-                        onClick={() => handleGrantCancellation(viewingBooking.rawId || viewingBooking.id)}
-                        style={{
-                          padding: "7px 14px",
-                          borderRadius: "8px",
-                          border: "none",
-                          background: "#dc2626",
-                          color: "#ffffff",
-                          fontWeight: "600",
-                          fontSize: "0.82rem",
-                          cursor: "pointer",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "6px",
-                        }}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                        Grant Cancellation
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeclineCancellation(viewingBooking.rawId || viewingBooking.id)}
-                        style={{
-                          padding: "7px 14px",
-                          borderRadius: "8px",
-                          border: "1px solid #cbd5e1",
-                          background: "#ffffff",
-                          color: "#334155",
-                          fontWeight: "600",
-                          fontSize: "0.82rem",
-                          cursor: "pointer",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "6px",
-                        }}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <line x1="18" y1="6" x2="6" y2="18" />
-                          <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                        Decline Request (Keep Approved)
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Status Switcher Toolbar */}
-                <div className="wz-status-changer-box" style={{ marginTop: "4px" }}>
-                  <div className="wz-status-changer-header">
-                    <span className="wz-status-changer-title">Change Booking Status</span>
-                    <span style={{ fontSize: "0.78rem", color: "#64748b" }}>
-                      Selected: <strong style={{ color: "#0f172a" }}>{modalStatus}</strong>
-                      {modalStatus !== viewingBooking.status && (
-                        <span style={{ marginLeft: "6px", color: "#64748b", fontStyle: "italic", fontSize: "0.74rem" }}>
-                          (Unsaved)
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                  <div className="wz-status-btn-group">
-                    {["Pending", "Approved", "Ongoing", "Returned", "Rescheduled", "Rejected", "Voided"].map((s) => {
-                      const isSelected = modalStatus.toLowerCase() === s.toLowerCase();
-                      return (
-                        <button
-                          key={s}
-                          type="button"
-                          className={`wz-status-switch-btn ${isSelected ? "active" : ""}`}
-                          onClick={() => setModalStatus(s)}
-                          title={`Select status ${s}`}
-                        >
-                          {isSelected && (
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                          )}
-                          {s}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Subpanel: Reason for Rejection */}
-                  {modalStatus === "Rejected" && (
-                    <div className="wz-modal-subpanel">
-                      <div className="wz-subpanel-title">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <circle cx="12" cy="12" r="10" />
-                          <line x1="12" y1="8" x2="12" y2="12" />
-                          <line x1="12" y1="16" x2="12.01" y2="16" />
-                        </svg>
-                        Specify Reason for Rejection:
-                      </div>
-
-                      <div className="wz-quick-preset-chips">
-                        {[
-                          "Machinery Under Maintenance",
-                          "Schedule Conflict / Unavailable",
-                          "Incomplete Documentation",
-                          "Operator Unavailable",
-                          "Adverse Weather Conditions",
-                          "Member Requested Cancellation",
-                        ].map((preset) => (
-                          <button
-                            key={preset}
-                            type="button"
-                            className={`wz-preset-chip ${modalRejectionReason === preset ? "active" : ""}`}
-                            onClick={() => setModalRejectionReason(preset)}
-                          >
-                            {preset}
-                          </button>
-                        ))}
-                      </div>
-
-                      <textarea
-                        className="wz-modal-textarea"
-                        placeholder="Type or select a reason for rejecting this booking..."
-                        value={modalRejectionReason}
-                        onChange={(e) => setModalRejectionReason(e.target.value)}
-                        rows={2}
-                      />
-                    </div>
-                  )}
-
-                  {/* Subpanel: Reschedule Dates */}
-                  {modalStatus === "Rescheduled" && (
-                    <div className="wz-modal-subpanel">
-                      <div className="wz-subpanel-title">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                          <line x1="16" y1="2" x2="16" y2="6" />
-                          <line x1="8" y1="2" x2="8" y2="6" />
-                          <line x1="3" y1="10" x2="21" y2="10" />
-                          <circle cx="12" cy="15" r="2" />
-                        </svg>
-                        Select New Booking Schedule Dates:
-                      </div>
-
-                      <div className="wz-modal-date-grid">
-                        <div className="wz-modal-date-field">
-                          <label className="wz-modal-date-label">New Start Date</label>
-                          <input
-                            type="date"
-                            className="wz-modal-date-input"
-                            value={modalStartDate}
-                            onChange={(e) => setModalStartDate(e.target.value)}
-                          />
-                        </div>
-                        <div className="wz-modal-date-field">
-                          <label className="wz-modal-date-label">New End Date</label>
-                          <input
-                            type="date"
-                            className="wz-modal-date-input"
-                            value={modalEndDate}
-                            min={modalStartDate}
-                            onChange={(e) => setModalEndDate(e.target.value)}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="wz-reschedule-calc-badge">
-                        <span>
-                          Updated Duration: <strong>{rescheduleDays} Day{rescheduleDays === 1 ? "" : "s"}</strong>
-                        </span>
-                        <span>
-                          Recalculated Total: <strong style={{ color: "var(--wz-primary-red)" }}>{rescheduleAmount}</strong>
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Subpanel: Void Booking */}
-                  {modalStatus === "Voided" && (
-                    <div className="wz-modal-subpanel">
-                      <div className="wz-void-notice-banner">
-                        ⚠️ <strong>Void Warning:</strong> Voiding will permanently invalidate this machinery rental transaction, cancel driver assignments, and release the unit for other cooperative members.
-                      </div>
-
-                      <div className="wz-subpanel-title">
-                        Reason for Voiding:
-                      </div>
-
-                      <div className="wz-quick-preset-chips">
-                        {[
-                          "Administrative Cancellation",
-                          "Duplicate Billing Entry",
-                          "Member Clerical Error",
-                          "Equipment Decommissioned",
-                        ].map((preset) => (
-                          <button
-                            key={preset}
-                            type="button"
-                            className={`wz-preset-chip ${modalVoidReason === preset ? "active" : ""}`}
-                            onClick={() => setModalVoidReason(preset)}
-                          >
-                            {preset}
-                          </button>
-                        ))}
-                      </div>
-
-                      <textarea
-                        className="wz-modal-textarea"
-                        placeholder="Type or select reason for voiding..."
-                        value={modalVoidReason}
-                        onChange={(e) => setModalVoidReason(e.target.value)}
-                        rows={2}
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* ================= 2. MEMBERS AND RENTAL REQUEST ================= */}
-              <div className="wz-modal-section-card">
-                <div className="wz-modal-section-header">
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <span className="wz-modal-section-badge">2</span>
                     <div>
-                      <h4 className="wz-modal-section-heading">Members &amp; Rental Request</h4>
-                      <span className="wz-modal-section-sub">Cooperative member profile and farm service site details</span>
+                      <span className="wz-clean-kv-label">Rental Schedule</span>
+                      <span className="wz-clean-kv-value">{viewingBooking.dateRange}</span>
                     </div>
-                  </div>
-                </div>
-
-                {/* Member Profile Info */}
-                <div className="wz-modal-client-card" style={{ marginBottom: 0 }}>
-                  <img
-                    src={
-                      viewingBooking.clientAvatar ||
-                      `https://ui-avatars.com/api/?name=${encodeURIComponent(viewingBooking.clientName)}&background=0284c7&color=fff&bold=true`
-                    }
-                    alt={viewingBooking.clientName}
-                    className="wz-modal-client-avatar"
-                    onError={(e) => {
-                      e.currentTarget.onerror = null;
-                      e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(viewingBooking.clientName)}&background=0284c7&color=fff&bold=true`;
-                    }}
-                  />
-                  <div className="wz-modal-client-meta">
-                    <div className="wz-modal-client-name-row">
-                      <h4 className="wz-modal-client-name">{viewingBooking.clientName}</h4>
-                      <span className="wz-modal-coop-badge">
-                        {viewingBooking.coopId || "COOP MEMBER"}
-                      </span>
-                    </div>
-                    <div className="wz-modal-contact-grid">
-                      <div className="wz-modal-contact-item" title={viewingBooking.clientEmail}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-                          <polyline points="22,6 12,13 2,6" />
-                        </svg>
-                        <span>{viewingBooking.clientEmail || "client@example.com"}</span>
-                      </div>
-                      <div className="wz-modal-contact-item" title={viewingBooking.clientPhone}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-                        </svg>
-                        <span>{viewingBooking.clientPhone || "+63 917 123 4567"}</span>
-                      </div>
-                      <div className="wz-modal-contact-item" style={{ gridColumn: "1 / -1" }} title={viewingBooking.clientAddress}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                          <circle cx="12" cy="10" r="3" />
-                        </svg>
-                        <span>{viewingBooking.clientAddress || "Kalilangan, Bukidnon"}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Farm Site & Land Scope Grid */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", background: "#f8fafc", padding: "12px 14px", borderRadius: "8px", border: "1px solid #f1f5f9" }}>
-                  <div>
-                    <span style={{ fontSize: "0.70rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, display: "block", marginBottom: "2px" }}>
-                      🌾 Service Land Area
-                    </span>
-                    <strong style={{ fontSize: "0.88rem", color: "#0f172a" }}>
-                      {viewingBooking.hectares ? `${viewingBooking.hectares} Hectare${viewingBooking.hectares === 1 ? "" : "s"}` : viewingBooking.plan}
-                    </strong>
-                    <span style={{ fontSize: "0.72rem", color: "#64748b", display: "block", marginTop: "2px" }}>
-                      Plan Mode: {viewingBooking.bookingType ? `${viewingBooking.bookingType.toUpperCase()} Basis` : "Hectare basis"}
-                    </span>
-                  </div>
-
-                  <div>
-                    <span style={{ fontSize: "0.70rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, display: "block", marginBottom: "2px" }}>
-                      📍 Farm Location
-                    </span>
-                    <strong style={{ fontSize: "0.85rem", color: "#0f172a" }}>
-                      {viewingBooking.farmFormattedAddress || viewingBooking.farmLocation || "Kimagting, Kalilangan, Bukidnon"}
-                    </strong>
-                    {viewingBooking.farmCoordinates?.lat && viewingBooking.farmCoordinates?.lng && (
-                      <a
-                        href={`https://www.google.com/maps?q=${viewingBooking.farmCoordinates.lat},${viewingBooking.farmCoordinates.lng}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ fontSize: "0.72rem", color: "#0284c7", display: "inline-flex", alignItems: "center", gap: "3px", textDecoration: "none", marginTop: "3px", fontWeight: 600 }}
-                      >
-                        📍 GPS: {Number(viewingBooking.farmCoordinates.lat).toFixed(4)}, {Number(viewingBooking.farmCoordinates.lng).toFixed(4)} ↗
-                      </a>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* ================= 3. UNIT AND OPERATOR ASSIGNMENT ================= */}
-              <div className="wz-modal-section-card">
-                <div className="wz-modal-section-header">
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <span className="wz-modal-section-badge">3</span>
                     <div>
-                      <h4 className="wz-modal-section-heading">Unit &amp; Operator Assignment</h4>
-                      <span className="wz-modal-section-sub">Designated machinery asset specifications and operator dispatch</span>
+                      <span className="wz-clean-kv-label">Duration &amp; Scope</span>
+                      <span className="wz-clean-kv-value" style={{ color: "#059669" }}>{viewingBooking.plan}</span>
                     </div>
-                  </div>
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                  {/* Machinery Unit Box */}
-                  <div style={{ background: "#f8fafc", padding: "12px 14px", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
-                      <span style={{ fontSize: "1.1rem" }}>🚜</span>
-                      <span style={{ fontSize: "0.72rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>
-                        Assigned Machinery Unit
-                      </span>
-                    </div>
-                    <div style={{ fontSize: "0.92rem", fontWeight: 800, color: "#0f172a" }}>
-                      {viewingBooking.machineryModel}
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "4px" }}>
-                      <span className="wz-machinery-badge">{viewingBooking.category}</span>
-                      {viewingBooking.machineryUnitId && (
-                        <span style={{ fontSize: "0.72rem", color: "#0284c7", background: "#e0f2fe", padding: "1px 6px", borderRadius: "4px", fontWeight: 700 }}>
-                          Unit: {viewingBooking.machineryUnitId}
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ fontSize: "0.74rem", color: "#64748b", marginTop: "6px" }}>
-                      Daily Rate: <strong>₱{Number(viewingBooking.dailyRate || 2800).toLocaleString()} / day</strong>
-                    </div>
-                  </div>
-
-                  {/* Operator Assignment Box */}
-                  <div style={{ background: "#f8fafc", padding: "12px 14px", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
-                      <span style={{ fontSize: "1.1rem" }}>👷</span>
-                      <span style={{ fontSize: "0.72rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>
-                        Equipment Operator
-                      </span>
-                    </div>
-                    <div style={{ fontSize: "0.92rem", fontWeight: 800, color: "#0f172a" }}>
-                      {viewingBooking.hasDriver
-                        ? (viewingBooking.assignedDriver || "Coop Operator Assigned")
-                        : "Self-Operated by Member"}
-                    </div>
-                    <div style={{ fontSize: "0.74rem", color: viewingBooking.hasDriver ? "#059669" : "#64748b", marginTop: "4px", fontWeight: 600 }}>
-                      {viewingBooking.hasDriver ? "✓ Operator Service Included" : "Member Certified Operator"}
-                    </div>
-                    <div style={{ fontSize: "0.74rem", color: "#64748b", marginTop: "6px" }}>
-                      📞 Contact: {viewingBooking.driverPhone || (viewingBooking.hasDriver ? "+63 917 123 4567" : viewingBooking.clientPhone || "N/A")}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* ================= 4. PAYMENT SUMMARY ================= */}
-              <div className="wz-modal-section-card">
-                <div className="wz-modal-section-header">
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <span className="wz-modal-section-badge">4</span>
                     <div>
-                      <h4 className="wz-modal-section-heading">Payment Summary</h4>
-                      <span className="wz-modal-section-sub">Payment settlement, receipt records, and financial voucher</span>
+                      <span className="wz-clean-kv-label">Total Payable</span>
+                      <span className="wz-clean-kv-value">{viewingBooking.paymentAmount || "₱0.00"}</span>
                     </div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <span className={viewingBooking.paymentStatus === "Paid" ? "wz-payment-badge-paid" : "wz-payment-badge-pending"} style={{ padding: "4px 10px", fontSize: "0.78rem" }}>
-                      Payment: {viewingBooking.paymentStatus}
-                    </span>
-                    {viewingBooking.paymentStatus !== "Paid" && (
-                      <button
-                        type="button"
-                        onClick={() => handleSettlePayment(viewingBooking)}
-                        style={{
-                          background: "#059669",
-                          color: "#ffffff",
-                          border: "none",
-                          borderRadius: "8px",
-                          padding: "5px 12px",
-                          fontSize: "0.76rem",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "5px",
-                          boxShadow: "0 2px 6px rgba(5, 150, 105, 0.25)",
-                        }}
-                        title="Verify payment and issue official receipt"
-                      >
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                        Confirm &amp; Settle Payment
-                      </button>
-                    )}
-                  </div>
-                </div>
 
-                {/* Financial Metrics Cards */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "10px" }}>
-                  <div style={{ background: "#f8fafc", padding: "10px 12px", borderRadius: "8px", border: "1px solid #f1f5f9" }}>
-                    <span style={{ fontSize: "0.70rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, display: "block", marginBottom: "2px" }}>
-                      Payment Amount
-                    </span>
-                    <strong style={{ fontSize: "1.15rem", color: "#0f172a", fontWeight: 900 }}>
-                      {viewingBooking.paymentAmount || "₱0.00"}
-                    </strong>
-                  </div>
-
-                  <div style={{ background: "#f8fafc", padding: "10px 12px", borderRadius: "8px", border: "1px solid #f1f5f9" }}>
-                    <span style={{ fontSize: "0.70rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, display: "block", marginBottom: "2px" }}>
-                      Payment Method
-                    </span>
-                    <strong style={{ fontSize: "0.85rem", color: "#0284c7" }}>
-                      {viewingBooking.paymentMethod || "Cash"}
-                    </strong>
-                    {viewingBooking.cashPaymentOption && (
-                      <span style={{ fontSize: "0.70rem", color: "#64748b", display: "block" }}>
-                        ({viewingBooking.cashPaymentOption})
-                      </span>
-                    )}
-                  </div>
-
-                  <div style={{ background: "#f8fafc", padding: "10px 12px", borderRadius: "8px", border: "1px solid #f1f5f9" }}>
-                    <span style={{ fontSize: "0.70rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, display: "block", marginBottom: "2px" }}>
-                      Date Received
-                    </span>
-                    <strong style={{ fontSize: "0.85rem", color: "#334155" }}>
-                      {viewingBooking.dateReceived || (viewingBooking.paymentStatus === "Paid" ? viewingBooking.bookingDate : "Pending Settlement")}
-                    </strong>
-                  </div>
-
-                  <div style={{ background: "#f8fafc", padding: "10px 12px", borderRadius: "8px", border: "1px solid #f1f5f9" }}>
-                    <span style={{ fontSize: "0.70rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, display: "block", marginBottom: "2px" }}>
-                      Receipt / Ref No.
-                    </span>
-                    <strong style={{ fontSize: "0.85rem", color: "#0f172a", fontFamily: "monospace" }}>
-                      {viewingBooking.receiptNo || viewingBooking.referenceNumber || viewingBooking.id}
-                    </strong>
-                  </div>
-
-                  <div style={{ background: "#f8fafc", padding: "10px 12px", borderRadius: "8px", border: "1px solid #f1f5f9" }}>
-                    <span style={{ fontSize: "0.70rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, display: "block", marginBottom: "2px" }}>
-                      Recorded By
-                    </span>
-                    <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#166534", background: "#dcfce7", padding: "2px 8px", borderRadius: "6px", display: "inline-block" }}>
-                      👤 {viewingBooking.recordedBy || user?.fullName || user?.email || "Manager"}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Attached Proof of Payment (GCash) if exists */}
-                {(viewingBooking.proofOfPayment || viewingBooking.gcashProof) && (
-                  <div style={{ borderTop: "1px dashed #e2e8f0", paddingTop: "10px", display: "flex", alignItems: "center", gap: "12px" }}>
-                    <img
-                      src={viewingBooking.proofOfPayment || viewingBooking.gcashProof}
-                      alt="Proof of Payment"
-                      onClick={() => setPreviewGcashImage(viewingBooking.proofOfPayment || viewingBooking.gcashProof)}
+                  {/* Cancellation Requested Alert & Actions */}
+                  {(viewingBooking.status === "Cancellation Requested" || viewingBooking.cancellationRequested) && (
+                    <div
                       style={{
-                        width: "48px",
-                        height: "48px",
-                        objectFit: "cover",
-                        borderRadius: "6px",
-                        border: "2px solid #059669",
-                        cursor: "pointer",
+                        background: "#fff1f2",
+                        border: "1px solid #fecdd3",
+                        borderRadius: "10px",
+                        padding: "14px 16px",
                       }}
-                      title="Click to view full image"
-                    />
-                    <div>
-                      <span style={{ fontSize: "0.75rem", color: "#065f46", fontWeight: 700, display: "block" }}>
-                        ✓ GCash / Transfer Proof Attached
+                    >
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.5">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="8" x2="12" y2="12" />
+                            <line x1="12" y1="16" x2="12.01" y2="16" />
+                          </svg>
+                          <strong style={{ color: "#9f1239", fontSize: "0.9rem" }}>
+                            Member Requested Booking Cancellation
+                          </strong>
+                        </div>
+                        {viewingBooking.cancellationRequestedAt && (
+                          <span style={{ fontSize: "0.75rem", color: "#9f1239" }}>
+                            Requested {new Date(viewingBooking.cancellationRequestedAt).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
+                      <p style={{ margin: "6px 0 12px", fontSize: "0.83rem", color: "#881337" }}>
+                        <strong>Reason given:</strong>{" "}
+                        {viewingBooking.cancellationReason || "Member requested cancellation through the member portal."}
+                      </p>
+                      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          onClick={() => handleGrantCancellation(viewingBooking.rawId || viewingBooking.id)}
+                          style={{
+                            padding: "6px 14px",
+                            borderRadius: "8px",
+                            border: "none",
+                            background: "#dc2626",
+                            color: "#ffffff",
+                            fontWeight: "600",
+                            fontSize: "0.8rem",
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                          }}
+                        >
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                          Grant Cancellation
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeclineCancellation(viewingBooking.rawId || viewingBooking.id)}
+                          style={{
+                            padding: "6px 14px",
+                            borderRadius: "8px",
+                            border: "1px solid #cbd5e1",
+                            background: "#ffffff",
+                            color: "#334155",
+                            fontWeight: "600",
+                            fontSize: "0.8rem",
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                          }}
+                        >
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                          </svg>
+                          Decline Request
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 2 & 3. Two-Column Clean Grid: Member & Request | Unit & Operator */}
+                  <div className="wz-clean-two-col">
+                    {/* Left Card: Member & Rental Request */}
+                    <div className="wz-clean-card">
+                      <h5 className="wz-clean-card-title">
+                        <span>Member &amp; Farm Site</span>
+                        <span className="wz-modal-coop-badge" style={{ fontSize: "0.68rem", padding: "2px 8px" }}>
+                          {viewingBooking.coopId || "COOP MEMBER"}
+                        </span>
+                      </h5>
+
+                      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                        <img
+                          src={
+                            viewingBooking.clientAvatar ||
+                            `https://ui-avatars.com/api/?name=${encodeURIComponent(viewingBooking.clientName)}&background=0284c7&color=fff&bold=true`
+                          }
+                          alt={viewingBooking.clientName}
+                          style={{
+                            width: "44px",
+                            height: "44px",
+                            borderRadius: "50%",
+                            objectFit: "cover",
+                            border: "1px solid #e2e8f0",
+                            flexShrink: 0,
+                          }}
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(viewingBooking.clientName)}&background=0284c7&color=fff&bold=true`;
+                          }}
+                        />
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {viewingBooking.clientName}
+                          </div>
+                          <div style={{ fontSize: "0.78rem", color: "#64748b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {viewingBooking.clientPhone || "No phone"}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px", fontSize: "0.8rem", color: "#475569" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" style={{ flexShrink: 0 }}>
+                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                            <polyline points="22,6 12,13 2,6" />
+                          </svg>
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {viewingBooking.clientEmail || "client@example.com"}
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" style={{ flexShrink: 0 }}>
+                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                            <circle cx="12" cy="10" r="3" />
+                          </svg>
+                          <span>{viewingBooking.clientAddress || "Kalilangan, Bukidnon"}</span>
+                        </div>
+                      </div>
+
+                      <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: "10px", marginTop: "2px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                        <div>
+                          <span className="wz-clean-kv-label">Service Area</span>
+                          <span className="wz-clean-kv-value" style={{ fontSize: "0.82rem" }}>
+                            {viewingBooking.hectares ? `${viewingBooking.hectares} Hectare${viewingBooking.hectares === 1 ? "" : "s"}` : viewingBooking.plan}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="wz-clean-kv-label">Farm Location</span>
+                          <span className="wz-clean-kv-value" style={{ fontSize: "0.82rem", display: "block" }}>
+                            {viewingBooking.farmFormattedAddress || viewingBooking.farmLocation || "Kalilangan, Bukidnon"}
+                          </span>
+                          {viewingBooking.farmCoordinates?.lat && viewingBooking.farmCoordinates?.lng && (
+                            <a
+                              href={`https://www.google.com/maps?q=${viewingBooking.farmCoordinates.lat},${viewingBooking.farmCoordinates.lng}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ fontSize: "0.72rem", color: "#0284c7", textDecoration: "none", fontWeight: 600, display: "inline-block", marginTop: "2px" }}
+                            >
+                              Open Map ↗
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right Card: Unit & Operator Assignment */}
+                    <div className="wz-clean-card">
+                      <h5 className="wz-clean-card-title">
+                        <span>Unit &amp; Operator</span>
+                        <span className="wz-machinery-badge" style={{ fontSize: "0.68rem" }}>
+                          {viewingBooking.category}
+                        </span>
+                      </h5>
+
+                      <div>
+                        <span className="wz-clean-kv-label">Machinery Model</span>
+                        <div style={{ fontSize: "0.94rem", fontWeight: 700, color: "#0f172a" }}>
+                          {viewingBooking.machineryModel}
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "4px" }}>
+                          {viewingBooking.machineryUnitId && (
+                            <span style={{ fontSize: "0.72rem", color: "#0284c7", background: "#f0f9ff", padding: "2px 7px", borderRadius: "4px", fontWeight: 600, border: "1px solid #bae6fd" }}>
+                              Unit: {viewingBooking.machineryUnitId}
+                            </span>
+                          )}
+                          <span style={{ fontSize: "0.76rem", color: "#64748b" }}>
+                            Rate: <strong style={{ color: "#0f172a" }}>₱{Number(viewingBooking.dailyRate || 2800).toLocaleString()}</strong>/day
+                          </span>
+                        </div>
+                      </div>
+
+                      <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: "10px", marginTop: "auto" }}>
+                        <span className="wz-clean-kv-label">Assigned Operator</span>
+                        <div style={{ fontSize: "0.9rem", fontWeight: 700, color: "#0f172a" }}>
+                          {viewingBooking.hasDriver
+                            ? (viewingBooking.assignedDriver || "Coop Operator Assigned")
+                            : "Self-Operated by Member"}
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "6px", marginTop: "4px" }}>
+                          <span style={{ fontSize: "0.74rem", color: viewingBooking.hasDriver ? "#059669" : "#64748b", fontWeight: 600 }}>
+                            {viewingBooking.hasDriver ? "Coop Operator Included" : "Member Certified"}
+                          </span>
+                          <span style={{ fontSize: "0.76rem", color: "#64748b" }}>
+                            {viewingBooking.driverPhone || (viewingBooking.hasDriver ? "+63 917 123 4567" : viewingBooking.clientPhone || "N/A")}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Clean Status Switcher Toolbar */}
+                  <div className="wz-clean-card" style={{ background: "#f8fafc", padding: "14px 16px" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
+                      <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: "0.4px" }}>
+                        Update Booking Status
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => setPreviewGcashImage(viewingBooking.proofOfPayment || viewingBooking.gcashProof)}
-                        style={{
-                          background: "#0284c7",
-                          color: "#ffffff",
-                          border: "none",
-                          borderRadius: "6px",
-                          padding: "3px 8px",
-                          fontSize: "0.72rem",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                          marginTop: "2px",
-                        }}
-                      >
-                        🔍 View Full Proof
-                      </button>
+                      <span style={{ fontSize: "0.78rem", color: "#64748b" }}>
+                        Selected: <strong style={{ color: "#0f172a" }}>{modalStatus}</strong>
+                        {modalStatus !== viewingBooking.status && (
+                          <span style={{ marginLeft: "6px", color: "#059669", fontWeight: 600, fontSize: "0.74rem" }}>
+                            (Unsaved change)
+                          </span>
+                        )}
+                      </span>
                     </div>
-                  </div>
-                )}
 
-                {/* Official Receipt / Billing Voucher */}
-                <div className="wz-receipt-voucher" style={{ marginTop: "4px" }}>
-                  <div className="wz-receipt-header">
-                    <div>
-                      <h5 className="wz-receipt-coop-name">KALILANGAN IRRIGATORS MULTI-PURPOSE COOPERATIVE (KIMPC)</h5>
-                      <p className="wz-receipt-sub">Official Machinery Rental Billing Voucher &amp; Settlement</p>
+                    <div className="wz-status-btn-group">
+                      {["Pending", "Approved", "Ongoing", "Returned", "Rescheduled", "Rejected", "Voided"].map((s) => {
+                        const isSelected = modalStatus.toLowerCase() === s.toLowerCase();
+                        return (
+                          <button
+                            key={s}
+                            type="button"
+                            className={`wz-status-switch-btn ${isSelected ? "active" : ""}`}
+                            onClick={() => setModalStatus(s)}
+                            title={`Select status ${s}`}
+                          >
+                            {isSelected && (
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            )}
+                            {s}
+                          </button>
+                        );
+                      })}
                     </div>
-                    <div className="wz-receipt-num-box">
-                      <div className="wz-receipt-num-label">Receipt No.</div>
-                      <div className="wz-receipt-num">{viewingBooking.receiptNo || "REC-2028-0001"}</div>
-                    </div>
-                  </div>
 
-                  {/* Status Notice Banners on Receipt */}
-                  {(viewingBooking.status === "Rejected" || modalStatus === "Rejected") && (
-                    <div style={{ marginBottom: "12px", padding: "8px 12px", background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: "8px", fontSize: "0.78rem", color: "#991b1b" }}>
-                      <strong>⛔ Reason for Rejection:</strong> {modalRejectionReason || viewingBooking.rejectionReason || "No reason specified"}
-                    </div>
-                  )}
-                  {(viewingBooking.status === "Voided" || modalStatus === "Voided") && (
-                    <div style={{ marginBottom: "12px", padding: "8px 12px", background: "#f1f5f9", border: "1px dashed #cbd5e1", borderRadius: "8px", fontSize: "0.78rem", color: "#475569" }}>
-                      <strong>🚫 Booking Voided:</strong> {modalVoidReason || viewingBooking.voidReason || "Administrative Cancellation"}
-                    </div>
-                  )}
-                  {(viewingBooking.status === "Rescheduled" || modalStatus === "Rescheduled") && (
-                    <div style={{ marginBottom: "12px", padding: "8px 12px", background: "#f3e8ff", border: "1px solid #d8b4fe", borderRadius: "8px", fontSize: "0.78rem", color: "#6b21a8" }}>
-                      <strong>🔄 Rescheduled Schedule:</strong> {modalStartDate && modalEndDate ? `${modalStartDate} to ${modalEndDate}` : viewingBooking.dateRange} ({rescheduleDays} Days)
-                    </div>
-                  )}
+                    {/* Subpanel: Reason for Rejection */}
+                    {modalStatus === "Rejected" && (
+                      <div className="wz-modal-subpanel">
+                        <div className="wz-subpanel-title">Specify Reason for Rejection:</div>
+                        <div className="wz-quick-preset-chips">
+                          {[
+                            "Machinery Under Maintenance",
+                            "Schedule Conflict / Unavailable",
+                            "Incomplete Documentation",
+                            "Operator Unavailable",
+                            "Adverse Weather Conditions",
+                            "Member Requested Cancellation",
+                          ].map((preset) => (
+                            <button
+                              key={preset}
+                              type="button"
+                              className={`wz-preset-chip ${modalRejectionReason === preset ? "active" : ""}`}
+                              onClick={() => setModalRejectionReason(preset)}
+                            >
+                              {preset}
+                            </button>
+                          ))}
+                        </div>
+                        <textarea
+                          className="wz-modal-textarea"
+                          placeholder="Type or select a reason for rejecting this booking..."
+                          value={modalRejectionReason}
+                          onChange={(e) => setModalRejectionReason(e.target.value)}
+                          rows={2}
+                        />
+                      </div>
+                    )}
 
-                  <table className="wz-receipt-table">
-                    <thead>
-                      <tr>
-                        <th>Description</th>
-                        <th>Terms / Days</th>
-                        <th style={{ textAlign: "right" }}>Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td>
-                          <strong>{viewingBooking.machineryModel}</strong>
-                          <div style={{ fontSize: "0.72rem", color: "#64748b" }}>
-                            Daily Rate: ₱{Number(viewingBooking.dailyRate || 2800).toLocaleString()} / day
+                    {/* Subpanel: Reschedule Dates */}
+                    {modalStatus === "Rescheduled" && (
+                      <div className="wz-modal-subpanel">
+                        <div className="wz-subpanel-title">Select New Booking Schedule Dates:</div>
+                        <div className="wz-modal-date-grid">
+                          <div className="wz-modal-date-field">
+                            <label className="wz-modal-date-label">New Start Date</label>
+                            <input
+                              type="date"
+                              className="wz-modal-date-input"
+                              value={modalStartDate}
+                              onChange={(e) => setModalStartDate(e.target.value)}
+                            />
                           </div>
-                        </td>
-                        <td>{viewingBooking.plan}</td>
-                        <td style={{ textAlign: "right", fontWeight: "600" }}>{viewingBooking.paymentAmount}</td>
-                      </tr>
-                      <tr>
-                        <td>
-                          Assigned Operator Service
-                          <div style={{ fontSize: "0.72rem", color: "#64748b" }}>
-                            {viewingBooking.hasDriver ? (viewingBooking.assignedDriver || "Coop Operator") : "Self-Operated by Member"}
+                          <div className="wz-modal-date-field">
+                            <label className="wz-modal-date-label">New End Date</label>
+                            <input
+                              type="date"
+                              className="wz-modal-date-input"
+                              value={modalEndDate}
+                              min={modalStartDate}
+                              onChange={(e) => setModalEndDate(e.target.value)}
+                            />
                           </div>
-                        </td>
-                        <td>{viewingBooking.hasDriver ? "Included" : "N/A"}</td>
-                        <td style={{ textAlign: "right", color: "#059669" }}>₱0.00</td>
-                      </tr>
-                      <tr>
-                        <td>Coop Maintenance & Insurance Guarantee</td>
-                        <td>Coop Benefit</td>
-                        <td style={{ textAlign: "right", color: "#059669" }}>₱0.00</td>
-                      </tr>
-                      <tr>
-                        <td>CDA RA 9520 Member Tax Exemption</td>
-                        <td>Tax Exempt</td>
-                        <td style={{ textAlign: "right", color: "#059669" }}>₱0.00</td>
-                      </tr>
-                    </tbody>
-                    <tfoot>
-                      <tr>
-                        <td colSpan="2">Total Amount Payable:</td>
-                        <td style={{ textAlign: "right", color: "var(--wz-primary-red)" }}>
-                          {viewingBooking.paymentAmount}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
+                        </div>
+                        <div className="wz-reschedule-calc-badge">
+                          <span>
+                            Updated Duration: <strong>{rescheduleDays} Day{rescheduleDays === 1 ? "" : "s"}</strong>
+                          </span>
+                          <span>
+                            Recalculated Total: <strong style={{ color: "var(--wz-primary-red)" }}>{rescheduleAmount}</strong>
+                          </span>
+                        </div>
+                      </div>
+                    )}
 
-                  <div className="wz-receipt-footer-strip">
-                    <div>
-                      <span>Payment Method: </span>
-                      <strong style={{ color: "#0f172a" }}>{viewingBooking.paymentMethod || "Cash"}</strong>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                      <span>Payment Status: </span>
-                      <span className={viewingBooking.paymentStatus === "Paid" ? "wz-payment-badge-paid" : "wz-payment-badge-pending"}>
+                    {/* Subpanel: Void Booking */}
+                    {modalStatus === "Voided" && (
+                      <div className="wz-modal-subpanel">
+                        <div className="wz-void-notice-banner">
+                          <strong>Void Warning:</strong> Voiding will permanently invalidate this machinery rental transaction, cancel driver assignments, and release the unit.
+                        </div>
+                        <div className="wz-subpanel-title">Reason for Voiding:</div>
+                        <div className="wz-quick-preset-chips">
+                          {[
+                            "Administrative Cancellation",
+                            "Duplicate Billing Entry",
+                            "Member Clerical Error",
+                            "Equipment Decommissioned",
+                          ].map((preset) => (
+                            <button
+                              key={preset}
+                              type="button"
+                              className={`wz-preset-chip ${modalVoidReason === preset ? "active" : ""}`}
+                              onClick={() => setModalVoidReason(preset)}
+                            >
+                              {preset}
+                            </button>
+                          ))}
+                        </div>
+                        <textarea
+                          className="wz-modal-textarea"
+                          placeholder="Type or select reason for voiding..."
+                          value={modalVoidReason}
+                          onChange={(e) => setModalVoidReason(e.target.value)}
+                          rows={2}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {viewModalTab === "payment" && (
+                <>
+                  {/* 4. Clean Payment Summary Card */}
+                  <div className="wz-clean-card">
+                    <div className="wz-clean-card-title">
+                      <span>Payment Summary</span>
+                      <span className={viewingBooking.paymentStatus === "Paid" ? "wz-payment-badge-paid" : "wz-payment-badge-pending"} style={{ fontSize: "0.72rem", padding: "3px 9px" }}>
                         {viewingBooking.paymentStatus}
                       </span>
                     </div>
-                    <div style={{ width: "100%", fontSize: "0.7rem", color: "#94a3b8", textAlign: "right", marginTop: "4px" }}>
-                      ✓ Authorized by KIMPC Cooperative Fleet Dispatch • Digitally Verified
+
+                    {/* Top Highlight Strip: Total + Quick Settle */}
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px", background: "#f8fafc", padding: "12px 16px", borderRadius: "10px", border: "1px solid #f1f5f9" }}>
+                      <div>
+                        <span className="wz-clean-kv-label">Total Payable</span>
+                        <div style={{ fontSize: "1.4rem", fontWeight: 900, color: "#0f172a", lineHeight: 1.15 }}>
+                          {viewingBooking.paymentAmount || "₱0.00"}
+                        </div>
+                      </div>
+
+                      {viewingBooking.paymentStatus !== "Paid" && (
+                        <button
+                          type="button"
+                          onClick={() => handleSettlePayment(viewingBooking)}
+                          style={{
+                            background: "#059669",
+                            color: "#ffffff",
+                            border: "none",
+                            borderRadius: "8px",
+                            padding: "8px 16px",
+                            fontSize: "0.82rem",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            boxShadow: "0 2px 6px rgba(5, 150, 105, 0.25)",
+                          }}
+                          title="Verify payment and issue official receipt"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                          Confirm &amp; Settle Payment
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Clean 4-column Metadata Grid */}
+                    <div className="wz-clean-summary-strip" style={{ background: "#ffffff", padding: "10px 14px" }}>
+                      <div>
+                        <span className="wz-clean-kv-label">Method</span>
+                        <span className="wz-clean-kv-value" style={{ fontSize: "0.84rem", color: "#0284c7" }}>
+                          {viewingBooking.paymentMethod || "Cash"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="wz-clean-kv-label">Date Received</span>
+                        <span className="wz-clean-kv-value" style={{ fontSize: "0.84rem" }}>
+                          {viewingBooking.dateReceived || (viewingBooking.paymentStatus === "Paid" ? viewingBooking.bookingDate : "Pending")}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="wz-clean-kv-label">Receipt / Ref No.</span>
+                        <span className="wz-clean-kv-value" style={{ fontSize: "0.82rem", fontFamily: "monospace" }}>
+                          {viewingBooking.receiptNo || viewingBooking.referenceNumber || viewingBooking.id}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="wz-clean-kv-label">Recorded By</span>
+                        <span className="wz-clean-kv-value" style={{ fontSize: "0.82rem", color: "#059669" }}>
+                          {viewingBooking.recordedBy || user?.fullName || "Manager"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Attached Proof of Payment (GCash) if exists */}
+                    {(viewingBooking.proofOfPayment || viewingBooking.gcashProof) && (
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", padding: "10px 14px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                          <img
+                            src={viewingBooking.proofOfPayment || viewingBooking.gcashProof}
+                            alt="Proof of Payment"
+                            onClick={() => setPreviewGcashImage(viewingBooking.proofOfPayment || viewingBooking.gcashProof)}
+                            style={{
+                              width: "40px",
+                              height: "40px",
+                              objectFit: "cover",
+                              borderRadius: "6px",
+                              border: "1px solid #059669",
+                              cursor: "pointer",
+                            }}
+                          />
+                          <div>
+                            <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#166534" }}>GCash / Transfer Proof Attached</div>
+                            <div style={{ fontSize: "0.72rem", color: "#475569" }}>Click thumbnail to verify screenshot</div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewGcashImage(viewingBooking.proofOfPayment || viewingBooking.gcashProof)}
+                          style={{
+                            background: "#ffffff",
+                            color: "#0f172a",
+                            border: "1px solid #cbd5e1",
+                            borderRadius: "6px",
+                            padding: "5px 12px",
+                            fontSize: "0.76rem",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                          }}
+                        >
+                          View Proof
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Clean Paper-Style Official Receipt */}
+                  <div className="wz-receipt-voucher" style={{ border: "1px solid #e2e8f0", borderRadius: "12px", padding: "18px 20px" }}>
+                    <div className="wz-receipt-header">
+                      <div>
+                        <h5 className="wz-receipt-coop-name">KALILANGAN IRRIGATORS MULTI-PURPOSE COOPERATIVE (KIMPC)</h5>
+                        <p className="wz-receipt-sub">Official Machinery Rental Receipt &amp; Settlement</p>
+                      </div>
+                      <div className="wz-receipt-num-box">
+                        <div className="wz-receipt-num-label">Receipt No.</div>
+                        <div className="wz-receipt-num">{viewingBooking.receiptNo || "REC-2028-0001"}</div>
+                      </div>
+                    </div>
+
+                    {/* Status Notice Banners on Receipt */}
+                    {(viewingBooking.status === "Rejected" || modalStatus === "Rejected") && (
+                      <div style={{ marginBottom: "12px", padding: "8px 12px", background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: "8px", fontSize: "0.78rem", color: "#991b1b" }}>
+                        <strong>Rejected:</strong> {modalRejectionReason || viewingBooking.rejectionReason || "No reason specified"}
+                      </div>
+                    )}
+                    {(viewingBooking.status === "Voided" || modalStatus === "Voided") && (
+                      <div style={{ marginBottom: "12px", padding: "8px 12px", background: "#f1f5f9", border: "1px dashed #cbd5e1", borderRadius: "8px", fontSize: "0.78rem", color: "#475569" }}>
+                        <strong>Voided:</strong> {modalVoidReason || viewingBooking.voidReason || "Administrative Cancellation"}
+                      </div>
+                    )}
+                    {(viewingBooking.status === "Rescheduled" || modalStatus === "Rescheduled") && (
+                      <div style={{ marginBottom: "12px", padding: "8px 12px", background: "#f3e8ff", border: "1px solid #d8b4fe", borderRadius: "8px", fontSize: "0.78rem", color: "#6b21a8" }}>
+                        <strong>Rescheduled:</strong> {modalStartDate && modalEndDate ? `${modalStartDate} to ${modalEndDate}` : viewingBooking.dateRange} ({rescheduleDays} Days)
+                      </div>
+                    )}
+
+                    <table className="wz-receipt-table">
+                      <thead>
+                        <tr>
+                          <th>Description</th>
+                          <th>Terms</th>
+                          <th style={{ textAlign: "right" }}>Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>
+                            <strong>{viewingBooking.machineryModel}</strong>
+                            <div style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                              Daily Rate: ₱{Number(viewingBooking.dailyRate || 2800).toLocaleString()} / day
+                            </div>
+                          </td>
+                          <td>{viewingBooking.plan}</td>
+                          <td style={{ textAlign: "right", fontWeight: "600" }}>{viewingBooking.paymentAmount}</td>
+                        </tr>
+                        <tr>
+                          <td>
+                            Assigned Operator Service
+                            <div style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                              {viewingBooking.hasDriver ? (viewingBooking.assignedDriver || "Coop Operator") : "Self-Operated by Member"}
+                            </div>
+                          </td>
+                          <td>{viewingBooking.hasDriver ? "Included" : "N/A"}</td>
+                          <td style={{ textAlign: "right", color: "#059669" }}>₱0.00</td>
+                        </tr>
+                        <tr>
+                          <td>Coop Maintenance & Insurance Guarantee</td>
+                          <td>Coop Benefit</td>
+                          <td style={{ textAlign: "right", color: "#059669" }}>₱0.00</td>
+                        </tr>
+                        <tr>
+                          <td>CDA RA 9520 Member Tax Exemption</td>
+                          <td>Tax Exempt</td>
+                          <td style={{ textAlign: "right", color: "#059669" }}>₱0.00</td>
+                        </tr>
+                      </tbody>
+                      <tfoot>
+                        <tr>
+                          <td colSpan="2">Total Amount Payable:</td>
+                          <td style={{ textAlign: "right", color: "#059669" }}>
+                            {viewingBooking.paymentAmount}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+
+                    <div className="wz-receipt-footer-strip">
+                      <div>
+                        <span>Method: </span>
+                        <strong style={{ color: "#0f172a" }}>{viewingBooking.paymentMethod || "Cash"}</strong>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span>Status: </span>
+                        <span className={viewingBooking.paymentStatus === "Paid" ? "wz-payment-badge-paid" : "wz-payment-badge-pending"}>
+                          {viewingBooking.paymentStatus}
+                        </span>
+                      </div>
+                      <div style={{ width: "100%", fontSize: "0.7rem", color: "#94a3b8", textAlign: "right", marginTop: "4px" }}>
+                        Authorized by KIMPC Cooperative Fleet Dispatch • Digitally Verified
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
+                </>
+              )}
 
-              {/* ================= 5. ACTIVITY HISTORY ================= */}
-              <div className="wz-modal-section-card">
-                <div className="wz-modal-section-header">
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <span className="wz-modal-section-badge">5</span>
-                    <div>
-                      <h4 className="wz-modal-section-heading">Activity History</h4>
-                      <span className="wz-modal-section-sub">Chronological lifecycle milestones and administrative audit trail</span>
-                    </div>
+              {viewModalTab === "history" && (
+                /* 5. Clean Activity History */
+                <div className="wz-clean-card">
+                  <div className="wz-clean-card-title">
+                    <span>Activity History</span>
+                    <span style={{ fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>Chronological audit trail</span>
+                  </div>
+
+                  <div className="app-timeline-container" style={{ marginTop: 0, padding: "12px 14px", background: "#f8fafc" }}>
+                    <ul className="app-timeline-list">
+                      {getBookingTimelineEvents(viewingBooking).map((ev, evIdx) => (
+                        <li key={evIdx} className="app-timeline-item">
+                          <div className={`app-timeline-node node-${ev.status || "created"}`}>
+                            {ev.status === "approved" || ev.status === "returned" ? "✓" : ev.status === "rejected" || ev.status === "voided" ? "✕" : "•"}
+                          </div>
+                          <div className="app-timeline-card">
+                            <div className="app-timeline-card-header">
+                              <span className="app-timeline-item-title">{ev.title}</span>
+                              <span className="app-timeline-item-time">
+                                {ev.timestamp ? (
+                                  typeof ev.timestamp === "string" && !ev.timestamp.includes("T") && !ev.timestamp.includes("-")
+                                    ? ev.timestamp
+                                    : new Date(ev.timestamp).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })
+                                ) : "—"}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: "0.72rem", color: "#059669", fontWeight: 700, marginBottom: "3px" }}>
+                              By: {ev.actor || "System"}
+                            </div>
+                            <p className="app-timeline-item-note">{ev.note}</p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 </div>
-
-                <div className="app-timeline-container" style={{ marginTop: 0, padding: "14px 16px", background: "#f8fafc" }}>
-                  <ul className="app-timeline-list">
-                    {getBookingTimelineEvents(viewingBooking).map((ev, evIdx) => (
-                      <li key={evIdx} className="app-timeline-item">
-                        <div className={`app-timeline-node node-${ev.status || 'created'}`}>
-                          {ev.status === "approved" ? "✓" : ev.status === "dispatched" ? "🚜" : ev.status === "returned" ? "🏁" : ev.status === "rejected" || ev.status === "voided" ? "✕" : "•"}
-                        </div>
-                        <div className="app-timeline-card">
-                          <div className="app-timeline-card-header">
-                            <span className="app-timeline-item-title">{ev.title}</span>
-                            <span className="app-timeline-item-time">
-                              {ev.timestamp ? (
-                                typeof ev.timestamp === "string" && !ev.timestamp.includes("T") && !ev.timestamp.includes("-")
-                                  ? ev.timestamp
-                                  : new Date(ev.timestamp).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })
-                              ) : "—"}
-                            </span>
-                          </div>
-                          <div style={{ fontSize: "0.72rem", color: "#059669", fontWeight: 700, marginBottom: "4px" }}>
-                            Actor: {ev.actor || "System"}
-                          </div>
-                          <p className="app-timeline-item-note">{ev.note}</p>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
+              )}
             </div>
 
             {/* Modal Footer: Save and Close */}
             <div className="wz-booking-modal-footer">
               <button
                 type="button"
-                onClick={() => window.print()}
+                onClick={() => {
+                  if (viewModalTab !== "payment") {
+                    setViewModalTab("payment");
+                    setTimeout(() => window.print(), 120);
+                  } else {
+                    window.print();
+                  }
+                }}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
