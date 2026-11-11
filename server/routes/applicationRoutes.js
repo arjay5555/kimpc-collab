@@ -188,9 +188,13 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
     let memberAccount = null;
 
     if (memberEmail) {
-      memberAccount = await Account.findOne({ email: memberEmail }).select("fullName phone role").lean();
+      memberAccount = await Account.findOne({ email: memberEmail }).select("fullName phone role avatar").lean();
       if (!memberName) memberName = memberAccount?.fullName || memberEmail;
       if (!memberPhone) memberPhone = clean(memberAccount?.phone);
+    }
+
+    if ((req.user?.role === "manager" || req.user?.role === "admin") && (!memberEmail || !memberAccount || memberAccount.role !== "member")) {
+      return fail(res, 400, "Please select a registered member account in the system.");
     }
 
     // ENFORCE: Members cannot proceed with booking if they have not input their mobile number in their profile!
@@ -199,7 +203,7 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
       return fail(
         res,
         400,
-        "Mobile number required: You cannot proceed with booking because your profile has no mobile number. Please update your mobile number in your profile first."
+        "Mobile number required: The selected member account has no mobile number. Please enter a contact mobile number before proceeding."
       );
     }
 
@@ -236,7 +240,10 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
         event: "created",
         title: "Booking Request Submitted",
         timestamp: now,
-        actor: "Member",
+        actor:
+          req.user?.role === "manager" || req.user?.role === "admin"
+            ? clean(req.user.fullName) || "Manager"
+            : "Member",
         note: `Requested for ${hectares} ha (${startDate} to ${endDate}). Payment: ${paymentMethod}${paymentMethod === "Cash" ? ` (${cashPaymentOption})` : (gcashProof ? " [GCash Proof Uploaded]" : "")}`,
       },
     ];
@@ -248,6 +255,7 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
       machineryUnitId: machineryUnitId || targetUnit?.unitId || "",
       machineryModel,
       imageUrl: targetUnit?.imageUrl || (Array.isArray(targetUnit?.photos) && targetUnit?.photos[0]) || "",
+      clientAvatar: memberAccount?.avatar || "",
       assignedDriver,
       driverPhone,
       startDate,

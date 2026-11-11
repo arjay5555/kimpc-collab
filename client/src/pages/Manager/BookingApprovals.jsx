@@ -12,6 +12,76 @@ const CURRENT_MOCK_YEAR = new Date().getFullYear();
 // Live MongoDB database bookings
 const INITIAL_MOCK_BOOKINGS = [];
 
+const EMPTY_ADD_BOOKING = {
+  machineryUnitId: "",
+  equipment: "",
+  memberPhone: "",
+  hectares: 1,
+  location: "",
+  startDate: "",
+  endDate: "",
+};
+
+function getAddUnitAvailability(unit) {
+  const condition = (unit?.operatingCondition || unit?.status || "").toLowerCase();
+  return ["operational", "available"].includes(condition) ? "Available" : "Unavailable";
+}
+
+function formatAddBookPrice(value) {
+  return new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: "PHP",
+    maximumFractionDigits: 0,
+  }).format(Number(value) || 0);
+}
+
+function formatAddDateKey(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function rangeAddDateKey(value) {
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : formatAddDateKey(date);
+}
+
+function formatAddDisplayDate(value) {
+  if (!value) return "—";
+  const date = new Date(value.includes("T") ? value : `${value}T00:00:00`);
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function isAddDateKeyBooked(dayKey, blockedRanges) {
+  if (!dayKey) return false;
+  return blockedRanges.some((range) => {
+    const startKey = rangeAddDateKey(range.startDate);
+    const endKey = rangeAddDateKey(range.endDate) || startKey;
+    return Boolean(startKey && endKey && startKey <= dayKey && endKey >= dayKey);
+  });
+}
+
+function hasAddBookedDatesInRange(startKey, endKey, blockedRanges) {
+  if (!startKey || !endKey) return false;
+  if (endKey < startKey) return true;
+  const cur = new Date(`${startKey}T00:00:00`);
+  const last = new Date(`${endKey}T00:00:00`);
+  while (cur <= last) {
+    if (isAddDateKeyBooked(formatAddDateKey(cur), blockedRanges)) return true;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return false;
+}
+
+function getMemberInitials(name, email) {
+  const source = String(name || email || "M").trim();
+  const parts = source.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  return source.slice(0, 2).toUpperCase();
+}
+
 // Bidirectional Chart Data for the 12 months
 const MONTHLY_CHART_DATA = [
   { month: "Jan", done: 65, canceled: 50 },
@@ -387,28 +457,37 @@ export default function BookingApprovals() {
     }
   };
 
-  // Add Booking Modal
+  // Add Booking Modal (matches Member Portal Book Now workflow)
   const [showAddModal, setShowAddModal] = useState(false);
   const [machineryUnits, setMachineryUnits] = useState(() => {
     const cached = getCachedApiData("/machinery-units");
     return Array.isArray(cached?.data) ? cached.data : (Array.isArray(cached) ? cached : []);
   });
-  const [newBooking, setNewBooking] = useState({
-    farmerName: "",
-    farmerPhone: "",
-    equipment: "",
-    startDate: new Date().toISOString().split("T")[0],
-    endDate: new Date(Date.now() + 86400000 * 2).toISOString().split("T")[0],
-    dailyRate: 2800,
-    hasDriver: true,
+  const [memberAccounts, setMemberAccounts] = useState([]);
+  const [memberSearch, setMemberSearch] = useState("");
+  const [selectedMemberEmail, setSelectedMemberEmail] = useState("");
+  const [newBooking, setNewBooking] = useState(EMPTY_ADD_BOOKING);
+  const [addPaymentMethod, setAddPaymentMethod] = useState("Cash");
+  const [addCashTiming, setAddCashTiming] = useState("Upon Pickup");
+  const [addGcashProof, setAddGcashProof] = useState("");
+  const [addGcashPreview, setAddGcashPreview] = useState("");
+  const [addCopiedGcash, setAddCopiedGcash] = useState(false);
+  const [addAvailability, setAddAvailability] = useState([]);
+  const [addCalendarMonth, setAddCalendarMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
   });
+  const [addDateError, setAddDateError] = useState("");
+  const [addFormError, setAddFormError] = useState("");
+  const [addSubmitting, setAddSubmitting] = useState(false);
 
-  // Fetch live applications and machinery units from backend
+  // Fetch live applications, machinery units, and registered member accounts from backend
   const fetchData = async () => {
     try {
-      const [appRes, machRes] = await Promise.all([
+      const [appRes, machRes, membersRes] = await Promise.all([
         api("/applications"),
         api("/machinery-units"),
+        api("/manager/members"),
       ]);
 
       if (appRes.ok && Array.isArray(appRes.data)) {
@@ -422,16 +501,21 @@ export default function BookingApprovals() {
           : [];
         setMachineryUnits(unitsList);
         if (unitsList.length > 0) {
+          const defaultUnit =
+            unitsList.find((u) => getAddUnitAvailability(u) === "Available") || unitsList[0];
           setNewBooking((prev) =>
-            prev.equipment
+            prev.machineryUnitId || prev.equipment
               ? prev
               : {
                   ...prev,
-                  equipment: unitsList[0].name,
-                  dailyRate: Number(unitsList[0].ratePerDay || unitsList[0].memberRate) || 2800,
+                  machineryUnitId: defaultUnit.unitId || defaultUnit._id || "",
+                  equipment: defaultUnit.name || "",
                 }
           );
         }
+      }
+      if (membersRes.ok && Array.isArray(membersRes.data?.members)) {
+        setMemberAccounts(membersRes.data.members);
       }
     } catch (err) {
       console.error("Error loading bookings data:", err);
@@ -443,6 +527,144 @@ export default function BookingApprovals() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  const filteredMembers = useMemo(() => {
+    const q = memberSearch.trim().toLowerCase();
+    if (!q) return memberAccounts;
+    return memberAccounts.filter((m) =>
+      [m.fullName, m.email, m.cooperativeId, m.phone].some((field) =>
+        String(field || "").toLowerCase().includes(q)
+      )
+    );
+  }, [memberAccounts, memberSearch]);
+
+  const selectedMember = useMemo(
+    () =>
+      memberAccounts.find(
+        (m) => m.email?.toLowerCase() === selectedMemberEmail.toLowerCase()
+      ) || null,
+    [memberAccounts, selectedMemberEmail]
+  );
+
+  const selectedAddUnit = useMemo(() => {
+    if (machineryUnits.length === 0) return null;
+    return (
+      machineryUnits.find(
+        (u) =>
+          (newBooking.machineryUnitId &&
+            (u.unitId === newBooking.machineryUnitId || u._id === newBooking.machineryUnitId)) ||
+          (newBooking.equipment && u.name === newBooking.equipment)
+      ) ||
+      machineryUnits.find((u) => getAddUnitAvailability(u) === "Available") ||
+      machineryUnits[0]
+    );
+  }, [machineryUnits, newBooking.machineryUnitId, newBooking.equipment]);
+
+  useEffect(() => {
+    const targetId = selectedAddUnit?.unitId || selectedAddUnit?._id;
+    if (!showAddModal || !targetId) {
+      setAddAvailability([]);
+      return;
+    }
+    let ignore = false;
+    api(`/machinery-units/${encodeURIComponent(targetId)}/availability`).then((res) => {
+      if (ignore) return;
+      if (res.ok && Array.isArray(res.data?.data)) {
+        setAddAvailability(res.data.data);
+      } else {
+        setAddAvailability([]);
+      }
+    });
+    return () => {
+      ignore = true;
+    };
+  }, [showAddModal, selectedAddUnit]);
+
+  const addToday = new Date();
+  const addMinDate = formatAddDateKey(addToday);
+
+  const addBlockedRanges = useMemo(() => {
+    const unitBookings = addAvailability.filter((item) => item.type === "booking");
+    const unitMaintenance = addAvailability.filter((item) => item.type === "maintenance");
+    return [
+      ...unitBookings
+        .filter((item) => ["pending", "approved", "checked-out"].includes((item.status || "").toLowerCase()))
+        .map((item) => ({
+          startDate: item.startDate,
+          endDate: item.endDate,
+          label: (item.status || "").toLowerCase() === "pending" ? "Pending Approval" : "Reserved / Booked",
+        })),
+      ...unitMaintenance.map((item) => ({
+        startDate: item.startDate,
+        endDate: item.endDate,
+        label: "Maintenance",
+      })),
+    ].sort((a, b) => String(a.startDate).localeCompare(String(b.startDate)));
+  }, [addAvailability]);
+
+  const addMonthNameYear = useMemo(
+    () => addCalendarMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" }),
+    [addCalendarMonth]
+  );
+
+  const isAddPrevDisabled = useMemo(
+    () =>
+      addCalendarMonth.getFullYear() === addToday.getFullYear() &&
+      addCalendarMonth.getMonth() === addToday.getMonth(),
+    [addCalendarMonth, addToday]
+  );
+
+  const addCalendarGrid = useMemo(() => {
+    const year = addCalendarMonth.getFullYear();
+    const month = addCalendarMonth.getMonth();
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const items = [];
+    for (let i = 0; i < firstDay; i++) {
+      items.push({ isBlank: true, key: `blank-${i}` });
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      const key = formatAddDateKey(new Date(year, month, d));
+      items.push({
+        isBlank: false,
+        dayNum: d,
+        key,
+        isPast: key < addMinDate,
+        isBooked: isAddDateKeyBooked(key, addBlockedRanges),
+      });
+    }
+    return items;
+  }, [addCalendarMonth, addMinDate, addBlockedRanges]);
+
+  const addUnitRatePerHectare = Number(
+    selectedAddUnit?.ratePerHectare || selectedAddUnit?.memberRate || 2500
+  );
+  const addRequestedHectares = Math.max(0.1, Number(newBooking.hectares) || 1);
+  const addEstimatedCost = Math.round(addUnitRatePerHectare * addRequestedHectares);
+
+  const addScheduledDaysCount = useMemo(() => {
+    if (!newBooking.startDate || !newBooking.endDate || newBooking.endDate < newBooking.startDate) return 0;
+    const s = new Date(`${newBooking.startDate}T00:00:00`);
+    const e = new Date(`${newBooking.endDate}T00:00:00`);
+    if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return 0;
+    return Math.max(1, Math.round((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+  }, [newBooking.startDate, newBooking.endDate]);
+
+  const isAddStartBooked = isAddDateKeyBooked(newBooking.startDate, addBlockedRanges);
+  const isAddEndBooked = isAddDateKeyBooked(newBooking.endDate, addBlockedRanges);
+  const isAddRangeBlocked = hasAddBookedDatesInRange(
+    newBooking.startDate,
+    newBooking.endDate,
+    addBlockedRanges
+  );
+  const isAddDatesInvalid = Boolean(
+    !newBooking.startDate ||
+      !newBooking.endDate ||
+      newBooking.endDate < newBooking.startDate ||
+      isAddStartBooked ||
+      isAddEndBooked ||
+      isAddRangeBlocked
+  );
 
   // Format and merge live bookings with sample records
   const mergedBookings = useMemo(() => {
@@ -1023,51 +1245,266 @@ export default function BookingApprovals() {
     }
   };
 
-  // Handle Create Booking Submit
-  const handleCreateBooking = async (e) => {
-    e.preventDefault();
-    if (!newBooking.farmerName.trim()) {
-      alert("Please enter client/farmer name.");
+  const handleOpenAddModal = () => {
+    const defaultUnit =
+      machineryUnits.find((u) => getAddUnitAvailability(u) === "Available") ||
+      machineryUnits[0] ||
+      null;
+    const now = new Date();
+    setSelectedMemberEmail("");
+    setMemberSearch("");
+    setNewBooking({
+      machineryUnitId: defaultUnit?.unitId || defaultUnit?._id || "",
+      equipment: defaultUnit?.name || "",
+      memberPhone: "",
+      hectares: 1,
+      location: "",
+      startDate: "",
+      endDate: "",
+    });
+    setAddPaymentMethod("Cash");
+    setAddCashTiming("Upon Pickup");
+    setAddGcashProof("");
+    setAddGcashPreview("");
+    setAddCopiedGcash(false);
+    setAddCalendarMonth(new Date(now.getFullYear(), now.getMonth(), 1));
+    setAddDateError("");
+    setAddFormError("");
+    setShowAddModal(true);
+  };
+
+  const handleSelectMemberAccount = (member) => {
+    setSelectedMemberEmail(member.email);
+    setAddFormError("");
+    setNewBooking((prev) => ({
+      ...prev,
+      memberPhone: member.phone || prev.memberPhone || "",
+      location:
+        prev.location && prev.location.trim()
+          ? prev.location
+          : member.defaultFarmLocation || member.address || "",
+    }));
+  };
+
+  const handleSelectAddUnit = (unitKey) => {
+    const unit = machineryUnits.find(
+      (u) => (u.unitId || u._id || u.name) === unitKey
+    );
+    setAddDateError("");
+    setAddFormError("");
+    setNewBooking((prev) => ({
+      ...prev,
+      machineryUnitId: unit?.unitId || unit?._id || "",
+      equipment: unit?.name || "",
+      startDate: "",
+      endDate: "",
+    }));
+  };
+
+  const handleAddPrevMonth = () => {
+    setAddCalendarMonth((prev) => {
+      const target = new Date(prev.getFullYear(), prev.getMonth() - 1, 1);
+      const minMonth = new Date(addToday.getFullYear(), addToday.getMonth(), 1);
+      return target < minMonth ? minMonth : target;
+    });
+  };
+
+  const handleAddNextMonth = () => {
+    setAddCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+  };
+
+  const handleAddClearDates = () => {
+    setNewBooking((prev) => ({ ...prev, startDate: "", endDate: "" }));
+    setAddDateError("");
+    setAddFormError("");
+  };
+
+  const handleAddCalendarDayClick = (dayKey) => {
+    if (isAddDateKeyBooked(dayKey, addBlockedRanges)) return;
+    setAddDateError("");
+    setAddFormError("");
+    if (
+      !newBooking.startDate ||
+      (newBooking.startDate &&
+        newBooking.endDate &&
+        newBooking.startDate !== newBooking.endDate)
+    ) {
+      setNewBooking((prev) => ({ ...prev, startDate: dayKey, endDate: dayKey }));
       return;
     }
-    if (!newBooking.equipment) {
-      alert("Please add a machinery unit first before creating a booking.");
+    if (dayKey < newBooking.startDate) {
+      setNewBooking((prev) => ({ ...prev, startDate: dayKey, endDate: dayKey }));
+    } else if (dayKey === newBooking.startDate) {
+      setNewBooking((prev) => ({ ...prev, endDate: dayKey }));
+    } else {
+      if (hasAddBookedDatesInRange(newBooking.startDate, dayKey, addBlockedRanges)) {
+        setAddDateError(
+          "The period between selected dates contains reserved days. Please select an available continuous range."
+        );
+        setNewBooking((prev) => ({ ...prev, startDate: dayKey, endDate: dayKey }));
+        return;
+      }
+      setNewBooking((prev) => ({ ...prev, endDate: dayKey }));
+    }
+  };
+
+  const handleAddStartDateChange = (val) => {
+    setAddDateError("");
+    setAddFormError("");
+    if (!val) {
+      setNewBooking((prev) => ({ ...prev, startDate: "" }));
+      return;
+    }
+    const d = new Date(`${val}T00:00:00`);
+    if (!Number.isNaN(d.getTime())) {
+      setAddCalendarMonth(new Date(d.getFullYear(), d.getMonth(), 1));
+    }
+    if (isAddDateKeyBooked(val, addBlockedRanges)) {
+      setAddDateError(
+        `Selected start date (${val}) is already booked for this machinery. Please choose an available date.`
+      );
+      setNewBooking((prev) => ({ ...prev, startDate: "" }));
+      return;
+    }
+    setNewBooking((prev) => {
+      const nextEnd = prev.endDate && prev.endDate < val ? val : prev.endDate;
+      if (nextEnd && hasAddBookedDatesInRange(val, nextEnd, addBlockedRanges)) {
+        setAddDateError(
+          `The period from ${val} to ${nextEnd} contains booked dates. Choose an available date.`
+        );
+        return { ...prev, startDate: val, endDate: "" };
+      }
+      return { ...prev, startDate: val, endDate: nextEnd };
+    });
+  };
+
+  const handleAddEndDateChange = (val) => {
+    setAddDateError("");
+    setAddFormError("");
+    if (!val) {
+      setNewBooking((prev) => ({ ...prev, endDate: "" }));
+      return;
+    }
+    if (isAddDateKeyBooked(val, addBlockedRanges)) {
+      setAddDateError(
+        `Selected end date (${val}) is already booked for this machinery. Please choose an available date.`
+      );
+      setNewBooking((prev) => ({ ...prev, endDate: "" }));
+      return;
+    }
+    if (newBooking.startDate && val < newBooking.startDate) {
+      setAddDateError("End date must be on or after start date.");
+      return;
+    }
+    if (
+      newBooking.startDate &&
+      hasAddBookedDatesInRange(newBooking.startDate, val, addBlockedRanges)
+    ) {
+      setAddDateError(
+        `The period from ${newBooking.startDate} to ${val} contains dates that are already booked. Choose continuous available dates.`
+      );
+      return;
+    }
+    setNewBooking((prev) => ({ ...prev, endDate: val }));
+  };
+
+  const handleAddCopyGcash = () => {
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText("09264638983");
+      setAddCopiedGcash(true);
+      setTimeout(() => setAddCopiedGcash(false), 2000);
+    }
+  };
+
+  const handleAddGCashFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setAddFormError("GCash screenshot file is too large (maximum 5MB).");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setAddGcashProof(reader.result);
+      setAddGcashPreview(reader.result);
+      setAddFormError("");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Handle Create Booking Submit (identical fields to Member Portal Book Now)
+  const handleCreateBooking = async (e) => {
+    e.preventDefault();
+    if (!selectedMember) {
+      setAddFormError("Please select a registered member account.");
+      return;
+    }
+    if (!selectedAddUnit || getAddUnitAvailability(selectedAddUnit) !== "Available") {
+      setAddFormError("Please select an available machinery unit.");
+      return;
+    }
+    const cleanPhone = (newBooking.memberPhone || selectedMember.phone || "").trim();
+    if (!cleanPhone || cleanPhone.length < 7) {
+      setAddFormError("Please provide a valid contact mobile number for this member.");
+      return;
+    }
+    if (!newBooking.location || !newBooking.location.trim()) {
+      setAddFormError("Please enter the farm location or address for machinery dispatch.");
+      return;
+    }
+    if (!newBooking.startDate || !newBooking.endDate || isAddDatesInvalid) {
+      setAddFormError("Please choose valid available booking dates.");
+      return;
+    }
+    if (addPaymentMethod === "GCash" && !addGcashProof) {
+      setAddFormError("Please upload the GCash payment screenshot proof before confirming.");
       return;
     }
 
+    setAddSubmitting(true);
+    setAddFormError("");
+    setAddDateError("");
+
     try {
-      const res = await api("/pos-booking", {
+      const res = await api("/applications", {
         method: "POST",
         body: {
-          farmerName: newBooking.farmerName.trim(),
-          farmerPhone: newBooking.farmerPhone.trim(),
-          equipment: newBooking.equipment,
+          memberEmail: selectedMember.email,
+          memberName: selectedMember.fullName,
+          equipment: selectedAddUnit.name,
+          machineryUnitId: selectedAddUnit.unitId,
           startDate: newBooking.startDate,
           endDate: newBooking.endDate,
-          rate: Number(newBooking.dailyRate) || 2800,
-          rentalType: "day",
-          paymentMethod: "Cash",
+          bookingType: "hectare",
+          hectares: addRequestedHectares,
+          ratePerHectare: addUnitRatePerHectare,
+          totalAmount: addEstimatedCost,
+          paymentMethod: addPaymentMethod,
+          cashPaymentOption: addPaymentMethod === "Cash" ? addCashTiming : "",
+          gcashProof: addPaymentMethod === "GCash" ? addGcashProof : "",
+          paymentStatus: addPaymentMethod === "GCash" ? "Paid" : "Pending",
+          farmerPhone: cleanPhone,
+          memberPhone: cleanPhone,
+          farmLocation: newBooking.location.trim(),
         },
       });
 
       if (res.ok) {
         setShowAddModal(false);
-        setFeedback({ message: "New booking added successfully!", isError: false });
-        setNewBooking({
-          farmerName: "",
-          farmerPhone: "",
-          equipment: machineryUnits[0]?.name || "",
-          startDate: new Date().toISOString().split("T")[0],
-          endDate: new Date(Date.now() + 86400000 * 2).toISOString().split("T")[0],
-          dailyRate: machineryUnits[0]?.ratePerDay || 2800,
-          hasDriver: true,
-        });
+        setFeedback({ message: "New member booking added successfully!", isError: false });
+        setSelectedMemberEmail("");
+        setMemberSearch("");
+        setNewBooking(EMPTY_ADD_BOOKING);
+        setAddGcashProof("");
+        setAddGcashPreview("");
         fetchData();
       } else {
-        alert(res.data?.error || "Failed to create booking.");
+        setAddFormError(res.data?.error || "Could not submit the booking request.");
       }
     } catch (err) {
-      alert("Error submitting booking.");
+      setAddFormError("Could not submit the booking request.");
+    } finally {
+      setAddSubmitting(false);
     }
   };
 
@@ -1395,7 +1832,7 @@ export default function BookingApprovals() {
               {/* Add Booking Action Button */}
               <button
                 className="wz-btn-add-booking"
-                onClick={() => setShowAddModal(true)}
+                onClick={handleOpenAddModal}
               >
                 + Add Booking
               </button>
@@ -1585,158 +2022,763 @@ export default function BookingApprovals() {
         </section>
       </main>
 
-      {/* ================= Add Booking Modal ================= */}
+      {/* ================= Add Booking Modal (Minimalist Member-Parity Design) ================= */}
       {showAddModal && (
-        <div className="wz-modal-overlay" onClick={() => setShowAddModal(false)}>
-          <div className="wz-modal-content" onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: "800", color: "#0f172a" }}>
-                Add New Machinery Booking
-              </h3>
+        <div
+          className="wz-addbook-overlay"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setShowAddModal(false);
+          }}
+        >
+          <section
+            className="wz-addbook-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="wz-addbook-title"
+          >
+            <div className="wz-addbook-header">
+              {selectedAddUnit?.imageUrl ? (
+                <img
+                  className="wz-addbook-thumb"
+                  src={selectedAddUnit.imageUrl}
+                  alt={selectedAddUnit.name}
+                />
+              ) : (
+                <div className="wz-addbook-thumb-fallback" aria-hidden="true">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                    <line x1="16" y1="2" x2="16" y2="6" />
+                    <line x1="8" y1="2" x2="8" y2="6" />
+                    <line x1="3" y1="10" x2="21" y2="10" />
+                  </svg>
+                </div>
+              )}
+              <div className="wz-addbook-head-main">
+                <h3 id="wz-addbook-title" className="wz-addbook-title">
+                  Add New Machinery Booking
+                </h3>
+                <p className="wz-addbook-meta">
+                  {selectedAddUnit
+                    ? [selectedAddUnit.name, selectedAddUnit.category, selectedAddUnit.brand, selectedAddUnit.model]
+                        .filter(Boolean)
+                        .join(" · ")
+                    : "Select member account and machinery unit"}
+                </p>
+              </div>
+              {selectedAddUnit && (
+                <span className="wz-addbook-rate-pill">
+                  {formatAddBookPrice(addUnitRatePerHectare)} / ha
+                </span>
+              )}
               <button
+                type="button"
+                className="wz-addbook-close"
+                aria-label="Close booking dialog"
                 onClick={() => setShowAddModal(false)}
-                style={{ background: "none", border: "none", fontSize: "1.3rem", cursor: "pointer", color: "#94a3b8" }}
               >
-                &times;
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
               </button>
             </div>
 
-            <form onSubmit={handleCreateBooking}>
-              <div style={{ marginBottom: "12px" }}>
-                <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", color: "#475569", marginBottom: "5px" }}>
-                  Client / Farmer Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Juan Dela Cruz"
-                  value={newBooking.farmerName}
-                  onChange={(e) => setNewBooking({ ...newBooking, farmerName: e.target.value })}
-                  style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.86rem" }}
-                />
-              </div>
+            <form className="wz-addbook-form" onSubmit={handleCreateBooking}>
+              <div className="wz-addbook-body">
+                {/* Section 1: Member & Machinery */}
+                <div className="wz-addbook-section">
+                  <div className="wz-addbook-section-head">
+                    <h4 className="wz-addbook-section-title">Member & Machinery</h4>
+                    {selectedMember && (
+                      <button
+                        type="button"
+                        className="wz-addbook-link-btn"
+                        onClick={() => {
+                          setSelectedMemberEmail("");
+                          setMemberSearch("");
+                          setAddFormError("");
+                        }}
+                      >
+                        Change member
+                      </button>
+                    )}
+                  </div>
 
-              <div style={{ marginBottom: "12px" }}>
-                <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", color: "#475569", marginBottom: "5px" }}>
-                  Contact Phone
-                </label>
-                <input
-                  type="text"
-                  placeholder="+63 917 000 0000"
-                  value={newBooking.farmerPhone}
-                  onChange={(e) => setNewBooking({ ...newBooking, farmerPhone: e.target.value })}
-                  style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.86rem" }}
-                />
-              </div>
+                  <div className="wz-addbook-field">
+                    <label className="wz-addbook-label" htmlFor="addbook-member-search">
+                      <span>
+                        Members <span className="wz-addbook-label-req">*</span>
+                      </span>
+                      {!selectedMember && (
+                        <span className="wz-addbook-unit-tag">
+                          {memberAccounts.length} registered
+                        </span>
+                      )}
+                    </label>
 
-              <div style={{ marginBottom: "12px" }}>
-                <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", color: "#475569", marginBottom: "5px" }}>
-                  Machinery Equipment
-                </label>
-                <select
-                  value={newBooking.equipment}
-                  onChange={(e) => setNewBooking({ ...newBooking, equipment: e.target.value })}
-                  style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.86rem", background: "#fff" }}
-                >
-                  {machineryUnits.length > 0 ? (
-                    machineryUnits.map((u) => (
-                      <option key={u.unitId || u._id} value={u.name}>
-                        {u.name} ({u.category}) - ₱{u.ratePerDay}/day
-                      </option>
-                    ))
-                  ) : (
-                    <option value="">No machinery units added yet (Add units first)</option>
+                    {!selectedMember ? (
+                      <>
+                        <div className="wz-addbook-input-wrap">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <circle cx="11" cy="11" r="8" />
+                            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                          </svg>
+                          <input
+                            id="addbook-member-search"
+                            className="wz-addbook-input"
+                            type="search"
+                            placeholder="Search member by name, email, or Coop ID..."
+                            value={memberSearch}
+                            onChange={(e) => setMemberSearch(e.target.value)}
+                          />
+                        </div>
+
+                        <div className="wz-addbook-member-list" role="listbox" aria-label="Registered system members">
+                          {filteredMembers.length > 0 ? (
+                            filteredMembers.map((member) => (
+                              <button
+                                key={member.id || member.email}
+                                type="button"
+                                className="wz-addbook-member-option"
+                                onClick={() => handleSelectMemberAccount(member)}
+                              >
+                                {member.avatar ? (
+                                  <img
+                                    src={member.avatar}
+                                    alt={member.fullName}
+                                    className="wz-addbook-member-avatar"
+                                  />
+                                ) : (
+                                  <span className="wz-addbook-member-avatar">
+                                    {getMemberInitials(member.fullName, member.email)}
+                                  </span>
+                                )}
+                                <div className="wz-addbook-member-info">
+                                  <div className="wz-addbook-member-name">
+                                    <span>{member.fullName}</span>
+                                    {member.cooperativeId && (
+                                      <span className="wz-addbook-member-badge">
+                                        {member.cooperativeId}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="wz-addbook-member-sub">
+                                    {[member.email, member.phone || "No phone"].filter(Boolean).join(" · ")}
+                                  </div>
+                                </div>
+                              </button>
+                            ))
+                          ) : (
+                            <div className="wz-addbook-member-empty">
+                              {memberAccounts.length === 0
+                                ? "No active member accounts found in the system."
+                                : "No matching member account found."}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="wz-addbook-member-card">
+                        <div className="wz-addbook-member-card-left">
+                          {selectedMember.avatar ? (
+                            <img
+                              src={selectedMember.avatar}
+                              alt={selectedMember.fullName}
+                              className="wz-addbook-member-avatar"
+                            />
+                          ) : (
+                            <span className="wz-addbook-member-avatar">
+                              {getMemberInitials(selectedMember.fullName, selectedMember.email)}
+                            </span>
+                          )}
+                          <div className="wz-addbook-member-info">
+                            <div className="wz-addbook-member-name">
+                              <span>{selectedMember.fullName}</span>
+                              {selectedMember.cooperativeId && (
+                                <span className="wz-addbook-member-badge">
+                                  {selectedMember.cooperativeId}
+                                </span>
+                              )}
+                            </div>
+                            <div className="wz-addbook-member-sub">
+                              {selectedMember.email}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {selectedMember && (
+                    <div className="wz-addbook-field">
+                      <label className="wz-addbook-label" htmlFor="addbook-phone">
+                        <span>
+                          Mobile Number <span className="wz-addbook-label-req">*</span>
+                        </span>
+                      </label>
+                      <div className="wz-addbook-input-wrap">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+                          <line x1="12" y1="18" x2="12.01" y2="18" />
+                        </svg>
+                        <input
+                          id="addbook-phone"
+                          className="wz-addbook-input"
+                          type="tel"
+                          required
+                          placeholder="0917 123 4567"
+                          value={newBooking.memberPhone}
+                          onChange={(e) =>
+                            setNewBooking((prev) => ({ ...prev, memberPhone: e.target.value }))
+                          }
+                        />
+                      </div>
+                    </div>
                   )}
-                </select>
+
+                  <div className="wz-addbook-field">
+                    <label className="wz-addbook-label" htmlFor="addbook-machinery">
+                      <span>
+                        Machinery <span className="wz-addbook-label-req">*</span>
+                      </span>
+                    </label>
+                    <div className="wz-addbook-input-wrap">
+                      <select
+                        id="addbook-machinery"
+                        className="wz-addbook-select"
+                        required
+                        value={
+                          selectedAddUnit?.unitId ||
+                          selectedAddUnit?._id ||
+                          selectedAddUnit?.name ||
+                          ""
+                        }
+                        onChange={(e) => handleSelectAddUnit(e.target.value)}
+                      >
+                        {machineryUnits.length > 0 ? (
+                          machineryUnits.map((u) => {
+                            const avail = getAddUnitAvailability(u);
+                            const rate = Number(u.ratePerHectare || u.memberRate || 2500);
+                            return (
+                              <option
+                                key={u.unitId || u._id}
+                                value={u.unitId || u._id || u.name}
+                                disabled={avail !== "Available"}
+                              >
+                                {u.name} ({u.category || "Equipment"}) — {formatAddBookPrice(rate)} / ha
+                                {avail !== "Available" ? ` (${u.operatingCondition || avail})` : ""}
+                              </option>
+                            );
+                          })
+                        ) : (
+                          <option value="">No machinery units added yet</option>
+                        )}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 2: Farmland & Location (matches Member Portal Book Now) */}
+                <div className="wz-addbook-section">
+                  <div className="wz-addbook-section-head">
+                    <h4 className="wz-addbook-section-title">Farmland & Location</h4>
+                    <span className="wz-addbook-subtotal">
+                      {formatAddBookPrice(addUnitRatePerHectare)} × {addRequestedHectares} ha ={" "}
+                      {formatAddBookPrice(addEstimatedCost)}
+                    </span>
+                  </div>
+
+                  <div className="wz-addbook-field">
+                    <label className="wz-addbook-label" htmlFor="addbook-hectares">
+                      <span>
+                        Area <span className="wz-addbook-label-req">*</span>
+                      </span>
+                    </label>
+                    <div className="wz-addbook-input-wrap">
+                      <input
+                        id="addbook-hectares"
+                        className="wz-addbook-input"
+                        type="number"
+                        min="0.1"
+                        step="0.1"
+                        required
+                        placeholder="1.0"
+                        value={newBooking.hectares}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          setNewBooking((prev) => ({
+                            ...prev,
+                            hectares: isNaN(val) ? "" : Math.max(0.1, val),
+                          }));
+                        }}
+                      />
+                      <span className="wz-addbook-unit-tag">ha</span>
+                    </div>
+
+                    <div className="wz-addbook-presets">
+                      {[0.5, 1, 2, 3, 5, 10].map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => setNewBooking((prev) => ({ ...prev, hectares: preset }))}
+                          className={`wz-addbook-preset-btn${
+                            Number(newBooking.hectares) === preset ? " active" : ""
+                          }`}
+                        >
+                          {preset} ha
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="wz-addbook-field">
+                    <label className="wz-addbook-label" htmlFor="addbook-location">
+                      <span>
+                        Farm Location <span className="wz-addbook-label-req">*</span>
+                      </span>
+                    </label>
+                    <div className="wz-addbook-input-wrap">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                        <circle cx="12" cy="10" r="3" />
+                      </svg>
+                      <input
+                        id="addbook-location"
+                        className="wz-addbook-input"
+                        type="text"
+                        required
+                        placeholder="Barangay, Purok / Sitio, Landmark"
+                        value={newBooking.location || ""}
+                        onChange={(e) =>
+                          setNewBooking((prev) => ({ ...prev, location: e.target.value }))
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 3: Schedule (matches Member Portal Book Now) */}
+                <div className="wz-addbook-section">
+                  <div className="wz-addbook-section-head">
+                    <h4 className="wz-addbook-section-title">Schedule</h4>
+                    {newBooking.startDate && (
+                      <button
+                        type="button"
+                        className="wz-addbook-link-btn"
+                        onClick={handleAddClearDates}
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="wz-addbook-cal-box">
+                    <div className="wz-addbook-cal-head">
+                      <span className="wz-addbook-cal-month">{addMonthNameYear}</span>
+                      <div className="wz-addbook-cal-nav">
+                        <button
+                          type="button"
+                          className="wz-addbook-cal-nav-btn"
+                          onClick={handleAddPrevMonth}
+                          disabled={isAddPrevDisabled}
+                          aria-label="Previous month"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <polyline points="15 18 9 12 15 6" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          className="wz-addbook-cal-nav-btn"
+                          onClick={handleAddNextMonth}
+                          aria-label="Next month"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <polyline points="9 18 15 12 9 6" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="wz-addbook-cal-weekdays">
+                      {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((dayName) => (
+                        <div key={dayName}>{dayName}</div>
+                      ))}
+                    </div>
+
+                    <div className="wz-addbook-cal-grid">
+                      {addCalendarGrid.map((d) => {
+                        if (d.isBlank) {
+                          return <div key={d.key} className="wz-addbook-cal-day is-blank" />;
+                        }
+                        if (d.isPast) {
+                          return (
+                            <button
+                              key={d.key}
+                              type="button"
+                              disabled
+                              className="wz-addbook-cal-day is-past"
+                            >
+                              {d.dayNum}
+                            </button>
+                          );
+                        }
+                        if (d.isBooked) {
+                          return (
+                            <button
+                              key={d.key}
+                              type="button"
+                              disabled
+                              title="Reserved"
+                              className="wz-addbook-cal-day is-booked"
+                            >
+                              {d.dayNum}
+                            </button>
+                          );
+                        }
+
+                        const isSelectedPoint =
+                          newBooking.startDate === d.key || newBooking.endDate === d.key;
+                        const inRange = Boolean(
+                          newBooking.startDate &&
+                            newBooking.endDate &&
+                            d.key >= newBooking.startDate &&
+                            d.key <= newBooking.endDate
+                        );
+
+                        return (
+                          <button
+                            key={d.key}
+                            type="button"
+                            onClick={() => handleAddCalendarDayClick(d.key)}
+                            className={`wz-addbook-cal-day${
+                              isSelectedPoint ? " is-selected" : inRange ? " is-in-range" : ""
+                            }`}
+                          >
+                            {d.dayNum}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="wz-addbook-cal-legend">
+                      <span className="wz-addbook-cal-legend-item">
+                        <span className="wz-addbook-cal-dot" />
+                        Available
+                      </span>
+                      <span className="wz-addbook-cal-legend-item">
+                        <span className="wz-addbook-cal-dot selected" />
+                        Selected
+                      </span>
+                      <span className="wz-addbook-cal-legend-item">
+                        <span className="wz-addbook-cal-dot booked" />
+                        Booked
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="wz-addbook-date-row">
+                    <div className="wz-addbook-field">
+                      <label className="wz-addbook-label" htmlFor="addbook-start">
+                        Start Date
+                      </label>
+                      <div
+                        className="wz-addbook-input-wrap"
+                        style={isAddStartBooked ? { borderColor: "#dc2626" } : undefined}
+                      >
+                        <input
+                          id="addbook-start"
+                          className="wz-addbook-input"
+                          required
+                          type="date"
+                          min={addMinDate}
+                          value={newBooking.startDate}
+                          onChange={(e) => handleAddStartDateChange(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="wz-addbook-field">
+                      <label className="wz-addbook-label" htmlFor="addbook-end">
+                        End Date
+                      </label>
+                      <div
+                        className="wz-addbook-input-wrap"
+                        style={
+                          isAddEndBooked || isAddRangeBlocked
+                            ? { borderColor: "#dc2626" }
+                            : undefined
+                        }
+                      >
+                        <input
+                          id="addbook-end"
+                          className="wz-addbook-input"
+                          required
+                          type="date"
+                          min={newBooking.startDate || addMinDate}
+                          value={newBooking.endDate}
+                          onChange={(e) => handleAddEndDateChange(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {newBooking.startDate && newBooking.endDate && !isAddDatesInvalid ? (
+                    <div className="wz-addbook-status-pill">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      <span>
+                        {addScheduledDaysCount} day{addScheduledDaysCount > 1 ? "s" : ""} ·{" "}
+                        {formatAddDisplayDate(newBooking.startDate)} –{" "}
+                        {formatAddDisplayDate(newBooking.endDate)}
+                      </span>
+                    </div>
+                  ) : newBooking.startDate &&
+                    (!newBooking.endDate || newBooking.startDate === newBooking.endDate) ? (
+                    <div className="wz-addbook-status-pill">
+                      <span>
+                        Start: {formatAddDisplayDate(newBooking.startDate)} — tap an end date
+                      </span>
+                    </div>
+                  ) : null}
+
+                  {addDateError && (
+                    <div className="wz-addbook-status-pill is-warn">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="12" />
+                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                      </svg>
+                      <span>{addDateError}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Section 4: Payment (matches Member Portal Book Now) */}
+                <div className="wz-addbook-section">
+                  <div className="wz-addbook-section-head">
+                    <h4 className="wz-addbook-section-title">Payment</h4>
+                  </div>
+
+                  <div className="wz-addbook-pay-tabs">
+                    <button
+                      type="button"
+                      onClick={() => setAddPaymentMethod("Cash")}
+                      className={`wz-addbook-pay-tab${addPaymentMethod === "Cash" ? " active" : ""}`}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <rect x="2" y="6" width="20" height="12" rx="2" />
+                        <circle cx="12" cy="12" r="2" />
+                        <path d="M6 12h.01M18 12h.01" />
+                      </svg>
+                      <div>
+                        <span className="wz-addbook-pay-tab-title">Cash</span>
+                        <span className="wz-addbook-pay-tab-sub">Depot or field</span>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setAddPaymentMethod("GCash")}
+                      className={`wz-addbook-pay-tab${addPaymentMethod === "GCash" ? " active" : ""}`}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+                        <line x1="12" y1="18" x2="12.01" y2="18" />
+                      </svg>
+                      <div>
+                        <span className="wz-addbook-pay-tab-title">GCash</span>
+                        <span className="wz-addbook-pay-tab-sub">Upload receipt</span>
+                      </div>
+                    </button>
+                  </div>
+
+                  {addPaymentMethod === "Cash" && (
+                    <div className="wz-addbook-pay-subrow">
+                      <button
+                        type="button"
+                        onClick={() => setAddCashTiming("Upon Pickup")}
+                        className={`wz-addbook-pay-subbtn${
+                          addCashTiming === "Upon Pickup" ? " active" : ""
+                        }`}
+                      >
+                        Upon Pickup
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAddCashTiming("Upon Return")}
+                        className={`wz-addbook-pay-subbtn${
+                          addCashTiming === "Upon Return" ? " active" : ""
+                        }`}
+                      >
+                        Upon Return
+                      </button>
+                    </div>
+                  )}
+
+                  {addPaymentMethod === "GCash" && (
+                    <div className="wz-addbook-gcash-panel">
+                      <div className="wz-addbook-gcash-bar">
+                        <div>
+                          <div className="wz-addbook-gcash-num">0926 463 8983</div>
+                          <div className="wz-addbook-gcash-name">
+                            KIMPC · Kalilangan Irrigators MPC
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="wz-addbook-gcash-copy-btn"
+                          onClick={handleAddCopyGcash}
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                          </svg>
+                          <span>{addCopiedGcash ? "Copied" : "Copy"}</span>
+                        </button>
+                      </div>
+
+                      {!addGcashPreview ? (
+                        <label className="wz-addbook-gcash-upload">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <polyline points="16 16 12 12 8 16" />
+                            <line x1="12" y1="12" x2="12" y2="21" />
+                            <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
+                          </svg>
+                          <span>Upload GCash receipt (PNG/JPG, max 5MB)</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleAddGCashFileChange}
+                            style={{ display: "none" }}
+                          />
+                        </label>
+                      ) : (
+                        <div className="wz-addbook-gcash-preview">
+                          <div className="wz-addbook-gcash-preview-left">
+                            <img
+                              className="wz-addbook-gcash-preview-img"
+                              src={addGcashPreview}
+                              alt="GCash receipt"
+                            />
+                            <span className="wz-addbook-gcash-preview-name">
+                              Receipt attached
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            className="wz-addbook-link-btn"
+                            style={{ color: "#dc2626" }}
+                            onClick={() => {
+                              setAddGcashProof("");
+                              setAddGcashPreview("");
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Section 5: Booking Summary (matches Member Portal Book Now) */}
+                <div className="wz-addbook-summary">
+                  <div className="wz-addbook-summary-row">
+                    <span>Member</span>
+                    <span className="wz-addbook-summary-val">
+                      {selectedMember ? selectedMember.fullName : "Not selected"}
+                    </span>
+                  </div>
+                  <div className="wz-addbook-summary-row">
+                    <span>
+                      Rate ({formatAddBookPrice(addUnitRatePerHectare)} × {addRequestedHectares} ha)
+                    </span>
+                    <span className="wz-addbook-summary-val">
+                      {formatAddBookPrice(addEstimatedCost)}
+                    </span>
+                  </div>
+                  <div className="wz-addbook-summary-row">
+                    <span>Operator</span>
+                    <span className="wz-addbook-summary-val">
+                      {selectedAddUnit?.operatorIncluded === false
+                        ? Number(selectedAddUnit?.additionalOperatorFee) > 0
+                          ? selectedAddUnit?.operatorFeeBasis === "per %"
+                            ? `${Number(selectedAddUnit.additionalOperatorFee)}% of rate`
+                            : `+${formatAddBookPrice(selectedAddUnit.additionalOperatorFee)} ${
+                                selectedAddUnit.operatorFeeBasis || "per day"
+                              }`
+                          : "Not included"
+                        : "Included"}
+                    </span>
+                  </div>
+                  <div className="wz-addbook-summary-row">
+                    <span>Payment</span>
+                    <span className="wz-addbook-summary-val">
+                      {addPaymentMethod === "Cash"
+                        ? `Cash (${addCashTiming})`
+                        : addGcashProof
+                        ? "GCash (Attached)"
+                        : "GCash (Receipt needed)"}
+                    </span>
+                  </div>
+                  <div className="wz-addbook-summary-total">
+                    <span>Total Estimate</span>
+                    <span className="wz-addbook-summary-amount">
+                      {formatAddBookPrice(addEstimatedCost)}
+                    </span>
+                  </div>
+                </div>
+
+                {addFormError && (
+                  <div className="wz-addbook-error">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    <span>{addFormError}</span>
+                  </div>
+                )}
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "12px" }}>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", color: "#475569", marginBottom: "5px" }}>
-                    Start Date
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={newBooking.startDate}
-                    onChange={(e) => setNewBooking({ ...newBooking, startDate: e.target.value })}
-                    style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.86rem" }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", color: "#475569", marginBottom: "5px" }}>
-                    End Date
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={newBooking.endDate}
-                    onChange={(e) => setNewBooking({ ...newBooking, endDate: e.target.value })}
-                    style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.86rem" }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "10px", marginBottom: "18px" }}>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", color: "#475569", marginBottom: "5px" }}>
-                    Daily Rate (₱ PHP)
-                  </label>
-                  <input
-                    type="number"
-                    value={newBooking.dailyRate}
-                    onChange={(e) => setNewBooking({ ...newBooking, dailyRate: Number(e.target.value) })}
-                    style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.86rem" }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", color: "#475569", marginBottom: "5px" }}>
-                    Assigned Operator
-                  </label>
-                  <select
-                    value={newBooking.hasDriver ? "yes" : "no"}
-                    onChange={(e) => setNewBooking({ ...newBooking, hasDriver: e.target.value === "yes" })}
-                    style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.86rem", background: "#fff" }}
-                  >
-                    <option value="yes">With Driver</option>
-                    <option value="no">Self-Operated</option>
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              <div className="wz-addbook-footer">
                 <button
                   type="button"
+                  className="wz-addbook-btn-cancel"
                   onClick={() => setShowAddModal(false)}
-                  style={{
-                    padding: "9px 16px",
-                    borderRadius: "8px",
-                    border: "1px solid #cbd5e1",
-                    background: "#fff",
-                    color: "#475569",
-                    fontWeight: "600",
-                    cursor: "pointer",
-                  }}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  style={{
-                    padding: "9px 20px",
-                    borderRadius: "8px",
-                    border: "none",
-                    background: "var(--wz-primary-red)",
-                    color: "#fff",
-                    fontWeight: "700",
-                    cursor: "pointer",
-                  }}
+                  className="wz-addbook-btn-submit"
+                  disabled={
+                    addSubmitting ||
+                    !selectedMember ||
+                    !selectedAddUnit ||
+                    getAddUnitAvailability(selectedAddUnit) !== "Available" ||
+                    isAddDatesInvalid ||
+                    (addPaymentMethod === "GCash" && !addGcashProof)
+                  }
                 >
-                  Save Booking
+                  {addSubmitting
+                    ? "Submitting…"
+                    : !selectedMember
+                    ? "Select Member"
+                    : !selectedAddUnit
+                    ? "Select Machinery"
+                    : isAddDatesInvalid
+                    ? "Select Dates"
+                    : addPaymentMethod === "GCash" && !addGcashProof
+                    ? "Attach GCash Receipt"
+                    : `Confirm Booking · ${formatAddBookPrice(addEstimatedCost)}`}
                 </button>
               </div>
             </form>
-          </div>
+          </section>
         </div>
       )}
       {/* ================= MODAL: VIEW BOOKING, RECEIPT & PROFILE DETAILS ================= */}

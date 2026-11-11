@@ -1,5 +1,6 @@
 const express = require("express");
 const mongoose = require("mongoose");
+const Account = require("../models/Account");
 const SupportMessage = require("../models/SupportMessage");
 const Notification = require("../models/Notification");
 const { clean, fail } = require("./routeHelpers");
@@ -34,6 +35,35 @@ const router = express.Router();
 
 router.get("/calendar/events", getCalendarEvents);
 router.get("/bookings", listBookings);
+router.get("/members", async (req, res) => {
+  try {
+    const members = await Account.find({
+      role: "member",
+      isArchived: { $ne: true },
+      isSuspended: { $ne: true },
+    })
+      .select("fullName email phone address address2 city region cooperativeId avatar memberSettings.defaultFarmLocation verificationStatus")
+      .sort({ fullName: 1 })
+      .lean();
+
+    const formatted = members.map((m) => ({
+      id: String(m._id),
+      fullName: m.fullName || m.email,
+      email: m.email,
+      phone: m.phone || "",
+      address: [m.address, m.address2, m.city, m.region].filter(Boolean).join(", "),
+      defaultFarmLocation: m.memberSettings?.defaultFarmLocation || "",
+      cooperativeId: m.cooperativeId || "",
+      avatar: m.avatar || "",
+      verificationStatus: m.verificationStatus || "pending",
+    }));
+
+    res.json({ ok: true, members: formatted });
+  } catch (err) {
+    console.error("Error fetching cooperative members:", err);
+    res.status(500).json({ error: "Failed to fetch member accounts." });
+  }
+});
 router.patch("/bookings/:id/approve", approveBooking);
 router.patch("/bookings/:id/reject", rejectBooking);
 router.patch("/bookings/:id/resolve", resolveBookingConflict);
