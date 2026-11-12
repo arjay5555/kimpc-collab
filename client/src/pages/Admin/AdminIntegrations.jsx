@@ -32,7 +32,7 @@ function ApiSourceBadge({ isCustom }) {
           background: isCustom ? "#16a34a" : "#64748b",
         }}
       />
-      {isCustom ? "Using Custom API" : "Using Default API"}
+      {isCustom ? "Custom" : "Default"}
     </span>
   );
 }
@@ -1494,7 +1494,7 @@ export default function AdminIntegrations() {
                       color: apiKeys.google?.isCustom ? "#15803d" : "#475569",
                     }}
                   >
-                    Active API: {apiKeys.google?.isCustom ? "Using Custom API" : "Using Default API"}
+                    Active API: {apiKeys.google?.isCustom ? "Custom" : "Default"}
                   </span>
                 </div>
 
@@ -1771,7 +1771,7 @@ export default function AdminIntegrations() {
                       color: apiKeys.facebook?.isCustom ? "#15803d" : "#475569",
                     }}
                   >
-                    Active API: {apiKeys.facebook?.isCustom ? "Using Custom API" : "Using Default API"}
+                    Active API: {apiKeys.facebook?.isCustom ? "Custom" : "Default"}
                   </span>
                 </div>
 
@@ -2048,7 +2048,7 @@ export default function AdminIntegrations() {
                       color: apiKeys.recaptcha?.isCustom ? "#15803d" : "#475569",
                     }}
                   >
-                    Active API: {apiKeys.recaptcha?.isCustom ? "Using Custom API" : "Using Default API"}
+                    Active API: {apiKeys.recaptcha?.isCustom ? "Custom" : "Default"}
                   </span>
                 </div>
 
@@ -2321,7 +2321,7 @@ export default function AdminIntegrations() {
                       color: apiKeys.weather?.isCustom ? "#15803d" : "#475569",
                     }}
                   >
-                    Active API: {apiKeys.weather?.isCustom ? "Using Custom API" : "Using Default API"}
+                    Active API: {apiKeys.weather?.isCustom ? "Custom" : "Default"}
                   </span>
                 </div>
 
@@ -2574,7 +2574,7 @@ export default function AdminIntegrations() {
                       color: apiKeys.oneSignal?.isCustom ? "#15803d" : "#475569",
                     }}
                   >
-                    Active API: {apiKeys.oneSignal?.isCustom ? "Using Custom API" : "Using Default API"}
+                    Active API: {apiKeys.oneSignal?.isCustom ? "Custom" : "Default"}
                   </span>
                 </div>
 
@@ -2851,7 +2851,7 @@ export default function AdminIntegrations() {
                       color: apiKeys.cloudinary?.isCustom ? "#15803d" : "#475569",
                     }}
                   >
-                    Active API: {apiKeys.cloudinary?.isCustom ? "Using Custom API" : "Using Default API"}
+                    Active API: {apiKeys.cloudinary?.isCustom ? "Custom" : "Default"}
                   </span>
                 </div>
 
@@ -3150,7 +3150,7 @@ export default function AdminIntegrations() {
                       color: apiKeys.email?.isCustom ? "#15803d" : "#475569",
                     }}
                   >
-                    Active API: {apiKeys.email?.isCustom ? "Using Custom API" : "Using Default API"}
+                    Active API: {apiKeys.email?.isCustom ? "Custom" : "Default"}
                   </span>
                 </div>
 
@@ -3449,7 +3449,7 @@ export default function AdminIntegrations() {
                       color: apiKeys.calendar?.isCustom ? "#15803d" : "#475569",
                     }}
                   >
-                    Active API: {apiKeys.calendar?.isCustom ? "Using Custom API" : "Using Default API"}
+                    Active API: {apiKeys.calendar?.isCustom ? "Custom" : "Default"}
                   </span>
                 </div>
 

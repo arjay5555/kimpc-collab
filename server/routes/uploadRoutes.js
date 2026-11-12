@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const cloudinaryService = require("../services/cloudinaryService");
 const authenticate = require("../middleware/authenticate");
+const { logAudit } = require("../services/auditLogger");
 
 /**
  * GET /api/upload/status
@@ -33,6 +34,19 @@ router.post("/image", authenticate, async (req, res) => {
     const result = await cloudinaryService.uploadImage(image, {
       folder: targetFolder,
       filename,
+    });
+
+    await logAudit({
+      action: "IMAGE_UPLOADED",
+      module: "System",
+      actorEmail: req.user?.email || "user",
+      actorName: req.user?.fullName || "",
+      actorRole: req.user?.role || "member",
+      actorId: req.user?._id,
+      affectedRecord: `Upload (${targetFolder})`,
+      details: { folder: targetFolder, provider: result.provider, filename: filename || "" },
+      status: "Success",
+      req,
     });
 
     return res.status(201).json({

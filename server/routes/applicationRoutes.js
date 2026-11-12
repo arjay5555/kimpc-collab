@@ -1141,6 +1141,27 @@ router.post("/applications/:id/request-cancellation", authenticate, async (req, 
         nowTs,
       });
       await existing.save();
+
+      await logAudit({
+        action: "BOOKING_CANCELLED",
+        module: "Bookings",
+        actorEmail,
+        actorName: req.user?.fullName || "",
+        actorRole: req.user?.role || "member",
+        actorId: req.user?._id,
+        affectedRecord: `Booking #${existing.id} (${existing.equipment})`,
+        targetEmail: existing.memberEmail,
+        targetName: existing.memberName,
+        targetRole: "member",
+        details: {
+          applicationId: existing.id,
+          equipment: existing.equipment,
+          dateRange: `${existing.startDate} – ${existing.endDate}`,
+          reason,
+        },
+        req,
+      });
+
       return res.json({ ok: true, direct: true, message: "Booking request cancelled successfully.", application: existing });
     }
 
@@ -1162,6 +1183,26 @@ router.post("/applications/:id/request-cancellation", authenticate, async (req, 
       note: `Reason: ${existing.cancellationReason}`,
     });
     await existing.save();
+
+    await logAudit({
+      action: "BOOKING_CANCELLATION_REQUESTED",
+      module: "Bookings",
+      actorEmail,
+      actorName: req.user?.fullName || "",
+      actorRole: req.user?.role || "member",
+      actorId: req.user?._id,
+      affectedRecord: `Booking #${existing.id} (${existing.equipment})`,
+      targetEmail: existing.memberEmail,
+      targetName: existing.memberName,
+      targetRole: "member",
+      details: {
+        applicationId: existing.id,
+        equipment: existing.equipment,
+        dateRange: `${existing.startDate} – ${existing.endDate}`,
+        reason: existing.cancellationReason,
+      },
+      req,
+    });
 
     // Notify managers
     const managers = await Account.find({ role: "manager" }).select("email").lean();

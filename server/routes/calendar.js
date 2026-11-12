@@ -14,6 +14,7 @@ const {
 } = require("../services/googleCalendarService");
 const weatherService = require("../services/weatherService");
 const { getSystemSetting } = require("../models/SystemSetting");
+const { logAudit } = require("../services/auditLogger");
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || "minders-secret-jwt-key-cooperative-2026";
@@ -288,6 +289,18 @@ router.get("/status", resolveManager, async (req, res) => {
 router.post("/disconnect", resolveManager, async (req, res) => {
   try {
     const result = await disconnectManagerCalendar(req.user._id);
+    await logAudit({
+      action: "GOOGLE_CALENDAR_DISCONNECTED",
+      module: "Security Settings",
+      actorEmail: req.user?.email || "manager",
+      actorName: req.user?.fullName || "",
+      actorRole: req.user?.role || "manager",
+      actorId: req.user?._id,
+      affectedRecord: "Google Calendar Sync",
+      details: "Disconnected Google Calendar synchronization",
+      status: "Success",
+      req,
+    });
     return res.json(result);
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -317,6 +330,23 @@ router.post("/sync-now", resolveManager, async (req, res) => {
       const eventId = await syncMaintenanceToGoogleCalendar(m, req.user);
       if (eventId) maintenanceCount++;
     }
+
+    await logAudit({
+      action: "GOOGLE_CALENDAR_SYNCED",
+      module: "Security Settings",
+      actorEmail: req.user?.email || "manager",
+      actorName: req.user?.fullName || "",
+      actorRole: req.user?.role || "manager",
+      actorId: req.user?._id,
+      affectedRecord: "Google Calendar Sync",
+      details: {
+        syncedBookings: bookingCount,
+        syncedMaintenance: maintenanceCount,
+        total: bookingCount + maintenanceCount,
+      },
+      status: "Success",
+      req,
+    });
 
     return res.json({
       success: true,

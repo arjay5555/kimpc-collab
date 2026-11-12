@@ -1159,6 +1159,21 @@ router.post("/accounts/:email/profile-update", async (req, res) => {
     account.pendingUpdate = pending;
     account.markModified("pendingUpdate");
     await account.save();
+
+    await logAudit({
+      action: "PROFILE_UPDATE_REQUESTED",
+      module: "Accounts & Roles",
+      actorEmail: account.email,
+      actorName: account.fullName || "",
+      actorRole: account.role || "member",
+      actorId: account._id,
+      targetEmail: account.email,
+      targetName: pending.fullName || account.fullName,
+      details: { pendingEmail: pending.email, fullName: pending.fullName },
+      status: "Success",
+      req,
+    });
+
     res.json(account);
   } catch (error) {
     console.error("Error staging profile update:", error);

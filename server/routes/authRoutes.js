@@ -37,6 +37,9 @@ const {
   getAdminApiKeysSummary,
 } = require("../services/apiKeyManager");
 const {
+  validateIntegrationCredentials,
+} = require("../services/integrationValidator");
+const {
   clean,
   cleanEmail,
   fail,
@@ -48,6 +51,25 @@ const {
 } = require("./routeHelpers");
 
 const router = express.Router();
+
+async function rejectInvalidIntegration(res, req, provider, credentials, updatedBy) {
+  const errorMsg = await validateIntegrationCredentials(provider, credentials);
+  if (!errorMsg) return false;
+
+  await logAudit({
+    action: "SETTINGS_UPDATE_FAILED",
+    module: "Security Settings",
+    actorEmail: updatedBy,
+    actorRole: req.admin?.role || "admin",
+    affectedRecord: `Integration: ${provider}`,
+    details: `Rejected invalid custom ${provider} credentials: ${errorMsg}`,
+    status: "Failed",
+    req,
+  });
+
+  fail(res, 400, errorMsg);
+  return true;
+}
 
 // Helper to calculate sequential Cooperative ID
 async function nextCooperativeId() {
@@ -559,6 +581,8 @@ router.post(["/admin/api-keys/google", "/admin/integrations/keys/google", "/admi
       });
     }
 
+    if (await rejectInvalidIntegration(res, req, "google", { clientId, clientSecret }, updatedBy)) return;
+
     if (clientId) {
       await setSystemSetting(
         "customGoogleClientId",
@@ -641,6 +665,8 @@ router.post(["/admin/api-keys/facebook", "/admin/integrations/keys/facebook", "/
         message: "Facebook OAuth credentials reset to default code keys.",
       });
     }
+
+    if (await rejectInvalidIntegration(res, req, "facebook", { appId, appSecret }, updatedBy)) return;
 
     if (appId) {
       await setSystemSetting(
@@ -725,6 +751,8 @@ router.post(["/admin/api-keys/recaptcha", "/admin/integrations/keys/recaptcha", 
       });
     }
 
+    if (await rejectInvalidIntegration(res, req, "recaptcha", { siteKey, secretKey }, updatedBy)) return;
+
     if (siteKey) {
       await setSystemSetting(
         "customRecaptchaSiteKey",
@@ -802,6 +830,8 @@ router.post(["/admin/api-keys/weather", "/admin/integrations/keys/weather", "/ad
       });
     }
 
+    if (await rejectInvalidIntegration(res, req, "weather", { apiKey: key }, updatedBy)) return;
+
     await setSystemSetting(
       "customWeatherApiKey",
       key,
@@ -872,6 +902,8 @@ router.post(["/admin/api-keys/onesignal", "/admin/integrations/keys/onesignal", 
         message: "OneSignal credentials reset to default code keys.",
       });
     }
+
+    if (await rejectInvalidIntegration(res, req, "oneSignal", { appId, restApiKey }, updatedBy)) return;
 
     if (appId) {
       await setSystemSetting(
@@ -961,6 +993,8 @@ router.post(["/admin/api-keys/cloudinary", "/admin/integrations/keys/cloudinary"
         message: "Cloudinary credentials reset to default code keys.",
       });
     }
+
+    if (await rejectInvalidIntegration(res, req, "cloudinary", { cloudName, apiKey, apiSecret }, updatedBy)) return;
 
     if (cloudName) {
       await setSystemSetting(
@@ -1061,6 +1095,8 @@ router.post(["/admin/api-keys/email", "/admin/integrations/keys/email", "/admin/
       });
     }
 
+    if (await rejectInvalidIntegration(res, req, "email", { user, pass, from }, updatedBy)) return;
+
     if (user) {
       await setSystemSetting(
         "customSmtpUser",
@@ -1094,8 +1130,6 @@ router.post(["/admin/api-keys/email", "/admin/integrations/keys/email", "/admin/
     process.env.SMTP_USER = user || defaultUser;
     process.env.SMTP_PASS = pass || defaultPass;
     process.env.SMTP_FROM = from || defaultFrom;
-    process.env.SMTP_PASS = pass || process.env.DEFAULT_SMTP_PASS || DEFAULT_SMTP_PASS;
-    process.env.SMTP_FROM = from || process.env.DEFAULT_SMTP_FROM || DEFAULT_SMTP_FROM;
 
     await logAudit({
       action: "SETTINGS_UPDATED",
@@ -1161,6 +1195,8 @@ router.post(["/admin/api-keys/calendar", "/admin/integrations/keys/calendar", "/
         message: "Google Calendar credentials reset to default code keys.",
       });
     }
+
+    if (await rejectInvalidIntegration(res, req, "calendar", { clientId, clientSecret, redirectUri }, updatedBy)) return;
 
     if (clientId) {
       await setSystemSetting(

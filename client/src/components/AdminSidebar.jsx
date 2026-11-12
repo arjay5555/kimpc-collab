@@ -84,7 +84,7 @@ export default function AdminSidebar() {
           <span>Integrations</span>
         </Link>
 
-        {/* Reports & Exports */}
+        {/* Reports */}
         <Link
           to="/admin/reports"
           className={`wz-nav-item ${isReportsActive ? "active" : ""}`}
@@ -94,7 +94,7 @@ export default function AdminSidebar() {
             <line x1="12" y1="20" x2="12" y2="4" />
             <line x1="6" y1="20" x2="6" y2="14" />
           </svg>
-          <span>Reports &amp; Export</span>
+          <span>Reports</span>
         </Link>
 
         {/* Database & Backups */}

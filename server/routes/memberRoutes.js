@@ -30,6 +30,21 @@ router.post("/notifications/announce", authManager, async (req, res) => {
   const recipients = members.filter((member) => member.memberSettings?.notifications?.inApp !== false && member.memberSettings?.notifications?.systemUpdates !== false);
   if (recipients.length === 0) return fail(res, 404, "No opted-in member recipients were found.");
   await Notification.insertMany(recipients.map(({ email }) => ({ memberEmail: email, title, message, type: "system" })));
+
+  await logAudit({
+    action: "ANNOUNCEMENT_SENT",
+    module: "Member Messages",
+    actorEmail: req.user?.email || "manager",
+    actorName: req.user?.fullName || "",
+    actorRole: req.user?.role || "manager",
+    actorId: req.user?._id,
+    affectedRecord: targetEmail ? `Announcement to ${targetEmail}` : `Broadcast (${recipients.length} members)`,
+    targetEmail: targetEmail || "",
+    details: { title, recipientCount: recipients.length, targetEmail: targetEmail || "all" },
+    status: "Success",
+    req,
+  });
+
   return res.status(201).json({ created: recipients.length });
 });
 
@@ -74,6 +89,25 @@ router.patch("/member/preferences", async (req, res) => {
   }
   req.user.memberSettings = settings;
   await req.user.save();
+
+  await logAudit({
+    action: "PREFERENCES_UPDATED",
+    module: "Accounts & Roles",
+    actorEmail: req.user.email,
+    actorName: req.user.fullName || "",
+    actorRole: req.user.role || "member",
+    actorId: req.user._id,
+    affectedRecord: `${req.user.fullName || req.user.email} preferences`,
+    targetEmail: req.user.email,
+    targetName: req.user.fullName || "",
+    details: {
+      theme: settings.theme || "light",
+      defaultFarmLocation: settings.defaultFarmLocation || "",
+    },
+    status: "Success",
+    req,
+  });
+
   return res.json({
     theme: settings.theme || "light",
     defaultFarmLocation: settings.defaultFarmLocation || "",
@@ -127,6 +161,22 @@ router.patch(["/member/profile", "/member/update-profile"], async (req, res) => 
 
   if (!req.user.fullName) return fail(res, 400, "Full name is required.");
   await req.user.save();
+
+  await logAudit({
+    action: "PROFILE_UPDATED",
+    module: "Accounts & Roles",
+    actorEmail: req.user.email,
+    actorName: req.user.fullName || "",
+    actorRole: req.user.role || "member",
+    actorId: req.user._id,
+    targetEmail: req.user.email,
+    targetName: req.user.fullName || "",
+    targetRole: req.user.role || "member",
+    details: "Member updated profile information",
+    status: "Success",
+    req,
+  });
+
   return res.json({
     fullName: req.user.fullName,
     email: req.user.email,
@@ -147,10 +197,39 @@ router.post("/member/change-password", async (req, res) => {
   if (!currentPassword || !newPassword) return fail(res, 400, "Current and new passwords are required.");
   if (newPassword.length < 8) return fail(res, 400, "New password must be at least 8 characters.");
   const account = await Account.findById(req.user._id).select("+passwordHash");
-  if (!account || !(await bcrypt.compare(currentPassword, account.passwordHash))) return fail(res, 401, "Current password is incorrect.");
+  if (!account || !(await bcrypt.compare(currentPassword, account.passwordHash))) {
+    await logAudit({
+      action: "PASSWORD_CHANGE_FAILED",
+      module: "Authentication",
+      actorEmail: req.user.email,
+      actorName: req.user.fullName || "",
+      actorRole: req.user.role || "member",
+      actorId: req.user._id,
+      targetEmail: req.user.email,
+      details: "Password change denied: incorrect current password",
+      status: "Failed",
+      req,
+    });
+    return fail(res, 401, "Current password is incorrect.");
+  }
   account.passwordHash = await bcrypt.hash(newPassword, 10);
   account.mustChangePassword = false;
   await account.save();
+
+  await logAudit({
+    action: "PASSWORD_CHANGED",
+    module: "Authentication",
+    actorEmail: account.email,
+    actorName: account.fullName || "",
+    actorRole: account.role || "member",
+    actorId: account._id,
+    targetEmail: account.email,
+    targetName: account.fullName || "",
+    details: "Member updated account password",
+    status: "Success",
+    req,
+  });
+
   return res.json({ ok: true, message: "Password updated." });
 });
 

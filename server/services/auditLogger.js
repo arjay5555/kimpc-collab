@@ -79,6 +79,9 @@ function deriveModule(action = "") {
     a.includes("RECAPTCHA") ||
     a.includes("GOOGLE_LOGIN") ||
     a.includes("FACEBOOK_LOGIN") ||
+    a.includes("CALENDAR") ||
+    a.includes("API_KEY") ||
+    a.includes("INTEGRATION") ||
     a.includes("SECURITY") ||
     a.includes("SETTING") ||
     a.includes("CONFIG")
@@ -93,17 +96,6 @@ function deriveModule(action = "") {
     a.includes("FLEET")
   ) {
     return "Machinery Fleet";
-  }
-  if (
-    a.includes("PAYMENT") ||
-    a.includes("FINANCIAL") ||
-    a.includes("REFUND") ||
-    a.includes("POLICY") ||
-    a.includes("CORRECTION") ||
-    a.includes("EXPENSE") ||
-    a.includes("DEPOSIT")
-  ) {
-    return "Financial Policies";
   }
   if (
     a.includes("BACKUP") ||
@@ -121,6 +113,7 @@ function deriveModule(action = "") {
   if (
     a.includes("MESSAGE") ||
     a.includes("INQUIRY") ||
+    a.includes("ANNOUNCEMENT") ||
     a.includes("SUPPORT") ||
     a.includes("TICKET")
   ) {
