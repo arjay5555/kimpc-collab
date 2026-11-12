@@ -198,7 +198,8 @@ router.get("/reports/pdf", async (req, res) => {
       req.user?.fullName ||
       (req.user?.firstName && req.user?.lastName ? `${req.user.firstName} ${req.user.lastName}` : null) ||
       req.user?.name ||
-      "Operations Manager";
+      req.user?.email ||
+      (req.user?.role === "admin" ? "System Administrator" : "Operations Manager");
 
     reportService.generateReportPDF(reportData, res, {
       loggedInManager,
