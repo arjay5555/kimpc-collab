@@ -1,0 +1,1108 @@
+const express = require("express");
+const mongoose = require("mongoose");
+const router = express.Router();
+
+const Account = require("../models/Account");
+const Application = require("../models/Application");
+const MachineryUnit = require("../models/MachineryUnit");
+const MachineryMaintenance = require("../models/MachineryMaintenance");
+const Notification = require("../models/Notification");
+const authenticate = require("../middleware/authenticate");
+
+const authManager = require("../middleware/authManager");
+const { logAudit } = require("../services/auditLogger");
+const {
+  syncBookingToGoogleCalendar,
+  deleteBookingFromGoogleCalendar,
+} = require("../services/googleCalendarService");
+const cloudinaryService = require("../services/cloudinaryService");
+const oneSignalService = require("../services/oneSignalService");
+
+const {
+  STATUSES,
+  clean,
+  cleanEmail,
+  fail,
+  isSameMachineryMatch,
+} = require("./routeHelpers");
+
+function optionalAuthentication(req, res, next) {
+  if (!(req.headers.authorization || "").startsWith("Bearer ")) return next();
+  return authenticate(req, res, next);
+}
+
+function bookingTimestamp(value, endOfDate = false) {
+  const raw = clean(value);
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+    ? `${raw}T${endOfDate ? "23:59:59.999" : "00:00:00.000"}Z`
+    : raw;
+  const timestamp = new Date(normalized).getTime();
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+// ---------- Equipment applications ----------
+
+// ?memberEmail=... returns one member's requests; without it, everything (manager/admin queue).
+router.get("/applications", optionalAuthentication, async (req, res) => {
+  try {
+    const memberEmail = req.user?.role === "member" ? req.user.email : cleanEmail(req.query.memberEmail);
+    const filter = memberEmail ? { memberEmail } : {};
+    const applications = await Application.find(filter).sort({ createdAt: -1 }).lean();
+
+    // Ensure memberPhone / farmerPhone / clientPhone are populated from Account if missing
+    const missingEmails = [...new Set(applications.filter((a) => !a.farmerPhone && !a.memberPhone && a.memberEmail).map((a) => a.memberEmail))];
+    if (missingEmails.length > 0) {
+      const accounts = await Account.find({ email: { $in: missingEmails } }).select("email phone").lean();
+      const phoneMap = new Map(accounts.map((acc) => [acc.email, acc.phone]));
+      applications.forEach((a) => {
+        if (!a.farmerPhone && !a.memberPhone && a.memberEmail) {
+          const ph = phoneMap.get(a.memberEmail) || "";
+          a.farmerPhone = ph;
+          a.memberPhone = ph;
+          a.clientPhone = ph;
+        }
+      });
+    }
+
+    // Ensure machinery imageUrl is populated from MachineryUnit if missing
+    const unitIds = [...new Set(applications.filter((a) => !a.imageUrl && a.machineryUnitId).map((a) => a.machineryUnitId))];
+    const equipNames = [...new Set(applications.filter((a) => !a.imageUrl && a.equipment).map((a) => a.equipment))];
+    if (unitIds.length > 0 || equipNames.length > 0) {
+      const units = await MachineryUnit.find({
+        $or: [
+          ...(unitIds.length > 0 ? [{ unitId: { $in: unitIds } }] : []),
+          ...(equipNames.length > 0 ? [{ name: { $in: equipNames } }] : []),
+        ],
+      }).select("unitId name imageUrl photos").lean();
+
+      const unitMap = new Map();
+      units.forEach((u) => {
+        const img = u.imageUrl || (Array.isArray(u.photos) && u.photos[0]) || "";
+        if (u.unitId && img) unitMap.set(u.unitId, img);
+        if (u.name && img && !unitMap.has(u.name)) unitMap.set(u.name, img);
+      });
+
+      applications.forEach((a) => {
+        if (!a.imageUrl) {
+          a.imageUrl = unitMap.get(a.machineryUnitId) || unitMap.get(a.equipment) || "";
+        }
+      });
+    }
+
+    res.json(applications);
+  } catch (error) {
+    console.error("Error fetching applications:", error);
+    res.status(500).json({ error: "Failed to fetch applications." });
+  }
+});
+
+router.post("/applications", optionalAuthentication, async (req, res) => {
+  try {
+    const memberEmail = req.user?.role === "member" ? req.user.email : cleanEmail(req.body.memberEmail);
+    const equipment = clean(req.body.equipment);
+    const machineryUnitId = clean(req.body.machineryUnitId);
+    const startDate = clean(req.body.startDate);
+    const endDate = clean(req.body.endDate);
+    const hectares = Math.max(0.1, Number(req.body.hectares) || 1);
+    const bookingType = clean(req.body.bookingType).toLowerCase() || "hectare";
+    const farmLocation = clean(req.body.farmLocation || req.body.location);
+    const farmFormattedAddress = clean(req.body.farmFormattedAddress || farmLocation);
+    const farmCoordinates = {
+      lat: req.body.farmCoordinates?.lat != null ? Number(req.body.farmCoordinates.lat) : (req.body.lat != null ? Number(req.body.lat) : null),
+      lng: req.body.farmCoordinates?.lng != null ? Number(req.body.farmCoordinates.lng) : (req.body.lng != null ? Number(req.body.lng) : null),
+    };
+    if (!equipment || !startDate || !endDate) {
+      return fail(res, 400, "Equipment and booking dates are required.");
+    }
+    if (farmLocation.length > 500) return fail(res, 400, "Farm location must be 500 characters or fewer.");
+    const startTimestamp = bookingTimestamp(startDate);
+    const endTimestamp = bookingTimestamp(endDate, true);
+    if (startTimestamp === null || endTimestamp === null) return fail(res, 400, "Enter valid booking dates.");
+    if (endTimestamp <= startTimestamp) return fail(res, 400, "The end date must be on or after the start date.");
+
+    // Block new assignments to units under maintenance or retired
+    let targetUnit = null;
+    if (machineryUnitId || equipment) {
+      targetUnit = await MachineryUnit.findOne(
+        machineryUnitId ? { unitId: machineryUnitId } : { name: equipment }
+      );
+      if (machineryUnitId && !targetUnit) return fail(res, 404, "Selected machinery unit was not found.");
+      if (targetUnit) {
+        const cond = targetUnit.operatingCondition || targetUnit.status;
+        if (["Under Maintenance", "Maintenance", "Repair", "Retired", "Dispose"].includes(cond)) {
+          return fail(
+            res,
+            400,
+            `Cannot book machinery unit "${targetUnit.unitId || equipment}": Unit is currently ${cond}.`
+          );
+        }
+      }
+    }
+
+    // Automatic Maintenance Overlap Protection:
+    const overlappingMaints = await MachineryMaintenance.find({
+      status: { $in: ["Out of Service", "In Repair", "Scheduled Maintenance"] },
+    });
+    const maintenanceConflict = overlappingMaints.find((m) =>
+      isSameMachineryMatch(m.equipmentUnitId, m.equipmentName, machineryUnitId, equipment) &&
+      m.startDate <= endDate &&
+      m.endDate >= startDate
+    );
+
+    if (maintenanceConflict) {
+      return fail(
+        res,
+        409,
+        `Cannot book "${equipment}": Unit is scheduled for ${maintenanceConflict.maintenanceType} from ${maintenanceConflict.startDate} to ${maintenanceConflict.endDate}.`
+      );
+    }
+
+    // Quantity: 1 Enforcement — Cannot book an already APPROVED or CHECKED-OUT machinery unit
+    const overlappingBookings = await Application.find({
+      status: { $in: ["Approved", "Checked-Out"] },
+      startDate: { $lte: endDate },
+      endDate: { $gte: startDate },
+    });
+    const bookingConflict = overlappingBookings.find((b) =>
+      isSameMachineryMatch(b.machineryUnitId, b.equipment, machineryUnitId, equipment)
+    );
+
+    if (bookingConflict) {
+      return fail(
+        res,
+        409,
+        `Cannot book "${equipment}": This machinery unit is already reserved from ${bookingConflict.startDate} to ${bookingConflict.endDate}. Please choose different dates.`
+      );
+    }
+
+    let memberName = clean(req.body.memberName);
+    let memberPhone = clean(req.body.farmerPhone || req.body.memberPhone || req.body.phone || req.body.clientPhone);
+    let memberAccount = null;
+
+    if (memberEmail) {
+      memberAccount = await Account.findOne({ email: memberEmail }).select("fullName phone role").lean();
+      if (!memberName) memberName = memberAccount?.fullName || memberEmail;
+      if (!memberPhone) memberPhone = clean(memberAccount?.phone);
+    }
+
+    // ENFORCE: Members cannot proceed with booking if they have not input their mobile number in their profile!
+    const isMemberBooking = req.user?.role === "member" || memberAccount?.role === "member" || (!req.user && memberEmail);
+    if (isMemberBooking && !memberPhone) {
+      return fail(
+        res,
+        400,
+        "Mobile number required: You cannot proceed with booking because your profile has no mobile number. Please update your mobile number in your profile first."
+      );
+    }
+
+    const ratePerHectare = Number(req.body.ratePerHectare) || Number(targetUnit?.memberRate) || Number(targetUnit?.ratePerHectare) || 2500;
+    const totalAmount = Math.round(ratePerHectare * hectares);
+    const machineryModel = clean(targetUnit?.model || req.body.machineryModel || targetUnit?.brand ? `${targetUnit.brand} ${targetUnit.model}` : "Standard Model");
+    const assignedDriver = clean(targetUnit?.assignedDriver || (targetUnit?.operatorIncluded ? "Coop Operator Assigned" : "Self-Operated"));
+    const driverPhone = clean(targetUnit?.driverPhone || "");
+    const now = new Date();
+
+    const paymentMethod = clean(req.body.paymentMethod) === "GCash" ? "GCash" : "Cash";
+    const cashPaymentOption = paymentMethod === "Cash" ? clean(req.body.cashPaymentOption) || "Upon Pickup" : "";
+    let gcashProof = paymentMethod === "GCash" ? clean(req.body.gcashProof) : "";
+
+    // Upload GCash receipt proof to Cloudinary if base64 data URI provided
+    if (paymentMethod === "GCash" && gcashProof && gcashProof.startsWith("data:image/")) {
+      try {
+        const uploadResult = await cloudinaryService.uploadImage(gcashProof, {
+          folder: "kimpc/receipts",
+          filename: `gcash-${Date.now()}`,
+        });
+        gcashProof = uploadResult.url;
+      } catch (err) {
+        console.warn("Could not upload GCash proof to Cloudinary, saving local fallback/base64:", err.message);
+      }
+    }
+
+    const paymentStatus = paymentMethod === "GCash" && gcashProof ? "Paid" : clean(req.body.paymentStatus) || "Pending";
+    const receiptNo = `REC-${now.getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const initialTimeline = [
+      {
+        event: "created",
+        title: "Booking Request Submitted",
+        timestamp: now,
+        actor: "Member",
+        note: `Requested for ${hectares} ha (${startDate} to ${endDate}). Payment: ${paymentMethod}${paymentMethod === "Cash" ? ` (${cashPaymentOption})` : (gcashProof ? " [GCash Proof Uploaded]" : "")}`,
+      },
+    ];
+
+    const application = await Application.create({
+      memberEmail: memberEmail || "walkin@kimpc.test",
+      memberName: memberName || "Cooperative Member",
+      equipment,
+      machineryUnitId: machineryUnitId || targetUnit?.unitId || "",
+      machineryModel,
+      imageUrl: targetUnit?.imageUrl || (Array.isArray(targetUnit?.photos) && targetUnit?.photos[0]) || "",
+      assignedDriver,
+      driverPhone,
+      startDate,
+      endDate,
+      bookingType: "hectare",
+      hectares,
+      ratePerHectare,
+      totalAmount,
+      farmLocation,
+      farmCoordinates,
+      farmFormattedAddress,
+      status: "Pending",
+      paymentStatus,
+      paymentAmount: totalAmount,
+      paymentMethod,
+      cashPaymentOption,
+      gcashProof,
+      receiptNo,
+      isWalkIn: Boolean(req.body.isWalkIn),
+      farmerPhone: memberPhone,
+      memberPhone,
+      clientPhone: memberPhone,
+      timeline: initialTimeline,
+      financials: {
+        dailyRate: ratePerHectare,
+        ratePerHectare,
+        hectares,
+        totalPaid: totalAmount,
+        paymentMethod,
+        isSettled: paymentStatus === "Paid",
+      },
+    });
+
+    await logAudit({
+      action: "BOOKING_REQUESTED",
+      actorEmail: memberEmail || req.user?.email || "anonymous",
+      actorRole: req.user?.role || "member",
+      targetEmail: memberEmail,
+      targetName: memberName,
+      targetRole: "member",
+      details: {
+        applicationId: application.id,
+        equipment,
+        machineryUnitId: application.machineryUnitId,
+        dateRange: `${startDate} – ${endDate}`,
+        bookingType,
+        farmLocation,
+      farmCoordinates,
+      farmFormattedAddress,
+        paymentMethod,
+        totalAmount,
+      },
+      req,
+    });
+
+    // Notify managers in-app about new member booking
+    try {
+      const managers = await Account.find({ role: "manager" }).select("email").lean();
+      if (managers.length > 0) {
+        await Notification.insertMany(
+          managers.map((m) => ({
+            memberEmail: m.email,
+            title: "New Machinery Booking Placed",
+            message: `${memberName || memberEmail} placed a booking for ${equipment} (${startDate} to ${endDate}). Payment: ${paymentMethod || "Cash"} (₱${Number(totalAmount).toLocaleString()}).`,
+            type: "booking",
+            relatedApplicationId: application._id,
+          }))
+        );
+      }
+    } catch (notifErr) {
+      console.warn("Could not send manager notification for new booking:", notifErr.message);
+    }
+
+    res.status(201).json(application);
+  } catch (error) {
+    console.error("Error creating application:", error);
+    res.status(500).json({ error: "Failed to create application." });
+  }
+});
+
+router.get("/applications/:id", optionalAuthentication, async (req, res) => {
+  try {
+    let app = null;
+    if (mongoose.isValidObjectId(req.params.id)) {
+      app = await Application.findById(req.params.id);
+    }
+    if (!app) {
+      app = await Application.findOne({
+        $or: [
+          { displayId: req.params.id },
+          { displayId: req.params.id.toUpperCase() },
+        ],
+      });
+    }
+    if (!app) return fail(res, 404, "Application not found.");
+    const appObj = app.toObject ? app.toObject() : app;
+    if (!appObj.imageUrl && (appObj.machineryUnitId || appObj.equipment)) {
+      const u = await MachineryUnit.findOne({
+        $or: [
+          ...(appObj.machineryUnitId ? [{ unitId: appObj.machineryUnitId }] : []),
+          ...(appObj.equipment ? [{ name: appObj.equipment }] : []),
+        ],
+      }).select("imageUrl photos").lean();
+      if (u) {
+        appObj.imageUrl = u.imageUrl || (Array.isArray(u.photos) && u.photos[0]) || "";
+      }
+    }
+    res.json(appObj);
+  } catch (error) {
+    console.error("Error fetching application:", error);
+    res.status(500).json({ error: "Failed to fetch application." });
+  }
+});
+
+const handleApplicationUpdate = async (req, res) => {
+  try {
+    let existing = null;
+    const rawId = (req.params.id || "").trim();
+    if (mongoose.isValidObjectId(rawId)) {
+      existing = await Application.findById(rawId);
+    }
+    if (!existing) {
+      existing = await Application.findOne({
+        $or: [
+          { displayId: rawId },
+          { displayId: rawId.toUpperCase() },
+        ],
+      });
+    }
+    if (!existing) {
+      const suffix = rawId.replace(/^APP-/i, "").toLowerCase();
+      const apps = await Application.find().sort({ createdAt: -1 }).limit(200);
+      existing = apps.find((a) => String(a._id).slice(-6).toLowerCase() === suffix || String(a._id) === rawId);
+    }
+    if (!existing) return fail(res, 404, "Application not found.");
+
+    const actorEmail = cleanEmail(req.body.actorEmail || req.headers["x-actor-email"] || existing.memberEmail);
+    const actorRole = clean(req.body.actorRole || req.headers["x-actor-role"] || "member");
+
+    // Check if manager is updating payment status
+    if (req.body.paymentStatus && !req.body.status && !req.body.startDate) {
+      existing.paymentStatus = clean(req.body.paymentStatus);
+      if (!existing.financials) existing.financials = {};
+      existing.financials.isSettled = existing.paymentStatus === "Paid";
+      if (existing.paymentStatus === "Paid" && !existing.receiptNo) {
+        existing.receiptNo = `REC-${new Date().getFullYear()}-${String(existing._id).slice(-4).toUpperCase()}`;
+      }
+      if (!existing.timeline) existing.timeline = [];
+      existing.timeline.push({
+        event: "payment_settled",
+        title: "Payment Settled",
+        timestamp: new Date(),
+        actor: ["manager", "admin"].includes(actorRole) ? "Manager" : "System",
+        note: `Payment status updated to ${existing.paymentStatus} (${existing.paymentMethod || "Cash"}). Receipt: ${existing.receiptNo || "N/A"}.`,
+      });
+      await existing.save();
+
+      // Notify member in-app
+      try {
+        await Notification.create({
+          memberEmail: existing.memberEmail,
+          title: "Payment Confirmed & Receipt Ready",
+          message: `Your payment of ₱${Number(existing.totalAmount || 0).toLocaleString()} for ${existing.equipment} has been verified and settled. Receipt #${existing.receiptNo} is now ready for download.`,
+          type: "booking",
+          relatedApplicationId: existing._id,
+        });
+      } catch (notifErr) {
+        console.warn("Could not notify member of payment settlement:", notifErr.message);
+      }
+
+      return res.json({ ok: true, message: "Payment status updated.", application: existing });
+    }
+
+    // Check if member is editing booking details (farm location, equipment, startDate, endDate, bookingType)
+    const isEditingDetails = Boolean(
+      req.body.equipment ||
+      req.body.startDate ||
+      req.body.endDate ||
+      req.body.farmLocation !== undefined ||
+      req.body.bookingType
+    );
+    if (isEditingDetails && !req.body.status) {
+      if (existing.status !== "Pending") {
+        return fail(
+          res,
+          400,
+          `Only pending booking requests can be edited. Approved or in-progress bookings cannot be edited (current status: ${existing.status}).`
+        );
+      }
+
+      const newEquipment = clean(req.body.equipment || existing.equipment);
+      const newStartDate = clean(req.body.startDate || existing.startDate);
+      const newEndDate = clean(req.body.endDate || existing.endDate);
+
+      if (!newEquipment || !newStartDate || !newEndDate) {
+        return fail(res, 400, "Equipment and both dates are required.");
+      }
+      if (newEndDate < newStartDate) {
+        return fail(res, 400, "End date must be on or after the start date.");
+      }
+
+      // Automatic Maintenance Overlap Protection
+      const maintenanceConflict = await MachineryMaintenance.findOne({
+        equipmentName: { $regex: new RegExp(newEquipment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") },
+        status: { $in: ["Out of Service", "In Repair", "Scheduled Maintenance"] },
+        startDate: { $lte: newEndDate },
+        endDate: { $gte: newStartDate },
+      });
+
+      if (maintenanceConflict) {
+        return fail(
+          res,
+          409,
+          `Equipment "${newEquipment}" is currently Out of Service for ${maintenanceConflict.maintenanceType} (${maintenanceConflict.startDate} to ${maintenanceConflict.endDate}). Bookings are temporarily blocked for these dates.`
+        );
+      }
+
+      const previousEquipment = existing.equipment;
+      const previousDates = `${existing.startDate} – ${existing.endDate}`;
+      const previousLocation = existing.farmLocation;
+
+      const isDatesChanged = newStartDate !== existing.startDate || newEndDate !== existing.endDate;
+      if (isDatesChanged) {
+        // Enforce conflict checking when rescheduling
+        const overlappingBookings = await Application.find({
+          _id: { $ne: existing._id },
+          status: { $in: ["Pending", "Approved", "Checked-Out"] },
+          startDate: { $lte: newEndDate },
+          endDate: { $gte: newStartDate },
+        });
+        const conflict = overlappingBookings.find((b) =>
+          isSameMachineryMatch(b.machineryUnitId, b.equipment, existing.machineryUnitId, existing.equipment)
+        );
+        if (conflict) {
+          return fail(
+            res,
+            409,
+            `Cannot reschedule to these dates: Machinery "${existing.equipment}" is already booked by another reservation from ${conflict.startDate} to ${conflict.endDate}. Please choose different dates.`
+          );
+        }
+
+        existing.rescheduledAt = new Date();
+        if (!existing.rescheduleHistory) existing.rescheduleHistory = [];
+        existing.rescheduleHistory.push({
+          previousStartDate: existing.startDate,
+          previousEndDate: existing.endDate,
+          newStartDate,
+          newEndDate,
+          rescheduledAt: new Date(),
+          reason: clean(req.body.rescheduleReason || "Member rescheduled rental dates"),
+        });
+
+        if (!existing.timeline) existing.timeline = [];
+        existing.timeline.push({
+          event: "rescheduled",
+          title: "Booking Rescheduled",
+          timestamp: new Date(),
+          actor: actorRole === "manager" ? "Manager" : "Member",
+          note: `Dates moved from ${previousDates} ➔ ${newStartDate} – ${newEndDate} (${existing.hectares || 1} ha)`,
+        });
+      }
+
+      existing.equipment = newEquipment;
+      existing.startDate = newStartDate;
+      existing.endDate = newEndDate;
+      if (req.body.farmLocation !== undefined) {
+        existing.farmLocation = clean(req.body.farmLocation);
+      }
+      if (req.body.bookingType) {
+        existing.bookingType = clean(req.body.bookingType);
+      }
+      if (req.body.hectares !== undefined) {
+        existing.hectares = Math.max(0.1, Number(req.body.hectares) || 1);
+        const rate = existing.ratePerHectare || existing.financials?.ratePerHectare || existing.financials?.dailyRate || 2500;
+        existing.totalAmount = Math.round(rate * existing.hectares);
+        if (!existing.financials) existing.financials = {};
+        existing.financials.hectares = existing.hectares;
+        existing.financials.ratePerHectare = rate;
+        existing.financials.totalPaid = existing.totalAmount;
+      }
+      await existing.save();
+
+      await logAudit({
+        action: "BOOKING_UPDATED",
+        actorEmail,
+        actorRole,
+        targetEmail: existing.memberEmail,
+        targetName: existing.memberName,
+        targetRole: "member",
+        details: {
+          applicationId: existing.id,
+          previousEquipment,
+          newEquipment,
+          previousDates,
+          newDates: `${newStartDate} – ${newEndDate}`,
+          previousLocation,
+          newLocation: existing.farmLocation,
+          updatedBy: actorEmail,
+          updatedAt: new Date().toISOString(),
+        },
+        req,
+      });
+
+      if (previousDates !== `${newStartDate} – ${newEndDate}`) {
+        oneSignalService.sendBookingStatusPush(existing, "Rescheduled").catch((err) => {
+          console.warn("[OneSignal] Background booking reschedule push error:", err.message);
+        });
+        if (["Approved", "Checked-Out"].includes(existing.status)) {
+          syncBookingToGoogleCalendar(existing, req.user).catch((err) => {
+            console.warn("[GoogleCalendar] Rescheduled booking sync error:", err.message);
+          });
+        }
+      }
+
+      return res.json({ ok: true, message: "Booking updated successfully.", application: existing });
+    }
+
+    // Otherwise, handle status change
+    const newStatus = clean(req.body.status);
+    if (!newStatus || !STATUSES.includes(newStatus)) return fail(res, 400, "Invalid status.");
+
+    const isManagerOrAdmin = ["manager", "admin"].includes(actorRole) || Boolean(req.body.isVoid || req.body.voidedByManager);
+
+    // Cancellation prior to manager approval check (members can only cancel pending requests; managers/admins can void anytime)
+    if (newStatus === "Cancelled" && !isManagerOrAdmin && existing.status !== "Pending") {
+      return fail(res, 400, `Only pending booking requests can be cancelled directly. Approved bookings require manager approval.`);
+    }
+
+    // If approving, enforce that no other booking is already approved on overlapping dates (Quantity: 1)
+    if (newStatus === "Approved") {
+      const overlappingBookings = await Application.find({
+        _id: { $ne: existing._id },
+        status: { $in: ["Approved", "Checked-Out"] },
+        startDate: { $lte: existing.endDate },
+        endDate: { $gte: existing.startDate },
+      });
+      const existingConflict = overlappingBookings.find((b) =>
+        isSameMachineryMatch(b.machineryUnitId, b.equipment, existing.machineryUnitId, existing.equipment)
+      );
+      if (existingConflict) {
+        return fail(
+          res,
+          409,
+          `Cannot approve: "${existing.equipment}" (Quantity: 1) is already booked by ${existingConflict.memberName} from ${existingConflict.startDate} to ${existingConflict.endDate}.`
+        );
+      }
+    }
+
+    const previousStatus = existing.status;
+    existing.status = newStatus;
+    const nowTs = new Date();
+
+    if (newStatus === "Approved") {
+      existing.approvedAt = nowTs;
+      if (!existing.timeline) existing.timeline = [];
+      existing.timeline.push({
+        event: "approved",
+        title: "Booking Approved",
+        timestamp: nowTs,
+        actor: actorRole === "admin" ? "Admin" : "Manager",
+        note: "Booking approved and scheduled for machinery dispatch.",
+      });
+    } else if (newStatus === "Checked-Out") {
+      existing.dispatchedAt = nowTs;
+      if (!existing.timeline) existing.timeline = [];
+      existing.timeline.push({
+        event: "dispatched",
+        title: "Machinery Given / Dispatched",
+        timestamp: nowTs,
+        actor: "Manager",
+        note: `Machinery handed over and dispatched with ${existing.assignedDriver || "assigned driver"}.`,
+      });
+    } else if (newStatus === "Returned") {
+      existing.returnedAt = nowTs;
+      if (!existing.timeline) existing.timeline = [];
+      existing.timeline.push({
+        event: "returned",
+        title: "Machinery Returned",
+        timestamp: nowTs,
+        actor: "Manager",
+        note: "Machinery safely returned to depot.",
+      });
+    } else if (newStatus === "Rejected") {
+      if (req.body.managerRemarks !== undefined) {
+        existing.managerRemarks = clean(req.body.managerRemarks);
+      }
+      if (!existing.timeline) existing.timeline = [];
+      existing.timeline.push({
+        event: "rejected",
+        title: "Booking Declined",
+        timestamp: nowTs,
+        actor: actorRole === "admin" ? "Admin" : "Manager",
+        note: existing.managerRemarks || "Booking declined by management.",
+      });
+    } else if (newStatus === "Cancelled") {
+      existing.cancellationRequested = false;
+      existing.cancelledAt = nowTs;
+      const isVoid = isManagerOrAdmin && previousStatus !== "Pending";
+      const reason = clean(req.body.reason || req.body.cancellationReason || existing.cancellationReason) || (isVoid ? "Voided by manager" : "Cancelled by member");
+      existing.cancellationReason = reason;
+      if (!existing.timeline) existing.timeline = [];
+      existing.timeline.push({
+        event: isVoid ? "voided" : "cancelled",
+        title: isVoid ? "Booking Voided by Manager" : "Booking Cancelled",
+        timestamp: nowTs,
+        actor: isManagerOrAdmin ? "Manager" : "Member",
+        note: `Reason: ${reason}`,
+      });
+    }
+    await existing.save();
+
+    // Push approved bookings to Google Calendar (try/catch safe)
+    if (newStatus === "Approved") {
+      syncBookingToGoogleCalendar(existing, req.user).catch((err) => {
+        console.warn("[GoogleCalendar] Background booking approval sync note:", err.message);
+      });
+    } else if (newStatus === "Cancelled" || newStatus === "Rejected") {
+      // Delete event from Google Calendar if voided or rejected
+      deleteBookingFromGoogleCalendar(existing, req.user).catch((err) => {
+        console.warn("[GoogleCalendar] Background booking deletion note:", err.message);
+      });
+    }
+
+    // Use specific action constants for each status transition
+    const isVoid = isManagerOrAdmin && newStatus === "Cancelled" && previousStatus !== "Pending";
+    const actionMap = {
+      Approved: "BOOKING_APPROVED",
+      Rejected: "BOOKING_REJECTED",
+      Pending: "BOOKING_STATUS_UPDATED",
+      Cancelled: isVoid ? "BOOKING_VOIDED" : "BOOKING_CANCELLED",
+      "Cancellation Requested": "CANCELLATION_REQUESTED",
+    };
+    const action = actionMap[newStatus] || "BOOKING_STATUS_UPDATED";
+
+    await logAudit({
+      action,
+      actorEmail,
+      actorRole,
+      targetEmail: existing.memberEmail,
+      targetName: existing.memberName,
+      targetRole: "member",
+      details: {
+        applicationId: existing.id,
+        equipment: existing.equipment,
+        dateRange: `${existing.startDate} – ${existing.endDate}`,
+        previousStatus,
+        newStatus,
+        changedBy: actorEmail,
+        changedAt: new Date().toISOString(),
+      },
+      req,
+    });
+
+    if (["Approved", "Rejected"].includes(newStatus)) {
+      const member = await Account.findOne({ email: existing.memberEmail }).select("memberSettings").lean();
+      if (member?.memberSettings?.notifications?.inApp !== false) {
+        await Notification.create({
+          memberEmail: existing.memberEmail,
+          title: newStatus === "Approved" ? "Booking approved" : "Booking request update",
+          message: newStatus === "Approved"
+            ? `Your request for ${existing.equipment} has been approved.`
+            : `Your request for ${existing.equipment} was declined.${existing.managerRemarks ? ` Reason: ${existing.managerRemarks}` : ""}`,
+          type: "booking",
+          relatedApplicationId: existing._id,
+        });
+      }
+    }
+
+    // Dispatch OneSignal Web Push notification to member
+    if (previousStatus !== newStatus) {
+      oneSignalService.sendBookingStatusPush(existing, newStatus, existing.managerRemarks || existing.cancellationReason).catch((err) => {
+        console.warn("[OneSignal] Background booking status push error:", err.message);
+      });
+    }
+
+    res.json(existing);
+  } catch (error) {
+    console.error("Error updating application:", error);
+    res.status(500).json({ error: "Failed to update application." });
+  }
+};
+
+router.patch("/applications/:id", handleApplicationUpdate);
+router.put("/applications/:id", handleApplicationUpdate);
+
+// Cancel or request cancellation
+router.delete("/applications/:id", authenticate, async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 400, "Invalid application id.");
+    const existing = await Application.findById(req.params.id);
+    if (!existing) return fail(res, 404, "Application not found.");
+
+    const actorEmail = cleanEmail(req.user.email);
+    const actorRole = clean(req.user.role).toLowerCase();
+    const isManagerOrAdmin = ["manager", "admin"].includes(actorRole);
+    if (!isManagerOrAdmin && (actorRole !== "member" || actorEmail !== cleanEmail(existing.memberEmail))) {
+      return fail(res, 403, "You can only cancel your own booking requests.");
+    }
+
+    // Direct cancel for Pending requests
+    if (existing.status === "Pending") {
+      existing.status = "Cancelled";
+      existing.cancellationRequested = false;
+      const nowTs = new Date();
+      existing.cancelledAt = nowTs;
+      const reason = clean(req.body?.reason || req.query?.reason) || "Direct cancellation by member";
+      existing.cancellationReason = reason;
+      if (!existing.timeline) existing.timeline = [];
+      existing.timeline.push({
+        event: "cancelled",
+        title: "Booking Cancelled",
+        timestamp: nowTs,
+        actor: "Member",
+        note: `Reason: ${reason}`,
+      });
+      await existing.save();
+
+      await logAudit({
+        action: "BOOKING_CANCELLED",
+        actorEmail,
+        actorRole,
+        targetEmail: existing.memberEmail,
+        targetName: existing.memberName,
+        targetRole: "member",
+        details: {
+          applicationId: existing.id,
+          equipment: existing.equipment,
+          dateRange: `${existing.startDate} – ${existing.endDate}`,
+          cancelledBy: actorEmail,
+          cancelledAt: nowTs.toISOString(),
+          type: "Direct pending cancellation",
+        },
+        req,
+      });
+
+      return res.json({ ok: true, direct: true, message: "Booking request cancelled successfully.", application: existing });
+    }
+
+    // For Approved bookings: member must request manager approval!
+    if (existing.status === "Approved") {
+      existing.status = "Cancellation Requested";
+      existing.cancellationRequested = true;
+      existing.cancellationReason = clean(req.body?.reason || req.query?.reason) || "Member requested cancellation of approved booking";
+      const nowTs = new Date();
+      existing.cancellationRequestedAt = nowTs;
+      if (!existing.timeline) existing.timeline = [];
+      existing.timeline.push({
+        event: "cancellation_requested",
+        title: "Cancellation Requested",
+        timestamp: nowTs,
+        actor: "Member",
+        note: `Reason: ${existing.cancellationReason}`,
+      });
+      await existing.save();
+
+      // Notify managers
+      const managers = await Account.find({ role: "manager" }).select("email").lean();
+      if (managers.length > 0) {
+        await Notification.insertMany(
+          managers.map((m) => ({
+            memberEmail: m.email,
+            title: "Cancellation Request Received",
+            message: `${existing.memberName} requested cancellation for approved booking ${existing.equipment} (${existing.startDate} to ${existing.endDate}).`,
+            type: "alert",
+            relatedApplicationId: existing._id,
+          }))
+        );
+      }
+
+      await logAudit({
+        action: "CANCELLATION_REQUESTED",
+        actorEmail,
+        actorRole,
+        targetEmail: existing.memberEmail,
+        targetName: existing.memberName,
+        targetRole: "member",
+        details: {
+          applicationId: existing.id,
+          equipment: existing.equipment,
+          dateRange: `${existing.startDate} – ${existing.endDate}`,
+          reason: existing.cancellationReason,
+        },
+        req,
+      });
+
+      return res.json({
+        ok: true,
+        direct: false,
+        pendingGrant: true,
+        message: "Cancellation request submitted. The manager has been notified to grant cancellation.",
+        application: existing,
+      });
+    }
+
+    return fail(res, 400, `Cannot cancel booking with current status "${existing.status}".`);
+  } catch (error) {
+    console.error("Error cancelling application:", error);
+    res.status(500).json({ error: "Failed to cancel application." });
+  }
+});
+
+// Explicit Request Cancellation endpoint
+router.post("/applications/:id/request-cancellation", authenticate, async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 400, "Invalid application id.");
+    const existing = await Application.findById(req.params.id);
+    if (!existing) return fail(res, 404, "Application not found.");
+
+    const actorEmail = cleanEmail(req.user.email);
+    if (req.user.role === "member" && actorEmail !== cleanEmail(existing.memberEmail)) {
+      return fail(res, 403, "You can only request cancellation for your own bookings.");
+    }
+
+    if (existing.status === "Pending") {
+      // Pending cancels directly
+      existing.status = "Cancelled";
+      const nowTs = new Date();
+      existing.cancelledAt = nowTs;
+      const reason = clean(req.body?.reason) || "Member cancelled booking request";
+      existing.cancellationReason = reason;
+      if (!existing.timeline) existing.timeline = [];
+      existing.timeline.push({
+        event: "cancelled",
+        title: "Booking Cancelled",
+        timestamp: nowTs,
+        actor: "Member",
+        note: `Reason: ${reason}`,
+      });
+      await existing.save();
+      return res.json({ ok: true, direct: true, message: "Booking request cancelled successfully.", application: existing });
+    }
+
+    if (existing.status !== "Approved") {
+      return fail(res, 400, `Cannot request cancellation for booking with status "${existing.status}".`);
+    }
+
+    const nowTs = new Date();
+    existing.status = "Cancellation Requested";
+    existing.cancellationRequested = true;
+    existing.cancellationReason = clean(req.body.reason) || "Member requested cancellation";
+    existing.cancellationRequestedAt = nowTs;
+    if (!existing.timeline) existing.timeline = [];
+    existing.timeline.push({
+      event: "cancellation_requested",
+      title: "Cancellation Requested",
+      timestamp: nowTs,
+      actor: "Member",
+      note: `Reason: ${existing.cancellationReason}`,
+    });
+    await existing.save();
+
+    // Notify managers
+    const managers = await Account.find({ role: "manager" }).select("email").lean();
+    if (managers.length > 0) {
+      await Notification.insertMany(
+        managers.map((m) => ({
+          memberEmail: m.email,
+          title: "Cancellation Request Received",
+          message: `${existing.memberName} requested cancellation for approved booking ${existing.equipment} (${existing.startDate} to ${existing.endDate}).`,
+          type: "alert",
+          relatedApplicationId: existing._id,
+        }))
+      );
+    }
+
+    return res.json({
+      ok: true,
+      direct: false,
+      pendingGrant: true,
+      message: "Cancellation request submitted. Waiting for manager approval.",
+      application: existing,
+    });
+  } catch (err) {
+    console.error("Error requesting cancellation:", err);
+    res.status(500).json({ error: "Failed to request cancellation." });
+  }
+});
+
+// Manager Grants Cancellation for Approved Booking
+router.post("/applications/:id/grant-cancellation", authManager, async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 400, "Invalid application id.");
+    const existing = await Application.findById(req.params.id);
+    if (!existing) return fail(res, 404, "Application not found.");
+
+    existing.status = "Cancelled";
+    existing.cancellationRequested = false;
+    const nowTs = new Date();
+    existing.cancelledAt = nowTs;
+    existing.managerRemarks = "Cancellation granted by manager.";
+    if (!existing.timeline) existing.timeline = [];
+    existing.timeline.push({
+      event: "cancellation_granted",
+      title: "Cancellation Granted by Manager",
+      timestamp: nowTs,
+      actor: "Manager",
+      note: existing.cancellationReason ? `Cancellation granted. Reason: ${existing.cancellationReason}` : "Cancellation granted by manager.",
+    });
+    await existing.save();
+
+    // Remove from Google Calendar if scheduled
+    deleteBookingFromGoogleCalendar(existing, req.user).catch((err) => {
+      console.warn("[GoogleCalendar] Booking cancellation deletion note:", err.message);
+    });
+
+    // Notify member
+    await Notification.create({
+      memberEmail: existing.memberEmail,
+      title: "Cancellation Request Granted",
+      message: `Your cancellation request for ${existing.equipment} (${existing.startDate} to ${existing.endDate}) was granted by the manager.`,
+      type: "system",
+      relatedApplicationId: existing._id,
+    });
+
+    oneSignalService.sendBookingStatusPush(existing, "Cancellation Granted").catch((err) => {
+      console.warn("[OneSignal] Background grant cancellation push error:", err.message);
+    });
+
+    await logAudit({
+      action: "CANCELLATION_GRANTED",
+      actorEmail: req.user?.email || "manager",
+      actorRole: req.user?.role || "manager",
+      targetEmail: existing.memberEmail,
+      targetName: existing.memberName,
+      targetRole: "member",
+      details: { applicationId: existing.id, equipment: existing.equipment },
+      req,
+    });
+
+    res.json({ ok: true, message: "Booking cancellation granted successfully.", application: existing });
+  } catch (err) {
+    console.error("Error granting cancellation:", err);
+    res.status(500).json({ error: "Failed to grant cancellation." });
+  }
+});
+
+// Manager Declines Cancellation for Approved Booking
+router.post("/applications/:id/decline-cancellation", authManager, async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 400, "Invalid application id.");
+    const existing = await Application.findById(req.params.id);
+    if (!existing) return fail(res, 404, "Application not found.");
+
+    const reason = clean(req.body.reason) || "Booking schedule must proceed as confirmed.";
+    existing.status = "Approved";
+    existing.cancellationRequested = false;
+    existing.managerRemarks = `Cancellation request declined: ${reason}`;
+    const nowTs = new Date();
+    if (!existing.timeline) existing.timeline = [];
+    existing.timeline.push({
+      event: "cancellation_declined",
+      title: "Cancellation Declined by Manager",
+      timestamp: nowTs,
+      actor: "Manager",
+      note: `Declined: ${reason}`,
+    });
+    await existing.save();
+
+    // Notify member
+    await Notification.create({
+      memberEmail: existing.memberEmail,
+      title: "Cancellation Request Declined",
+      message: `Your cancellation request for ${existing.equipment} was declined by the manager: ${reason}`,
+      type: "alert",
+      relatedApplicationId: existing._id,
+    });
+
+    oneSignalService.sendBookingStatusPush(existing, "Cancellation Declined", reason).catch((err) => {
+      console.warn("[OneSignal] Background decline cancellation push error:", err.message);
+    });
+
+    await logAudit({
+      action: "CANCELLATION_DECLINED",
+      actorEmail: req.user?.email || "manager",
+      actorRole: req.user?.role || "manager",
+      targetEmail: existing.memberEmail,
+      targetName: existing.memberName,
+      targetRole: "member",
+      details: { applicationId: existing.id, equipment: existing.equipment, reason },
+      req,
+    });
+
+    res.json({ ok: true, message: "Cancellation request declined.", application: existing });
+  } catch (err) {
+    console.error("Error declining cancellation:", err);
+    res.status(500).json({ error: "Failed to decline cancellation." });
+  }
+});
+
+// ---------- MANAGER RENTAL OPERATIONS & INSPECTIONS ----------
+
+/**
+ * PATCH /api/applications/:id/inspection
+ * Log pre-rental checkout or post-rental check-in condition inspections.
+ */
+router.patch("/applications/:id/inspection", authManager, async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 400, "Invalid application id.");
+    const { type, odometerHours, fuelLevel, notes, photoCount } = req.body;
+    const isCheckout = type === "checkout";
+
+    const application = await Application.findById(req.params.id);
+    if (!application) return fail(res, 404, "Application not found.");
+
+    const inspectionData = {
+      odometerHours: Number(odometerHours) || 0,
+      fuelLevel: clean(fuelLevel) || "100%",
+      notes: clean(notes) || "Routine inspection passed.",
+      photoCount: Number(photoCount) || 0,
+      inspectedAt: new Date(),
+    };
+
+    if (isCheckout) {
+      application.checkoutInspection = inspectionData;
+      application.status = "Checked-Out";
+      application.dispatchedAt = inspectionData.inspectedAt;
+      if (!application.timeline) application.timeline = [];
+      application.timeline.push({
+        event: "dispatched",
+        title: "Machinery Given / Dispatched",
+        timestamp: inspectionData.inspectedAt,
+        actor: "Manager",
+        note: `Pre-rental checkout inspection passed (${inspectionData.fuelLevel} fuel, ${inspectionData.odometerHours} hrs). Machinery given and handed over to driver/operator.`,
+      });
+    } else {
+      application.checkinInspection = inspectionData;
+      application.status = "Returned";
+      application.returnedAt = inspectionData.inspectedAt;
+      if (!application.timeline) application.timeline = [];
+      application.timeline.push({
+        event: "returned",
+        title: "Machinery Returned & Inspected",
+        timestamp: inspectionData.inspectedAt,
+        actor: "Manager",
+        note: `Post-rental check-in completed (${inspectionData.fuelLevel} fuel, ${inspectionData.odometerHours} hrs). Notes: ${inspectionData.notes}`,
+      });
+    }
+
+    await application.save();
+
+    await logAudit({
+      action: isCheckout ? "RENTAL_HANDOVER_CHECKOUT" : "RENTAL_RETURN_CHECKIN",
+      actorEmail: req.user?.email || "manager",
+      actorRole: req.user?.role || "manager",
+      actorId: req.user?._id,
+      targetEmail: application.memberEmail,
+      targetName: application.memberName,
+      details: {
+        applicationId: application.id,
+        equipment: application.equipment,
+        type: isCheckout ? "Pre-Rental Check-Out Handover" : "Post-Rental Check-In Return",
+        odometerHours: inspectionData.odometerHours,
+        fuelLevel: inspectionData.fuelLevel,
+        notes: inspectionData.notes,
+        photoCount: inspectionData.photoCount,
+      },
+      req,
+    });
+
+    res.json({ ok: true, application, message: isCheckout ? "Check-out inspection recorded." : "Check-in return completed." });
+  } catch (error) {
+    console.error("Error updating inspection:", error);
+    res.status(500).json({ error: "Failed to record inspection." });
+  }
+});
+
+module.exports = router;

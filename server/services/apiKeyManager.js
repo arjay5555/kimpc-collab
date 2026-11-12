@@ -1,0 +1,558 @@
+const fs = require("fs");
+const path = require("path");
+const SystemSetting = require("../models/SystemSetting");
+
+const ENV_PATH = path.join(__dirname, "..", ".env");
+
+/**
+ * Updates or appends key-value pairs directly in server/.env and reflects them in process.env immediately.
+ * Empty string values are written as `KEY=""` so they are visibly customizable in .env.
+ */
+function updateEnvFile(keyValueMap) {
+  try {
+    if (!fs.existsSync(ENV_PATH)) return false;
+
+    let content = fs.readFileSync(ENV_PATH, "utf8");
+    const lines = content.split(/\r?\n/);
+    const pending = { ...keyValueMap };
+
+    const newLines = lines.map((line) => {
+      const match = line.match(/^([A-Za-z0-9_]+)=(.*)$/);
+      if (match) {
+        const key = match[1];
+        if (pending.hasOwnProperty(key)) {
+          const val = pending[key] == null ? "" : String(pending[key]).trim();
+          delete pending[key];
+          const formatted = val === "" ? '""' : (val.includes(" ") ? `"${val}"` : val);
+          return `${key}=${formatted}`;
+        }
+      }
+      return line;
+    });
+
+    // Append any keys that did not exist yet in .env
+    for (const [key, val] of Object.entries(pending)) {
+      const trimmed = val == null ? "" : String(val).trim();
+      const formatted = trimmed === "" ? '""' : (trimmed.includes(" ") ? `"${trimmed}"` : trimmed);
+      newLines.push(`${key}=${formatted}`);
+    }
+
+    fs.writeFileSync(ENV_PATH, newLines.join("\n"), "utf8");
+
+    // Immediately reflect in process.env memory
+    for (const [key, val] of Object.entries(keyValueMap)) {
+      const trimmed = val == null ? "" : String(val).trim();
+      process.env[key] = trimmed;
+    }
+
+    return true;
+  } catch (err) {
+    console.error("[apiKeyManager] Failed to update .env file:", err.message);
+    return false;
+  }
+}
+
+// 1. Google OAuth Credentials (defaults read from server environment)
+const DEFAULT_GOOGLE_CLIENT_ID = (process.env.DEFAULT_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || "").trim();
+const DEFAULT_GOOGLE_CLIENT_SECRET = (process.env.DEFAULT_GOOGLE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || "").trim();
+
+// 2. Facebook OAuth Credentials
+const DEFAULT_FACEBOOK_APP_ID =
+  (process.env.DEFAULT_FACEBOOK_APP_ID || process.env.FACEBOOK_APP_ID || "").trim();
+
+const DEFAULT_FACEBOOK_APP_SECRET =
+  (process.env.DEFAULT_FACEBOOK_APP_SECRET || process.env.FACEBOOK_APP_SECRET || "").trim();
+
+// 3. Google reCAPTCHA v2 Credentials
+const DEFAULT_RECAPTCHA_SITE_KEY =
+  (process.env.DEFAULT_RECAPTCHA_SITE_KEY || process.env.RECAPTCHA_SITE_KEY || "").trim();
+
+const DEFAULT_RECAPTCHA_SECRET_KEY =
+  (process.env.DEFAULT_RECAPTCHA_SECRET_KEY || process.env.RECAPTCHA_SECRET_KEY || "").trim();
+
+// 4. WeatherAPI.com Key
+const DEFAULT_WEATHER_API_KEY =
+  (process.env.DEFAULT_WEATHER_API_KEY || process.env.WEATHER_API_KEY || "").trim();
+
+// 5. OneSignal Web Push Credentials
+const DEFAULT_ONESIGNAL_APP_ID =
+  (process.env.DEFAULT_ONESIGNAL_APP_ID || process.env.ONESIGNAL_APP_ID || "").trim();
+
+const DEFAULT_ONESIGNAL_REST_KEY =
+  (process.env.DEFAULT_ONESIGNAL_REST_KEY || process.env.ONESIGNAL_REST_API_KEY || "").trim();
+
+// 6. Cloudinary Storage Credentials
+const DEFAULT_CLOUDINARY_CLOUD_NAME =
+  (process.env.DEFAULT_CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_CLOUD_NAME || "").trim();
+
+const DEFAULT_CLOUDINARY_API_KEY =
+  (process.env.DEFAULT_CLOUDINARY_API_KEY || process.env.CLOUDINARY_API_KEY || "").trim();
+
+const DEFAULT_CLOUDINARY_API_SECRET =
+  (process.env.DEFAULT_CLOUDINARY_API_SECRET || process.env.CLOUDINARY_API_SECRET || "").trim();
+
+// 7. Gmail SMTP Service Credentials
+const DEFAULT_SMTP_USER =
+  (process.env.DEFAULT_SMTP_USER || process.env.SMTP_USER || "").trim();
+const DEFAULT_SMTP_PASS =
+  (process.env.DEFAULT_SMTP_PASS || process.env.SMTP_PASS || "").trim();
+const DEFAULT_SMTP_FROM =
+  (process.env.DEFAULT_SMTP_FROM || process.env.SMTP_FROM || "").trim() || `"KIMPC Security" <kimpc.system@gmail.com>`;
+
+// 8. Google Calendar Integration Credentials
+const DEFAULT_GOOGLE_CALENDAR_CLIENT_ID =
+  (process.env.DEFAULT_GOOGLE_CALENDAR_CLIENT_ID || process.env.DEFAULT_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID || "").trim();
+const DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET =
+  (process.env.DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET || process.env.DEFAULT_GOOGLE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || DEFAULT_GOOGLE_CLIENT_SECRET || "").trim();
+const DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI =
+  (process.env.DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI || process.env.GOOGLE_REDIRECT_URI || "http://localhost:3000/api/calendar/callback").trim();
+
+/**
+ * Initializes process.env with effective keys (custom value takes precedence over default)
+ * so legacy library references and external integrations function seamlessly without
+ * requiring plain key duplicates in .env.
+ */
+function initEffectiveEnv() {
+  process.env.GOOGLE_CLIENT_ID = (process.env.CUSTOM_GOOGLE_CLIENT_ID || process.env.DEFAULT_GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID || "").trim();
+  process.env.GOOGLE_CLIENT_SECRET = (process.env.CUSTOM_GOOGLE_CLIENT_SECRET || process.env.DEFAULT_GOOGLE_CLIENT_SECRET || DEFAULT_GOOGLE_CLIENT_SECRET || "").trim();
+  process.env.FACEBOOK_APP_ID = (process.env.CUSTOM_FACEBOOK_APP_ID || process.env.DEFAULT_FACEBOOK_APP_ID || DEFAULT_FACEBOOK_APP_ID || "").trim();
+  process.env.FACEBOOK_APP_SECRET = (process.env.CUSTOM_FACEBOOK_APP_SECRET || process.env.DEFAULT_FACEBOOK_APP_SECRET || DEFAULT_FACEBOOK_APP_SECRET || "").trim();
+  process.env.RECAPTCHA_SITE_KEY = (process.env.CUSTOM_RECAPTCHA_SITE_KEY || process.env.DEFAULT_RECAPTCHA_SITE_KEY || DEFAULT_RECAPTCHA_SITE_KEY || "").trim();
+  process.env.RECAPTCHA_SECRET_KEY = (process.env.CUSTOM_RECAPTCHA_SECRET_KEY || process.env.DEFAULT_RECAPTCHA_SECRET_KEY || DEFAULT_RECAPTCHA_SECRET_KEY || "").trim();
+  process.env.WEATHER_API_KEY = (process.env.CUSTOM_WEATHER_API_KEY || process.env.DEFAULT_WEATHER_API_KEY || DEFAULT_WEATHER_API_KEY || "").trim();
+  process.env.ONESIGNAL_APP_ID = (process.env.CUSTOM_ONESIGNAL_APP_ID || process.env.DEFAULT_ONESIGNAL_APP_ID || DEFAULT_ONESIGNAL_APP_ID || "").trim();
+  process.env.ONESIGNAL_REST_API_KEY = (process.env.CUSTOM_ONESIGNAL_REST_KEY || process.env.DEFAULT_ONESIGNAL_REST_KEY || DEFAULT_ONESIGNAL_REST_KEY || "").trim();
+  process.env.CLOUDINARY_CLOUD_NAME = (process.env.CUSTOM_CLOUDINARY_CLOUD_NAME || process.env.DEFAULT_CLOUDINARY_CLOUD_NAME || DEFAULT_CLOUDINARY_CLOUD_NAME || "").trim();
+  process.env.CLOUDINARY_API_KEY = (process.env.CUSTOM_CLOUDINARY_API_KEY || process.env.DEFAULT_CLOUDINARY_API_KEY || DEFAULT_CLOUDINARY_API_KEY || "").trim();
+  process.env.CLOUDINARY_API_SECRET = (process.env.CUSTOM_CLOUDINARY_API_SECRET || process.env.DEFAULT_CLOUDINARY_API_SECRET || DEFAULT_CLOUDINARY_API_SECRET || "").trim();
+  process.env.SMTP_USER = (process.env.CUSTOM_SMTP_USER || process.env.DEFAULT_SMTP_USER || DEFAULT_SMTP_USER || "").trim();
+  process.env.SMTP_PASS = (process.env.CUSTOM_SMTP_PASS || process.env.DEFAULT_SMTP_PASS || DEFAULT_SMTP_PASS || "").trim();
+  process.env.SMTP_FROM = (process.env.CUSTOM_SMTP_FROM || process.env.DEFAULT_SMTP_FROM || DEFAULT_SMTP_FROM || "").trim();
+  process.env.GOOGLE_CALENDAR_CLIENT_ID = (process.env.CUSTOM_GOOGLE_CALENDAR_CLIENT_ID || process.env.DEFAULT_GOOGLE_CALENDAR_CLIENT_ID || DEFAULT_GOOGLE_CALENDAR_CLIENT_ID || "").trim();
+  process.env.GOOGLE_CALENDAR_CLIENT_SECRET = (process.env.CUSTOM_GOOGLE_CALENDAR_CLIENT_SECRET || process.env.DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET || DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET || "").trim();
+  process.env.GOOGLE_CALENDAR_REDIRECT_URI = (process.env.CUSTOM_GOOGLE_CALENDAR_REDIRECT_URI || process.env.DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI || DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI || "").trim();
+}
+
+// Auto-run on module load
+initEffectiveEnv();
+
+/**
+ * Mask string helper for UI display (e.g. "7145••••••••260611")
+ */
+function maskValue(val) {
+  if (!val || typeof val !== "string") return "";
+  const s = val.trim();
+  if (s.length <= 8) return "••••••••";
+  return `${s.slice(0, 4)}••••••••${s.slice(-4)}`;
+}
+
+/**
+ * Google Sign-In Effective Credentials
+ */
+async function getEffectiveGoogleKeys() {
+  let customClientId = "";
+  let customClientSecret = "";
+  try {
+    const idDoc = await SystemSetting.findOne({ key: "customGoogleClientId" });
+    const secDoc = await SystemSetting.findOne({ key: "customGoogleClientSecret" });
+    customClientId = typeof idDoc?.value === "string" ? idDoc.value.trim() : "";
+    customClientSecret = typeof secDoc?.value === "string" ? secDoc.value.trim() : "";
+  } catch (err) {
+    console.warn("[apiKeyManager] Error reading customGoogleKeys:", err.message);
+  }
+
+  // Fallback to process.env.CUSTOM_... if set in .env
+  if (!customClientId && process.env.CUSTOM_GOOGLE_CLIENT_ID) {
+    customClientId = process.env.CUSTOM_GOOGLE_CLIENT_ID.trim();
+  }
+  if (!customClientSecret && process.env.CUSTOM_GOOGLE_CLIENT_SECRET) {
+    customClientSecret = process.env.CUSTOM_GOOGLE_CLIENT_SECRET.trim();
+  }
+
+  const defaultId = (process.env.DEFAULT_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID || "").trim();
+  const defaultSecret = (process.env.DEFAULT_GOOGLE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || DEFAULT_GOOGLE_CLIENT_SECRET || "").trim();
+
+  const clientId = customClientId || defaultId;
+  const clientSecret = customClientSecret || defaultSecret;
+  const isCustom = Boolean(customClientId || customClientSecret);
+
+  return { clientId, clientSecret, isCustom, customClientId, customClientSecret };
+}
+
+/**
+ * Facebook Sign-In Effective Credentials
+ */
+async function getEffectiveFacebookKeys() {
+  let customAppId = "";
+  let customAppSecret = "";
+  try {
+    const idDoc = await SystemSetting.findOne({ key: "customFacebookAppId" });
+    const secDoc = await SystemSetting.findOne({ key: "customFacebookAppSecret" });
+    customAppId = typeof idDoc?.value === "string" ? idDoc.value.trim() : "";
+    customAppSecret = typeof secDoc?.value === "string" ? secDoc.value.trim() : "";
+  } catch (err) {
+    console.warn("[apiKeyManager] Error reading customFacebookKeys:", err.message);
+  }
+
+  if (!customAppId && process.env.CUSTOM_FACEBOOK_APP_ID) {
+    customAppId = process.env.CUSTOM_FACEBOOK_APP_ID.trim();
+  }
+  if (!customAppSecret && process.env.CUSTOM_FACEBOOK_APP_SECRET) {
+    customAppSecret = process.env.CUSTOM_FACEBOOK_APP_SECRET.trim();
+  }
+
+  const defaultAppId = (process.env.DEFAULT_FACEBOOK_APP_ID || process.env.FACEBOOK_APP_ID || DEFAULT_FACEBOOK_APP_ID).trim();
+  const defaultAppSecret = (process.env.DEFAULT_FACEBOOK_APP_SECRET || process.env.FACEBOOK_APP_SECRET || DEFAULT_FACEBOOK_APP_SECRET).trim();
+
+  const appId = customAppId || defaultAppId;
+  const appSecret = customAppSecret || defaultAppSecret;
+  const isCustom = Boolean(customAppId || customAppSecret);
+
+  return { appId, appSecret, isCustom, customAppId, customAppSecret };
+}
+
+/**
+ * Google reCAPTCHA v2 Effective Credentials
+ */
+async function getEffectiveRecaptchaKeys() {
+  let customSiteKey = "";
+  let customSecretKey = "";
+  try {
+    const siteDoc = await SystemSetting.findOne({ key: "customRecaptchaSiteKey" });
+    const secDoc = await SystemSetting.findOne({ key: "customRecaptchaSecretKey" });
+    customSiteKey = typeof siteDoc?.value === "string" ? siteDoc.value.trim() : "";
+    customSecretKey = typeof secDoc?.value === "string" ? secDoc.value.trim() : "";
+  } catch (err) {
+    console.warn("[apiKeyManager] Error reading customRecaptchaKeys:", err.message);
+  }
+
+  if (!customSiteKey && process.env.CUSTOM_RECAPTCHA_SITE_KEY) {
+    customSiteKey = process.env.CUSTOM_RECAPTCHA_SITE_KEY.trim();
+  }
+  if (!customSecretKey && process.env.CUSTOM_RECAPTCHA_SECRET_KEY) {
+    customSecretKey = process.env.CUSTOM_RECAPTCHA_SECRET_KEY.trim();
+  }
+
+  const defaultSiteKey = (process.env.DEFAULT_RECAPTCHA_SITE_KEY || process.env.RECAPTCHA_SITE_KEY || DEFAULT_RECAPTCHA_SITE_KEY).trim();
+  const defaultSecretKey = (process.env.DEFAULT_RECAPTCHA_SECRET_KEY || process.env.RECAPTCHA_SECRET_KEY || DEFAULT_RECAPTCHA_SECRET_KEY).trim();
+
+  const siteKey = customSiteKey || defaultSiteKey;
+  const secretKey = customSecretKey || defaultSecretKey;
+  const isCustom = Boolean(customSiteKey || customSecretKey);
+
+  return { siteKey, secretKey, isCustom, customSiteKey, customSecretKey };
+}
+
+/**
+ * WeatherAPI Effective Key
+ */
+async function getEffectiveWeatherKey() {
+  let customKey = "";
+  try {
+    const doc = await SystemSetting.findOne({ key: "customWeatherApiKey" });
+    customKey = typeof doc?.value === "string" ? doc.value.trim() : "";
+  } catch (err) {
+    console.warn("[apiKeyManager] Error reading customWeatherApiKey:", err.message);
+  }
+
+  if (!customKey && process.env.CUSTOM_WEATHER_API_KEY) {
+    customKey = process.env.CUSTOM_WEATHER_API_KEY.trim();
+  }
+
+  const defaultKey = (process.env.DEFAULT_WEATHER_API_KEY || process.env.WEATHER_API_KEY || DEFAULT_WEATHER_API_KEY).trim();
+  const key = customKey || defaultKey;
+  const isCustom = Boolean(customKey);
+
+  return { key, isCustom, customKey };
+}
+
+/**
+ * OneSignal Effective Credentials
+ */
+async function getEffectiveOneSignalKeys() {
+  let customAppId = "";
+  let customRestApiKey = "";
+  try {
+    const appIdDoc = await SystemSetting.findOne({ key: "customOneSignalAppId" });
+    const restKeyDoc = await SystemSetting.findOne({ key: "customOneSignalRestApiKey" });
+    customAppId = typeof appIdDoc?.value === "string" ? appIdDoc.value.trim() : "";
+    customRestApiKey = typeof restKeyDoc?.value === "string" ? restKeyDoc.value.trim() : "";
+  } catch (err) {
+    console.warn("[apiKeyManager] Error reading customOneSignalKeys:", err.message);
+  }
+
+  if (!customAppId && process.env.CUSTOM_ONESIGNAL_APP_ID) {
+    customAppId = process.env.CUSTOM_ONESIGNAL_APP_ID.trim();
+  }
+  if (!customRestApiKey && (process.env.CUSTOM_ONESIGNAL_REST_KEY || process.env.CUSTOM_ONESIGNAL_REST_API_KEY)) {
+    customRestApiKey = (process.env.CUSTOM_ONESIGNAL_REST_KEY || process.env.CUSTOM_ONESIGNAL_REST_API_KEY).trim();
+  }
+
+  const defaultAppId = (process.env.DEFAULT_ONESIGNAL_APP_ID || process.env.ONESIGNAL_APP_ID || DEFAULT_ONESIGNAL_APP_ID).trim();
+  const defaultRestKey = (process.env.DEFAULT_ONESIGNAL_REST_KEY || process.env.ONESIGNAL_REST_API_KEY || DEFAULT_ONESIGNAL_REST_KEY).trim();
+
+  const appId = customAppId || defaultAppId;
+  const restApiKey = customRestApiKey || defaultRestKey;
+  const isCustom = Boolean(customAppId || customRestApiKey);
+
+  return { appId, restApiKey, isCustom, customAppId, customRestApiKey };
+}
+
+/**
+ * Cloudinary Effective Credentials
+ */
+async function getEffectiveCloudinaryKeys() {
+  let customCloudName = "";
+  let customApiKey = "";
+  let customApiSecret = "";
+  try {
+    const cDoc = await SystemSetting.findOne({ key: "customCloudinaryCloudName" });
+    const kDoc = await SystemSetting.findOne({ key: "customCloudinaryApiKey" });
+    const sDoc = await SystemSetting.findOne({ key: "customCloudinaryApiSecret" });
+    customCloudName = typeof cDoc?.value === "string" ? cDoc.value.trim() : "";
+    customApiKey = typeof kDoc?.value === "string" ? kDoc.value.trim() : "";
+    customApiSecret = typeof sDoc?.value === "string" ? sDoc.value.trim() : "";
+  } catch (err) {
+    console.warn("[apiKeyManager] Error reading customCloudinaryKeys:", err.message);
+  }
+
+  if (!customCloudName && process.env.CUSTOM_CLOUDINARY_CLOUD_NAME) {
+    customCloudName = process.env.CUSTOM_CLOUDINARY_CLOUD_NAME.trim();
+  }
+  if (!customApiKey && process.env.CUSTOM_CLOUDINARY_API_KEY) {
+    customApiKey = process.env.CUSTOM_CLOUDINARY_API_KEY.trim();
+  }
+  if (!customApiSecret && process.env.CUSTOM_CLOUDINARY_API_SECRET) {
+    customApiSecret = process.env.CUSTOM_CLOUDINARY_API_SECRET.trim();
+  }
+
+  const defaultCloudName = (process.env.DEFAULT_CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_CLOUD_NAME || DEFAULT_CLOUDINARY_CLOUD_NAME).trim();
+  const defaultApiKey = (process.env.DEFAULT_CLOUDINARY_API_KEY || process.env.CLOUDINARY_API_KEY || DEFAULT_CLOUDINARY_API_KEY).trim();
+  const defaultApiSecret = (process.env.DEFAULT_CLOUDINARY_API_SECRET || process.env.CLOUDINARY_API_SECRET || DEFAULT_CLOUDINARY_API_SECRET).trim();
+
+  const cloudName = customCloudName || defaultCloudName;
+  const apiKey = customApiKey || defaultApiKey;
+  const apiSecret = customApiSecret || defaultApiSecret;
+  const isCustom = Boolean(customCloudName || customApiKey || customApiSecret);
+
+  return { cloudName, apiKey, apiSecret, isCustom, customCloudName, customApiKey, customApiSecret };
+}
+
+/**
+ * Gmail SMTP Effective Credentials
+ */
+async function getEffectiveEmailKeys() {
+  let customUser = "";
+  let customPass = "";
+  let customFrom = "";
+  try {
+    const userDoc = await SystemSetting.findOne({ key: "customSmtpUser" });
+    const passDoc = await SystemSetting.findOne({ key: "customSmtpPass" });
+    const fromDoc = await SystemSetting.findOne({ key: "customSmtpFrom" });
+    if (userDoc?.value) customUser = String(userDoc.value).trim();
+    if (passDoc?.value) customPass = String(passDoc.value).trim();
+    if (fromDoc?.value) customFrom = String(fromDoc.value).trim();
+  } catch (err) {
+    console.warn("[apiKeyManager] Error reading customEmailKeys:", err.message);
+  }
+
+  if (!customUser && process.env.CUSTOM_SMTP_USER) customUser = process.env.CUSTOM_SMTP_USER.trim();
+  if (!customPass && process.env.CUSTOM_SMTP_PASS) customPass = process.env.CUSTOM_SMTP_PASS.trim();
+  if (!customFrom && process.env.CUSTOM_SMTP_FROM) customFrom = process.env.CUSTOM_SMTP_FROM.trim();
+
+  const defaultUser = (process.env.DEFAULT_SMTP_USER || process.env.SMTP_USER || DEFAULT_SMTP_USER).trim();
+  const defaultPass = (process.env.DEFAULT_SMTP_PASS || process.env.SMTP_PASS || DEFAULT_SMTP_PASS).trim();
+  const defaultFrom = (process.env.DEFAULT_SMTP_FROM || process.env.SMTP_FROM || DEFAULT_SMTP_FROM).trim();
+
+  const user = customUser || defaultUser;
+  const pass = customPass || defaultPass;
+  const from = customFrom || defaultFrom;
+  const isCustom = Boolean(customUser || customPass || customFrom);
+
+  return { user, pass, from, isCustom, customUser, customPass, customFrom, defaultUser, defaultPass, defaultFrom };
+}
+
+/**
+ * Google Calendar Effective Credentials
+ */
+async function getEffectiveCalendarKeys() {
+  let customClientId = "";
+  let customClientSecret = "";
+  let customRedirectUri = "";
+  try {
+    const idDoc = await SystemSetting.findOne({ key: "customCalendarClientId" });
+    const secDoc = await SystemSetting.findOne({ key: "customCalendarClientSecret" });
+    const uriDoc = await SystemSetting.findOne({ key: "customCalendarRedirectUri" });
+    if (idDoc?.value) customClientId = String(idDoc.value).trim();
+    if (secDoc?.value) customClientSecret = String(secDoc.value).trim();
+    if (uriDoc?.value) customRedirectUri = String(uriDoc.value).trim();
+  } catch (err) {
+    console.warn("[apiKeyManager] Error reading customCalendarKeys:", err.message);
+  }
+
+  if (!customClientId && process.env.CUSTOM_GOOGLE_CALENDAR_CLIENT_ID) customClientId = process.env.CUSTOM_GOOGLE_CALENDAR_CLIENT_ID.trim();
+  if (!customClientSecret && process.env.CUSTOM_GOOGLE_CALENDAR_CLIENT_SECRET) customClientSecret = process.env.CUSTOM_GOOGLE_CALENDAR_CLIENT_SECRET.trim();
+  if (!customRedirectUri && process.env.CUSTOM_GOOGLE_CALENDAR_REDIRECT_URI) customRedirectUri = process.env.CUSTOM_GOOGLE_CALENDAR_REDIRECT_URI.trim();
+
+  const defaultClientId = (process.env.DEFAULT_GOOGLE_CALENDAR_CLIENT_ID || process.env.DEFAULT_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CALENDAR_CLIENT_ID).trim();
+  const defaultClientSecret = (process.env.DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET || process.env.DEFAULT_GOOGLE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET).trim();
+  const defaultRedirectUri = (process.env.DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI || process.env.GOOGLE_REDIRECT_URI || DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI).trim();
+
+  const clientId = customClientId || defaultClientId;
+  const clientSecret = customClientSecret || defaultClientSecret;
+  const redirectUri = customRedirectUri || defaultRedirectUri;
+  const isCustom = Boolean(customClientId || customClientSecret || customRedirectUri);
+
+  return { clientId, clientSecret, redirectUri, isCustom, customClientId, customClientSecret, customRedirectUri, defaultClientId, defaultClientSecret, defaultRedirectUri };
+}
+
+/**
+ * Summarizes all API keys for Admin Settings UI
+ */
+async function getAdminApiKeysSummary() {
+  const google = await getEffectiveGoogleKeys();
+  const facebook = await getEffectiveFacebookKeys();
+  const recaptcha = await getEffectiveRecaptchaKeys();
+  const weather = await getEffectiveWeatherKey();
+  const oneSignal = await getEffectiveOneSignalKeys();
+  const cloudinary = await getEffectiveCloudinaryKeys();
+  const email = await getEffectiveEmailKeys();
+  const calendar = await getEffectiveCalendarKeys();
+
+  const defGoogleClientId = (process.env.DEFAULT_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID || "").trim();
+  const defGoogleClientSecret = (process.env.DEFAULT_GOOGLE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || DEFAULT_GOOGLE_CLIENT_SECRET || "").trim();
+
+  const defFbAppId = (process.env.DEFAULT_FACEBOOK_APP_ID || process.env.FACEBOOK_APP_ID || DEFAULT_FACEBOOK_APP_ID || "").trim();
+  const defFbAppSecret = (process.env.DEFAULT_FACEBOOK_APP_SECRET || process.env.FACEBOOK_APP_SECRET || DEFAULT_FACEBOOK_APP_SECRET || "").trim();
+
+  const defRecaptchaSiteKey = (process.env.DEFAULT_RECAPTCHA_SITE_KEY || process.env.RECAPTCHA_SITE_KEY || DEFAULT_RECAPTCHA_SITE_KEY || "").trim();
+  const defRecaptchaSecretKey = (process.env.DEFAULT_RECAPTCHA_SECRET_KEY || process.env.RECAPTCHA_SECRET_KEY || DEFAULT_RECAPTCHA_SECRET_KEY || "").trim();
+
+  const defWeatherKey = (process.env.DEFAULT_WEATHER_API_KEY || process.env.WEATHER_API_KEY || DEFAULT_WEATHER_API_KEY || "").trim();
+
+  const defOneSignalAppId = (process.env.DEFAULT_ONESIGNAL_APP_ID || process.env.ONESIGNAL_APP_ID || DEFAULT_ONESIGNAL_APP_ID || "").trim();
+  const defOneSignalRestKey = (process.env.DEFAULT_ONESIGNAL_REST_KEY || process.env.DEFAULT_ONESIGNAL_REST_API_KEY || process.env.ONESIGNAL_REST_KEY || DEFAULT_ONESIGNAL_REST_KEY || "").trim();
+
+  const defCloudName = (process.env.DEFAULT_CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_CLOUD_NAME || DEFAULT_CLOUDINARY_CLOUD_NAME || "").trim();
+  const defCloudApiKey = (process.env.DEFAULT_CLOUDINARY_API_KEY || process.env.CLOUDINARY_API_KEY || DEFAULT_CLOUDINARY_API_KEY || "").trim();
+  const defCloudApiSecret = (process.env.DEFAULT_CLOUDINARY_API_SECRET || process.env.CLOUDINARY_API_SECRET || DEFAULT_CLOUDINARY_API_SECRET || "").trim();
+
+  const defEmailUser = (email.defaultUser || process.env.DEFAULT_SMTP_USER || process.env.SMTP_USER || DEFAULT_SMTP_USER || "").trim();
+  const defEmailPass = (email.defaultPass || process.env.DEFAULT_SMTP_PASS || process.env.SMTP_PASS || DEFAULT_SMTP_PASS || "").trim();
+  const defEmailFrom = (email.defaultFrom || process.env.DEFAULT_SMTP_FROM || process.env.SMTP_FROM || DEFAULT_SMTP_FROM || "").trim();
+
+  const defCalClientId = (calendar.defaultClientId || process.env.DEFAULT_GOOGLE_CALENDAR_CLIENT_ID || DEFAULT_GOOGLE_CALENDAR_CLIENT_ID || "").trim();
+  const defCalClientSecret = (calendar.defaultClientSecret || process.env.DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET || DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET || "").trim();
+  const defCalRedirectUri = (calendar.defaultRedirectUri || process.env.DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI || DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI || "").trim();
+
+  return {
+    google: {
+      isCustom: google.isCustom,
+      customClientId: google.customClientId || "",
+      customClientSecret: google.customClientSecret || "",
+      defaultClientId: defGoogleClientId,
+      defaultClientSecret: defGoogleClientSecret,
+      defaultClientIdMasked: maskValue(defGoogleClientId),
+      defaultClientSecretMasked: maskValue(defGoogleClientSecret),
+    },
+    facebook: {
+      isCustom: facebook.isCustom,
+      customAppId: facebook.customAppId || "",
+      customAppSecret: facebook.customAppSecret || "",
+      defaultAppId: defFbAppId,
+      defaultAppSecret: defFbAppSecret,
+      defaultAppIdMasked: maskValue(defFbAppId),
+      defaultAppSecretMasked: maskValue(defFbAppSecret),
+    },
+    recaptcha: {
+      isCustom: recaptcha.isCustom,
+      customSiteKey: recaptcha.customSiteKey || "",
+      customSecretKey: recaptcha.customSecretKey || "",
+      defaultSiteKey: defRecaptchaSiteKey,
+      defaultSecretKey: defRecaptchaSecretKey,
+      defaultSiteKeyMasked: maskValue(defRecaptchaSiteKey),
+      defaultSecretKeyMasked: maskValue(defRecaptchaSecretKey),
+    },
+    weather: {
+      isCustom: weather.isCustom,
+      customKey: weather.isCustom ? weather.key : "",
+      defaultKey: defWeatherKey,
+      defaultKeyMasked: maskValue(defWeatherKey),
+    },
+    oneSignal: {
+      isCustom: oneSignal.isCustom,
+      customAppId: oneSignal.customAppId || "",
+      customRestApiKey: oneSignal.customRestApiKey || "",
+      defaultAppId: defOneSignalAppId,
+      defaultRestKey: defOneSignalRestKey,
+      defaultAppIdMasked: maskValue(defOneSignalAppId),
+      defaultRestKeyMasked: maskValue(defOneSignalRestKey),
+    },
+    cloudinary: {
+      isCustom: cloudinary.isCustom,
+      customCloudName: cloudinary.customCloudName || "",
+      customApiKey: cloudinary.customApiKey || "",
+      customApiSecret: cloudinary.customApiSecret || "",
+      defaultCloudName: defCloudName,
+      defaultApiKey: defCloudApiKey,
+      defaultApiSecret: defCloudApiSecret,
+      defaultApiKeyMasked: maskValue(defCloudApiKey),
+      defaultApiSecretMasked: maskValue(defCloudApiSecret),
+    },
+    email: {
+      isCustom: email.isCustom,
+      customUser: email.customUser || "",
+      customPass: email.customPass || "",
+      customFrom: email.customFrom || "",
+      defaultUser: defEmailUser,
+      defaultPass: defEmailPass,
+      defaultFrom: defEmailFrom,
+      defaultUserMasked: maskValue(defEmailUser),
+      defaultPassMasked: maskValue(defEmailPass),
+    },
+    calendar: {
+      isCustom: calendar.isCustom,
+      customClientId: calendar.customClientId || "",
+      customClientSecret: calendar.customClientSecret || "",
+      customRedirectUri: calendar.customRedirectUri || "",
+      defaultClientId: defCalClientId,
+      defaultClientSecret: defCalClientSecret,
+      defaultRedirectUri: defCalRedirectUri,
+      defaultClientIdMasked: maskValue(defCalClientId),
+      defaultClientSecretMasked: maskValue(defCalClientSecret),
+    },
+  };
+}
+
+module.exports = {
+  updateEnvFile,
+  DEFAULT_GOOGLE_CLIENT_ID,
+  DEFAULT_GOOGLE_CLIENT_SECRET,
+  DEFAULT_FACEBOOK_APP_ID,
+  DEFAULT_FACEBOOK_APP_SECRET,
+  DEFAULT_RECAPTCHA_SITE_KEY,
+  DEFAULT_RECAPTCHA_SECRET_KEY,
+  DEFAULT_WEATHER_API_KEY,
+  DEFAULT_ONESIGNAL_APP_ID,
+  DEFAULT_ONESIGNAL_REST_KEY,
+  DEFAULT_CLOUDINARY_CLOUD_NAME,
+  DEFAULT_CLOUDINARY_API_KEY,
+  DEFAULT_CLOUDINARY_API_SECRET,
+  DEFAULT_SMTP_USER,
+  DEFAULT_SMTP_PASS,
+  DEFAULT_SMTP_FROM,
+  DEFAULT_GOOGLE_CALENDAR_CLIENT_ID,
+  DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET,
+  DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI,
+  maskValue,
+  getEffectiveGoogleKeys,
+  getEffectiveFacebookKeys,
+  getEffectiveRecaptchaKeys,
+  getEffectiveWeatherKey,
+  getEffectiveOneSignalKeys,
+  getEffectiveCloudinaryKeys,
+  getEffectiveEmailKeys,
+  getEffectiveCalendarKeys,
+  getAdminApiKeysSummary,
+  initEffectiveEnv,
+};

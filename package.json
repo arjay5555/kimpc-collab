@@ -1,0 +1,20 @@
+{
+  "name": "kimpc",
+  "version": "1.0.0",
+  "description": "KIMPC - Kalilangan Irrigators Multi-Purpose Cooperative machinery portal",
+  "scripts": {
+    "start": "npm --prefix server start",
+    "dev": "npm --prefix server run dev",
+    "server": "npm --prefix server run dev",
+    "server:dev": "npm --prefix server run dev",
+    "server:start": "npm --prefix server start",
+    "client": "npm --prefix client run dev",
+    "client:dev": "npm --prefix client run dev",
+    "client:build": "npm --prefix client run build",
+    "build": "npm --prefix client run build",
+    "seed": "npm --prefix server run seed",
+    "db:check": "npm --prefix server run db:check",
+    "db:seed": "npm --prefix server run seed"
+  },
+  "license": "ISC"
+}

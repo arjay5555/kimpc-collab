@@ -1,0 +1,33 @@
+const express = require("express");
+const router = express.Router();
+const authManager = require("../middleware/authManager");
+const weatherService = require("../services/weatherService");
+const { getSystemSetting } = require("../models/SystemSetting");
+
+/**
+ * GET /api/weather/forecast
+ * Manager-only endpoint fetching 3-day Kalilangan, Bukidnon weather forecast
+ */
+router.get("/forecast", authManager, async (req, res) => {
+  try {
+    const weatherEnabled = await getSystemSetting("weatherEnabled", true);
+    if (!weatherEnabled) {
+      return res.status(403).json({
+        ok: false,
+        disabled: true,
+        error: "Kalilangan Weather Forecast API is currently disabled by administrator.",
+      });
+    }
+    const forceRefresh = req.query.refresh === "true" || req.query.refresh === "1";
+    const data = await weatherService.getKalilanganForecast(forceRefresh);
+    if (!data.ok) {
+      return res.status(503).json(data);
+    }
+    return res.json(data);
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: "Failed to load weather forecast." });
+  }
+});
+
+module.exports = router;
+
