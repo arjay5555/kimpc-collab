@@ -15,6 +15,7 @@ function requireMember(req, res, next) {
   return next();
 }
 
+// POST /api/notifications/announce - Send an in-app announcement to opted-in members.
 router.post("/notifications/announce", authManager, async (req, res) => {
   const title = clean(req.body.title);
   const message = clean(req.body.message);
@@ -31,6 +32,7 @@ router.post("/notifications/announce", authManager, async (req, res) => {
 
 router.use(["/member", "/notifications"], authenticate, requireMember);
 
+// GET /api/member/preferences - Read the signed-in member's preferences and support contacts.
 router.get("/member/preferences", async (req, res) => {
   res.json({
     theme: req.user.memberSettings?.theme || "light",
@@ -46,6 +48,7 @@ router.get("/member/preferences", async (req, res) => {
   });
 });
 
+// PATCH /api/member/preferences - Update the signed-in member's preferences.
 router.patch("/member/preferences", async (req, res) => {
   const settings = req.user.memberSettings || {};
   if (req.body.theme !== undefined) {
@@ -81,6 +84,7 @@ router.patch("/member/preferences", async (req, res) => {
   });
 });
 
+// PATCH /api/member/profile - Update the signed-in member's contact profile.
 router.patch("/member/profile", async (req, res) => {
   const fields = ["fullName", "phone", "address", "address2", "city", "region", "postalCode", "country"];
   for (const field of fields) {
@@ -91,6 +95,7 @@ router.patch("/member/profile", async (req, res) => {
   return res.json({ fullName: req.user.fullName, email: req.user.email, phone: req.user.phone, address: req.user.address, address2: req.user.address2, city: req.user.city, region: req.user.region, postalCode: req.user.postalCode, country: req.user.country });
 });
 
+// POST /api/member/change-password - Change the signed-in member's password.
 router.post("/member/change-password", async (req, res) => {
   const currentPassword = String(req.body.currentPassword || "");
   const newPassword = String(req.body.newPassword || "");
@@ -104,6 +109,7 @@ router.post("/member/change-password", async (req, res) => {
   return res.json({ ok: true, message: "Password updated." });
 });
 
+// POST /api/member/support-request - Send a support request on behalf of the member.
 router.post("/member/support-request", async (req, res) => {
   const subject = clean(req.body.subject);
   const message = clean(req.body.message);
@@ -123,17 +129,20 @@ router.post("/member/support-request", async (req, res) => {
   }
 });
 
+// GET /api/notifications - List the signed-in member's notifications and unread count.
 router.get("/notifications", async (req, res) => {
   const notifications = await Notification.find({ memberEmail: req.user.email }).sort({ createdAt: -1 }).limit(100).lean();
   const unreadCount = notifications.filter((item) => !item.readAt).length;
   return res.json({ notifications, unreadCount });
 });
 
+// PATCH /api/notifications/read-all - Mark all of the signed-in member's notifications as read.
 router.patch("/notifications/read-all", async (req, res) => {
   const result = await Notification.updateMany({ memberEmail: req.user.email, readAt: null }, { $set: { readAt: new Date() } });
   return res.json({ updated: result.modifiedCount });
 });
 
+// PATCH /api/notifications/:id/read - Mark one of the signed-in member's notifications as read.
 router.patch("/notifications/:id/read", async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 400, "Invalid notification id.");
   const notification = await Notification.findOneAndUpdate(
@@ -145,6 +154,7 @@ router.patch("/notifications/:id/read", async (req, res) => {
   return res.json(notification);
 });
 
+// DELETE /api/notifications/:id - Delete one of the signed-in member's notifications.
 router.delete("/notifications/:id", async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 400, "Invalid notification id.");
   const result = await Notification.deleteOne({ _id: req.params.id, memberEmail: req.user.email });

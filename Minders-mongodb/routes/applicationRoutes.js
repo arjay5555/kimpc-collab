@@ -52,6 +52,7 @@ router.get("/applications", optionalAuthentication, async (req, res) => {
   }
 });
 
+// POST /api/applications - Create a machinery rental application.
 router.post("/applications", optionalAuthentication, async (req, res) => {
   try {
     const memberEmail = req.user?.role === "member" ? req.user.email : cleanEmail(req.body.memberEmail);
@@ -367,9 +368,12 @@ const handleApplicationUpdate = async (req, res) => {
   }
 };
 
+// PATCH /api/applications/:id - Update an application's status or booking details.
 router.patch("/applications/:id", handleApplicationUpdate);
+// PUT /api/applications/:id - Update an application using the legacy PUT method.
 router.put("/applications/:id", handleApplicationUpdate);
 
+// DELETE /api/applications/:id - Cancel a pending application.
 router.delete("/applications/:id", authenticate, async (req, res) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 400, "Invalid application id.");

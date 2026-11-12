@@ -1377,7 +1377,9 @@ const handleMachineryAvailability = async (req, res) => {
   }
 };
 
+// GET /api/machinery-availability - Return booking and maintenance availability for machinery.
 router.get("/machinery-availability", handleMachineryAvailability);
+// GET /api/manager/machinery-availability - Manager-prefixed alias for machinery availability.
 router.get("/manager/machinery-availability", handleMachineryAvailability);
 
 /**

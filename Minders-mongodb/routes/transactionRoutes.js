@@ -151,7 +151,9 @@ const handlePosBooking = async (req, res) => {
   }
 };
 
+// POST /api/pos-booking - Create a point-of-sale walk-in rental booking.
 router.post("/pos-booking", handlePosBooking);
+// POST /api/manager/pos-booking - Manager-prefixed alias for walk-in rental booking.
 router.post("/manager/pos-booking", handlePosBooking);
 
 /**
@@ -273,4 +275,3 @@ router.get("/manager/transactions", async (req, res) => {
 });
 
 module.exports = router;
-

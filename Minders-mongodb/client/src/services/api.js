@@ -11,7 +11,7 @@ export function getSignedInName() {
 }
 
 export function getAuthToken() {
-  return localStorage.getItem("token") || sessionStorage.getItem("kimpc-jwt-token") || sessionStorage.getItem("minders-jwt-token") || "";
+  return sessionStorage.getItem("kimpc-jwt-token") || sessionStorage.getItem("minders-jwt-token") || localStorage.getItem("token") || "";
 }
 
 export function isAuthenticated() {

@@ -99,6 +99,7 @@ router.post("/register", async (req, res) => {
   res.status(201).json(account);
 });
 
+// POST /api/verify - Reject the legacy verification flow with a migration response.
 router.post("/verify", async (req, res) => {
   return fail(res, 403, "waiting for verification");
 });
@@ -119,6 +120,7 @@ router.get("/config", async (req, res) => {
   });
 });
 
+// GET /api/admin/settings - Read administrator-controlled authentication settings.
 router.get("/admin/settings", requireAdmin, async (req, res) => {
   try {
     const googleLoginEnabled = await getSystemSetting("googleLoginEnabled", true);
@@ -135,6 +137,7 @@ router.get("/admin/settings", requireAdmin, async (req, res) => {
   }
 });
 
+// POST /api/admin/settings/google-login - Enable or disable Google sign-in.
 router.post("/admin/settings/google-login", requireAdmin, async (req, res) => {
   try {
     const enabled = Boolean(req.body.enabled);
@@ -166,6 +169,7 @@ router.post("/admin/settings/google-login", requireAdmin, async (req, res) => {
   }
 });
 
+// POST /api/admin/settings/facebook-login - Enable or disable Facebook sign-in.
 router.post("/admin/settings/facebook-login", requireAdmin, async (req, res) => {
   try {
     const enabled = Boolean(req.body.enabled);
@@ -197,6 +201,7 @@ router.post("/admin/settings/facebook-login", requireAdmin, async (req, res) => 
   }
 });
 
+// POST /api/admin/settings/recaptcha - Enable or disable login and registration reCAPTCHA.
 router.post("/admin/settings/recaptcha", requireAdmin, async (req, res) => {
   try {
     const enabled = Boolean(req.body.enabled);
@@ -338,6 +343,7 @@ router.post("/login", async (req, res) => {
   res.json(responseData);
 });
 
+// POST /api/auth/forgot-password-request - Submit an account password recovery request.
 router.post("/auth/forgot-password-request", async (req, res) => {
   const identifier = clean(req.body.identifier || req.body.email);
   if (!identifier) return fail(res, 400, "Please enter your Member ID or registered email.");
@@ -374,6 +380,7 @@ router.post("/auth/forgot-password-request", async (req, res) => {
   });
 });
 
+// POST /api/auth/change-temp-password - Replace a temporary password with a new password.
 router.post("/auth/change-temp-password", async (req, res) => {
   const email = cleanEmail(req.body.email);
   const tempPassword = String(req.body.tempPassword || "").trim();
@@ -559,6 +566,7 @@ router.post("/auth/google", async (req, res) => {
   }
 });
 
+// POST /api/auth/facebook - Authenticate or register a user with Facebook.
 router.post("/auth/facebook", async (req, res) => {
   try {
     const facebookLoginEnabled = await getSystemSetting("facebookLoginEnabled", true);
@@ -791,4 +799,3 @@ router.patch("/auth/profile", authenticate, async (req, res) => {
 });
 
 module.exports = router;
-
