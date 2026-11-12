@@ -12,9 +12,13 @@ export default function Login() {
   const [mode, setMode] = useState("login");
 
   // Form states
-  const [loginIdentifier, setLoginIdentifier] = useState("");
+  const [loginIdentifier, setLoginIdentifier] = useState(
+    () => localStorage.getItem("kimpc-remembered-identifier") || ""
+  );
   const [loginPassword, setLoginPassword] = useState("");
-  const [rememberMe, setRememberMe] = useState(false);
+  const [rememberMe, setRememberMe] = useState(
+    () => Boolean(localStorage.getItem("kimpc-remembered-identifier"))
+  );
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [loginFeedback, setLoginFeedback] = useState({ message: "", isError: false });
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -74,7 +78,7 @@ export default function Login() {
     } else {
       setMode("login");
     }
-    setLoginIdentifier("");
+    setLoginIdentifier(localStorage.getItem("kimpc-remembered-identifier") || "");
     setLoginPassword("");
   }, [location.hash]);
 
@@ -182,7 +186,7 @@ export default function Login() {
       return;
     }
 
-    const signedInUser = completeSignIn(data);
+    const signedInUser = completeSignIn(data, { rememberMe });
     navigate(getDashboardForRole(signedInUser.role));
   };
 
@@ -266,7 +270,7 @@ export default function Login() {
                 return;
               }
 
-              const signedInUser = completeSignIn(data);
+              const signedInUser = completeSignIn(data, { rememberMe });
               navigate(getDashboardForRole(signedInUser.role));
             } catch (err) {
               console.error(err);
@@ -329,7 +333,7 @@ export default function Login() {
               });
               return;
             }
-            const signedInUser = completeSignIn(data);
+            const signedInUser = completeSignIn(data, { rememberMe });
             navigate(getDashboardForRole(signedInUser.role));
           });
         } else {
@@ -368,7 +372,8 @@ export default function Login() {
     setIsLoggingIn(true);
     setLoginFeedback({ message: "Signing in...", isError: false });
 
-    const { ok, data } = await login(loginIdentifier.trim(), loginPassword, recaptchaToken);
+    const trimmedIdentifier = loginIdentifier.trim();
+    const { ok, data } = await login(trimmedIdentifier, loginPassword, recaptchaToken, rememberMe);
     setIsLoggingIn(false);
 
     if (!ok) {
@@ -385,7 +390,13 @@ export default function Login() {
       return;
     }
 
-    const signedInUser = completeSignIn(data);
+    if (rememberMe) {
+      localStorage.setItem("kimpc-remembered-identifier", trimmedIdentifier);
+    } else {
+      localStorage.removeItem("kimpc-remembered-identifier");
+    }
+
+    const signedInUser = completeSignIn(data, { rememberMe });
     navigate(getDashboardForRole(signedInUser.role));
   };
 
@@ -433,7 +444,7 @@ export default function Login() {
     }
 
     setMode("login");
-    setLoginIdentifier("");
+    setLoginIdentifier(localStorage.getItem("kimpc-remembered-identifier") || "");
     setLoginPassword("");
     setLoginFeedback({
       message: "waiting for verification",

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { api, getCachedApiData } from "../../services/api";
+import { computePaymentSummary } from "../../utils/paymentSummary";
 import ManagerSidebar from "../../components/ManagerSidebar";
 import ManagerSearchBar from "../../components/ManagerSearchBar";
 import ManagerTopbar from "../../components/ManagerTopbar";
@@ -82,6 +83,51 @@ function getMemberInitials(name, email) {
   return source.slice(0, 2).toUpperCase();
 }
 
+const HISTORY_BOOKING_STATUSES = new Set([
+  "returned",
+  "completed",
+  "done",
+  "cancelled",
+  "canceled",
+  "rejected",
+  "voided",
+]);
+
+function isHistoryEligibleStatus(status) {
+  return HISTORY_BOOKING_STATUSES.has(String(status || "").trim().toLowerCase());
+}
+
+function getBookingHistoryReferenceDate(booking) {
+  const endDateCandidate = booking?.endDate
+    ? /^\d{4}-\d{2}-\d{2}$/.test(booking.endDate)
+      ? `${booking.endDate}T23:59:59`
+      : booking.endDate
+    : null;
+  const candidates = [
+    booking?.returnedAt,
+    booking?.cancelledAt,
+    booking?.bookingVoidedAt,
+    endDateCandidate,
+    booking?.updatedAt,
+    booking?.createdAt,
+  ];
+  for (const raw of candidates) {
+    if (!raw) continue;
+    const ts = new Date(raw).getTime();
+    if (Number.isFinite(ts)) return new Date(ts);
+  }
+  return null;
+}
+
+function isBookingOlderThanThreeMonths(booking, now = new Date()) {
+  if (!isHistoryEligibleStatus(booking?.status)) return false;
+  const txDate = getBookingHistoryReferenceDate(booking);
+  if (!txDate) return false;
+  const cutoff = new Date(now.getTime());
+  cutoff.setMonth(cutoff.getMonth() - 3);
+  return txDate.getTime() <= cutoff.getTime();
+}
+
 // Bidirectional Chart Data for the 12 months
 const MONTHLY_CHART_DATA = [
   { month: "Jan", done: 65, canceled: 50 },
@@ -138,6 +184,9 @@ export default function BookingApprovals() {
   const [modalVoidReason, setModalVoidReason] = useState("");
   const [modalStartDate, setModalStartDate] = useState("2028-08-01");
   const [modalEndDate, setModalEndDate] = useState("2028-08-05");
+  const [mountNow] = useState(() => new Date());
+  const [isHistoryView, setIsHistoryView] = useState(false);
+  const [historyScope, setHistoryScope] = useState("archived"); // "archived" | "all_closed"
 
   // Helper to extract ISO date strings or fallback
   const getBookingDates = (booking) => {
@@ -327,7 +376,6 @@ export default function BookingApprovals() {
 
     if (targetStatus === "Voided") {
       updatedFields.voidReason = modalVoidReason || "Administrative Cancellation";
-      updatedFields.paymentStatus = "Voided";
     }
 
     if (targetStatus === "Rescheduled" && modalStartDate && modalEndDate) {
@@ -760,21 +808,17 @@ export default function BookingApprovals() {
         dateRange: `${item.startDate} to ${item.endDate}`,
         hasDriver,
         paymentAmount: `₱${Number(totalAmount).toLocaleString()}`,
-        totalAmountNum: Number(totalAmount) || 0,
-        paidAmountNum: (() => {
-          const hist = Array.isArray(item.paymentHistory) ? item.paymentHistory : [];
-          if (hist.length > 0) {
-            return hist
-              .filter((h) => !h.isVoided)
-              .reduce((s, h) => s + (Number(h.amount) || 0), 0);
-          }
-          const pSt = String(item.paymentStatus || "").toLowerCase();
-          if (pSt === "paid" || pSt === "settled" || item.financials?.isSettled) return Number(totalAmount) || 0;
-          if (pSt === "partial") return Number(item.financials?.totalPaid ?? item.paymentAmount ?? 0) || 0;
-          return 0;
+        ...(() => {
+          const fin = computePaymentSummary(item);
+          return {
+            totalAmountNum: fin.rentalCharge,
+            paidAmountNum: fin.grossPaid,
+            balanceAmountNum: fin.balanceDue,
+            refundedAmountNum: fin.totalRefunded,
+            paymentStatus: fin.paymentStatus,
+            status: fin.isVoidedBooking ? "Voided" : displayStatus,
+          };
         })(),
-        paymentStatus: item.paymentStatus || (item.financials?.isSettled ? "Paid" : "Pending"),
-        status: displayStatus,
         cancellationRequested: Boolean(item.cancellationRequested || s === "cancellation requested"),
         cancellationReason: item.cancellationReason || "",
         cancellationRequestedAt: item.cancellationRequestedAt || null,
@@ -789,8 +833,10 @@ export default function BookingApprovals() {
         dispatchedAt: item.dispatchedAt || null,
         returnedAt: item.returnedAt || null,
         cancelledAt: item.cancelledAt || null,
+        bookingVoidedAt: item.bookingVoidedAt || null,
         rescheduledAt: item.rescheduledAt || null,
         createdAt: item.createdAt || null,
+        updatedAt: item.updatedAt || null,
         isLive: true,
       };
     });
@@ -801,38 +847,21 @@ export default function BookingApprovals() {
     return base
       .filter((b) => !deletedIds.includes(b.id))
       .map((b) => {
-        let paymentRecord = null;
-        try {
-          const stored = JSON.parse(localStorage.getItem("kimpc_booking_payments") || "{}");
-          paymentRecord = stored[b.id] || (b.rawId && stored[b.rawId]) || null;
-        } catch (e) {}
-
         const extra = bookingOverrides[b.id] || (b.rawId && bookingOverrides[b.rawId]) || {};
         const st = statusOverrides[b.id] || (b.rawId && statusOverrides[b.rawId]) || extra.status || b.status;
-        const normalizedLocalStatus =
-          paymentRecord?.status === "Completed"
-            ? "Paid"
-            : paymentRecord?.status === "Partial"
-            ? "Partial"
-            : null;
-        const paymentStatus = normalizedLocalStatus || extra.paymentStatus || b.paymentStatus;
-        const totalAmtNum = Number(paymentRecord?.totalAmount ?? b.totalAmountNum ?? 0) || 0;
-        const paidAmtNum =
-          paymentRecord?.amountPaid !== undefined
-            ? Number(paymentRecord.amountPaid) || 0
-            : paymentStatus === "Paid"
-            ? totalAmtNum
-            : Number(b.paidAmountNum || 0) || 0;
-        const balanceAmtNum = Math.max(0, totalAmtNum - paidAmtNum);
+        const paymentStatus = extra.paymentStatus || b.paymentStatus;
+        const totalAmtNum = Number(b.totalAmountNum ?? 0) || 0;
+        const paidAmtNum = Number(b.paidAmountNum || 0) || 0;
+        const balanceAmtNum = b.balanceAmountNum !== undefined ? Number(b.balanceAmountNum) : Math.max(0, totalAmtNum - paidAmtNum);
         const paymentAmount = totalAmtNum > 0 ? `₱${totalAmtNum.toLocaleString()}` : extra.paymentAmount || b.paymentAmount;
-        const paymentMethod = paymentRecord?.paymentMethod || extra.paymentMethod || b.paymentMethod;
-        const paymentType = paymentRecord?.paymentType || extra.paymentType || b.paymentType || "Full Rental Payment";
-        const dateReceived = paymentRecord?.dateReceived || extra.dateReceived || b.paymentDateTime || b.dateReceived || (paymentStatus === "Paid" ? b.bookingDate : "");
-        const receiptNo = paymentRecord?.receiptNo || extra.receiptNo || b.receiptNo || `OR-${new Date().getFullYear()}-${String(b.id).replace(/\D/g, "")}`;
-        const referenceNumber = paymentRecord?.referenceNumber || extra.referenceNumber || b.paymentReference || "";
-        const proofOfPayment = paymentRecord?.proofOfPayment || extra.proofOfPayment || b.proofOfPayment || b.gcashProof || null;
-        const notes = paymentRecord?.notes || extra.notes || b.notes || "";
-        const recordedBy = paymentRecord?.receivedBy || paymentRecord?.recordedBy || extra.recordedBy || b.receivedBy || b.recordedBy || user?.fullName || user?.email || "Manager";
+        const paymentMethod = extra.paymentMethod || b.paymentMethod;
+        const paymentType = extra.paymentType || b.paymentType || "Full Rental Payment";
+        const dateReceived = extra.dateReceived || b.paymentDateTime || b.dateReceived || "";
+        const receiptNo = extra.receiptNo || b.receiptNo || `OR-${new Date().getFullYear()}-${String(b.id).replace(/\D/g, "")}`;
+        const referenceNumber = extra.referenceNumber || b.paymentReference || "";
+        const proofOfPayment = extra.proofOfPayment || b.proofOfPayment || b.gcashProof || null;
+        const notes = extra.notes || b.notes || "";
+        const recordedBy = extra.recordedBy || b.receivedBy || b.recordedBy || user?.fullName || user?.email || "Manager";
 
         return {
           ...b,
@@ -854,25 +883,53 @@ export default function BookingApprovals() {
       });
   }, [liveBookings, statusOverrides, bookingOverrides, deletedIds, user]);
 
-  // Filtered bookings based on search & dropdowns
+  const closedHistoryBookings = useMemo(() => {
+    return mergedBookings
+      .filter((b) => isHistoryEligibleStatus(b.status))
+      .sort((a, b) => {
+        const da = getBookingHistoryReferenceDate(a)?.getTime() || 0;
+        const db = getBookingHistoryReferenceDate(b)?.getTime() || 0;
+        return db - da;
+      });
+  }, [mergedBookings]);
+
+  const archivedHistoryBookings = useMemo(
+    () => closedHistoryBookings.filter((b) => isBookingOlderThanThreeMonths(b, mountNow)),
+    [closedHistoryBookings, mountNow]
+  );
+
+  // Filtered bookings based on active/history mode, search & dropdowns
   const filteredBookings = useMemo(() => {
-    let result = mergedBookings.filter((b) => {
+    const baseSource = isHistoryView
+      ? historyScope === "archived"
+        ? archivedHistoryBookings
+        : closedHistoryBookings
+      : mergedBookings.filter((b) => !isBookingOlderThanThreeMonths(b, mountNow));
+
+    const q = searchQuery.trim().toLowerCase();
+    const targetStatus = filterStatus.toLowerCase();
+
+    let result = baseSource.filter((b) => {
       // Search filter
       const matchesSearch =
-        !searchQuery.trim() ||
-        b.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (b.clientPhone && b.clientPhone.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        b.machineryModel.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        b.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        b.category.toLowerCase().includes(searchQuery.toLowerCase());
+        !q ||
+        b.clientName.toLowerCase().includes(q) ||
+        (b.clientPhone && b.clientPhone.toLowerCase().includes(q)) ||
+        b.machineryModel.toLowerCase().includes(q) ||
+        b.id.toLowerCase().includes(q) ||
+        b.category.toLowerCase().includes(q);
 
       // Category filter
       const matchesType =
         filterType === "All" || b.category.toLowerCase().includes(filterType.toLowerCase());
 
       // Status filter
+      const bStatus = String(b.status || "").trim().toLowerCase();
       const matchesStatus =
-        filterStatus === "All" || b.status.toLowerCase() === filterStatus.toLowerCase();
+        filterStatus === "All" ||
+        bStatus === targetStatus ||
+        (targetStatus === "cancelled" && bStatus === "canceled") ||
+        (targetStatus === "canceled" && bStatus === "cancelled");
 
       return matchesSearch && matchesType && matchesStatus;
     });
@@ -887,7 +944,18 @@ export default function BookingApprovals() {
     });
 
     return result;
-  }, [mergedBookings, searchQuery, filterType, filterStatus, sortBy]);
+  }, [
+    isHistoryView,
+    historyScope,
+    archivedHistoryBookings,
+    closedHistoryBookings,
+    mergedBookings,
+    mountNow,
+    searchQuery,
+    filterType,
+    filterStatus,
+    sortBy,
+  ]);
 
   const totalPages = Math.ceil(filteredBookings.length / pageSize) || 1;
   const paginatedBookings = useMemo(() => {
@@ -896,7 +964,7 @@ export default function BookingApprovals() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, filterType, filterStatus, sortBy]);
+  }, [searchQuery, filterType, filterStatus, sortBy, isHistoryView, historyScope]);
 
   // ================= Dynamic KPI Counts directly derived from Machinery Bookings =================
   // 1. Pending Bookings: Pending manager confirmation/review
@@ -1486,7 +1554,7 @@ export default function BookingApprovals() {
           paymentMethod: addPaymentMethod,
           cashPaymentOption: addPaymentMethod === "Cash" ? addCashTiming : "",
           gcashProof: addPaymentMethod === "GCash" ? addGcashProof : "",
-          paymentStatus: addPaymentMethod === "GCash" ? "Paid" : "Pending",
+          paymentStatus: "Pending",
           farmerPhone: cleanPhone,
           memberPhone: cleanPhone,
           farmLocation: newBooking.location.trim(),
@@ -1773,75 +1841,253 @@ export default function BookingApprovals() {
           </div>
         </section>
 
-        {/* ================= Bottom Section: Machinery Bookings Table ================= */}
-        <section className="wz-table-card">
-          <div className="wz-table-toolbar" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "18px" }}>
-            <div className="wz-toolbar-left" style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-              <ManagerSearchBar
-                searchQuery={searchQuery}
-                onSearchChange={setSearchQuery}
-                placeholder="Search member, machinery, ID, phone..."
-                filters={[
-                  {
-                    id: "machineryType",
-                    label: "Machinery Type",
-                    value: filterType,
-                    defaultValue: "All",
-                    onChange: setFilterType,
-                    options: [
-                      { value: "All", label: "All Machinery Types" },
-                      { value: "Tractor", label: "Tractor" },
-                      { value: "Harvester", label: "Harvester" },
-                      { value: "Baler", label: "Baler" },
-                      { value: "Mower", label: "Mower / Rake" },
-                      { value: "Sprayer", label: "Sprayer" },
-                      { value: "Transport", label: "Transport" },
-                    ],
-                  },
-                  {
-                    id: "status",
-                    label: "Status",
-                    value: filterStatus,
-                    defaultValue: "All",
-                    onChange: setFilterStatus,
-                    options: [
-                      { value: "All", label: "All Statuses" },
-                      { value: "Pending", label: "Pending" },
-                      { value: "Approved", label: "Approved" },
-                      { value: "Ongoing", label: "Ongoing" },
-                      { value: "Returned", label: "Returned" },
-                      { value: "Rescheduled", label: "Rescheduled" },
-                      { value: "Rejected", label: "Rejected" },
-                      { value: "Voided", label: "Voided" },
-                      { value: "Cancelled", label: "Cancelled" },
-                    ],
-                  },
-                ]}
-                sort={{
-                  value: sortBy,
-                  defaultValue: "date_desc",
-                  onChange: setSortBy,
+        {/* ================= Bookings Toolbar & Action Bar (Outside Table Card, matching Units & Drivers) ================= */}
+        <div className="wz-units-toolbar" style={{ marginBottom: "14px" }}>
+          <div className="wz-units-left-filters">
+            <ManagerSearchBar
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              placeholder={
+                isHistoryView
+                  ? "Search history by member, machinery, ID, phone..."
+                  : "Search member, machinery, ID, phone..."
+              }
+              filters={[
+                {
+                  id: "machineryType",
+                  label: "Machinery Type",
+                  value: filterType,
+                  defaultValue: "All",
+                  onChange: setFilterType,
                   options: [
-                    { value: "date_desc", label: "Newest Date" },
-                    { value: "date_asc", label: "Oldest Date" },
-                    { value: "id_asc", label: "Booking ID" },
-                    { value: "client_asc", label: "Member (A-Z)" },
-                    { value: "client_desc", label: "Member (Z-A)" },
+                    { value: "All", label: "All Machinery Types" },
+                    { value: "Tractor", label: "Tractor" },
+                    { value: "Harvester", label: "Harvester" },
+                    { value: "Baler", label: "Baler" },
+                    { value: "Mower", label: "Mower / Rake" },
+                    { value: "Sprayer", label: "Sprayer" },
+                    { value: "Transport", label: "Transport" },
                   ],
-                }}
-              />
-            </div>
-
-            <div className="wz-toolbar-right" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              {/* Add Booking Action Button */}
-              <button
-                className="wz-btn-add-booking"
-                onClick={handleOpenAddModal}
-              >
-                + Add Booking
-              </button>
-            </div>
+                },
+                {
+                  id: "status",
+                  label: "Status",
+                  value: filterStatus,
+                  defaultValue: "All",
+                  onChange: setFilterStatus,
+                  options: isHistoryView
+                    ? [
+                        { value: "All", label: "All History Statuses" },
+                        { value: "Returned", label: "Returned" },
+                        { value: "Completed", label: "Completed" },
+                        { value: "Done", label: "Done" },
+                        { value: "Cancelled", label: "Cancelled" },
+                        { value: "Rejected", label: "Rejected" },
+                        { value: "Voided", label: "Voided" },
+                      ]
+                    : [
+                        { value: "All", label: "All Statuses" },
+                        { value: "Pending", label: "Pending" },
+                        { value: "Approved", label: "Approved" },
+                        { value: "Ongoing", label: "Ongoing" },
+                        { value: "Returned", label: "Returned" },
+                        { value: "Rescheduled", label: "Rescheduled" },
+                        { value: "Rejected", label: "Rejected" },
+                        { value: "Voided", label: "Voided" },
+                        { value: "Cancelled", label: "Cancelled" },
+                      ],
+                },
+              ]}
+              sort={{
+                value: sortBy,
+                defaultValue: "date_desc",
+                onChange: setSortBy,
+                options: [
+                  { value: "date_desc", label: "Newest Date" },
+                  { value: "date_asc", label: "Oldest Date" },
+                  { value: "id_asc", label: "Booking ID" },
+                  { value: "client_asc", label: "Member (A-Z)" },
+                  { value: "client_desc", label: "Member (Z-A)" },
+                ],
+              }}
+            />
           </div>
+
+          <div className="wz-units-right-actions">
+            {/* Booking Transaction History Toggle Icon Button (3+ month Completed, Done, Canceled) */}
+            <button
+              type="button"
+              onClick={() => {
+                setIsHistoryView((prev) => {
+                  const next = !prev;
+                  if (next) setHistoryScope("archived");
+                  return next;
+                });
+                setFilterStatus("All");
+              }}
+              title={
+                isHistoryView
+                  ? "Return to Active Bookings"
+                  : "Booking History (Auto-archived after 3 months for Completed, Done & Canceled)"
+              }
+              aria-label={isHistoryView ? "Return to active bookings" : "Open booking transaction history"}
+              aria-pressed={isHistoryView}
+              style={{
+                position: "relative",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                height: "36px",
+                padding: "0 12px",
+                borderRadius: "9px",
+                border: isHistoryView ? "1px solid #0f172a" : "1px solid var(--wz-border)",
+                background: isHistoryView ? "#0f172a" : "#ffffff",
+                color: isHistoryView ? "#ffffff" : "#334155",
+                fontSize: "0.82rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+                <path d="M3 3v5h5" />
+                <path d="M12 7v5l3 2" />
+              </svg>
+              {archivedHistoryBookings.length > 0 && (
+                <span
+                  style={{
+                    background: isHistoryView ? "#ffffff" : "#0f172a",
+                    color: isHistoryView ? "#0f172a" : "#ffffff",
+                    borderRadius: "999px",
+                    padding: "1px 6px",
+                    fontSize: "0.7rem",
+                    fontWeight: 800,
+                    lineHeight: 1.3,
+                  }}
+                >
+                  {archivedHistoryBookings.length}
+                </span>
+              )}
+            </button>
+
+            {/* Add Booking Action Button */}
+            <button
+              className="wz-btn-add-unit"
+              onClick={handleOpenAddModal}
+            >
+              + Add Booking
+            </button>
+          </div>
+        </div>
+
+        {/* ================= Bottom Section: Machinery Bookings Table Card ================= */}
+        <section className="wz-table-card" style={{ padding: 0, overflow: "hidden" }}>
+          {isHistoryView && (
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: "12px",
+                padding: "14px 20px",
+                background: "#f8fafc",
+                borderBottom: "1px solid var(--wz-border)",
+              }}
+            >
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "0.95rem", fontWeight: 800, color: "#0f172a" }}>
+                    Booking Transaction History
+                  </span>
+                  <span
+                    style={{
+                      background: "#e2e8f0",
+                      color: "#334155",
+                      borderRadius: "999px",
+                      padding: "2px 8px",
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {historyScope === "archived"
+                      ? `${archivedHistoryBookings.length} Archived`
+                      : `${closedHistoryBookings.length} Closed`}
+                  </span>
+                </div>
+                <p style={{ margin: "3px 0 0", fontSize: "0.76rem", color: "#64748b" }}>
+                  Completed, Done (Returned), and Canceled bookings automatically move here after 3 months.
+                </p>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                <div style={{ display: "inline-flex", background: "#e2e8f0", padding: "3px", borderRadius: "9px", gap: "3px" }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHistoryScope("archived");
+                      setFilterStatus("All");
+                    }}
+                    style={{
+                      border: "none",
+                      borderRadius: "7px",
+                      padding: "5px 11px",
+                      fontSize: "0.76rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      background: historyScope === "archived" ? "#ffffff" : "transparent",
+                      color: historyScope === "archived" ? "#0f172a" : "#475569",
+                      boxShadow: historyScope === "archived" ? "0 1px 2px rgba(15, 23, 42, 0.08)" : "none",
+                    }}
+                  >
+                    Auto-Archived (3+ Months) ({archivedHistoryBookings.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHistoryScope("all_closed");
+                      setFilterStatus("All");
+                    }}
+                    style={{
+                      border: "none",
+                      borderRadius: "7px",
+                      padding: "5px 11px",
+                      fontSize: "0.76rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      background: historyScope === "all_closed" ? "#ffffff" : "transparent",
+                      color: historyScope === "all_closed" ? "#0f172a" : "#475569",
+                      boxShadow: historyScope === "all_closed" ? "0 1px 2px rgba(15, 23, 42, 0.08)" : "none",
+                    }}
+                  >
+                    All Completed &amp; Canceled ({closedHistoryBookings.length})
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsHistoryView(false);
+                    setFilterStatus("All");
+                  }}
+                  style={{
+                    border: "1px solid var(--wz-border)",
+                    borderRadius: "8px",
+                    padding: "6px 12px",
+                    fontSize: "0.78rem",
+                    fontWeight: 700,
+                    background: "#ffffff",
+                    color: "#0f172a",
+                    cursor: "pointer",
+                  }}
+                >
+                  &larr; Active Bookings
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Table Container */}
           <div className="wz-table-responsive">
@@ -1861,7 +2107,38 @@ export default function BookingApprovals() {
                 {filteredBookings.length === 0 ? (
                   <tr>
                     <td colSpan="7" style={{ padding: "36px", textAlign: "center", color: "#64748b" }}>
-                      No machinery bookings found matching your search.
+                      {isHistoryView && historyScope === "archived" ? (
+                        <div>
+                          <div style={{ fontWeight: 700, color: "#334155", marginBottom: "4px" }}>
+                            No 3+ month archived booking transactions found.
+                          </div>
+                          <div style={{ fontSize: "0.8rem", marginBottom: closedHistoryBookings.length > 0 ? "12px" : 0 }}>
+                            Completed, Done (Returned), and Canceled bookings automatically move here after 3 months.
+                          </div>
+                          {closedHistoryBookings.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setHistoryScope("all_closed")}
+                              style={{
+                                background: "#0f172a",
+                                color: "#ffffff",
+                                border: "none",
+                                borderRadius: "8px",
+                                padding: "7px 14px",
+                                fontSize: "0.78rem",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                              }}
+                            >
+                              View All {closedHistoryBookings.length} Completed &amp; Canceled
+                            </button>
+                          )}
+                        </div>
+                      ) : isHistoryView ? (
+                        "No completed, done, or canceled booking transactions found matching your search."
+                      ) : (
+                        "No machinery bookings found matching your search."
+                      )}
                     </td>
                   </tr>
                 ) : (
@@ -1929,7 +2206,23 @@ export default function BookingApprovals() {
                       </td>
 
                       {/* Date Range */}
-                      <td style={{ fontSize: "0.82rem", color: "#64748b" }}>{b.dateRange}</td>
+                      <td style={{ fontSize: "0.82rem", color: "#64748b" }}>
+                        <div>{b.dateRange}</div>
+                        {isHistoryView && (
+                          <div
+                            style={{
+                              fontSize: "0.7rem",
+                              fontWeight: 700,
+                              marginTop: "2px",
+                              color: isBookingOlderThanThreeMonths(b, mountNow) ? "#059669" : "#64748b",
+                            }}
+                          >
+                            {isBookingOlderThanThreeMonths(b, mountNow)
+                              ? "Auto-Archived (3+ mo)"
+                              : "Closed (< 3 mo)"}
+                          </div>
+                        )}
+                      </td>
 
                       {/* Action: 1 action only -> View Details */}
                       <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
@@ -1967,63 +2260,64 @@ export default function BookingApprovals() {
               </tbody>
             </table>
           </div>
-
-          {/* Table Footer with Pagination Controls */}
-          <div className="wz-table-footer" style={{ marginTop: "24px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", color: "#64748b" }}>
-              <span>Results per page:</span>
-              <select
-                className="wz-dropdown-select"
-                value={pageSize}
-                onChange={(e) => {
-                  const val = Number(e.target.value);
-                  setPageSize(val);
-                  setCurrentPage(1);
-                  localStorage.setItem("kimpc_manager_pageSize", String(val));
-                }}
-              >
-                <option value="8">8</option>
-                <option value="16">16</option>
-                <option value="24">24</option>
-                <option value="50">50</option>
-              </select>
-              <span style={{ marginLeft: "12px" }}>
-                Showing {filteredBookings.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}–
-                {Math.min(currentPage * pageSize, filteredBookings.length)} of {filteredBookings.length} bookings
-              </span>
-            </div>
-
-            <div className="wz-pagination-btns">
-              <button
-                className="wz-page-btn"
-                disabled={currentPage <= 1}
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                title="Previous Page"
-              >
-                &lt;
-              </button>
-
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                <button
-                  key={p}
-                  className={`wz-page-btn ${p === currentPage ? "active" : ""}`}
-                  onClick={() => setCurrentPage(p)}
-                >
-                  {p}
-                </button>
-              ))}
-
-              <button
-                className="wz-page-btn"
-                disabled={currentPage >= totalPages}
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                title="Next Page"
-              >
-                &gt;
-              </button>
-            </div>
-          </div>
         </section>
+
+        {/* Table Footer with Pagination Controls */}
+        <div className="wz-table-footer" style={{ marginTop: "24px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", color: "#64748b" }}>
+            <span>Results per page:</span>
+            <select
+              className="wz-dropdown-select"
+              value={pageSize}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                setPageSize(val);
+                setCurrentPage(1);
+                localStorage.setItem("kimpc_manager_pageSize", String(val));
+              }}
+            >
+              <option value="8">8</option>
+              <option value="16">16</option>
+              <option value="24">24</option>
+              <option value="50">50</option>
+            </select>
+            <span style={{ marginLeft: "12px" }}>
+              Showing {filteredBookings.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}–
+              {Math.min(currentPage * pageSize, filteredBookings.length)} of {filteredBookings.length}{" "}
+              {isHistoryView ? "history transactions" : "bookings"}
+            </span>
+          </div>
+
+          <div className="wz-pagination-btns">
+            <button
+              className="wz-page-btn"
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              title="Previous Page"
+            >
+              &lt;
+            </button>
+
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+              <button
+                key={p}
+                className={`wz-page-btn ${p === currentPage ? "active" : ""}`}
+                onClick={() => setCurrentPage(p)}
+              >
+                {p}
+              </button>
+            ))}
+
+            <button
+              className="wz-page-btn"
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              title="Next Page"
+            >
+              &gt;
+            </button>
+          </div>
+        </div>
       </main>
 
       {/* ================= Add Booking Modal (Minimalist Member-Parity Design) ================= */}
@@ -2785,6 +3079,7 @@ export default function BookingApprovals() {
           </section>
         </div>
       )}
+
       {/* ================= MODAL: VIEW BOOKING, RECEIPT & PROFILE DETAILS ================= */}
       {viewingBooking && (
         <div
@@ -2812,7 +3107,7 @@ export default function BookingApprovals() {
                     className={
                       viewingBooking.paymentStatus === "Paid"
                         ? "wz-payment-badge-paid"
-                        : viewingBooking.paymentStatus === "Partial"
+                        : viewingBooking.paymentStatus === "Partially Paid" || viewingBooking.paymentStatus === "Partial"
                         ? "wz-payment-badge-partial"
                         : "wz-payment-badge-pending"
                     }
@@ -3287,7 +3582,7 @@ export default function BookingApprovals() {
                         className={
                           viewingBooking.paymentStatus === "Paid"
                             ? "wz-payment-badge-paid"
-                            : viewingBooking.paymentStatus === "Partial"
+                            : viewingBooking.paymentStatus === "Partially Paid" || viewingBooking.paymentStatus === "Partial"
                             ? "wz-payment-badge-partial"
                             : "wz-payment-badge-pending"
                         }
@@ -3304,7 +3599,7 @@ export default function BookingApprovals() {
                         <div style={{ fontSize: "1.4rem", fontWeight: 900, color: "#0f172a", lineHeight: 1.15 }}>
                           {viewingBooking.paymentAmount || "₱0.00"}
                         </div>
-                        {viewingBooking.paymentStatus === "Partial" && (
+                        {(viewingBooking.paymentStatus === "Partially Paid" || viewingBooking.paymentStatus === "Partial") && (
                           <div style={{ fontSize: "0.74rem", fontWeight: 600, color: "#b45309", marginTop: "3px" }}>
                             Paid ₱{Number(viewingBooking.paidAmountNum || 0).toLocaleString()} · Balance ₱{Number(viewingBooking.balanceAmountNum || 0).toLocaleString()}
                           </div>

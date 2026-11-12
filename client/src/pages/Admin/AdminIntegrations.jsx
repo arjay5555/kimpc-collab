@@ -5,6 +5,38 @@ import AdminSidebar from "../../components/AdminSidebar";
 import AdminTopbar from "../../components/AdminTopbar";
 import "../../styles/admin-kimpc.css";
 
+function ApiSourceBadge({ isCustom }) {
+  return (
+    <span
+      title={isCustom ? "Currently using your saved Custom API credentials" : "Currently using system Default API credentials"}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "5px",
+        fontSize: "0.7rem",
+        fontWeight: 800,
+        padding: "2px 9px",
+        borderRadius: "999px",
+        border: `1px solid ${isCustom ? "#86efac" : "#cbd5e1"}`,
+        background: isCustom ? "#dcfce7" : "#f1f5f9",
+        color: isCustom ? "#15803d" : "#475569",
+        letterSpacing: "0.01em",
+        whiteSpace: "nowrap",
+      }}
+    >
+      <span
+        style={{
+          width: "6px",
+          height: "6px",
+          borderRadius: "50%",
+          background: isCustom ? "#16a34a" : "#64748b",
+        }}
+      />
+      {isCustom ? "Using Custom API" : "Using Default API"}
+    </span>
+  );
+}
+
 export default function AdminIntegrations() {
   const { user } = useAuth();
   const [settings, setSettings] = useState({
@@ -115,6 +147,9 @@ export default function AdminIntegrations() {
   const [showDevOtpInput, setShowDevOtpInput] = useState(true);
   const [resendCooldown, setResendCooldown] = useState(0);
   const devPollTimerRef = useRef(null);
+  const devPollResolvedRef = useRef(false);
+  const devAuthCallbackRef = useRef(null);
+  const [devAuthChecking, setDevAuthChecking] = useState(false);
   const devOtpInputRefs = [
     useRef(null),
     useRef(null),
@@ -146,6 +181,8 @@ export default function AdminIntegrations() {
     if (devPollTimerRef.current) {
       clearInterval(devPollTimerRef.current);
     }
+    devPollResolvedRef.current = true;
+    devAuthCallbackRef.current = null;
     setPinModal({ open: false, actionDescription: "", onSuccess: null, isFirstPin: false });
     setDevAuthStep(false);
     setDevAuthStatus("PENDING");
@@ -154,7 +191,53 @@ export default function AdminIntegrations() {
     setPinLoading(false);
   };
 
+  const checkDeveloperAuthStatus = async (reqId) => {
+    if (!reqId || devPollResolvedRef.current) return;
+    try {
+      const statusRes = await api(`/admin/integrations/dev-auth/status/${reqId}`, { skipCache: true });
+      if (statusRes.ok && statusRes.data && !devPollResolvedRef.current) {
+        const st = statusRes.data.status;
+        if (st === "APPROVED") {
+          devPollResolvedRef.current = true;
+          if (devPollTimerRef.current) clearInterval(devPollTimerRef.current);
+          setDevAuthStatus("APPROVED");
+          const callback = devAuthCallbackRef.current;
+          setTimeout(() => {
+            setIsPinAuthorized(true);
+            setPinModal({ open: false, actionDescription: "", onSuccess: null, isFirstPin: false });
+            setDevAuthStep(false);
+            if (typeof callback === "function") {
+              callback();
+            }
+          }, 900);
+        } else if (st === "DENIED") {
+          devPollResolvedRef.current = true;
+          if (devPollTimerRef.current) clearInterval(devPollTimerRef.current);
+          setDevAuthStatus("DENIED");
+        } else if (st === "EXPIRED") {
+          devPollResolvedRef.current = true;
+          if (devPollTimerRef.current) clearInterval(devPollTimerRef.current);
+          setDevAuthStatus("EXPIRED");
+        }
+      }
+    } catch {
+      // ignore transient poll failure
+    }
+  };
+
+  // Re-check immediately if browser tab regains focus after clicking email link
+  useEffect(() => {
+    if (!devAuthStep || devAuthStatus !== "PENDING" || !devAuthRequestId) return;
+    const handleFocusCheck = () => {
+      checkDeveloperAuthStatus(devAuthRequestId);
+    };
+    window.addEventListener("focus", handleFocusCheck);
+    return () => window.removeEventListener("focus", handleFocusCheck);
+  }, [devAuthStep, devAuthStatus, devAuthRequestId]);
+
   const startDeveloperAuthorization = async (actionDesc, callback) => {
+    devPollResolvedRef.current = false;
+    devAuthCallbackRef.current = callback;
     setDevAuthStep(true);
     setDevAuthStatus("PENDING");
     setDevAuthOtpDigits(["", "", "", "", "", ""]);
@@ -183,41 +266,23 @@ export default function AdminIntegrations() {
       setDevAuthMaskedEmail(res.data.devEmailMasked || "ar••••••••••@gmail.com");
       setResendCooldown(60);
 
-      // Start polling developer approval status every 2 seconds
+      // Start uncached polling of developer approval status every 2 seconds
       if (devPollTimerRef.current) clearInterval(devPollTimerRef.current);
-      devPollTimerRef.current = setInterval(async () => {
-        try {
-          const statusRes = await api(`/admin/integrations/dev-auth/status/${reqId}`);
-          if (statusRes.ok && statusRes.data) {
-            const st = statusRes.data.status;
-            if (st === "APPROVED") {
-              clearInterval(devPollTimerRef.current);
-              setDevAuthStatus("APPROVED");
-              setTimeout(() => {
-                setIsPinAuthorized(true);
-                setPinModal({ open: false, actionDescription: "", onSuccess: null, isFirstPin: false });
-                setDevAuthStep(false);
-                if (typeof callback === "function") {
-                  callback();
-                }
-              }, 1200);
-            } else if (st === "DENIED") {
-              clearInterval(devPollTimerRef.current);
-              setDevAuthStatus("DENIED");
-            } else if (st === "EXPIRED") {
-              clearInterval(devPollTimerRef.current);
-              setDevAuthStatus("EXPIRED");
-            }
-          }
-        } catch (e) {
-          // ignore transient poll failure
-        }
+      devPollTimerRef.current = setInterval(() => {
+        checkDeveloperAuthStatus(reqId);
       }, 2000);
-    } catch (err) {
+    } catch {
       setPinError("Network error contacting developer authorization service.");
       setDevAuthStep(false);
       setPinLoading(false);
     }
+  };
+
+  const handleManualCheckDevAuth = async () => {
+    if (!devAuthRequestId || devAuthChecking) return;
+    setDevAuthChecking(true);
+    await checkDeveloperAuthStatus(devAuthRequestId);
+    setDevAuthChecking(false);
   };
 
   const handleVerifyDevOtp = async (eOrOtp) => {
@@ -331,7 +396,7 @@ export default function AdminIntegrations() {
   const checkPinStatus = async () => {
     try {
       const email = user?.email || JSON.parse(localStorage.getItem("kimpc_user") || "{}")?.email || "admin@kimpc.test";
-      const res = await api(`/admin/pin-status?email=${encodeURIComponent(email)}`);
+      const res = await api(`/admin/pin-status?email=${encodeURIComponent(email)}`, { skipCache: true });
       if (res.ok && res.data) {
         setAdminHasPin(Boolean(res.data.hasPin));
         return Boolean(res.data.hasPin);
@@ -364,7 +429,7 @@ export default function AdminIntegrations() {
     let hasPin = adminHasPin;
     try {
       const email = user?.email || JSON.parse(localStorage.getItem("kimpc_user") || "{}")?.email || "admin@kimpc.test";
-      const res = await api(`/admin/pin-status?email=${encodeURIComponent(email)}`);
+      const res = await api(`/admin/pin-status?email=${encodeURIComponent(email)}`, { skipCache: true });
       if (res.ok && res.data) {
         hasPin = Boolean(res.data.hasPin);
         setAdminHasPin(hasPin);
@@ -599,7 +664,7 @@ export default function AdminIntegrations() {
   const fetchSettingsAndKeys = async () => {
     setLoading(true);
     try {
-      const res = await api("/admin/settings");
+      const res = await api("/admin/settings", { skipCache: true });
       if (res.ok && res.data) {
         setSettings({
           googleLoginEnabled: res.data.googleLoginEnabled ?? true,
@@ -613,7 +678,7 @@ export default function AdminIntegrations() {
         });
       }
 
-      const keysRes = await api("/admin/integrations/keys");
+      const keysRes = await api("/admin/integrations/keys", { skipCache: true });
       if (keysRes.ok && keysRes.data?.data) {
         const d = keysRes.data?.data || keysRes.data || {};
         setApiKeys({
@@ -1331,7 +1396,10 @@ export default function AdminIntegrations() {
                     style={{ width: "100%", height: "100%", objectFit: "contain" }}
                   />
                 </div>
-                <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Google Sign-In</strong>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Google Sign-In</strong>
+                  <ApiSourceBadge isCustom={Boolean(apiKeys.google?.isCustom)} />
+                </div>
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -1426,7 +1494,7 @@ export default function AdminIntegrations() {
                       color: apiKeys.google?.isCustom ? "#15803d" : "#475569",
                     }}
                   >
-                    Active Source: {apiKeys.google?.isCustom ? "Custom .env Key" : "Default Hardcoded Code"}
+                    Active API: {apiKeys.google?.isCustom ? "Using Custom API" : "Using Default API"}
                   </span>
                 </div>
 
@@ -1605,7 +1673,10 @@ export default function AdminIntegrations() {
                     style={{ width: "100%", height: "100%", objectFit: "contain" }}
                   />
                 </div>
-                <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Facebook Sign-In</strong>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Facebook Sign-In</strong>
+                  <ApiSourceBadge isCustom={Boolean(apiKeys.facebook?.isCustom)} />
+                </div>
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -1700,7 +1771,7 @@ export default function AdminIntegrations() {
                       color: apiKeys.facebook?.isCustom ? "#15803d" : "#475569",
                     }}
                   >
-                    Active Source: {apiKeys.facebook?.isCustom ? "Custom .env Key" : "Default Hardcoded Code"}
+                    Active API: {apiKeys.facebook?.isCustom ? "Using Custom API" : "Using Default API"}
                   </span>
                 </div>
 
@@ -1879,7 +1950,10 @@ export default function AdminIntegrations() {
                     style={{ width: "100%", height: "100%", objectFit: "contain" }}
                   />
                 </div>
-                <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Google reCAPTCHA v2</strong>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Google reCAPTCHA v2</strong>
+                  <ApiSourceBadge isCustom={Boolean(apiKeys.recaptcha?.isCustom)} />
+                </div>
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -1974,7 +2048,7 @@ export default function AdminIntegrations() {
                       color: apiKeys.recaptcha?.isCustom ? "#15803d" : "#475569",
                     }}
                   >
-                    Active Source: {apiKeys.recaptcha?.isCustom ? "Custom .env Key" : "Default Hardcoded Code"}
+                    Active API: {apiKeys.recaptcha?.isCustom ? "Using Custom API" : "Using Default API"}
                   </span>
                 </div>
 
@@ -2149,7 +2223,10 @@ export default function AdminIntegrations() {
                     <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
                   </svg>
                 </div>
-                <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Kalilangan Weather Forecast API</strong>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Kalilangan Weather Forecast API</strong>
+                  <ApiSourceBadge isCustom={Boolean(apiKeys.weather?.isCustom)} />
+                </div>
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -2244,7 +2321,7 @@ export default function AdminIntegrations() {
                       color: apiKeys.weather?.isCustom ? "#15803d" : "#475569",
                     }}
                   >
-                    Active Source: {apiKeys.weather?.isCustom ? "Custom .env Key" : "Default Hardcoded Code"}
+                    Active API: {apiKeys.weather?.isCustom ? "Using Custom API" : "Using Default API"}
                   </span>
                 </div>
 
@@ -2399,7 +2476,10 @@ export default function AdminIntegrations() {
                     style={{ width: "100%", height: "100%", objectFit: "contain" }}
                   />
                 </div>
-                <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>OneSignal Web Push Notifications</strong>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>OneSignal Web Push Notifications</strong>
+                  <ApiSourceBadge isCustom={Boolean(apiKeys.oneSignal?.isCustom)} />
+                </div>
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -2494,7 +2574,7 @@ export default function AdminIntegrations() {
                       color: apiKeys.oneSignal?.isCustom ? "#15803d" : "#475569",
                     }}
                   >
-                    Active Source: {apiKeys.oneSignal?.isCustom ? "Custom .env Key" : "Default Hardcoded Code"}
+                    Active API: {apiKeys.oneSignal?.isCustom ? "Using Custom API" : "Using Default API"}
                   </span>
                 </div>
 
@@ -2673,7 +2753,10 @@ export default function AdminIntegrations() {
                     style={{ width: "100%", height: "100%", objectFit: "contain" }}
                   />
                 </div>
-                <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Cloudinary Cloud Media Storage</strong>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Cloudinary Cloud Media Storage</strong>
+                  <ApiSourceBadge isCustom={Boolean(apiKeys.cloudinary?.isCustom)} />
+                </div>
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -2768,7 +2851,7 @@ export default function AdminIntegrations() {
                       color: apiKeys.cloudinary?.isCustom ? "#15803d" : "#475569",
                     }}
                   >
-                    Active Source: {apiKeys.cloudinary?.isCustom ? "Custom .env Key" : "Default Hardcoded Code"}
+                    Active API: {apiKeys.cloudinary?.isCustom ? "Using Custom API" : "Using Default API"}
                   </span>
                 </div>
 
@@ -2969,7 +3052,10 @@ export default function AdminIntegrations() {
                     style={{ width: "100%", height: "100%", objectFit: "contain" }}
                   />
                 </div>
-                <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Gmail SMTP Service (Password Reset & OTP)</strong>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Gmail SMTP Service (Password Reset &amp; OTP)</strong>
+                  <ApiSourceBadge isCustom={Boolean(apiKeys.email?.isCustom)} />
+                </div>
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -3064,7 +3150,7 @@ export default function AdminIntegrations() {
                       color: apiKeys.email?.isCustom ? "#15803d" : "#475569",
                     }}
                   >
-                    Active Source: {apiKeys.email?.isCustom ? "Custom .env Key" : "Default Hardcoded Code"}
+                    Active API: {apiKeys.email?.isCustom ? "Using Custom API" : "Using Default API"}
                   </span>
                 </div>
 
@@ -3265,7 +3351,10 @@ export default function AdminIntegrations() {
                     style={{ width: "100%", height: "100%", objectFit: "contain" }}
                   />
                 </div>
-                <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Google Calendar Integration</strong>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Google Calendar Integration</strong>
+                  <ApiSourceBadge isCustom={Boolean(apiKeys.calendar?.isCustom)} />
+                </div>
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -3360,7 +3449,7 @@ export default function AdminIntegrations() {
                       color: apiKeys.calendar?.isCustom ? "#15803d" : "#475569",
                     }}
                   >
-                    Active Source: {apiKeys.calendar?.isCustom ? "Custom .env Key" : "Default Hardcoded Code"}
+                    Active API: {apiKeys.calendar?.isCustom ? "Using Custom API" : "Using Default API"}
                   </span>
                 </div>
 
@@ -3739,9 +3828,26 @@ export default function AdminIntegrations() {
                           <div style={{ fontSize: "0.90rem", fontWeight: 800, color: "#0f172a", marginBottom: "4px" }}>
                             Waiting for Developer to Click Authorize in Email...
                           </div>
-                          <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b", lineHeight: 1.45 }}>
+                          <p style={{ margin: "0 0 12px", fontSize: "0.78rem", color: "#64748b", lineHeight: 1.45 }}>
                             The System Developer can approve this request with a single click from their phone or computer. This window will automatically unlock.
                           </p>
+                          <button
+                            type="button"
+                            onClick={handleManualCheckDevAuth}
+                            disabled={devAuthChecking}
+                            style={{
+                              padding: "6px 14px",
+                              borderRadius: "8px",
+                              border: "1px solid #cbd5e1",
+                              background: "#ffffff",
+                              color: "#0f172a",
+                              fontSize: "0.76rem",
+                              fontWeight: 700,
+                              cursor: devAuthChecking ? "not-allowed" : "pointer",
+                            }}
+                          >
+                            {devAuthChecking ? "Checking..." : "↻ Check Approval Status Now"}
+                          </button>
                         </div>
 
                         {/* Alternative Direct OTP Entry */}

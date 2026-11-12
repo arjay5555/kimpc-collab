@@ -1396,8 +1396,10 @@ router.post("/login", async (req, res) => {
     req,
   });
 
+  const rememberMe = Boolean(req.body.rememberMe);
   const responseData = account.toJSON ? account.toJSON() : (account.toObject ? account.toObject() : account);
-  responseData.token = generateUserToken(account);
+  responseData.token = generateUserToken(account, {}, { expiresIn: rememberMe ? "30d" : "8h" });
+  responseData.rememberMe = rememberMe;
   res.json(responseData);
 });
 

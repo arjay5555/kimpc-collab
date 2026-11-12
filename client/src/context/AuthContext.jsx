@@ -1,8 +1,30 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { api, getSignedInEmail, getSignedInRole, getSignedInName, getAuthToken, isAuthenticated, clearApiCache } from "../services/api";
 import { initOneSignal, logoutOneSignal } from "../services/oneSignal";
 
 const AuthContext = createContext(null);
+
+const AUTH_STORAGE_KEYS = [
+  "kimpc-member-auth",
+  "kimpc-member-email",
+  "kimpc-account-role",
+  "kimpc-account-name",
+  "kimpc-jwt-token",
+  "minders-member-auth",
+  "minders-member-email",
+  "minders-account-role",
+  "minders-account-name",
+  "minders-jwt-token",
+];
+
+function clearStoredAuthSession() {
+  clearApiCache();
+  for (const key of AUTH_STORAGE_KEYS) {
+    sessionStorage.removeItem(key);
+    localStorage.removeItem(key);
+  }
+  localStorage.removeItem("token");
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
@@ -19,6 +41,12 @@ export function AuthProvider({ children }) {
 
   const [loading, setLoading] = useState(true);
 
+  const logout = useCallback(() => {
+    clearStoredAuthSession();
+    logoutOneSignal();
+    setUser(null);
+  }, []);
+
   useEffect(() => {
     if (isAuthenticated()) {
       setUser({
@@ -28,10 +56,19 @@ export function AuthProvider({ children }) {
         token: getAuthToken(),
       });
     } else {
+      clearStoredAuthSession();
       setUser(null);
     }
     setLoading(false);
   }, []);
+
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      logout();
+    };
+    window.addEventListener("kimpc:auth-expired", handleAuthExpired);
+    return () => window.removeEventListener("kimpc:auth-expired", handleAuthExpired);
+  }, [logout]);
 
   useEffect(() => {
     if (user?.email) {
@@ -39,21 +76,40 @@ export function AuthProvider({ children }) {
     }
   }, [user?.email]);
 
-  const completeSignIn = (data) => {
+  const completeSignIn = (data, options = {}) => {
     const role = data.role || "member";
-    if (data.token) {
-      localStorage.setItem("token", data.token);
-      sessionStorage.setItem("kimpc-jwt-token", data.token);
-      sessionStorage.setItem("minders-jwt-token", data.token);
+    const rememberMe = Boolean(options.rememberMe ?? data.rememberMe);
+    const values = {
+      "kimpc-member-auth": "true",
+      "kimpc-member-email": data.email || "",
+      "kimpc-account-role": role,
+      "kimpc-account-name": data.fullName || "",
+      "minders-member-auth": "true",
+      "minders-member-email": data.email || "",
+      "minders-account-role": role,
+      "minders-account-name": data.fullName || "",
+      ...(data.token
+        ? {
+            "kimpc-jwt-token": data.token,
+            "minders-jwt-token": data.token,
+          }
+        : {}),
+    };
+
+    for (const [key, val] of Object.entries(values)) {
+      sessionStorage.setItem(key, val);
+      if (rememberMe) {
+        localStorage.setItem(key, val);
+      } else {
+        localStorage.removeItem(key);
+      }
     }
-    sessionStorage.setItem("kimpc-member-auth", "true");
-    sessionStorage.setItem("kimpc-member-email", data.email || "");
-    sessionStorage.setItem("kimpc-account-role", role);
-    sessionStorage.setItem("kimpc-account-name", data.fullName || "");
-    sessionStorage.setItem("minders-member-auth", "true");
-    sessionStorage.setItem("minders-member-email", data.email || "");
-    sessionStorage.setItem("minders-account-role", role);
-    sessionStorage.setItem("minders-account-name", data.fullName || "");
+
+    if (rememberMe && data.token) {
+      localStorage.setItem("token", data.token);
+    } else {
+      localStorage.removeItem("token");
+    }
 
     const newUser = {
       email: data.email || "",
@@ -71,6 +127,10 @@ export function AuthProvider({ children }) {
     if (fullName) {
       sessionStorage.setItem("kimpc-account-name", fullName);
       sessionStorage.setItem("minders-account-name", fullName);
+      if (localStorage.getItem("kimpc-member-auth") === "true") {
+        localStorage.setItem("kimpc-account-name", fullName);
+        localStorage.setItem("minders-account-name", fullName);
+      }
     }
     if (avatar !== undefined) {
       if (avatar) {
@@ -82,10 +142,10 @@ export function AuthProvider({ children }) {
     setUser((current) => (current ? { ...current, ...(fullName ? { fullName } : {}), ...(avatar !== undefined ? { avatar } : {}) } : current));
   };
 
-  const login = async (identifier, password, recaptchaToken = "") => {
+  const login = async (identifier, password, recaptchaToken = "", rememberMe = false) => {
     const res = await api("/login", {
       method: "POST",
-      body: { identifier, password, recaptchaToken },
+      body: { identifier, password, recaptchaToken, rememberMe: Boolean(rememberMe) },
     });
     return res;
   };
@@ -120,23 +180,6 @@ export function AuthProvider({ children }) {
       body: { email, tempPassword, newPassword, confirmPassword },
     });
     return res;
-  };
-
-  const logout = () => {
-    clearApiCache();
-    sessionStorage.removeItem("kimpc-member-auth");
-    sessionStorage.removeItem("kimpc-member-email");
-    sessionStorage.removeItem("kimpc-account-role");
-    sessionStorage.removeItem("kimpc-account-name");
-    sessionStorage.removeItem("kimpc-jwt-token");
-    sessionStorage.removeItem("minders-member-auth");
-    sessionStorage.removeItem("minders-member-email");
-    sessionStorage.removeItem("minders-account-role");
-    sessionStorage.removeItem("minders-account-name");
-    sessionStorage.removeItem("minders-jwt-token");
-    localStorage.removeItem("token");
-    logoutOneSignal();
-    setUser(null);
   };
 
   return (

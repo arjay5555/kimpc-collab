@@ -25,6 +25,57 @@ const {
   fail,
   isSameMachineryMatch,
 } = require("./routeHelpers");
+const {
+  round2,
+  computePaymentSummary,
+  syncApplicationFinancials,
+  applyCancellationFinancialEffects,
+  findLinkedRefundsForPayment,
+} = require("../utils/paymentSummary");
+
+function serializeApplication(appDoc) {
+  const obj = appDoc && typeof appDoc.toObject === "function" ? appDoc.toObject() : { ...(appDoc || {}) };
+  if (obj._id && !obj.id) obj.id = String(obj._id);
+  if (obj.id && !obj.displayId) obj.displayId = `APP-${String(obj.id).slice(-6).toUpperCase()}`;
+  if (!obj.submittedAt && obj.createdAt) {
+    obj.submittedAt = new Date(obj.createdAt).toISOString();
+  }
+  obj.financialSummary = computePaymentSummary(obj);
+  return obj;
+}
+
+function getRequestIdempotencyKey(req) {
+  return clean(req.body?.idempotencyKey || req.headers["idempotency-key"]);
+}
+
+function hasProcessedRequest(existing, idempotencyKey) {
+  if (!idempotencyKey) return false;
+  return Array.isArray(existing?.processedRequestIds) && existing.processedRequestIds.includes(idempotencyKey);
+}
+
+function recordProcessedRequest(existing, idempotencyKey) {
+  if (!idempotencyKey) return;
+  if (!Array.isArray(existing.processedRequestIds)) existing.processedRequestIds = [];
+  if (!existing.processedRequestIds.includes(idempotencyKey)) {
+    existing.processedRequestIds.push(idempotencyKey);
+    if (existing.processedRequestIds.length > 50) {
+      existing.processedRequestIds = existing.processedRequestIds.slice(-50);
+    }
+  }
+}
+
+function checkManagerUser(req, res) {
+  if (!req.user) {
+    fail(res, 401, "Authentication required.");
+    return false;
+  }
+  const role = clean(req.user.role).toLowerCase();
+  if (!["manager", "admin"].includes(role)) {
+    fail(res, 403, "Access denied. Manager or administrator privileges required.");
+    return false;
+  }
+  return true;
+}
 
 function optionalAuthentication(req, res, next) {
   if (!(req.headers.authorization || "").startsWith("Bearer ")) return next();
@@ -97,7 +148,7 @@ router.get("/applications", optionalAuthentication, async (req, res) => {
       });
     }
 
-    res.json(applications);
+    res.json(applications.map(serializeApplication));
   } catch (error) {
     console.error("Error fetching applications:", error);
     res.status(500).json({ error: "Failed to fetch applications." });
@@ -232,7 +283,7 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
       }
     }
 
-    const paymentStatus = paymentMethod === "GCash" && gcashProof ? "Paid" : clean(req.body.paymentStatus) || "Pending";
+    // Bookings always initialize with zero recorded payments until a manager saves payment received
     const receiptNo = `REC-${now.getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
     const initialTimeline = [
@@ -244,7 +295,7 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
           req.user?.role === "manager" || req.user?.role === "admin"
             ? clean(req.user.fullName) || "Manager"
             : "Member",
-        note: `Requested for ${hectares} ha (${startDate} to ${endDate}). Payment: ${paymentMethod}${paymentMethod === "Cash" ? ` (${cashPaymentOption})` : (gcashProof ? " [GCash Proof Uploaded]" : "")}`,
+        note: `Requested for ${hectares} ha (${startDate} to ${endDate}). Payment: ${paymentMethod}${paymentMethod === "Cash" ? ` (${cashPaymentOption})` : (gcashProof ? " [GCash Proof Uploaded - Pending Verification]" : "")}`,
       },
     ];
 
@@ -268,12 +319,14 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
       farmCoordinates,
       farmFormattedAddress,
       status: "Pending",
-      paymentStatus,
-      paymentAmount: paymentStatus === "Paid" ? totalAmount : 0,
+      paymentStatus: "Pending",
+      paymentAmount: 0,
       paymentMethod,
       cashPaymentOption,
       gcashProof,
       receiptNo,
+      paymentHistory: [],
+      refunds: [],
       isWalkIn: Boolean(req.body.isWalkIn),
       farmerPhone: memberPhone,
       memberPhone,
@@ -283,9 +336,10 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
         dailyRate: ratePerHectare,
         ratePerHectare,
         hectares,
-        totalPaid: paymentStatus === "Paid" ? totalAmount : 0,
+        totalPaid: 0,
+        refundAmount: 0,
         paymentMethod,
-        isSettled: paymentStatus === "Paid",
+        isSettled: false,
       },
     });
 
@@ -377,7 +431,7 @@ router.get("/applications/:id", optionalAuthentication, async (req, res) => {
         }
       }
     }
-    res.json(appObj);
+    res.json(serializeApplication(appObj));
   } catch (error) {
     console.error("Error fetching application:", error);
     res.status(500).json({ error: "Failed to fetch application." });
@@ -407,180 +461,190 @@ async function findApplicationByAnyId(rawIdInput) {
   return existing;
 }
 
+/**
+ * Shared validated & idempotent payment recording helper used by POST /payments and legacy PATCH /applications/:id.
+ */
+async function recordApplicationPayment(existing, req) {
+  if (!existing.financials) existing.financials = {};
+  if (!Array.isArray(existing.paymentHistory)) existing.paymentHistory = [];
+  if (!Array.isArray(existing.timeline)) existing.timeline = [];
+
+  const now = new Date();
+  const idempotencyKey = getRequestIdempotencyKey(req);
+  if (
+    hasProcessedRequest(existing, idempotencyKey) ||
+    (idempotencyKey && existing.paymentHistory.some((p) => clean(p.idempotencyKey) === idempotencyKey))
+  ) {
+    const existingSummary = computePaymentSummary(existing);
+    return { ok: true, deduplicated: true, summary: existingSummary, paymentEntry: null };
+  }
+
+  const preSummary = computePaymentSummary(existing);
+  const payableCap = round2(preSummary.maxPayableAmount ?? preSummary.balanceDue);
+  if (!preSummary.canRecordPayment || payableCap <= 0) {
+    return {
+      ok: false,
+      status: 400,
+      error: "This booking is already fully paid or has no remaining payable amount.",
+    };
+  }
+
+  const incomingRequestedStatus = clean(req.body?.paymentStatus);
+  const rawIncomingAmount =
+    req.body?.amount !== undefined && req.body?.amount !== ""
+      ? Number(req.body.amount)
+      : req.body?.installmentAmount !== undefined && req.body?.installmentAmount !== ""
+      ? Number(req.body.installmentAmount)
+      : req.body?.paymentAmount !== undefined && req.body?.paymentAmount !== ""
+      ? Number(req.body.paymentAmount)
+      : incomingRequestedStatus === "Paid" || incomingRequestedStatus === "Settled"
+      ? preSummary.balanceDue > 0
+        ? preSummary.balanceDue
+        : payableCap
+      : NaN;
+
+  if (!Number.isFinite(rawIncomingAmount) || rawIncomingAmount <= 0) {
+    return { ok: false, status: 400, error: "Payment amount must be greater than ₱0." };
+  }
+
+  const roundedRequested = round2(rawIncomingAmount);
+  if (roundedRequested - payableCap > 0.01) {
+    return {
+      ok: false,
+      status: 400,
+      error: `Payment amount (₱${roundedRequested.toLocaleString()}) exceeds remaining payable limit (₱${payableCap.toLocaleString()}).`,
+    };
+  }
+
+  const appliedAmount = Math.min(roundedRequested, payableCap);
+  const paymentMethod = clean(req.body?.paymentMethod) || existing.paymentMethod || "Cash";
+  const referenceNumber = clean(req.body?.referenceNumber || req.body?.paymentReference);
+  const dateTime = clean(req.body?.dateTime || req.body?.paymentDateTime || req.body?.paymentDate) || now.toISOString();
+  const receiverName = clean(req.user?.fullName || req.user?.email) || "Manager";
+  const seqSuffix = String(existing.paymentHistory.length + 1).padStart(2, "0");
+  const receiptNo =
+    clean(req.body?.receiptNo) ||
+    `OR-${now.getFullYear()}-${String(existing._id).slice(-4).toUpperCase()}-${seqSuffix}`;
+
+  const isCompleting = appliedAmount >= payableCap - 0.01;
+  const defaultType = preSummary.isCancelled && preSummary.cancellationFee > 0
+    ? "Cancellation Fee Payment"
+    : isCompleting
+    ? preSummary.activePaymentCount > 0
+      ? "Final Payment"
+      : "Full Rental Payment"
+    : preSummary.activePaymentCount === 0
+    ? "Down Payment"
+    : "Partial Rental Payment";
+  const paymentType = clean(req.body?.paymentType) || defaultType;
+  const proofOfPayment = clean(req.body?.proofOfPayment);
+  const notes = clean(req.body?.notes);
+
+  existing.paymentHistory.push({
+    receiptNo,
+    amount: appliedAmount,
+    paymentMethod,
+    paymentType,
+    referenceNumber,
+    dateTime,
+    receivedBy: receiverName,
+    proofOfPayment,
+    notes,
+    idempotencyKey,
+    recordedAt: now,
+  });
+
+  if (proofOfPayment && !existing.gcashProof) {
+    existing.gcashProof = proofOfPayment;
+  }
+
+  recordProcessedRequest(existing, idempotencyKey);
+  const postSummary = syncApplicationFinancials(existing);
+  const effectiveTarget = postSummary.isClosedBooking
+    ? Math.max(postSummary.rentalCharge, postSummary.cancellationFee)
+    : postSummary.rentalCharge;
+
+  existing.timeline.push({
+    event: postSummary.balanceDue <= 0 ? "payment_settled" : "payment_partial",
+    title: postSummary.balanceDue <= 0 ? "Payment Settled" : `${paymentType} Recorded`,
+    timestamp: now,
+    actor: receiverName,
+    note: `${paymentType} of ₱${appliedAmount.toLocaleString()} (${paymentMethod}). Total Paid: ₱${postSummary.grossPaid.toLocaleString()} / ₱${effectiveTarget.toLocaleString()} · Balance Due: ₱${postSummary.balanceDue.toLocaleString()}. OR No: ${receiptNo}${referenceNumber ? ` · Ref: ${referenceNumber}` : ""}.`,
+  });
+
+  await existing.save();
+
+  const createdEntry = existing.paymentHistory[existing.paymentHistory.length - 1];
+
+  await logAudit({
+    action: "PAYMENT_RECORDED",
+    actorEmail: cleanEmail(req.user?.email || "manager"),
+    actorRole: clean(req.user?.role || "manager"),
+    actorId: req.user?._id,
+    targetEmail: existing.memberEmail,
+    targetName: existing.memberName,
+    targetRole: "member",
+    details: {
+      applicationId: existing.id,
+      receiptNo,
+      amount: appliedAmount,
+      paymentMethod,
+      paymentType,
+      referenceNumber,
+      grossPaid: postSummary.grossPaid,
+      balanceDue: postSummary.balanceDue,
+      paymentStatus: postSummary.paymentStatus,
+    },
+    req,
+  });
+
+  try {
+    await Notification.create({
+      memberEmail: existing.memberEmail,
+      title:
+        postSummary.balanceDue <= 0
+          ? "Payment Confirmed & Receipt Ready"
+          : `${paymentType} Recorded`,
+      message:
+        postSummary.balanceDue <= 0
+          ? `Your payment of ₱${appliedAmount.toLocaleString()} for ${existing.equipment} has been verified and settled (Total Paid: ₱${postSummary.grossPaid.toLocaleString()}). OR #${receiptNo}.`
+          : `${paymentType} of ₱${appliedAmount.toLocaleString()} for ${existing.equipment} has been recorded (Total Paid: ₱${postSummary.grossPaid.toLocaleString()} of ₱${effectiveTarget.toLocaleString()}; Remaining balance: ₱${postSummary.balanceDue.toLocaleString()}). OR #${receiptNo}.`,
+      type: "booking",
+      relatedApplicationId: existing._id,
+    });
+  } catch (notifErr) {
+    console.warn("Could not notify member of payment settlement:", notifErr.message);
+  }
+
+  return { ok: true, deduplicated: false, summary: postSummary, paymentEntry: createdEntry };
+}
+
 const handleApplicationUpdate = async (req, res) => {
   try {
+    if (!req.user) {
+      return fail(res, 401, "Authentication required.");
+    }
     const existing = await findApplicationByAnyId(req.params.id);
     if (!existing) return fail(res, 404, "Application not found.");
 
-    const actorEmail = cleanEmail(req.body.actorEmail || req.headers["x-actor-email"] || existing.memberEmail);
-    const actorRole = clean(req.body.actorRole || req.headers["x-actor-role"] || "member");
+    const actorEmail = cleanEmail(req.user.email);
+    const actorRole = clean(req.user.role).toLowerCase();
+    const isManagerOrAdmin = ["manager", "admin"].includes(actorRole);
 
-    // Check if manager is updating payment status
+    // Check if manager is updating payment status (requires manager/admin credentials)
     if (req.body.paymentStatus && !req.body.status && !req.body.startDate) {
-      if (!existing.financials) existing.financials = {};
-      const totalBookingFee = Number(existing.totalAmount || existing.financials.totalPaid || 0) || 0;
-      const prevStatus = clean(existing.paymentStatus || "Pending");
-      const existingHistory = Array.isArray(existing.paymentHistory) ? existing.paymentHistory : [];
-      const activeHistory = existingHistory.filter((entry) => !entry.isVoided);
-
-      let previousPaid = 0;
-      if (activeHistory.length > 0) {
-        previousPaid = activeHistory.reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
-      } else if (existingHistory.length === 0 && (prevStatus === "Paid" || prevStatus === "Settled" || existing.financials.isSettled)) {
-        previousPaid = Number(existing.financials.totalPaid || existing.paymentAmount || totalBookingFee) || 0;
-      } else if (existingHistory.length === 0 && prevStatus === "Partial") {
-        previousPaid = Number(existing.financials.totalPaid || existing.paymentAmount || 0) || 0;
-      } else {
-        // Pending bookings initialize paymentAmount with totalAmount on creation before any cash is collected
-        previousPaid = 0;
+      if (!checkManagerUser(req, res)) return;
+      const result = await recordApplicationPayment(existing, req);
+      if (!result.ok) {
+        return fail(res, result.status || 400, result.error);
       }
-
-      const incomingMethod = clean(req.body.paymentMethod);
-      if (incomingMethod) {
-        existing.paymentMethod = incomingMethod;
-        existing.financials.paymentMethod = incomingMethod;
-      }
-
-      const incomingDateTime = clean(req.body.paymentDateTime || req.body.paymentDate);
-      if (incomingDateTime) {
-        existing.paymentDateTime = incomingDateTime;
-      }
-
-      if (existing.paymentMethod === "GCash") {
-        const incomingRef = clean(req.body.paymentReference || req.body.referenceNumber);
-        if (incomingRef) existing.paymentReference = incomingRef;
-      } else if (req.body.paymentMethod) {
-        existing.paymentReference = "";
-      }
-
-      const receiverName =
-        clean(req.user?.fullName || req.user?.email) ||
-        clean(req.body.receivedBy || req.body.recordedBy);
-      if (receiverName) {
-        existing.receivedBy = receiverName;
-      }
-
-      const incomingReceiptNo = clean(req.body.receiptNo);
-      if (incomingReceiptNo) {
-        existing.receiptNo = incomingReceiptNo;
-      } else if (!existing.receiptNo) {
-        existing.receiptNo = `OR-${new Date().getFullYear()}-${String(existing._id).slice(-4).toUpperCase()}`;
-      }
-
-      const incomingInstallment = Number(req.body.installmentAmount);
-      const isInstallmentMode =
-        req.body.paymentMode === "installment" ||
-        (Number.isFinite(incomingInstallment) && incomingInstallment > 0);
-
-      let cumulativePaid = previousPaid;
-      let appliedPaymentAmount = 0;
-
-      if (isInstallmentMode) {
-        const stepAmount =
-          Number.isFinite(incomingInstallment) && incomingInstallment > 0
-            ? incomingInstallment
-            : Number(req.body.paymentAmount ?? 0) || 0;
-        const maxRemaining = totalBookingFee > 0 ? Math.max(0, totalBookingFee - previousPaid) : stepAmount;
-        appliedPaymentAmount = totalBookingFee > 0 ? Math.min(stepAmount, maxRemaining || stepAmount) : stepAmount;
-        cumulativePaid = previousPaid + appliedPaymentAmount;
-
-        if (appliedPaymentAmount > 0) {
-          existing.paymentHistory = [
-            ...existingHistory,
-            {
-              receiptNo: existing.receiptNo,
-              amount: appliedPaymentAmount,
-              paymentMethod: existing.paymentMethod || "Cash",
-              referenceNumber: existing.paymentReference || "",
-              dateTime: existing.paymentDateTime || new Date().toISOString(),
-              receivedBy: receiverName || "Manager",
-              recordedAt: new Date(),
-            },
-          ];
-        }
-      } else {
-        const requestedStatus = clean(req.body.paymentStatus);
-        const explicitTotal = Number(req.body.paymentAmount ?? req.body.financials?.totalPaid);
-        if (requestedStatus === "Paid" || requestedStatus === "Settled") {
-          cumulativePaid =
-            totalBookingFee > 0
-              ? totalBookingFee
-              : Number.isFinite(explicitTotal) && explicitTotal > 0
-              ? explicitTotal
-              : previousPaid;
-          appliedPaymentAmount = Math.max(0, cumulativePaid - previousPaid);
-          if (appliedPaymentAmount > 0) {
-            existing.paymentHistory = [
-              ...existingHistory,
-              {
-                receiptNo: existing.receiptNo,
-                amount: appliedPaymentAmount,
-                paymentMethod: existing.paymentMethod || "Cash",
-                referenceNumber: existing.paymentReference || "",
-                dateTime: existing.paymentDateTime || new Date().toISOString(),
-                receivedBy: receiverName || "Manager",
-                recordedAt: new Date(),
-              },
-            ];
-          }
-        } else if (Number.isFinite(explicitTotal) && explicitTotal > 0) {
-          cumulativePaid = totalBookingFee > 0 ? Math.min(explicitTotal, totalBookingFee) : explicitTotal;
-          appliedPaymentAmount = Math.max(0, cumulativePaid - previousPaid);
-        }
-      }
-
-      const effectiveTotal = totalBookingFee > 0 ? totalBookingFee : cumulativePaid;
-      const remainingBalance = Math.max(0, effectiveTotal - cumulativePaid);
-      const isNowSettled = cumulativePaid > 0 && remainingBalance <= 0;
-      const requestedStatus = clean(req.body.paymentStatus);
-
-      if (requestedStatus === "Refunded") {
-        existing.paymentStatus = "Refunded";
-      } else if (isNowSettled || (requestedStatus === "Paid" && !isInstallmentMode)) {
-        existing.paymentStatus = "Paid";
-      } else if (cumulativePaid > 0) {
-        existing.paymentStatus = "Partial";
-      } else {
-        existing.paymentStatus = requestedStatus || "Pending";
-      }
-
-      existing.financials.isSettled = existing.paymentStatus === "Paid";
-      existing.paymentAmount = cumulativePaid;
-      existing.financials.totalPaid = cumulativePaid;
-
-      if (!existing.timeline) existing.timeline = [];
-      existing.timeline.push({
-        event: existing.paymentStatus === "Partial" ? "payment_partial" : "payment_settled",
-        title: existing.paymentStatus === "Partial" ? "Partial Payment Recorded" : "Payment Settled",
-        timestamp: new Date(),
-        actor: receiverName || (["manager", "admin"].includes(actorRole) ? "Manager" : "System"),
-        note:
-          existing.paymentStatus === "Partial"
-            ? `Partial payment of ₱${appliedPaymentAmount.toLocaleString()} recorded (${existing.paymentMethod || "Cash"}). Paid: ₱${cumulativePaid.toLocaleString()} / ₱${effectiveTotal.toLocaleString()} · Balance: ₱${remainingBalance.toLocaleString()}. OR No: ${existing.receiptNo || "N/A"}${existing.paymentReference ? ` • Ref: ${existing.paymentReference}` : ""}.`
-            : `Payment settled (${existing.paymentMethod || "Cash"}). Total Paid: ₱${cumulativePaid.toLocaleString()}. OR No: ${existing.receiptNo || "N/A"}${existing.paymentReference ? ` • Ref: ${existing.paymentReference}` : ""}.`,
+      return res.json({
+        ok: true,
+        deduplicated: Boolean(result.deduplicated),
+        message: result.deduplicated ? "Duplicate payment request ignored." : "Payment status updated.",
+        paymentEntry: result.paymentEntry,
+        application: existing,
       });
-      await existing.save();
-
-      // Notify member in-app
-      try {
-        await Notification.create({
-          memberEmail: existing.memberEmail,
-          title:
-            existing.paymentStatus === "Partial"
-              ? "Partial Payment Recorded"
-              : "Payment Confirmed & Receipt Ready",
-          message:
-            existing.paymentStatus === "Partial"
-              ? `Partial payment of ₱${appliedPaymentAmount.toLocaleString()} for ${existing.equipment} has been recorded (${cumulativePaid.toLocaleString()} paid of ₱${effectiveTotal.toLocaleString()}; Remaining balance: ₱${remainingBalance.toLocaleString()}). OR #${existing.receiptNo}.`
-              : `Your payment of ₱${Number(existing.paymentAmount || existing.totalAmount || 0).toLocaleString()} for ${existing.equipment} has been verified and settled. OR #${existing.receiptNo} is now ready for download.`,
-          type: "booking",
-          relatedApplicationId: existing._id,
-        });
-      } catch (notifErr) {
-        console.warn("Could not notify member of payment settlement:", notifErr.message);
-      }
-
-      return res.json({ ok: true, message: "Payment status updated.", application: existing });
     }
 
     // Check if member is editing booking details (farm location, equipment, startDate, endDate, bookingType)
@@ -592,6 +656,9 @@ const handleApplicationUpdate = async (req, res) => {
       req.body.bookingType
     );
     if (isEditingDetails && !req.body.status) {
+      if (!isManagerOrAdmin && actorEmail !== cleanEmail(existing.memberEmail)) {
+        return fail(res, 403, "You can only edit your own booking requests.");
+      }
       if (existing.status !== "Pending") {
         return fail(
           res,
@@ -688,9 +755,7 @@ const handleApplicationUpdate = async (req, res) => {
         if (!existing.financials) existing.financials = {};
         existing.financials.hectares = existing.hectares;
         existing.financials.ratePerHectare = rate;
-        if (existing.paymentStatus === "Paid" || existing.paymentStatus === "Settled") {
-          existing.financials.totalPaid = existing.totalAmount;
-        }
+        syncApplicationFinancials(existing);
       }
       await existing.save();
 
@@ -733,7 +798,16 @@ const handleApplicationUpdate = async (req, res) => {
     const newStatus = clean(req.body.status);
     if (!newStatus || !STATUSES.includes(newStatus)) return fail(res, 400, "Invalid status.");
 
-    const isManagerOrAdmin = ["manager", "admin"].includes(actorRole) || Boolean(req.body.isVoid || req.body.voidedByManager);
+    const isVoidRequested = Boolean(req.body.isVoid || req.body.voidedByManager);
+
+    if (!isManagerOrAdmin) {
+      if (actorEmail !== cleanEmail(existing.memberEmail)) {
+        return fail(res, 403, "You can only update your own booking requests.");
+      }
+      if (newStatus !== "Cancelled" || isVoidRequested) {
+        return fail(res, 403, "Only cooperative managers or administrators can perform this booking status change.");
+      }
+    }
 
     // Cancellation prior to manager approval check (members can only cancel pending requests; managers/admins can void anytime)
     if (newStatus === "Cancelled" && !isManagerOrAdmin && existing.status !== "Pending") {
@@ -806,19 +880,33 @@ const handleApplicationUpdate = async (req, res) => {
         actor: actorRole === "admin" ? "Admin" : "Manager",
         note: existing.managerRemarks || "Booking declined by management.",
       });
+      applyCancellationFinancialEffects(existing, {
+        isVoid: false,
+        reason: existing.managerRemarks || "Booking declined by management.",
+        actorName: clean(req.user?.fullName || actorEmail) || (actorRole === "admin" ? "Admin" : "Manager"),
+        nowTs,
+      });
     } else if (newStatus === "Cancelled") {
       existing.cancellationRequested = false;
       existing.cancelledAt = nowTs;
-      const isVoid = isManagerOrAdmin && previousStatus !== "Pending";
-      const reason = clean(req.body.reason || req.body.cancellationReason || existing.cancellationReason) || (isVoid ? "Voided by manager" : "Cancelled by member");
+      const isVoid = isManagerOrAdmin && (isVoidRequested || previousStatus !== "Pending");
+      const reason =
+        clean(req.body.voidReason || req.body.reason || req.body.cancellationReason || existing.cancellationReason) ||
+        (isVoid ? "Voided by manager" : "Cancelled by member");
       existing.cancellationReason = reason;
       if (!existing.timeline) existing.timeline = [];
       existing.timeline.push({
         event: isVoid ? "voided" : "cancelled",
         title: isVoid ? "Booking Voided by Manager" : "Booking Cancelled",
         timestamp: nowTs,
-        actor: isManagerOrAdmin ? "Manager" : "Member",
+        actor: isManagerOrAdmin ? clean(req.user?.fullName || actorEmail) || "Manager" : "Member",
         note: `Reason: ${reason}`,
+      });
+      applyCancellationFinancialEffects(existing, {
+        isVoid,
+        reason,
+        actorName: clean(req.user?.fullName || actorEmail) || (isManagerOrAdmin ? "Manager" : "Member"),
+        nowTs,
       });
     }
     await existing.save();
@@ -836,7 +924,7 @@ const handleApplicationUpdate = async (req, res) => {
     }
 
     // Use specific action constants for each status transition
-    const isVoid = isManagerOrAdmin && newStatus === "Cancelled" && previousStatus !== "Pending";
+    const isVoid = isManagerOrAdmin && newStatus === "Cancelled" && (isVoidRequested || previousStatus !== "Pending");
     const actionMap = {
       Approved: "BOOKING_APPROVED",
       Rejected: "BOOKING_REJECTED",
@@ -894,8 +982,8 @@ const handleApplicationUpdate = async (req, res) => {
   }
 };
 
-router.patch("/applications/:id", optionalAuthentication, handleApplicationUpdate);
-router.put("/applications/:id", optionalAuthentication, handleApplicationUpdate);
+router.patch("/applications/:id", authenticate, handleApplicationUpdate);
+router.put("/applications/:id", authenticate, handleApplicationUpdate);
 
 // Cancel or request cancellation
 router.delete("/applications/:id", authenticate, async (req, res) => {
@@ -926,6 +1014,12 @@ router.delete("/applications/:id", authenticate, async (req, res) => {
         timestamp: nowTs,
         actor: "Member",
         note: `Reason: ${reason}`,
+      });
+      applyCancellationFinancialEffects(existing, {
+        isVoid: false,
+        reason,
+        actorName: clean(req.user?.fullName || actorEmail) || "Member",
+        nowTs,
       });
       await existing.save();
 
@@ -1040,6 +1134,12 @@ router.post("/applications/:id/request-cancellation", authenticate, async (req, 
         actor: "Member",
         note: `Reason: ${reason}`,
       });
+      applyCancellationFinancialEffects(existing, {
+        isVoid: false,
+        reason,
+        actorName: clean(req.user?.fullName || actorEmail) || "Member",
+        nowTs,
+      });
       await existing.save();
       return res.json({ ok: true, direct: true, message: "Booking request cancelled successfully.", application: existing });
     }
@@ -1107,8 +1207,14 @@ router.post("/applications/:id/grant-cancellation", authManager, async (req, res
       event: "cancellation_granted",
       title: "Cancellation Granted by Manager",
       timestamp: nowTs,
-      actor: "Manager",
+      actor: clean(req.user?.fullName || req.user?.email) || "Manager",
       note: existing.cancellationReason ? `Cancellation granted. Reason: ${existing.cancellationReason}` : "Cancellation granted by manager.",
+    });
+    applyCancellationFinancialEffects(existing, {
+      isVoid: false,
+      reason: existing.cancellationReason || "Cancellation granted by manager",
+      actorName: clean(req.user?.fullName || req.user?.email) || "Manager",
+      nowTs,
     });
     await existing.save();
 
@@ -1278,6 +1384,32 @@ router.patch("/applications/:id/inspection", authManager, async (req, res) => {
   }
 });
 
+// Record an actual payment received for a booking (supports multiple installments, down payments, final payments)
+router.post("/applications/:id/payments", authManager, async (req, res) => {
+  try {
+    const existing = await findApplicationByAnyId(req.params.id);
+    if (!existing) return fail(res, 404, "Booking record not found.");
+
+    const result = await recordApplicationPayment(existing, req);
+    if (!result.ok) {
+      return fail(res, result.status || 400, result.error);
+    }
+
+    return res.status(result.deduplicated ? 200 : 201).json({
+      ok: true,
+      deduplicated: Boolean(result.deduplicated),
+      message: result.deduplicated
+        ? "Duplicate payment request ignored."
+        : `Recorded payment of ₱${Number(result.paymentEntry?.amount || 0).toLocaleString()}.`,
+      paymentEntry: result.paymentEntry,
+      application: existing,
+    });
+  } catch (error) {
+    console.error("Error recording booking payment:", error);
+    return res.status(500).json({ error: "Failed to record payment transaction." });
+  }
+});
+
 // Void an incorrect payment transaction in paymentHistory and recalculate balances
 router.post("/applications/:id/void-payment", authManager, async (req, res) => {
   try {
@@ -1285,11 +1417,27 @@ router.post("/applications/:id/void-payment", authManager, async (req, res) => {
     if (!existing) return fail(res, 404, "Booking record not found.");
     if (!existing.financials) existing.financials = {};
     if (!Array.isArray(existing.paymentHistory)) existing.paymentHistory = [];
+    if (!Array.isArray(existing.refunds)) existing.refunds = [];
+    if (!Array.isArray(existing.timeline)) existing.timeline = [];
 
-    const voidedBy = clean(req.user?.fullName || req.user?.email || req.body.voidedBy) || "Manager";
-    const reason = clean(req.body.reason) || "Wrong payment transaction voided";
+    const idempotencyKey = getRequestIdempotencyKey(req);
+    if (hasProcessedRequest(existing, idempotencyKey)) {
+      return res.json({
+        ok: true,
+        deduplicated: true,
+        message: "Duplicate void request ignored.",
+        application: existing,
+      });
+    }
+
+    const reason = clean(req.body.reason);
+    if (!reason) {
+      return fail(res, 400, "A reason is required to void a payment transaction.");
+    }
+
+    const voidedBy = clean(req.user?.fullName || req.user?.email) || "Manager";
     const now = new Date();
-    const totalBookingFee = Number(existing.totalAmount || existing.financials.totalPaid || 0) || 0;
+    const preSummary = computePaymentSummary(existing);
 
     let target = null;
     if (req.body.entryId) {
@@ -1304,29 +1452,47 @@ router.post("/applications/:id/void-payment", authManager, async (req, res) => {
 
     let voidedAmount = 0;
     let voidedReceiptNo = "";
+    let linkedRefunds = [];
+    const refundReviewed = Boolean(req.body.refundReviewed);
+    const refundReviewNote = clean(req.body.refundReviewNote);
 
     if (target) {
       if (target.isVoided) {
         return fail(res, 400, "This payment transaction has already been voided.");
       }
+
+      linkedRefunds = findLinkedRefundsForPayment(existing, target);
+      if (linkedRefunds.length > 0 && !refundReviewed) {
+        return res.status(409).json({
+          error: `This payment (${target.receiptNo || "entry"}) has ${linkedRefunds.length} linked refund record(s). Manager review is required before voiding.`,
+          code: "LINKED_REFUND_REVIEW_REQUIRED",
+          linkedRefunds,
+        });
+      }
+      if (linkedRefunds.length > 0 && !refundReviewNote) {
+        return fail(res, 400, "Please provide a refund review note confirming how linked refunds were reviewed.");
+      }
+
       voidedAmount = Number(target.amount) || 0;
       voidedReceiptNo = clean(target.receiptNo) || existing.receiptNo || "";
       target.isVoided = true;
       target.voidedAt = now;
       target.voidedBy = voidedBy;
       target.voidReason = reason;
+      if (linkedRefunds.length > 0) {
+        target.linkedRefundReviewNote = refundReviewNote;
+      }
+      if (target.flaggedForReview) {
+        target.reviewStatus = "voided";
+        target.reviewedBy = voidedBy;
+        target.reviewedAt = now;
+        target.reviewNote = reason;
+      }
     } else if (
       existing.paymentHistory.length === 0 &&
-      (req.body.legacyFallback ||
-        ["Paid", "Settled", "Partial"].includes(clean(existing.paymentStatus)) ||
-        existing.financials.isSettled)
+      (req.body.legacyFallback || preSummary.grossPaid > 0)
     ) {
-      const prevPaid = Number(
-        existing.financials.totalPaid ||
-          existing.paymentAmount ||
-          (existing.financials.isSettled ? totalBookingFee : 0) ||
-          0
-      );
+      const prevPaid = preSummary.grossPaid;
       if (prevPaid <= 0) {
         return fail(res, 404, "No recorded payment amount found to void.");
       }
@@ -1346,50 +1512,35 @@ router.post("/applications/:id/void-payment", authManager, async (req, res) => {
         voidedAt: now,
         voidedBy,
         voidReason: reason,
+        reviewStatus: "voided",
       });
     } else {
       return fail(res, 404, "Payment history transaction was not found.");
     }
 
-    const activeEntries = existing.paymentHistory.filter((entry) => !entry.isVoided);
-    const cumulativePaid = activeEntries.reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
-    const remainingBalance = totalBookingFee > 0 ? Math.max(0, totalBookingFee - cumulativePaid) : 0;
-    const isNowSettled = cumulativePaid > 0 && remainingBalance <= 0;
-
-    existing.paymentStatus = isNowSettled ? "Paid" : cumulativePaid > 0 ? "Partial" : "Pending";
-    existing.paymentAmount = cumulativePaid;
-    existing.financials.totalPaid = cumulativePaid;
-    existing.financials.isSettled = isNowSettled;
-
-    const latestActive = activeEntries.length > 0 ? activeEntries[activeEntries.length - 1] : null;
-    if (latestActive) {
-      existing.receiptNo = latestActive.receiptNo || existing.receiptNo;
-      existing.paymentMethod = latestActive.paymentMethod || existing.paymentMethod;
-      existing.financials.paymentMethod = existing.paymentMethod;
-      existing.paymentReference = latestActive.referenceNumber || "";
-      existing.paymentDateTime = latestActive.dateTime || "";
-      existing.receivedBy = latestActive.receivedBy || existing.receivedBy;
-    } else {
-      existing.paymentReference = "";
-      existing.paymentDateTime = "";
-      existing.receivedBy = "";
+    // Re-evaluate refundDetermination if voiding cleared all collected funds on a closed booking
+    const intermediateSummary = computePaymentSummary(existing);
+    if (intermediateSummary.isClosedBooking && intermediateSummary.grossPaid === 0 && intermediateSummary.totalRefunded === 0) {
+      existing.refundDetermination = "not_applicable";
     }
 
-    if (!existing.timeline) existing.timeline = [];
+    recordProcessedRequest(existing, idempotencyKey);
+    const postSummary = syncApplicationFinancials(existing);
+
     existing.timeline.push({
       event: "payment_voided",
       title: "Payment Transaction Voided",
       timestamp: now,
       actor: voidedBy,
-      note: `Voided ₱${voidedAmount.toLocaleString()} (${voidedReceiptNo || "OR"}). Total Paid: ₱${cumulativePaid.toLocaleString()} / ₱${totalBookingFee.toLocaleString()} · Balance Due: ₱${remainingBalance.toLocaleString()}.`,
+      note: `Voided ₱${voidedAmount.toLocaleString()} (${voidedReceiptNo || "OR"}). Reason: ${reason}${refundReviewNote ? ` · Linked Refund Review: ${refundReviewNote}` : ""}. Total Paid: ₱${postSummary.grossPaid.toLocaleString()} · Balance Due: ₱${postSummary.balanceDue.toLocaleString()}.`,
     });
 
     await existing.save();
 
     await logAudit({
       action: "PAYMENT_VOIDED",
-      actorEmail: req.user?.email || "manager",
-      actorRole: req.user?.role || "manager",
+      actorEmail: cleanEmail(req.user?.email || "manager"),
+      actorRole: clean(req.user?.role || "manager"),
       actorId: req.user?._id,
       targetEmail: existing.memberEmail,
       targetName: existing.memberName,
@@ -1397,10 +1548,12 @@ router.post("/applications/:id/void-payment", authManager, async (req, res) => {
         applicationId: existing.id,
         voidedAmount,
         voidedReceiptNo,
-        remainingPaid: cumulativePaid,
-        remainingBalance,
-        paymentStatus: existing.paymentStatus,
+        remainingPaid: postSummary.grossPaid,
+        remainingBalance: postSummary.balanceDue,
+        paymentStatus: postSummary.paymentStatus,
         reason,
+        linkedRefundCount: linkedRefunds.length,
+        refundReviewNote: refundReviewNote || undefined,
       },
       req,
     });
@@ -1409,7 +1562,7 @@ router.post("/applications/:id/void-payment", authManager, async (req, res) => {
       await Notification.create({
         memberEmail: existing.memberEmail,
         title: "Payment Transaction Voided",
-        message: `A payment entry of ₱${voidedAmount.toLocaleString()} (${voidedReceiptNo || "OR"}) for ${existing.equipment} was voided by ${voidedBy}. Remaining balance: ₱${remainingBalance.toLocaleString()}.`,
+        message: `A payment entry of ₱${voidedAmount.toLocaleString()} (${voidedReceiptNo || "OR"}) for ${existing.equipment} was voided by ${voidedBy} (${reason}). Remaining balance: ₱${postSummary.balanceDue.toLocaleString()}.`,
         type: "booking",
         relatedApplicationId: existing._id,
       });
@@ -1425,6 +1578,464 @@ router.post("/applications/:id/void-payment", authManager, async (req, res) => {
   } catch (error) {
     console.error("Error voiding payment transaction:", error);
     return res.status(500).json({ error: "Failed to void payment transaction." });
+  }
+});
+
+// KIMPC Refund Determination for cancelled or voided bookings with collected funds
+router.post("/applications/:id/refund-determination", authManager, async (req, res) => {
+  try {
+    const existing = await findApplicationByAnyId(req.params.id);
+    if (!existing) return fail(res, 404, "Booking record not found.");
+    if (!Array.isArray(existing.timeline)) existing.timeline = [];
+
+    const idempotencyKey = getRequestIdempotencyKey(req);
+    if (hasProcessedRequest(existing, idempotencyKey)) {
+      return res.json({
+        ok: true,
+        deduplicated: true,
+        message: "Duplicate refund determination ignored.",
+        application: existing,
+      });
+    }
+
+    const summary = computePaymentSummary(existing);
+    if (!summary.isClosedBooking) {
+      return fail(res, 400, "Refund determination only applies to cancelled, rejected, or voided bookings.");
+    }
+
+    const decision = clean(req.body.decision);
+    if (!["refund_due", "no_refund"].includes(decision)) {
+      return fail(res, 400, 'Invalid decision. Choose "refund_due" or "no_refund".');
+    }
+
+    if (req.body.cancellationFee !== undefined && req.body.cancellationFee !== "") {
+      const fee = Number(req.body.cancellationFee);
+      if (!Number.isFinite(fee) || fee < 0) {
+        return fail(res, 400, "Cancellation fee must be a valid non-negative amount.");
+      }
+      if (summary.grossPaid > 0 && round2(fee) > summary.grossPaid && decision === "refund_due") {
+        return fail(res, 400, "Cancellation fee cannot exceed collected amount when marking refund due.");
+      }
+      existing.cancellationFee = round2(fee);
+    }
+
+    const updatedPreRefund = computePaymentSummary(existing);
+    if (decision === "refund_due" && updatedPreRefund.grossPaid <= 0) {
+      return fail(res, 400, "Cannot mark refund due on a booking with zero collected payments.");
+    }
+    if (decision === "refund_due" && updatedPreRefund.refundableCap <= 0) {
+      return fail(res, 400, "Refundable amount is ₱0 after cancellation fee deduction.");
+    }
+
+    const managerName = clean(req.user?.fullName || req.user?.email) || "Manager";
+    const note = clean(req.body.note || req.body.reason);
+    const now = new Date();
+
+    existing.refundDetermination = decision;
+    existing.refundDecisionNote = note;
+    existing.refundDecidedBy = managerName;
+    existing.refundDecidedAt = now;
+
+    recordProcessedRequest(existing, idempotencyKey);
+    const postSummary = syncApplicationFinancials(existing);
+
+    existing.timeline.push({
+      event: "refund_determined",
+      title: decision === "refund_due" ? "KIMPC Determined Refund Due" : "KIMPC Determined No Refund Due",
+      timestamp: now,
+      actor: managerName,
+      note: `${decision === "refund_due" ? `Refund Pending: ₱${postSummary.refundDueRemaining.toLocaleString()}` : "No refund due for this cancellation"}${existing.cancellationFee > 0 ? ` · Cancellation Fee: ₱${existing.cancellationFee.toLocaleString()}` : ""}${note ? ` · ${note}` : ""}.`,
+    });
+
+    await existing.save();
+
+    await logAudit({
+      action: "REFUND_DETERMINATION_UPDATED",
+      actorEmail: cleanEmail(req.user?.email || "manager"),
+      actorRole: clean(req.user?.role || "manager"),
+      actorId: req.user?._id,
+      targetEmail: existing.memberEmail,
+      targetName: existing.memberName,
+      details: {
+        applicationId: existing.id,
+        decision,
+        cancellationFee: existing.cancellationFee,
+        refundDueRemaining: postSummary.refundDueRemaining,
+        paymentStatus: postSummary.paymentStatus,
+        note,
+      },
+      req,
+    });
+
+    try {
+      await Notification.create({
+        memberEmail: existing.memberEmail,
+        title: decision === "refund_due" ? "Refund Approved / Pending Processing" : "Cancellation Financial Review Completed",
+        message:
+          decision === "refund_due"
+            ? `KIMPC has approved a refund of ₱${postSummary.refundDueRemaining.toLocaleString()} for your cancelled booking (${existing.equipment}).`
+            : `KIMPC reviewed your cancelled booking (${existing.equipment}) and recorded: No Refund Due${note ? ` (${note})` : ""}.`,
+        type: "booking",
+        relatedApplicationId: existing._id,
+      });
+    } catch (notifErr) {
+      console.warn("Could not notify member of refund determination:", notifErr.message);
+    }
+
+    return res.json({
+      ok: true,
+      message:
+        decision === "refund_due"
+          ? `Booking marked Refund Pending (₱${postSummary.refundDueRemaining.toLocaleString()} due).`
+          : "Recorded decision: No Refund Due.",
+      application: existing,
+    });
+  } catch (error) {
+    console.error("Error updating refund determination:", error);
+    return res.status(500).json({ error: "Failed to update refund determination." });
+  }
+});
+
+// Record a refund linked to an original active payment entry
+router.post("/applications/:id/refunds", authManager, async (req, res) => {
+  try {
+    const existing = await findApplicationByAnyId(req.params.id);
+    if (!existing) return fail(res, 404, "Booking record not found.");
+    if (!Array.isArray(existing.paymentHistory)) existing.paymentHistory = [];
+    if (!Array.isArray(existing.refunds)) existing.refunds = [];
+    if (!Array.isArray(existing.timeline)) existing.timeline = [];
+
+    const idempotencyKey = getRequestIdempotencyKey(req);
+    if (
+      hasProcessedRequest(existing, idempotencyKey) ||
+      (idempotencyKey && existing.refunds.some((r) => clean(r.idempotencyKey) === idempotencyKey))
+    ) {
+      return res.json({
+        ok: true,
+        deduplicated: true,
+        message: "Duplicate refund request ignored.",
+        application: existing,
+      });
+    }
+
+    const preSummary = computePaymentSummary(existing);
+    if (preSummary.grossPaid <= 0) {
+      return fail(res, 400, "No collected payment found to refund on this booking.");
+    }
+    if (preSummary.hasFlaggedPayments) {
+      return fail(res, 409, "Review and confirm all flagged payments on this voided booking before issuing a refund.");
+    }
+
+    const activePayments = existing.paymentHistory.filter((p) => !p.isVoided);
+    let linkedPayment = null;
+    if (req.body.linkedPaymentId) {
+      linkedPayment = existing.paymentHistory.find((p) => String(p._id) === String(req.body.linkedPaymentId));
+    } else if (activePayments.length === 1) {
+      linkedPayment = activePayments[0];
+    }
+
+    if (!linkedPayment) {
+      return fail(res, 400, "Select the original payment transaction to link this refund to.");
+    }
+    if (linkedPayment.isVoided) {
+      return fail(res, 400, "Cannot link a refund to a voided payment transaction.");
+    }
+
+    const requestedAmount = round2(Number(req.body.amount));
+    if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
+      return fail(res, 400, "Refund amount must be greater than ₱0.");
+    }
+
+    const refundsForEntry = findLinkedRefundsForPayment(existing, linkedPayment);
+    const alreadyRefundedForEntry = round2(
+      refundsForEntry.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
+    );
+    const entryRemaining = round2((Number(linkedPayment.amount) || 0) - alreadyRefundedForEntry);
+
+    if (requestedAmount - entryRemaining > 0.01) {
+      return fail(
+        res,
+        400,
+        `Refund amount (₱${requestedAmount.toLocaleString()}) exceeds unrefunded balance (₱${entryRemaining.toLocaleString()}) on payment ${linkedPayment.receiptNo || "entry"}.`
+      );
+    }
+
+    const refundableCapRemaining = preSummary.refundableRemaining ?? Math.max(0, round2(preSummary.refundableCap - preSummary.totalRefunded));
+    if (requestedAmount - refundableCapRemaining > 0.01) {
+      return fail(
+        res,
+        400,
+        `Refund amount (₱${requestedAmount.toLocaleString()}) exceeds remaining refundable amount (₱${refundableCapRemaining.toLocaleString()}).`
+      );
+    }
+
+    const reason = clean(req.body.reason);
+    if (!reason) {
+      return fail(res, 400, "A refund reason is required.");
+    }
+    const referenceNumber = clean(req.body.referenceNumber);
+    if (!referenceNumber) {
+      return fail(res, 400, "A refund reference number is required.");
+    }
+
+    const now = new Date();
+    const refundDate = clean(req.body.refundDate || req.body.dateTime) || now.toISOString();
+    const paymentMethod = clean(req.body.paymentMethod) || linkedPayment.paymentMethod || "Cash";
+    const recordedBy = clean(req.user?.fullName || req.user?.email) || "Manager";
+    if (existing.refundDetermination !== "refund_due") {
+      existing.refundDetermination = "refund_due";
+      existing.refundDecidedBy = recordedBy;
+      existing.refundDecidedAt = now;
+    }
+    const refundNo =
+      clean(req.body.refundNo) ||
+      `REF-${now.getFullYear()}-${String(existing._id).slice(-4).toUpperCase()}-${String(existing.refunds.length + 1).padStart(2, "0")}`;
+
+    existing.refunds.push({
+      refundNo,
+      linkedPaymentId: String(linkedPayment._id),
+      linkedReceiptNo: clean(linkedPayment.receiptNo),
+      amount: requestedAmount,
+      refundDate,
+      reason,
+      referenceNumber,
+      paymentMethod,
+      recordedBy,
+      recordedAt: now,
+      notes: clean(req.body.notes),
+      idempotencyKey,
+    });
+
+    if (linkedPayment.flaggedForReview && linkedPayment.reviewStatus !== "confirmed_received") {
+      linkedPayment.reviewStatus = "confirmed_received";
+      linkedPayment.flaggedForReview = false;
+      linkedPayment.reviewedBy = recordedBy;
+      linkedPayment.reviewedAt = now;
+    }
+
+    recordProcessedRequest(existing, idempotencyKey);
+    const postSummary = syncApplicationFinancials(existing);
+
+    existing.timeline.push({
+      event: "refund_recorded",
+      title: `Refund Recorded (${postSummary.paymentStatus})`,
+      timestamp: now,
+      actor: recordedBy,
+      note: `Refunded ₱${requestedAmount.toLocaleString()} against ${linkedPayment.receiptNo || "original payment"} (${paymentMethod}). Ref: ${referenceNumber} · Reason: ${reason}. Total Refunded: ₱${postSummary.totalRefunded.toLocaleString()} of ₱${postSummary.grossPaid.toLocaleString()}.`,
+    });
+
+    await existing.save();
+    const createdRefund = existing.refunds[existing.refunds.length - 1];
+
+    await logAudit({
+      action: "REFUND_RECORDED",
+      actorEmail: cleanEmail(req.user?.email || "manager"),
+      actorRole: clean(req.user?.role || "manager"),
+      actorId: req.user?._id,
+      targetEmail: existing.memberEmail,
+      targetName: existing.memberName,
+      targetRole: "member",
+      details: {
+        applicationId: existing.id,
+        refundNo,
+        linkedPaymentId: String(linkedPayment._id),
+        linkedReceiptNo: linkedPayment.receiptNo,
+        amount: requestedAmount,
+        refundDate,
+        referenceNumber,
+        reason,
+        recordedBy,
+        totalRefunded: postSummary.totalRefunded,
+        paymentStatus: postSummary.paymentStatus,
+      },
+      req,
+    });
+
+    try {
+      await Notification.create({
+        memberEmail: existing.memberEmail,
+        title: "Refund Issued",
+        message: `A refund of ₱${requestedAmount.toLocaleString()} (${refundNo}, Ref: ${referenceNumber}) for ${existing.equipment} has been recorded by ${recordedBy}. Status: ${postSummary.paymentStatus}.`,
+        type: "booking",
+        relatedApplicationId: existing._id,
+      });
+    } catch (notifErr) {
+      console.warn("Could not notify member of recorded refund:", notifErr.message);
+    }
+
+    return res.status(201).json({
+      ok: true,
+      message: `Recorded refund of ₱${requestedAmount.toLocaleString()} (${postSummary.paymentStatus}).`,
+      refundEntry: createdRefund,
+      application: existing,
+    });
+  } catch (error) {
+    console.error("Error recording refund:", error);
+    return res.status(500).json({ error: "Failed to record refund." });
+  }
+});
+
+// Manager Review of Payments Flagged When a Booking Was Voided
+router.post("/applications/:id/review-flagged-payment", authManager, async (req, res) => {
+  try {
+    const existing = await findApplicationByAnyId(req.params.id);
+    if (!existing) return fail(res, 404, "Booking record not found.");
+    if (!Array.isArray(existing.paymentHistory)) existing.paymentHistory = [];
+    if (!Array.isArray(existing.timeline)) existing.timeline = [];
+
+    const idempotencyKey = getRequestIdempotencyKey(req);
+    if (hasProcessedRequest(existing, idempotencyKey)) {
+      return res.json({
+        ok: true,
+        deduplicated: true,
+        message: "Duplicate review request ignored.",
+        application: existing,
+      });
+    }
+
+    const outcome = clean(req.body.outcome);
+    if (!["confirmed_received", "not_received_void"].includes(outcome)) {
+      return fail(res, 400, 'Invalid outcome. Choose "confirmed_received" or "not_received_void".');
+    }
+
+    let target = null;
+    if (req.body.entryId) {
+      target = existing.paymentHistory.find((p) => String(p._id) === String(req.body.entryId));
+    } else if (req.body.index !== undefined && req.body.index !== null) {
+      const idx = Number(req.body.index);
+      if (Number.isInteger(idx) && idx >= 0 && idx < existing.paymentHistory.length) {
+        target = existing.paymentHistory[idx];
+      }
+    }
+    if (!target) {
+      return fail(res, 404, "Payment transaction was not found.");
+    }
+    if (target.isVoided) {
+      return fail(res, 400, "This payment transaction is already voided.");
+    }
+
+    const managerName = clean(req.user?.fullName || req.user?.email) || "Manager";
+    const now = new Date();
+    const note = clean(req.body.note || req.body.reason);
+
+    if (outcome === "confirmed_received") {
+      target.reviewStatus = "confirmed_received";
+      target.flaggedForReview = false;
+      target.reviewedBy = managerName;
+      target.reviewedAt = now;
+      target.reviewNote = note || "Confirmed funds actually received by KIMPC.";
+
+      const optionalRefundDecision = clean(req.body.refundDecision);
+      if (["refund_due", "no_refund"].includes(optionalRefundDecision)) {
+        existing.refundDetermination = optionalRefundDecision;
+        existing.refundDecidedBy = managerName;
+        existing.refundDecidedAt = now;
+        existing.refundDecisionNote = note;
+      }
+
+      recordProcessedRequest(existing, idempotencyKey);
+      const postSummary = syncApplicationFinancials(existing);
+
+      existing.timeline.push({
+        event: "payment_review_confirmed",
+        title: "Flagged Payment Confirmed as Received",
+        timestamp: now,
+        actor: managerName,
+        note: `Confirmed ₱${Number(target.amount || 0).toLocaleString()} (${target.receiptNo || "OR"}) was received.${note ? ` Note: ${note}` : ""} Payment Status: ${postSummary.paymentStatus}.`,
+      });
+
+      await existing.save();
+
+      await logAudit({
+        action: "FLAGGED_PAYMENT_CONFIRMED",
+        actorEmail: cleanEmail(req.user?.email || "manager"),
+        actorRole: clean(req.user?.role || "manager"),
+        actorId: req.user?._id,
+        targetEmail: existing.memberEmail,
+        targetName: existing.memberName,
+        details: {
+          applicationId: existing.id,
+          receiptNo: target.receiptNo,
+          amount: target.amount,
+          refundDecision: existing.refundDetermination,
+          note,
+        },
+        req,
+      });
+
+      return res.json({
+        ok: true,
+        message: `Confirmed payment ${target.receiptNo || "entry"} was received.`,
+        application: existing,
+      });
+    }
+
+    // outcome === "not_received_void"
+    if (!note) {
+      return fail(res, 400, "A reason is required to void an uncollected/mistaken flagged payment.");
+    }
+    const linkedRefunds = findLinkedRefundsForPayment(existing, target);
+    if (linkedRefunds.length > 0 && !req.body.refundReviewed) {
+      return res.status(409).json({
+        error: "This flagged payment has linked refunds. Review linked refunds before voiding.",
+        code: "LINKED_REFUND_REVIEW_REQUIRED",
+        linkedRefunds,
+      });
+    }
+
+    target.isVoided = true;
+    target.voidedAt = now;
+    target.voidedBy = managerName;
+    target.voidReason = note;
+    target.reviewStatus = "voided";
+    target.flaggedForReview = false;
+    target.reviewedBy = managerName;
+    target.reviewedAt = now;
+    target.reviewNote = note;
+
+    const midSummary = computePaymentSummary(existing);
+    if (midSummary.isClosedBooking && midSummary.grossPaid === 0 && midSummary.totalRefunded === 0) {
+      existing.refundDetermination = "not_applicable";
+    }
+
+    recordProcessedRequest(existing, idempotencyKey);
+    const postSummary = syncApplicationFinancials(existing);
+
+    existing.timeline.push({
+      event: "flagged_payment_voided",
+      title: "Flagged Payment Voided After Review",
+      timestamp: now,
+      actor: managerName,
+      note: `Voided ₱${Number(target.amount || 0).toLocaleString()} (${target.receiptNo || "OR"}) on voided booking. Reason: ${note}. Balance Due: ₱${postSummary.balanceDue.toLocaleString()}.`,
+    });
+
+    await existing.save();
+
+    await logAudit({
+      action: "FLAGGED_PAYMENT_VOIDED",
+      actorEmail: cleanEmail(req.user?.email || "manager"),
+      actorRole: clean(req.user?.role || "manager"),
+      actorId: req.user?._id,
+      targetEmail: existing.memberEmail,
+      targetName: existing.memberName,
+      details: {
+        applicationId: existing.id,
+        receiptNo: target.receiptNo,
+        amount: target.amount,
+        reason: note,
+        paymentStatus: postSummary.paymentStatus,
+      },
+      req,
+    });
+
+    return res.json({
+      ok: true,
+      message: `Voided flagged payment of ₱${Number(target.amount || 0).toLocaleString()}.`,
+      application: existing,
+    });
+  } catch (error) {
+    console.error("Error reviewing flagged payment:", error);
+    return res.status(500).json({ error: "Failed to review flagged payment." });
   }
 });
 

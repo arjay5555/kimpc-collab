@@ -38,9 +38,7 @@ const handlePosBooking = async (req, res) => {
     const rentalHours = Math.max(Number(req.body.rentalHours) || 1, 1);
     const paymentMethod = clean(req.body.paymentMethod) || "Cash";
     const managerEmail = cleanEmail(req.body.managerEmail || req.user?.email || "manager@coop.local");
-    const isPaidNow =
-      req.body.isPaid === true ||
-      String(req.body.paymentStatus || "").trim().toLowerCase() === "paid";
+    const isPaidNow = req.body.isPaid === true && Boolean(req.user);
 
     if (!farmerName || !equipment || !startDate || !endDate) {
       return fail(res, 400, "Farmer name, machinery, and valid dates are required.");
@@ -94,12 +92,28 @@ const handlePosBooking = async (req, res) => {
 
     const rentalFee = rentalType === "hour" ? (rate * rentalHours) : (rate * rentalDays);
     const totalPaid = isPaidNow ? rentalFee : 0;
+    const txId = isPaidNow ? `TX-${Date.now().toString().slice(-6)}` : "";
+    const posReceiver = clean(req.user?.fullName || req.user?.email || managerEmail) || "Manager";
+    const initialHistory = isPaidNow
+      ? [
+          {
+            receiptNo: txId,
+            amount: totalPaid,
+            paymentMethod,
+            paymentType: "Walk-In POS Full Payment",
+            referenceNumber: clean(req.body.referenceNumber),
+            dateTime: new Date().toISOString(),
+            receivedBy: posReceiver,
+            recordedAt: new Date(),
+          },
+        ]
+      : [];
 
     const durationLabel = rentalType === "hour"
       ? `${rentalHours} hr${rentalHours === 1 ? "" : "s"} @ ₱${rate}/hr`
       : `${rentalDays} day${rentalDays === 1 ? "" : "s"} @ ₱${rate}/day`;
 
-    // Create walk-in application (unpaid/Pending unless explicitly marked paid)
+    // Create walk-in application (unpaid/Pending unless explicitly marked paid by manager)
     const app = await Application.create({
       memberEmail: `walkin.${Date.now()}@coop.local`,
       memberName: `${farmerName} (${coopId})`,
@@ -112,6 +126,10 @@ const handlePosBooking = async (req, res) => {
       paymentStatus: isPaidNow ? "Paid" : "Pending",
       paymentAmount: totalPaid,
       paymentMethod,
+      receiptNo: txId,
+      receivedBy: isPaidNow ? posReceiver : "",
+      paymentDateTime: isPaidNow ? new Date().toISOString() : "",
+      paymentHistory: initialHistory,
       status: "Approved",
       isWalkIn: true,
       farmerPhone,
@@ -125,7 +143,6 @@ const handlePosBooking = async (req, res) => {
     });
 
     // Only log cash ledger revenue immediately when payment is collected upfront
-    const txId = isPaidNow ? `TX-${Date.now().toString().slice(-6)}` : "";
     if (isPaidNow) {
       await Transaction.create({
         txId,
@@ -172,8 +189,8 @@ const handlePosBooking = async (req, res) => {
   }
 };
 
-router.post("/pos-booking", handlePosBooking);
-router.post("/manager/pos-booking", handlePosBooking);
+router.post("/pos-booking", authManager, handlePosBooking);
+router.post("/manager/pos-booking", authManager, handlePosBooking);
 
 /**
  * POST /api/manager/pos-settlement

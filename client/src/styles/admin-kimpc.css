@@ -10153,3 +10153,261 @@ input::-webkit-contacts-auto-fill-button {
     display: none;
   }
 }
+
+/* ================= PAYMENTS LIFECYCLE, REFUND & VOID MODALS ================= */
+.wz-pay-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.71rem;
+  font-weight: 700;
+  white-space: nowrap;
+  line-height: 1.25;
+}
+
+.wz-pay-pill.is-unpaid {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.wz-pay-pill.is-partial {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.wz-pay-pill.is-paid {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.wz-pay-pill.is-closed {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.wz-pay-pill.is-refund-pending {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.wz-pay-pill.is-partial-refund {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+.wz-pay-pill.is-refunded {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.wz-pay-review-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 0.67rem;
+  font-weight: 700;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #c2410c;
+}
+
+.wz-payview-alert-box {
+  border-radius: 12px;
+  padding: 13px 15px;
+  border: 1px solid #fed7aa;
+  background: #fff7ed;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wz-payview-alert-box.is-neutral {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.wz-payview-alert-box.is-info {
+  border-color: #bae6fd;
+  background: #f0f9ff;
+}
+
+.wz-payview-alert-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.wz-payview-alert-title {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #9a3412;
+}
+
+.wz-payview-alert-box.is-neutral .wz-payview-alert-title {
+  color: #334155;
+}
+
+.wz-payview-alert-box.is-info .wz-payview-alert-title {
+  color: #0369a1;
+}
+
+.wz-payview-alert-desc {
+  margin: 0;
+  font-size: 0.77rem;
+  color: #475569;
+  line-height: 1.45;
+}
+
+.wz-payview-decision-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.wz-payview-inline-btn {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  border-radius: 8px;
+  padding: 6px 11px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.wz-payview-inline-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+
+.wz-payview-inline-btn.is-primary {
+  background: #ea580c;
+  border-color: #ea580c;
+  color: #ffffff;
+}
+
+.wz-payview-inline-btn.is-primary:hover:not(:disabled) {
+  background: #c2410c;
+}
+
+.wz-payview-inline-btn.is-emerald {
+  background: #059669;
+  border-color: #059669;
+  color: #ffffff;
+}
+
+.wz-payview-inline-btn.is-emerald:hover:not(:disabled) {
+  background: #047857;
+}
+
+.wz-payview-inline-btn.is-danger {
+  background: #ffffff;
+  border-color: #fecaca;
+  color: #dc2626;
+}
+
+.wz-payview-inline-btn.is-danger:hover:not(:disabled) {
+  background: #fef2f2;
+}
+
+.wz-payview-inline-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.wz-payview-void-meta {
+  margin-top: 5px;
+  padding: 6px 9px;
+  border-radius: 7px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  font-size: 0.72rem;
+  color: #991b1b;
+  line-height: 1.4;
+}
+
+.wz-payview-refund-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  border: 1px solid #e9d5ff;
+  background: #faf5ff;
+}
+
+.wz-payview-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 185px;
+  overflow-y: auto;
+}
+
+.wz-payview-tl-row {
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  font-size: 0.74rem;
+}
+
+.wz-payrec-error {
+  padding: 9px 12px;
+  border-radius: 9px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.wz-payrec-warn-box {
+  padding: 11px 13px;
+  border-radius: 10px;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  color: #9a3412;
+  font-size: 0.77rem;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-theme="dark"] .wz-payview-alert-box,
+[data-theme="dark"] .wz-payrec-warn-box {
+  background: rgba(194, 65, 12, 0.14);
+  border-color: rgba(251, 146, 60, 0.35);
+  color: #fed7aa;
+}
+
+[data-theme="dark"] .wz-payview-alert-box.is-neutral,
+[data-theme="dark"] .wz-payview-tl-row {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+[data-theme="dark"] .wz-payview-alert-desc {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .wz-payview-refund-item {
+  background: rgba(109, 40, 217, 0.16);
+  border-color: rgba(167, 139, 250, 0.3);
+}
+
+[data-theme="dark"] .wz-payview-void-meta,
+[data-theme="dark"] .wz-payrec-error {
+  background: rgba(185, 28, 28, 0.16);
+  border-color: rgba(248, 113, 113, 0.35);
+  color: #fecaca;
+}

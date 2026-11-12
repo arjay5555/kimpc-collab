@@ -601,7 +601,7 @@ export default function EquipmentCatalog() {
         paymentMethod,
         cashPaymentOption: paymentMethod === "Cash" ? cashTiming : "",
         gcashProof: paymentMethod === "GCash" ? gcashProof : "",
-        paymentStatus: paymentMethod === "GCash" ? "Paid" : "Pending",
+        paymentStatus: "Pending",
         farmerPhone: memberPhone,
         memberPhone,
         farmLocation: (booking.location || "").trim(),

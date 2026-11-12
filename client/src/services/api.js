@@ -1,21 +1,92 @@
+function readAuthStorage(keys) {
+  for (const key of keys) {
+    const val = sessionStorage.getItem(key);
+    if (val) return val;
+  }
+  for (const key of keys) {
+    const val = localStorage.getItem(key);
+    if (val) return val;
+  }
+  return "";
+}
+
 export function getSignedInEmail() {
-  return (sessionStorage.getItem("kimpc-member-email") || sessionStorage.getItem("minders-member-email") || "").trim().toLowerCase();
+  return readAuthStorage(["kimpc-member-email", "minders-member-email"]).trim().toLowerCase();
 }
 
 export function getSignedInRole() {
-  return sessionStorage.getItem("kimpc-account-role") || sessionStorage.getItem("minders-account-role") || "member";
+  return readAuthStorage(["kimpc-account-role", "minders-account-role"]) || "member";
 }
 
 export function getSignedInName() {
-  return sessionStorage.getItem("kimpc-account-name") || sessionStorage.getItem("minders-account-name") || "";
+  return readAuthStorage(["kimpc-account-name", "minders-account-name"]);
+}
+
+function decodeJwtPayload(token) {
+  try {
+    const parts = String(token || "").split(".");
+    if (parts.length !== 3) return null;
+    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+    return JSON.parse(atob(padded));
+  } catch {
+    return null;
+  }
+}
+
+export function isTokenExpired(token) {
+  if (!token) return false;
+  const payload = decodeJwtPayload(token);
+  if (!payload || typeof payload.exp !== "number") return false;
+  return payload.exp * 1000 <= Date.now();
+}
+
+function getRawAuthTokens() {
+  return [
+    sessionStorage.getItem("kimpc-jwt-token"),
+    sessionStorage.getItem("minders-jwt-token"),
+    localStorage.getItem("kimpc-jwt-token"),
+    localStorage.getItem("minders-jwt-token"),
+    localStorage.getItem("token"),
+  ].filter(Boolean);
 }
 
 export function getAuthToken() {
-  return localStorage.getItem("token") || sessionStorage.getItem("kimpc-jwt-token") || sessionStorage.getItem("minders-jwt-token") || "";
+  const candidates = getRawAuthTokens();
+  for (const candidate of candidates) {
+    if (!isTokenExpired(candidate)) return candidate;
+  }
+  return "";
 }
 
 export function isAuthenticated() {
-  return sessionStorage.getItem("kimpc-member-auth") === "true" || sessionStorage.getItem("minders-member-auth") === "true";
+  const hasFlag =
+    sessionStorage.getItem("kimpc-member-auth") === "true" ||
+    sessionStorage.getItem("minders-member-auth") === "true" ||
+    localStorage.getItem("kimpc-member-auth") === "true" ||
+    localStorage.getItem("minders-member-auth") === "true";
+  if (!hasFlag) return false;
+  if (getRawAuthTokens().length > 0 && !getAuthToken()) return false;
+  return true;
+}
+
+function notifyIfAuthRejected(path, status, tokenUsed, data) {
+  if (status !== 401 || !tokenUsed) return;
+  const normalized = String(path || "").toLowerCase();
+  if (
+    normalized.startsWith("/login") ||
+    normalized.startsWith("/register") ||
+    normalized.startsWith("/verify") ||
+    normalized.startsWith("/auth/google") ||
+    normalized.startsWith("/auth/facebook") ||
+    normalized.startsWith("/auth/forgot-password") ||
+    normalized.startsWith("/auth/change-temp-password")
+  ) {
+    return;
+  }
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("kimpc:auth-expired", { detail: data || {} }));
+  }
 }
 
 export function getDashboardForRole(role) {
@@ -200,6 +271,9 @@ function revalidateInBackground(path, cacheKey, ttl) {
             new CustomEvent("kimpc:data-updated", { detail: { path, data } })
           );
         }
+      } else {
+        const errData = await response.json().catch(() => ({}));
+        notifyIfAuthRejected(path, response.status, token, errData);
       }
     } catch (e) {
       // Keep existing cached data on background failure
@@ -260,6 +334,7 @@ export async function api(path, { method = "GET", body, skipCache = false, ttl =
       });
 
       const data = await response.json().catch(() => ({}));
+      notifyIfAuthRejected(path, response.status, token, data);
       const result = { ok: response.ok, status: response.status, data };
 
       if (normMethod === "GET" && response.ok) {
