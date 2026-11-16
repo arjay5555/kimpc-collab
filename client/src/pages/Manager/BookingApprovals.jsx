@@ -6,6 +6,8 @@ import { computePaymentSummary } from "../../utils/paymentSummary";
 import ManagerSidebar from "../../components/ManagerSidebar";
 import ManagerSearchBar from "../../components/ManagerSearchBar";
 import ManagerTopbar from "../../components/ManagerTopbar";
+import FarmLocationPicker from "../../components/FarmLocationPicker";
+import GcashOcrBadge from "../../components/GcashOcrBadge";
 import "../../styles/admin-kimpc.css";
 
 const CURRENT_MOCK_YEAR = new Date().getFullYear();
@@ -19,6 +21,10 @@ const EMPTY_ADD_BOOKING = {
   memberPhone: "",
   hectares: 1,
   location: "",
+  formattedAddress: "",
+  farmCoordinates: null,
+  deliveryDistanceKm: null,
+  estimatedTravelMinutes: null,
   startDate: "",
   endDate: "",
 };
@@ -519,6 +525,11 @@ export default function BookingApprovals() {
   const [addCashTiming, setAddCashTiming] = useState("Upon Pickup");
   const [addGcashProof, setAddGcashProof] = useState("");
   const [addGcashPreview, setAddGcashPreview] = useState("");
+  const [addGcashOcr, setAddGcashOcr] = useState(null);
+  const [addGcashOcrScanning, setAddGcashOcrScanning] = useState(false);
+  const [addGcashOcrError, setAddGcashOcrError] = useState("");
+  const [viewingOcrScanning, setViewingOcrScanning] = useState(false);
+  const [viewingOcrError, setViewingOcrError] = useState("");
   const [addCopiedGcash, setAddCopiedGcash] = useState(false);
   const [addAvailability, setAddAvailability] = useState([]);
   const [addCalendarMonth, setAddCalendarMonth] = useState(() => {
@@ -794,6 +805,7 @@ export default function BookingApprovals() {
         paymentMethod,
         cashPaymentOption,
         gcashProof,
+        gcashOcr: item.gcashOcr || null,
         hectares,
         dailyRate,
         daysCount: days,
@@ -825,6 +837,8 @@ export default function BookingApprovals() {
         farmLocation: item.farmLocation || "",
         farmFormattedAddress: item.farmFormattedAddress || item.farmLocation || "",
         farmCoordinates: item.farmCoordinates || null,
+        deliveryDistanceKm: item.deliveryDistanceKm ?? null,
+        estimatedTravelMinutes: item.estimatedTravelMinutes ?? null,
         bookingType: item.bookingType || "hectare",
         managerRemarks: item.managerRemarks || "",
         timeline: Array.isArray(item.timeline) ? item.timeline : [],
@@ -1354,7 +1368,9 @@ export default function BookingApprovals() {
       location:
         prev.location && prev.location.trim()
           ? prev.location
-          : member.defaultFarmLocation || member.address || "",
+          : member.memberSettings?.defaultFarmLocation || member.defaultFarmLocation || member.address || "",
+      farmCoordinates:
+        prev.farmCoordinates || member.memberSettings?.defaultFarmCoordinates || null,
     }));
   };
 
@@ -1488,6 +1504,43 @@ export default function BookingApprovals() {
     }
   };
 
+  const scanAddGcashImage = async (dataUrl) => {
+    if (!dataUrl) return;
+    setAddGcashOcrScanning(true);
+    setAddGcashOcrError("");
+    const res = await api("/ocr/gcash", {
+      method: "POST",
+      body: {
+        imageDataUrl: dataUrl,
+        expectedAmount: addEstimatedCost,
+      },
+    });
+    setAddGcashOcrScanning(false);
+    if (res.ok && res.data?.extracted) {
+      setAddGcashOcr(res.data.extracted);
+    } else if (!res.data?.disabled) {
+      setAddGcashOcrError(res.data?.error || "Could not extract receipt details.");
+    }
+  };
+
+  const handleScanViewingGcash = async (booking) => {
+    const targetId = booking?.rawId || booking?.id;
+    if (!targetId) return;
+    setViewingOcrScanning(true);
+    setViewingOcrError("");
+    const res = await api(`/applications/${encodeURIComponent(targetId)}/scan-gcash`, {
+      method: "POST",
+    });
+    setViewingOcrScanning(false);
+    if (res.ok && res.data?.gcashOcr) {
+      const updatedOcr = res.data.gcashOcr;
+      setViewingBooking((prev) => (prev ? { ...prev, gcashOcr: updatedOcr } : prev));
+      fetchData();
+    } else {
+      setViewingOcrError(res.data?.error || "Failed to scan GCash receipt.");
+    }
+  };
+
   const handleAddGCashFileChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1500,6 +1553,9 @@ export default function BookingApprovals() {
       setAddGcashProof(reader.result);
       setAddGcashPreview(reader.result);
       setAddFormError("");
+      setAddGcashOcr(null);
+      setAddGcashOcrError("");
+      scanAddGcashImage(reader.result);
     };
     reader.readAsDataURL(file);
   };
@@ -1554,10 +1610,15 @@ export default function BookingApprovals() {
           paymentMethod: addPaymentMethod,
           cashPaymentOption: addPaymentMethod === "Cash" ? addCashTiming : "",
           gcashProof: addPaymentMethod === "GCash" ? addGcashProof : "",
+          gcashOcr: addPaymentMethod === "GCash" && addGcashOcr ? addGcashOcr : undefined,
           paymentStatus: "Pending",
           farmerPhone: cleanPhone,
           memberPhone: cleanPhone,
           farmLocation: newBooking.location.trim(),
+          farmFormattedAddress: (newBooking.formattedAddress || newBooking.location || "").trim(),
+          farmCoordinates: newBooking.farmCoordinates || null,
+          deliveryDistanceKm: newBooking.deliveryDistanceKm ?? null,
+          estimatedTravelMinutes: newBooking.estimatedTravelMinutes ?? null,
         },
       });
 
@@ -1569,6 +1630,8 @@ export default function BookingApprovals() {
         setNewBooking(EMPTY_ADD_BOOKING);
         setAddGcashProof("");
         setAddGcashPreview("");
+        setAddGcashOcr(null);
+        setAddGcashOcrError("");
         fetchData();
       } else {
         setAddFormError(res.data?.error || "Could not submit the booking request.");
@@ -2633,26 +2696,30 @@ export default function BookingApprovals() {
                   <div className="wz-addbook-field">
                     <label className="wz-addbook-label" htmlFor="addbook-location">
                       <span>
-                        Farm Location <span className="wz-addbook-label-req">*</span>
+                        Farm Location &amp; Map Pin (PSGC + OpenStreetMap) <span className="wz-addbook-label-req">*</span>
                       </span>
                     </label>
-                    <div className="wz-addbook-input-wrap">
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                        <circle cx="12" cy="10" r="3" />
-                      </svg>
-                      <input
-                        id="addbook-location"
-                        className="wz-addbook-input"
-                        type="text"
-                        required
-                        placeholder="Barangay, Purok / Sitio, Landmark"
-                        value={newBooking.location || ""}
-                        onChange={(e) =>
-                          setNewBooking((prev) => ({ ...prev, location: e.target.value }))
-                        }
-                      />
-                    </div>
+                    <FarmLocationPicker
+                      height={190}
+                      placeholder="Barangay, Purok / Sitio, Landmark"
+                      value={{
+                        location: newBooking.location || "",
+                        formattedAddress: newBooking.formattedAddress || "",
+                        coordinates: newBooking.farmCoordinates || null,
+                        distanceKm: newBooking.deliveryDistanceKm ?? null,
+                        durationMinutes: newBooking.estimatedTravelMinutes ?? null,
+                      }}
+                      onChange={(geo) =>
+                        setNewBooking((prev) => ({
+                          ...prev,
+                          location: geo.location || "",
+                          formattedAddress: geo.formattedAddress || geo.location || "",
+                          farmCoordinates: geo.coordinates || null,
+                          deliveryDistanceKm: geo.distanceKm ?? null,
+                          estimatedTravelMinutes: geo.durationMinutes ?? null,
+                        }))
+                      }
+                    />
                   </div>
                 </div>
 
@@ -2972,11 +3039,22 @@ export default function BookingApprovals() {
                             onClick={() => {
                               setAddGcashProof("");
                               setAddGcashPreview("");
+                              setAddGcashOcr(null);
+                              setAddGcashOcrError("");
                             }}
                           >
                             Remove
                           </button>
                         </div>
+                      )}
+                      {addGcashPreview && (
+                        <GcashOcrBadge
+                          ocr={addGcashOcr}
+                          scanning={addGcashOcrScanning}
+                          error={addGcashOcrError}
+                          expectedAmount={addEstimatedCost}
+                          onScanClick={() => scanAddGcashImage(addGcashProof)}
+                        />
                       )}
                     </div>
                   )}
@@ -3369,18 +3447,42 @@ export default function BookingApprovals() {
                           <span className="wz-clean-kv-value" style={{ fontSize: "0.82rem", display: "block" }}>
                             {viewingBooking.farmFormattedAddress || viewingBooking.farmLocation || "Kalilangan, Bukidnon"}
                           </span>
+                          {viewingBooking.deliveryDistanceKm != null && (
+                            <span style={{ fontSize: "0.74rem", color: "#15803d", fontWeight: 700, display: "inline-block", marginTop: "3px" }}>
+                              {viewingBooking.deliveryDistanceKm} km from Depot
+                              {viewingBooking.estimatedTravelMinutes ? ` • ~${viewingBooking.estimatedTravelMinutes} min drive` : ""}
+                            </span>
+                          )}
                           {viewingBooking.farmCoordinates?.lat && viewingBooking.farmCoordinates?.lng && (
                             <a
-                              href={`https://www.google.com/maps?q=${viewingBooking.farmCoordinates.lat},${viewingBooking.farmCoordinates.lng}`}
+                              href={`https://www.openstreetmap.org/?mlat=${viewingBooking.farmCoordinates.lat}&mlon=${viewingBooking.farmCoordinates.lng}#map=15/${viewingBooking.farmCoordinates.lat}/${viewingBooking.farmCoordinates.lng}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              style={{ fontSize: "0.72rem", color: "#0284c7", textDecoration: "none", fontWeight: 600, display: "inline-block", marginTop: "2px" }}
+                              style={{ fontSize: "0.72rem", color: "#0284c7", textDecoration: "none", fontWeight: 600, display: "inline-block", marginTop: "2px", marginLeft: viewingBooking.deliveryDistanceKm != null ? "8px" : 0 }}
                             >
                               Open Map ↗
                             </a>
                           )}
                         </div>
                       </div>
+                      {viewingBooking.farmCoordinates?.lat && viewingBooking.farmCoordinates?.lng && (
+                        <div style={{ marginTop: "12px", borderTop: "1px solid #f1f5f9", paddingTop: "10px" }}>
+                          <span className="wz-clean-kv-label" style={{ display: "block", marginBottom: "6px" }}>
+                            Dispatch Route Preview (Depot → Farm)
+                          </span>
+                          <FarmLocationPicker
+                            readOnly
+                            height={180}
+                            value={{
+                              location: viewingBooking.farmLocation,
+                              formattedAddress: viewingBooking.farmFormattedAddress,
+                              coordinates: viewingBooking.farmCoordinates,
+                              distanceKm: viewingBooking.deliveryDistanceKm,
+                              durationMinutes: viewingBooking.estimatedTravelMinutes,
+                            }}
+                          />
+                        </div>
+                      )}
                     </div>
 
                     {/* Right Card: Unit & Operator Assignment */}
@@ -3666,42 +3768,51 @@ export default function BookingApprovals() {
 
                     {/* Attached Proof of Payment (GCash) if exists */}
                     {(viewingBooking.proofOfPayment || viewingBooking.gcashProof) && (
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", padding: "10px 14px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                          <img
-                            src={viewingBooking.proofOfPayment || viewingBooking.gcashProof}
-                            alt="Proof of Payment"
+                      <div style={{ display: "grid", gap: "6px" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", padding: "10px 14px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                            <img
+                              src={viewingBooking.proofOfPayment || viewingBooking.gcashProof}
+                              alt="Proof of Payment"
+                              onClick={() => setPreviewGcashImage(viewingBooking.proofOfPayment || viewingBooking.gcashProof)}
+                              style={{
+                                width: "40px",
+                                height: "40px",
+                                objectFit: "cover",
+                                borderRadius: "6px",
+                                border: "1px solid #059669",
+                                cursor: "pointer",
+                              }}
+                            />
+                            <div>
+                              <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#166534" }}>GCash / Transfer Proof Attached</div>
+                              <div style={{ fontSize: "0.72rem", color: "#475569" }}>Click thumbnail to verify screenshot</div>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
                             onClick={() => setPreviewGcashImage(viewingBooking.proofOfPayment || viewingBooking.gcashProof)}
                             style={{
-                              width: "40px",
-                              height: "40px",
-                              objectFit: "cover",
+                              background: "#ffffff",
+                              color: "#0f172a",
+                              border: "1px solid #cbd5e1",
                               borderRadius: "6px",
-                              border: "1px solid #059669",
+                              padding: "5px 12px",
+                              fontSize: "0.76rem",
+                              fontWeight: 600,
                               cursor: "pointer",
                             }}
-                          />
-                          <div>
-                            <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#166534" }}>GCash / Transfer Proof Attached</div>
-                            <div style={{ fontSize: "0.72rem", color: "#475569" }}>Click thumbnail to verify screenshot</div>
-                          </div>
+                          >
+                            View Proof
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setPreviewGcashImage(viewingBooking.proofOfPayment || viewingBooking.gcashProof)}
-                          style={{
-                            background: "#ffffff",
-                            color: "#0f172a",
-                            border: "1px solid #cbd5e1",
-                            borderRadius: "6px",
-                            padding: "5px 12px",
-                            fontSize: "0.76rem",
-                            fontWeight: 600,
-                            cursor: "pointer",
-                          }}
-                        >
-                          View Proof
-                        </button>
+                        <GcashOcrBadge
+                          ocr={viewingBooking.gcashOcr}
+                          scanning={viewingOcrScanning}
+                          error={viewingOcrError}
+                          expectedAmount={viewingBooking.totalAmountNum}
+                          onScanClick={() => handleScanViewingGcash(viewingBooking)}
+                        />
                       </div>
                     )}
                     {/* Compact Rate & Scope Breakdown */}

@@ -4,15 +4,16 @@ const LIVE_CHECK_TIMEOUT_MS = 5000;
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const GOOGLE_CLIENT_ID_REGEX = /^[A-Za-z0-9_-]+\.apps\.googleusercontent\.com$/;
-const GOOGLE_SECRET_REGEX = /^[A-Za-z0-9_-]{16,128}$/;
-const FACEBOOK_APP_ID_REGEX = /^\d{8,25}$/;
-const FACEBOOK_SECRET_REGEX = /^[a-fA-F0-9]{16,64}$/;
-const RECAPTCHA_KEY_REGEX = /^6L[A-Za-z0-9_-]{35,45}$/;
-const WEATHER_KEY_REGEX = /^[A-Za-z0-9]{20,64}$/;
+const GOOGLE_SECRET_REGEX = /^GOCSPX-[A-Za-z0-9_-]{28}$/;
+const FACEBOOK_APP_ID_REGEX = /^\d{16}$/;
+const FACEBOOK_SECRET_REGEX = /^[a-fA-F0-9]{32}$/;
+const RECAPTCHA_KEY_REGEX = /^6L[A-Za-z0-9_-]{38}$/;
+const WEATHER_KEY_REGEX = /^[A-Za-z0-9]{30,31}$/;
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const CLOUDINARY_NAME_REGEX = /^[a-z0-9_-]{2,64}$/;
-const CLOUDINARY_API_KEY_REGEX = /^\d{10,25}$/;
-const CLOUDINARY_SECRET_REGEX = /^[A-Za-z0-9_-]{16,64}$/;
+const CLOUDINARY_NAME_REGEX = /^[a-z0-9_-]{2,32}$/;
+const CLOUDINARY_API_KEY_REGEX = /^\d{15}$/;
+const CLOUDINARY_SECRET_REGEX = /^[A-Za-z0-9_-]{27}$/;
+const OCR_SPACE_KEY_REGEX = /^K[A-Za-z0-9]{19}$/;
 
 const PLACEHOLDER_TOKENS = new Set([
   "test",
@@ -69,11 +70,11 @@ async function validateGoogleCredentials({ clientId, clientSecret }) {
   if (isPlaceholderValue(clientId) || isPlaceholderValue(clientSecret)) {
     return "Please enter valid Google OAuth credentials rather than placeholder text.";
   }
-  if (!GOOGLE_CLIENT_ID_REGEX.test(clientId)) {
-    return "Invalid Google Client ID format. Expected a value ending with .apps.googleusercontent.com.";
+  if (!GOOGLE_CLIENT_ID_REGEX.test(clientId) || clientId.length < 65 || clientId.length > 85) {
+    return `Google Client ID must end with .apps.googleusercontent.com and be 70-75 characters long (currently ${clientId.length} characters).`;
   }
-  if (!GOOGLE_SECRET_REGEX.test(clientSecret)) {
-    return "Invalid Google Client Secret format (must be 16-128 valid characters).";
+  if (!GOOGLE_SECRET_REGEX.test(clientSecret) || clientSecret.length !== 35) {
+    return `Google Client Secret must be exactly 35 characters starting with 'GOCSPX-' (currently ${clientSecret.length} character${clientSecret.length === 1 ? "" : "s"}).`;
   }
   return null;
 }
@@ -88,11 +89,11 @@ async function validateFacebookCredentials({ appId, appSecret }) {
   if (isPlaceholderValue(appId) || isPlaceholderValue(appSecret)) {
     return "Please enter valid Facebook App credentials rather than placeholder text.";
   }
-  if (!FACEBOOK_APP_ID_REGEX.test(appId)) {
-    return "Invalid Facebook App ID. It must be a numeric Meta App ID (8-25 digits).";
+  if (!FACEBOOK_APP_ID_REGEX.test(appId) || appId.length !== 16) {
+    return `Facebook App ID must be exactly 16 numeric digits (currently ${appId.length} character${appId.length === 1 ? "" : "s"}).`;
   }
-  if (!FACEBOOK_SECRET_REGEX.test(appSecret)) {
-    return "Invalid Facebook App Secret format (expected a 16-64 character hexadecimal secret).";
+  if (!FACEBOOK_SECRET_REGEX.test(appSecret) || appSecret.length !== 32) {
+    return `Facebook App Secret must be exactly 32 hexadecimal characters (currently ${appSecret.length} character${appSecret.length === 1 ? "" : "s"}).`;
   }
 
   try {
@@ -122,11 +123,11 @@ async function validateRecaptchaCredentials({ siteKey, secretKey }) {
   if (isPlaceholderValue(siteKey) || isPlaceholderValue(secretKey)) {
     return "Please enter valid Google reCAPTCHA keys rather than placeholder text.";
   }
-  if (!RECAPTCHA_KEY_REGEX.test(siteKey)) {
-    return "Invalid Google reCAPTCHA Site Key format (expected a valid key starting with 6L).";
+  if (!RECAPTCHA_KEY_REGEX.test(siteKey) || siteKey.length !== 40) {
+    return `Google reCAPTCHA Site Key must be exactly 40 characters starting with '6L' (currently ${siteKey.length} character${siteKey.length === 1 ? "" : "s"}).`;
   }
-  if (!RECAPTCHA_KEY_REGEX.test(secretKey)) {
-    return "Invalid Google reCAPTCHA Secret Key format (expected a valid key starting with 6L).";
+  if (!RECAPTCHA_KEY_REGEX.test(secretKey) || secretKey.length !== 40) {
+    return `Google reCAPTCHA Secret Key must be exactly 40 characters starting with '6L' (currently ${secretKey.length} character${secretKey.length === 1 ? "" : "s"}).`;
   }
   if (siteKey === secretKey) {
     return "reCAPTCHA Site Key and Secret Key cannot be the same value.";
@@ -154,8 +155,11 @@ async function validateWeatherCredentials({ apiKey }) {
   if (!apiKey) {
     return "WeatherAPI key is required.";
   }
-  if (hasControlOrWhitespace(apiKey) || isPlaceholderValue(apiKey) || !WEATHER_KEY_REGEX.test(apiKey)) {
-    return "Invalid WeatherAPI key format (expected 20-64 alphanumeric characters with no spaces).";
+  if (hasControlOrWhitespace(apiKey) || isPlaceholderValue(apiKey)) {
+    return "WeatherAPI key cannot contain spaces or placeholder text.";
+  }
+  if (!WEATHER_KEY_REGEX.test(apiKey) || (apiKey.length !== 30 && apiKey.length !== 31)) {
+    return `WeatherAPI key must be exactly 30 or 31 alphanumeric characters (currently ${apiKey.length} character${apiKey.length === 1 ? "" : "s"}).`;
   }
 
   try {
@@ -182,11 +186,11 @@ async function validateOneSignalCredentials({ appId, restApiKey }) {
   if (isPlaceholderValue(appId) || isPlaceholderValue(restApiKey)) {
     return "Please enter valid OneSignal credentials rather than placeholder text.";
   }
-  if (!UUID_REGEX.test(appId)) {
-    return "Invalid OneSignal App ID format (must be a valid UUID, e.g. xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).";
+  if (!UUID_REGEX.test(appId) || appId.length !== 36) {
+    return `OneSignal App ID must be exactly 36 characters in UUID format (currently ${appId.length} character${appId.length === 1 ? "" : "s"}).`;
   }
-  if (restApiKey.length < 24 || !/^[A-Za-z0-9_=-]+$/.test(restApiKey)) {
-    return "Invalid OneSignal REST API Key format (must be at least 24 valid characters).";
+  if (restApiKey.length < 48 || !/^[A-Za-z0-9_=-]+$/.test(restApiKey)) {
+    return `OneSignal REST API Key must be at least 48 characters (currently ${restApiKey.length} character${restApiKey.length === 1 ? "" : "s"}).`;
   }
 
   try {
@@ -225,13 +229,13 @@ async function validateCloudinaryCredentials({ cloudName, apiKey, apiSecret }) {
     return "Please enter valid Cloudinary credentials rather than placeholder text.";
   }
   if (!CLOUDINARY_NAME_REGEX.test(cloudName)) {
-    return "Invalid Cloudinary Cloud Name (use 2-64 lowercase letters, numbers, hyphens, or underscores).";
+    return "Invalid Cloudinary Cloud Name (use 2-32 lowercase letters, numbers, hyphens, or underscores).";
   }
-  if (!CLOUDINARY_API_KEY_REGEX.test(apiKey)) {
-    return "Invalid Cloudinary API Key (must be a 10-25 digit numeric key).";
+  if (!CLOUDINARY_API_KEY_REGEX.test(apiKey) || apiKey.length !== 15) {
+    return `Cloudinary API Key must be exactly 15 numeric digits (currently ${apiKey.length} character${apiKey.length === 1 ? "" : "s"}).`;
   }
-  if (!CLOUDINARY_SECRET_REGEX.test(apiSecret)) {
-    return "Invalid Cloudinary API Secret format (must be 16-64 valid characters).";
+  if (!CLOUDINARY_SECRET_REGEX.test(apiSecret) || apiSecret.length !== 27) {
+    return `Cloudinary API Secret must be exactly 27 characters (currently ${apiSecret.length} character${apiSecret.length === 1 ? "" : "s"}).`;
   }
 
   try {
@@ -261,8 +265,8 @@ async function validateEmailCredentials({ user, pass, from }) {
     return "Invalid Gmail SMTP Username. Please enter a valid email address.";
   }
   const strippedPass = String(pass).replace(/\s+/g, "");
-  if (/[\r\n]/.test(pass) || strippedPass.length < 8) {
-    return "Invalid Gmail SMTP App Password (must be at least 8 characters).";
+  if (!/^[a-zA-Z]{16}$/.test(strippedPass) || strippedPass.length !== 16) {
+    return `Gmail App Password must be exactly 16 letters with spaces removed (currently ${strippedPass.length} character${strippedPass.length === 1 ? "" : "s"}).`;
   }
   if (from) {
     const extractedFrom = extractEmailFromHeader(from);
@@ -278,7 +282,7 @@ async function validateEmailCredentials({ user, pass, from }) {
       host,
       port,
       secure: port === 465,
-      auth: { user, pass },
+      auth: { user, pass: strippedPass },
       connectionTimeout: LIVE_CHECK_TIMEOUT_MS,
       greetingTimeout: LIVE_CHECK_TIMEOUT_MS,
     });
@@ -312,11 +316,11 @@ async function validateCalendarCredentials({ clientId, clientSecret, redirectUri
   if (isPlaceholderValue(clientId) || isPlaceholderValue(clientSecret)) {
     return "Please enter valid Google Calendar credentials rather than placeholder text.";
   }
-  if (!GOOGLE_CLIENT_ID_REGEX.test(clientId)) {
-    return "Invalid Google Calendar Client ID format. Expected a value ending with .apps.googleusercontent.com.";
+  if (!GOOGLE_CLIENT_ID_REGEX.test(clientId) || clientId.length < 65 || clientId.length > 85) {
+    return `Google Calendar Client ID must end with .apps.googleusercontent.com and be 70-75 characters (currently ${clientId.length} characters).`;
   }
-  if (!GOOGLE_SECRET_REGEX.test(clientSecret)) {
-    return "Invalid Google Calendar Client Secret format (must be 16-128 valid characters).";
+  if (!GOOGLE_SECRET_REGEX.test(clientSecret) || clientSecret.length !== 35) {
+    return `Google Calendar Client Secret must be exactly 35 characters starting with 'GOCSPX-' (currently ${clientSecret.length} character${clientSecret.length === 1 ? "" : "s"}).`;
   }
   try {
     const parsed = new URL(redirectUri);
@@ -325,6 +329,81 @@ async function validateCalendarCredentials({ clientId, clientSecret, redirectUri
     }
   } catch {
     return "Invalid Redirect URI format. Must be a valid http:// or https:// URL.";
+  }
+
+  return null;
+}
+
+async function validateOrsCredentials({ apiKey }) {
+  if (!apiKey) {
+    return "OpenRouteService API key is required.";
+  }
+  if (hasControlOrWhitespace(apiKey) || isPlaceholderValue(apiKey)) {
+    return "OpenRouteService API key cannot contain spaces or placeholder text.";
+  }
+  const isStandardToken = apiKey.length >= 58 && apiKey.length <= 64;
+  const isHeigitToken = apiKey.length === 120;
+  if ((!isStandardToken && !isHeigitToken) || !/^[A-Za-z0-9_=+/.-]+$/.test(apiKey)) {
+    return `OpenRouteService API key must be 58-64 characters (standard token) or 120 characters (HeiGIT token), currently ${apiKey.length} characters.`;
+  }
+
+  try {
+    const { ok, status, data } = await fetchJsonWithTimeout(
+      "https://api.openrouteservice.org/v2/directions/driving-car/geojson",
+      {
+        method: "POST",
+        headers: {
+          Authorization: apiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          coordinates: [
+            [124.7314, 7.8211],
+            [124.745, 7.83],
+          ],
+          preference: "fastest",
+        }),
+      }
+    );
+    if (!ok && (status === 401 || status === 403)) {
+      const msg = data?.error?.message || data?.error || "rejected by OpenRouteService.";
+      return `Invalid OpenRouteService API key: ${msg}`;
+    }
+  } catch {
+    // Allow format-validated key when offline
+  }
+
+  return null;
+}
+
+async function validateOcrSpaceCredentials({ apiKey }) {
+  if (!apiKey) {
+    return "OCR.space API key is required.";
+  }
+  if (hasControlOrWhitespace(apiKey) || isPlaceholderValue(apiKey)) {
+    return "OCR.space API key cannot contain spaces or placeholder text.";
+  }
+  if (!OCR_SPACE_KEY_REGEX.test(apiKey) || apiKey.length !== 20) {
+    return `OCR.space API key must be exactly 20 characters starting with 'K' (currently ${apiKey.length} character${apiKey.length === 1 ? "" : "s"}).`;
+  }
+
+  try {
+    const form = new FormData();
+    form.append("apikey", apiKey);
+    form.append("base64Image", "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
+    form.append("language", "eng");
+    const { status, data } = await fetchJsonWithTimeout("https://api.ocr.space/parse/image", {
+      method: "POST",
+      body: form,
+    });
+    const errText = Array.isArray(data?.ErrorMessage)
+      ? data.ErrorMessage.join("; ")
+      : String(data?.ErrorMessage || data?.error || "");
+    if (status === 401 || status === 403 || /api key is invalid|invalid api key|expired/i.test(errText)) {
+      return `Invalid OCR.space API key: ${errText || `HTTP ${status} from OCR.space.`}`;
+    }
+  } catch {
+    // Allow format-validated key when offline
   }
 
   return null;
@@ -339,6 +418,8 @@ const VALIDATORS = {
   cloudinary: validateCloudinaryCredentials,
   email: validateEmailCredentials,
   calendar: validateCalendarCredentials,
+  ors: validateOrsCredentials,
+  ocrSpace: validateOcrSpaceCredentials,
 };
 
 /**

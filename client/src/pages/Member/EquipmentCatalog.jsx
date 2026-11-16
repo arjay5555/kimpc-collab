@@ -3,12 +3,18 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { api, getCachedApiData } from "../../services/api";
 import MemberTopbar from "../../components/MemberTopbar";
+import FarmLocationPicker from "../../components/FarmLocationPicker";
+import GcashOcrBadge from "../../components/GcashOcrBadge";
 
 const EMPTY_BOOKING = {
   start: "",
   end: "",
   hectares: 1,
   location: "",
+  formattedAddress: "",
+  farmCoordinates: null,
+  deliveryDistanceKm: null,
+  estimatedTravelMinutes: null,
 };
 
 function getAvailability(unit) {
@@ -229,6 +235,9 @@ export default function EquipmentCatalog() {
   const [cashTiming, setCashTiming] = useState("Upon Pickup");
   const [gcashProof, setGcashProof] = useState("");
   const [gcashPreview, setGcashPreview] = useState("");
+  const [gcashOcr, setGcashOcr] = useState(null);
+  const [gcashOcrScanning, setGcashOcrScanning] = useState(false);
+  const [gcashOcrError, setGcashOcrError] = useState("");
   const [copiedGcash, setCopiedGcash] = useState(false);
 
   const handleCopyGcash = () => {
@@ -236,6 +245,25 @@ export default function EquipmentCatalog() {
       navigator.clipboard.writeText("09264638983");
       setCopiedGcash(true);
       setTimeout(() => setCopiedGcash(false), 2000);
+    }
+  };
+
+  const scanGcashImage = async (dataUrl) => {
+    if (!dataUrl) return;
+    setGcashOcrScanning(true);
+    setGcashOcrError("");
+    const res = await api("/ocr/gcash", {
+      method: "POST",
+      body: {
+        imageDataUrl: dataUrl,
+        expectedAmount: estimatedCost,
+      },
+    });
+    setGcashOcrScanning(false);
+    if (res.ok && res.data?.extracted) {
+      setGcashOcr(res.data.extracted);
+    } else if (!res.data?.disabled) {
+      setGcashOcrError(res.data?.error || "Could not extract receipt details.");
     }
   };
 
@@ -250,6 +278,9 @@ export default function EquipmentCatalog() {
     reader.onload = () => {
       setGcashProof(reader.result);
       setGcashPreview(reader.result);
+      setGcashOcr(null);
+      setGcashOcrError("");
+      scanGcashImage(reader.result);
     };
     reader.readAsDataURL(file);
   };
@@ -416,10 +447,11 @@ export default function EquipmentCatalog() {
 
   useEffect(() => {
     api("/member/preferences").then((response) => {
-      if (response.ok && response.data?.defaultFarmLocation) {
+      if (response.ok && response.data) {
         setBooking((current) => ({
           ...current,
-          location: current.location || response.data.defaultFarmLocation,
+          location: current.location || response.data.defaultFarmLocation || "",
+          farmCoordinates: current.farmCoordinates || response.data.defaultFarmCoordinates || null,
         }));
       }
     });
@@ -601,10 +633,15 @@ export default function EquipmentCatalog() {
         paymentMethod,
         cashPaymentOption: paymentMethod === "Cash" ? cashTiming : "",
         gcashProof: paymentMethod === "GCash" ? gcashProof : "",
+        gcashOcr: paymentMethod === "GCash" && gcashOcr ? gcashOcr : undefined,
         paymentStatus: "Pending",
         farmerPhone: memberPhone,
         memberPhone,
         farmLocation: (booking.location || "").trim(),
+        farmFormattedAddress: (booking.formattedAddress || booking.location || "").trim(),
+        farmCoordinates: booking.farmCoordinates || null,
+        deliveryDistanceKm: booking.deliveryDistanceKm ?? null,
+        estimatedTravelMinutes: booking.estimatedTravelMinutes ?? null,
       },
     });
 
@@ -617,6 +654,8 @@ export default function EquipmentCatalog() {
     setBooking(EMPTY_BOOKING);
     setGcashProof("");
     setGcashPreview("");
+    setGcashOcr(null);
+    setGcashOcrError("");
     navigate("/applications");
   };
 
@@ -864,21 +903,30 @@ export default function EquipmentCatalog() {
                     <div className="mb-book-field">
                       <label className="mb-book-label" htmlFor="booking-location">
                         <span>
-                          Farm Location <span className="mb-book-label-req">*</span>
+                          Farm Location &amp; Map Pin (PSGC + OpenStreetMap) <span className="mb-book-label-req">*</span>
                         </span>
                       </label>
-                      <div className="mb-book-input-wrap">
-                        <MapPinIcon size={15} />
-                        <input
-                          id="booking-location"
-                          className="mb-book-input"
-                          type="text"
-                          required
-                          placeholder="Barangay, Purok / Sitio, Landmark"
-                          value={booking.location || ""}
-                          onChange={(e) => setBooking((prev) => ({ ...prev, location: e.target.value }))}
-                        />
-                      </div>
+                      <FarmLocationPicker
+                        height={190}
+                        placeholder="Barangay, Purok / Sitio, Landmark"
+                        value={{
+                          location: booking.location || "",
+                          formattedAddress: booking.formattedAddress || "",
+                          coordinates: booking.farmCoordinates || null,
+                          distanceKm: booking.deliveryDistanceKm ?? null,
+                          durationMinutes: booking.estimatedTravelMinutes ?? null,
+                        }}
+                        onChange={(geo) =>
+                          setBooking((prev) => ({
+                            ...prev,
+                            location: geo.location || "",
+                            formattedAddress: geo.formattedAddress || geo.location || "",
+                            farmCoordinates: geo.coordinates || null,
+                            deliveryDistanceKm: geo.distanceKm ?? null,
+                            estimatedTravelMinutes: geo.durationMinutes ?? null,
+                          }))
+                        }
+                      />
                     </div>
                   </div>
 
@@ -1149,11 +1197,22 @@ export default function EquipmentCatalog() {
                               onClick={() => {
                                 setGcashProof("");
                                 setGcashPreview("");
+                                setGcashOcr(null);
+                                setGcashOcrError("");
                               }}
                             >
                               Remove
                             </button>
                           </div>
+                        )}
+                        {gcashPreview && (
+                          <GcashOcrBadge
+                            ocr={gcashOcr}
+                            scanning={gcashOcrScanning}
+                            error={gcashOcrError}
+                            expectedAmount={estimatedCost}
+                            onScanClick={() => scanGcashImage(gcashProof)}
+                          />
                         )}
                       </div>
                     )}
@@ -1333,14 +1392,15 @@ export default function EquipmentCatalog() {
       />
 
       {/* Category Filter */}
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
+      <div className="member-catalog-filter-bar" style={{ display: "flex", justifyContent: "flex-end", marginBottom: "16px" }}>
         <select
           aria-label="Filter by category"
           value={category}
           onChange={(event) => setCategory(event.target.value)}
+          className="member-category-dropdown"
           style={{
-            minWidth: "180px",
-            minHeight: "40px",
+            minWidth: "160px",
+            minHeight: "38px",
             padding: "0 12px",
             borderRadius: "8px",
             border: "1px solid #cbd5e1",

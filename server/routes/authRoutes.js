@@ -30,6 +30,8 @@ const {
   DEFAULT_GOOGLE_CALENDAR_CLIENT_ID,
   DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET,
   DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI,
+  DEFAULT_ORS_API_KEY,
+  DEFAULT_OCR_SPACE_API_KEY,
   getEffectiveGoogleKeys,
   getEffectiveFacebookKeys,
   getEffectiveRecaptchaKeys,
@@ -168,6 +170,8 @@ router.get(["/config", "/auth/settings", "/settings/public"], async (req, res) =
   const cloudinaryEnabled = await getSystemSetting("cloudinaryEnabled", true);
   const emailResetEnabled = await getSystemSetting("emailResetEnabled", true);
   const googleCalendarEnabled = await getSystemSetting("googleCalendarEnabled", true);
+  const orsEnabled = await getSystemSetting("orsEnabled", true);
+  const ocrSpaceEnabled = await getSystemSetting("ocrSpaceEnabled", true);
 
   const { clientId: googleClientId } = await getEffectiveGoogleKeys();
   const { appId: facebookAppId } = await getEffectiveFacebookKeys();
@@ -186,6 +190,8 @@ router.get(["/config", "/auth/settings", "/settings/public"], async (req, res) =
     cloudinaryEnabled: Boolean(cloudinaryEnabled),
     emailResetEnabled: Boolean(emailResetEnabled),
     googleCalendarEnabled: Boolean(googleCalendarEnabled),
+    orsEnabled: Boolean(orsEnabled),
+    ocrSpaceEnabled: Boolean(ocrSpaceEnabled),
     oneSignalAppId: oneSignalAppId || "fc811113-559c-40c3-ba59-e703db896839",
   });
 });
@@ -200,6 +206,8 @@ router.get("/admin/settings", requireAdmin, async (req, res) => {
     const cloudinaryEnabled = await getSystemSetting("cloudinaryEnabled", true);
     const emailResetEnabled = await getSystemSetting("emailResetEnabled", true);
     const googleCalendarEnabled = await getSystemSetting("googleCalendarEnabled", true);
+    const orsEnabled = await getSystemSetting("orsEnabled", true);
+    const ocrSpaceEnabled = await getSystemSetting("ocrSpaceEnabled", true);
     res.json({
       googleLoginEnabled: Boolean(googleLoginEnabled),
       facebookLoginEnabled: Boolean(facebookLoginEnabled),
@@ -209,6 +217,8 @@ router.get("/admin/settings", requireAdmin, async (req, res) => {
       cloudinaryEnabled: Boolean(cloudinaryEnabled),
       emailResetEnabled: Boolean(emailResetEnabled),
       googleCalendarEnabled: Boolean(googleCalendarEnabled),
+      orsEnabled: Boolean(orsEnabled),
+      ocrSpaceEnabled: Boolean(ocrSpaceEnabled),
     });
   } catch (err) {
     console.error("Error retrieving admin settings:", err);
@@ -228,6 +238,8 @@ router.put("/admin/settings", requireAdmin, async (req, res) => {
       "cloudinaryEnabled",
       "emailResetEnabled",
       "googleCalendarEnabled",
+      "orsEnabled",
+      "ocrSpaceEnabled",
     ];
 
     for (const key of allowedKeys) {
@@ -259,6 +271,8 @@ router.put("/admin/settings", requireAdmin, async (req, res) => {
     const cloudinaryEnabled = await getSystemSetting("cloudinaryEnabled", true);
     const emailResetEnabled = await getSystemSetting("emailResetEnabled", true);
     const googleCalendarEnabled = await getSystemSetting("googleCalendarEnabled", true);
+    const orsEnabled = await getSystemSetting("orsEnabled", true);
+    const ocrSpaceEnabled = await getSystemSetting("ocrSpaceEnabled", true);
 
     res.json({
       ok: true,
@@ -270,6 +284,8 @@ router.put("/admin/settings", requireAdmin, async (req, res) => {
       cloudinaryEnabled: Boolean(cloudinaryEnabled),
       emailResetEnabled: Boolean(emailResetEnabled),
       googleCalendarEnabled: Boolean(googleCalendarEnabled),
+      orsEnabled: Boolean(orsEnabled),
+      ocrSpaceEnabled: Boolean(ocrSpaceEnabled),
       message: "Integration settings updated successfully.",
     });
   } catch (err) {
@@ -398,6 +414,68 @@ router.post("/admin/settings/weather", requireAdmin, async (req, res) => {
     });
   } catch (err) {
     console.error("Error saving weather setting:", err);
+    fail(res, 500, "Failed to update setting.");
+  }
+});
+
+router.post("/admin/settings/ors", requireAdmin, async (req, res) => {
+  try {
+    const enabled = Boolean(req.body.enabled);
+    const updatedBy = req.admin?.email || "admin";
+    await setSystemSetting(
+      "orsEnabled",
+      enabled,
+      "Allow OpenRouteService farm distance, driving ETA, and dispatch routing",
+      updatedBy
+    );
+
+    await logAudit({
+      action: "SETTINGS_UPDATED",
+      actorEmail: updatedBy,
+      actorRole: req.admin?.role || "admin",
+      details: `Administrator ${enabled ? "enabled" : "disabled"} OpenRouteService Maps & Routing integration`,
+      status: "Success",
+      req,
+    });
+
+    res.json({
+      ok: true,
+      orsEnabled: enabled,
+      message: `OpenRouteService routing integration has been ${enabled ? "enabled" : "disabled"} successfully.`,
+    });
+  } catch (err) {
+    console.error("Error saving ORS setting:", err);
+    fail(res, 500, "Failed to update setting.");
+  }
+});
+
+router.post("/admin/settings/ocr-space", requireAdmin, async (req, res) => {
+  try {
+    const enabled = Boolean(req.body.enabled);
+    const updatedBy = req.admin?.email || "admin";
+    await setSystemSetting(
+      "ocrSpaceEnabled",
+      enabled,
+      "Allow automatic GCash receipt text & reference extraction via OCR.space",
+      updatedBy
+    );
+
+    await logAudit({
+      action: "SETTINGS_UPDATED",
+      actorEmail: updatedBy,
+      actorRole: req.admin?.role || "admin",
+      details: `Administrator ${enabled ? "enabled" : "disabled"} OCR.space GCash Receipt Scanner integration`,
+      status: "Success",
+      req,
+    });
+
+    res.json({
+      ok: true,
+      ocrSpaceEnabled: enabled,
+      message: `OCR.space Receipt Scanner has been ${enabled ? "enabled" : "disabled"} successfully.`,
+    });
+  } catch (err) {
+    console.error("Error saving OCR.space setting:", err);
     fail(res, 500, "Failed to update setting.");
   }
 });
@@ -861,6 +939,140 @@ router.post(["/admin/api-keys/weather", "/admin/integrations/keys/weather", "/ad
   } catch (err) {
     console.error("Error saving custom weather API key:", err);
     fail(res, 500, "Failed to save Weather API key.");
+  }
+});
+
+router.post(["/admin/api-keys/ors", "/admin/integrations/keys/ors", "/admin/integrations/keys/ors/reset"], requireAdmin, async (req, res) => {
+  try {
+    const body = req.body || {};
+    const key = clean(body.apiKey);
+    const defaultKey = (process.env.DEFAULT_ORS_API_KEY || DEFAULT_ORS_API_KEY || "").trim();
+    const isMatchingDefault = key === defaultKey;
+    const isReset = req.path.endsWith("/reset") || Boolean(body.reset) || !key || isMatchingDefault;
+    const updatedBy = req.admin?.email || "admin";
+
+    if (isReset) {
+      await SystemSetting.findOneAndDelete({ key: "customOrsApiKey" });
+      updateEnvFile({
+        CUSTOM_ORS_API_KEY: "",
+      });
+      process.env.ORS_API_KEY = defaultKey;
+      await logAudit({
+        action: "SETTINGS_UPDATED",
+        actorEmail: updatedBy,
+        actorRole: req.admin?.role || "admin",
+        details: "Administrator reset OpenRouteService API key to default code key",
+        status: "Success",
+        req,
+      });
+      return res.json({
+        ok: true,
+        isCustom: false,
+        defaultKeys: {
+          apiKey: defaultKey,
+        },
+        message: "OpenRouteService API key reset to default code key.",
+      });
+    }
+
+    if (await rejectInvalidIntegration(res, req, "ors", { apiKey: key }, updatedBy)) return;
+
+    await setSystemSetting(
+      "customOrsApiKey",
+      key,
+      "Custom OpenRouteService (HeiGIT) API Key",
+      updatedBy
+    );
+
+    updateEnvFile({
+      CUSTOM_ORS_API_KEY: key,
+    });
+    process.env.ORS_API_KEY = key;
+
+    await logAudit({
+      action: "SETTINGS_UPDATED",
+      actorEmail: updatedBy,
+      actorRole: req.admin?.role || "admin",
+      details: "Administrator saved custom OpenRouteService API key",
+      status: "Success",
+      req,
+    });
+
+    res.json({
+      ok: true,
+      isCustom: true,
+      message: "Custom OpenRouteService API key saved successfully.",
+    });
+  } catch (err) {
+    console.error("Error saving custom ORS API key:", err);
+    fail(res, 500, "Failed to save OpenRouteService API key.");
+  }
+});
+
+router.post(["/admin/api-keys/ocr-space", "/admin/integrations/keys/ocr-space", "/admin/integrations/keys/ocr-space/reset"], requireAdmin, async (req, res) => {
+  try {
+    const body = req.body || {};
+    const key = clean(body.apiKey);
+    const defaultKey = (process.env.DEFAULT_OCR_SPACE_API_KEY || DEFAULT_OCR_SPACE_API_KEY || "").trim();
+    const isMatchingDefault = key === defaultKey;
+    const isReset = req.path.endsWith("/reset") || Boolean(body.reset) || !key || isMatchingDefault;
+    const updatedBy = req.admin?.email || "admin";
+
+    if (isReset) {
+      await SystemSetting.findOneAndDelete({ key: "customOcrSpaceApiKey" });
+      updateEnvFile({
+        CUSTOM_OCR_SPACE_API_KEY: "",
+      });
+      process.env.OCR_SPACE_API_KEY = defaultKey;
+      await logAudit({
+        action: "SETTINGS_UPDATED",
+        actorEmail: updatedBy,
+        actorRole: req.admin?.role || "admin",
+        details: "Administrator reset OCR.space API key to default code key",
+        status: "Success",
+        req,
+      });
+      return res.json({
+        ok: true,
+        isCustom: false,
+        defaultKeys: {
+          apiKey: defaultKey,
+        },
+        message: "OCR.space API key reset to default code key.",
+      });
+    }
+
+    if (await rejectInvalidIntegration(res, req, "ocrSpace", { apiKey: key }, updatedBy)) return;
+
+    await setSystemSetting(
+      "customOcrSpaceApiKey",
+      key,
+      "Custom OCR.space API Key",
+      updatedBy
+    );
+
+    updateEnvFile({
+      CUSTOM_OCR_SPACE_API_KEY: key,
+    });
+    process.env.OCR_SPACE_API_KEY = key;
+
+    await logAudit({
+      action: "SETTINGS_UPDATED",
+      actorEmail: updatedBy,
+      actorRole: req.admin?.role || "admin",
+      details: "Administrator saved custom OCR.space API key",
+      status: "Success",
+      req,
+    });
+
+    res.json({
+      ok: true,
+      isCustom: true,
+      message: "Custom OCR.space API key saved successfully.",
+    });
+  } catch (err) {
+    console.error("Error saving custom OCR.space API key:", err);
+    fail(res, 500, "Failed to save OCR.space API key.");
   }
 });
 

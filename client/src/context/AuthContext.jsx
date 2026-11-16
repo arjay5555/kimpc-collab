@@ -123,7 +123,7 @@ export function AuthProvider({ children }) {
     return newUser;
   };
 
-  const updateProfile = ({ fullName, avatar }) => {
+  const updateProfile = useCallback(({ fullName, avatar }) => {
     if (fullName) {
       sessionStorage.setItem("kimpc-account-name", fullName);
       sessionStorage.setItem("minders-account-name", fullName);
@@ -132,15 +132,20 @@ export function AuthProvider({ children }) {
         localStorage.setItem("minders-account-name", fullName);
       }
     }
-    if (avatar !== undefined) {
-      if (avatar) {
-        localStorage.setItem(`kimpc-avatar-${user?.email || "current"}`, avatar);
-      } else {
-        localStorage.removeItem(`kimpc-avatar-${user?.email || "current"}`);
+    setUser((current) => {
+      const targetEmail = current?.email || getSignedInEmail() || "current";
+      if (avatar !== undefined) {
+        if (avatar) {
+          localStorage.setItem(`kimpc-avatar-${targetEmail}`, avatar);
+        } else {
+          localStorage.removeItem(`kimpc-avatar-${targetEmail}`);
+        }
       }
-    }
-    setUser((current) => (current ? { ...current, ...(fullName ? { fullName } : {}), ...(avatar !== undefined ? { avatar } : {}) } : current));
-  };
+      return current
+        ? { ...current, ...(fullName ? { fullName } : {}), ...(avatar !== undefined ? { avatar } : {}) }
+        : current;
+    });
+  }, []);
 
   const login = async (identifier, password, recaptchaToken = "", rememberMe = false) => {
     const res = await api("/login", {

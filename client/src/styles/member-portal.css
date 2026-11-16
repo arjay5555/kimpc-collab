@@ -343,9 +343,7 @@
   .member-page-heading { gap: 16px; }
   .member-catalog-tools { flex-direction: column; }
   .member-catalog-tools select { min-height: 42px; }
-  .member-product-grid { grid-template-columns: 1fr; }
   .member-events-grid { grid-template-columns: 1fr; }
-  .member-product-image-wrap { height: 210px; }
   .member-detail-list div { grid-template-columns: 100px 1fr; }
   .member-notification { flex-wrap: wrap; }
   .member-notification-actions { margin-left: 49px; }
@@ -360,12 +358,191 @@
 /* ================= Mobile Phone Optimizations for Farmers ================ */
 /* ========================================================================= */
 
+/* Responsive visibility utilities for Member Portal */
+.member-mobile-only {
+  display: none !important;
+}
+
+.member-desktop-only {
+  display: block;
+}
+
 /* Mobile Bottom Navigation (Hidden on desktop, active on phone <= 768px) */
 .member-mobile-bottom-nav {
   display: none;
 }
 
 @media (max-width: 768px) {
+  /* =========================================================================
+     Mobile Responsive View: Hide Booking Tables Completely, Show Cards Only
+     ========================================================================= */
+  .member-desktop-only,
+  .wz-table-responsive.member-desktop-only,
+  .member-bookings-table-container,
+  .wz-bookings-table-mobile-hidden {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    max-height: 0 !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    pointer-events: none !important;
+  }
+
+  .member-mobile-only {
+    display: flex !important;
+  }
+
+  .member-mobile-bookings-list {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 0 20px 0 !important;
+  }
+
+  .member-booking-mobile-card {
+    background: #ffffff !important;
+    border-radius: 10px !important;
+    border: 1px solid #e2e8f0 !important;
+    padding: 10px 12px !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02) !important;
+    transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+    -webkit-tap-highlight-color: transparent !important;
+  }
+
+  .member-booking-mobile-card:active {
+    transform: scale(0.99) !important;
+  }
+
+  /* =========================================================================
+     Mobile Booking Details Page (Matches User-Uploaded E-Commerce / Order UI)
+     ========================================================================= */
+  .mobile-detail-page {
+    width: calc(100% + 28px) !important;
+    max-width: calc(100% + 28px) !important;
+    margin: -12px -14px 0 -14px !important;
+    padding: 0 0 110px 0 !important;
+    background: #f8fafc !important;
+    min-height: 100vh !important;
+    min-height: 100dvh !important;
+    box-sizing: border-box !important;
+  }
+
+  .mobile-detail-header {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 99 !important;
+    background: #ffffff !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 12px 16px !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    border-radius: 0 !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02) !important;
+  }
+
+  .mobile-back-btn {
+    background: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 4px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    color: #0f172a !important;
+    cursor: pointer !important;
+    -webkit-tap-highlight-color: transparent !important;
+  }
+
+  .mobile-detail-title {
+    margin: 0 !important;
+    font-size: 0.98rem !important;
+    font-weight: 700 !important;
+    color: #0f172a !important;
+    letter-spacing: -0.01em !important;
+  }
+
+  /* Single unified container maximizing screen space with crisp rectangular edges */
+  .mobile-unified-container {
+    background: #ffffff !important;
+    border-radius: 0 !important;
+    border-top: 1px solid #e2e8f0 !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    border-left: none !important;
+    border-right: none !important;
+    margin: 0 0 24px 0 !important;
+    width: 100% !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+  }
+
+  @keyframes timelineSlideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .timeline-dropdown-anim {
+    animation: timelineSlideDown 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .mobile-action-list-item {
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 13px 16px !important;
+    background: transparent !important;
+    border: none !important;
+    cursor: pointer !important;
+    font-size: 0.85rem !important;
+    color: #0f172a !important;
+    font-weight: 600 !important;
+    text-align: left !important;
+    -webkit-tap-highlight-color: transparent !important;
+    transition: background 0.15s ease !important;
+  }
+
+  .mobile-action-list-item:active {
+    background: #f8fafc !important;
+  }
+
+  .mobile-action-list-left {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+  }
+
+  .mobile-action-chevron {
+    font-size: 1.15rem !important;
+    color: #94a3b8 !important;
+    font-weight: 300 !important;
+  }
+
+  .mobile-action-divider {
+    height: 1px !important;
+    background: #f1f5f9 !important;
+    margin: 0 16px !important;
+  }
+
+  .member-mobile-payments-list {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 14px !important;
+    width: 100% !important;
+  }
+
   /* Hide desktop sidebar on mobile */
   .member-desktop-sidebar {
     display: none !important;
@@ -585,10 +762,159 @@
     width: 100% !important;
   }
 
-  /* Catalog grid phone layout */
+  /* =========================================================================
+     Mobile 2-Column Catalog Grid (Matches Uploaded E-Commerce Design)
+     ========================================================================= */
+  .member-catalog-filter-bar {
+    margin-bottom: 14px !important;
+  }
+
+  .member-category-dropdown {
+    font-size: 0.85rem !important;
+    height: 38px !important;
+    border-radius: 10px !important;
+    border: 1px solid #e2e8f0 !important;
+    background-color: #ffffff !important;
+    color: #1e293b !important;
+    font-weight: 600 !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+  }
+
   .member-product-grid {
-    grid-template-columns: 1fr !important;
-    gap: 14px !important;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 18px 12px !important;
+    padding: 0 !important;
+    margin-bottom: 24px !important;
+  }
+
+  .member-product-card {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    text-decoration: none !important;
+    overflow: visible !important;
+    transition: transform 0.15s ease !important;
+    -webkit-tap-highlight-color: transparent !important;
+  }
+
+  .member-product-card:active {
+    transform: scale(0.97) !important;
+  }
+
+  /* Rounded Image Container with Soft Neutral Background */
+  .member-product-image-wrap {
+    position: relative !important;
+    width: 100% !important;
+    height: auto !important;
+    aspect-ratio: 1 / 1.05 !important;
+    background: #f1f3f6 !important;
+    border-radius: 14px !important;
+    overflow: hidden !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border: 1px solid rgba(0, 0, 0, 0.04) !important;
+  }
+
+  .member-product-image-wrap img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+  }
+
+  /* Warm Orange Top-Left Pill Badge (Matches Picture's Orange "New" Badge) */
+  .member-product-image-wrap .member-availability {
+    position: absolute !important;
+    top: 8px !important;
+    left: 8px !important;
+    padding: 3px 8px !important;
+    border-radius: 6px !important;
+    font-size: 0.67rem !important;
+    font-weight: 700 !important;
+    line-height: 1.2 !important;
+    letter-spacing: 0.02em !important;
+    z-index: 2 !important;
+    gap: 0 !important;
+    border: none !important;
+  }
+
+  .member-product-image-wrap .member-availability i {
+    display: none !important;
+  }
+
+  .member-product-image-wrap .member-availability-available {
+    background: #e28a36 !important; /* Authentic warm orange tone from picture */
+    color: #ffffff !important;
+    box-shadow: 0 2px 6px rgba(226, 138, 54, 0.35) !important;
+  }
+
+  .member-product-image-wrap .member-availability-unavailable {
+    background: rgba(15, 23, 42, 0.72) !important;
+    color: #ffffff !important;
+    backdrop-filter: blur(4px) !important;
+  }
+
+  /* Content Below Image */
+  .member-product-card-copy {
+    padding: 8px 2px 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 1px !important;
+  }
+
+  .member-product-category {
+    display: none !important;
+  }
+
+  .member-product-card-copy h2 {
+    font-size: 0.88rem !important;
+    font-weight: 700 !important;
+    color: #0f172a !important;
+    margin: 0 !important;
+    line-height: 1.25 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  .member-product-card-copy > p {
+    display: none !important;
+  }
+
+  .member-product-card-price {
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    display: flex !important;
+    align-items: baseline !important;
+  }
+
+  .member-product-card-price strong {
+    font-size: 0.82rem !important;
+    font-weight: 600 !important;
+    color: #475569 !important;
+  }
+
+  .member-product-card-price small {
+    font-size: 0.68rem !important;
+    color: #94a3b8 !important;
+    margin-left: 2px !important;
+  }
+
+  .member-product-card-price span {
+    display: none !important;
+  }
+
+  /* Skeleton Loading State in 2-Column */
+  .member-product-skeleton {
+    height: auto !important;
+    aspect-ratio: 1 / 1.05 !important;
+    border-radius: 14px !important;
+    background-color: #f1f3f6 !important;
   }
 
   /* Modal bottom-sheet style on mobile */

@@ -238,6 +238,9 @@ function handleMutationInvalidation(path) {
   } else if (p.includes("/messages")) {
     invalidateApiCache("/messages");
     invalidateApiCache("/manager/messages");
+  } else if (p.includes("/member/")) {
+    invalidateApiCache("/member/");
+    invalidateApiCache("/accounts/");
   } else {
     // General mutation: invalidate generic cache entries to keep state clean
     invalidateApiCache();

@@ -30,6 +30,20 @@ function formatDateDisplay(dateStr) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+function formatTimelineDate(dateStr) {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  const dateFormatted = d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const hours = d.getHours();
+  const minutes = d.getMinutes();
+  if (hours !== 0 || minutes !== 0) {
+    const timeFormatted = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    return `${dateFormatted}, ${timeFormatted}`;
+  }
+  return dateFormatted;
+}
+
 function formatBookingDateRange(startDate, endDate) {
   if (!startDate) return "—";
   if (!endDate || startDate === endDate) return formatDateDisplay(startDate);
@@ -63,15 +77,50 @@ function getDaysCount(startDate, endDate) {
 function getStatusInfo(status, isCancellationRequested) {
   const s = (status || "Pending").toLowerCase();
   if (isCancellationRequested || s === "cancellation requested") {
-    return { slug: "cancellation-requested", label: "Cancellation Pending" };
+    return { slug: "cancellation-requested", label: "Cancellation Pending", textColor: "#b45309" };
   }
-  if (s === "approved") return { slug: "approved", label: "Approved" };
-  if (s === "checked-out" || s === "ongoing") return { slug: "ongoing", label: "Ongoing" };
-  if (s === "returned" || s === "completed") return { slug: "completed", label: "Completed" };
-  if (s === "rejected") return { slug: "rejected", label: "Declined" };
-  if (s === "cancelled") return { slug: "cancelled", label: "Cancelled" };
-  if (s === "voided" || s === "void") return { slug: "voided", label: "Voided" };
-  return { slug: "pending", label: "Pending" };
+  if (s === "approved") return { slug: "approved", label: "Approved", textColor: "#15803d" };
+  if (s === "checked-out" || s === "ongoing") return { slug: "ongoing", label: "Ongoing", textColor: "#0284c7" };
+  if (s === "returned" || s === "completed") return { slug: "completed", label: "Completed", textColor: "#166534" };
+  if (s === "rejected") return { slug: "rejected", label: "Declined", textColor: "#b91c1c" };
+  if (s === "cancelled") return { slug: "cancelled", label: "Cancelled", textColor: "#64748b" };
+  if (s === "voided" || s === "void") return { slug: "voided", label: "Voided", textColor: "#64748b" };
+  return { slug: "pending", label: "Pending", textColor: "#d97706" };
+}
+
+function getAppOperatorInfo(app, fullMap) {
+  if (!app) return { required: false, name: "Self-Operated / Own Driver", phone: "" };
+  const unit =
+    fullMap?.get(app.machineryUnitId) ||
+    fullMap?.get(app.equipment?.toLowerCase?.()) ||
+    fullMap?.get(app.machineryModel?.toLowerCase?.());
+
+  const isOperatorRequired = Boolean(
+    app.operatorRequired ||
+    app.driverOption === "With Cooperative Driver" ||
+    unit?.operatorRequired ||
+    unit?.operatorIncluded
+  );
+
+  let operatorName = "";
+  const candidateDriver = (app.driverName || app.assignedDriver || "").trim();
+  const unitDriver = (unit?.assignedDriver || "").trim();
+
+  if (candidateDriver && candidateDriver !== "Unassigned" && !candidateDriver.toLowerCase().includes("self-operated")) {
+    operatorName = candidateDriver;
+  } else if (unitDriver && unitDriver !== "Unassigned" && !unitDriver.toLowerCase().includes("self-operated")) {
+    operatorName = unitDriver;
+  } else if (isOperatorRequired) {
+    operatorName = "Coop Operator Assigned";
+  } else {
+    operatorName = "Self-Operated / Own Driver";
+  }
+
+  return {
+    required: isOperatorRequired,
+    name: operatorName,
+    phone: unit?.driverPhone || app.driverPhone || "",
+  };
 }
 
 function isDateKeyBooked(dayKey, blockedRanges) {
@@ -141,8 +190,10 @@ function getTimelineEvents(app) {
   }
 
   // 3. Approved
-  const isApprovedStage = ["approved", "checked-out", "ongoing", "returned"].includes(statusLower) || Boolean(app.approvedAt);
-  if (isApprovedStage) {
+  const isApprovedStage =
+    ["approved", "checked-out", "ongoing", "returned", "completed"].includes(statusLower) ||
+    Boolean(app.approvedAt);
+  if (isApprovedStage && statusLower !== "pending" && statusLower !== "rejected") {
     events.push({
       event: "approved",
       title: "Booking Approved",
@@ -153,10 +204,13 @@ function getTimelineEvents(app) {
   }
 
   // 4. Given / Dispatched (Checked-Out)
-  const isDispatched = statusLower === "checked-out" || statusLower === "ongoing" || statusLower === "returned" || Boolean(app.dispatchedAt) || Boolean(app.checkoutInspection);
-  if (isDispatched) {
+  const isDispatched =
+    ["checked-out", "ongoing", "returned", "completed"].includes(statusLower) ||
+    Boolean(app.dispatchedAt) ||
+    Boolean(app.checkoutInspection?.inspectedAt);
+  if (isDispatched && !["pending", "approved", "rejected", "cancelled", "voided"].includes(statusLower)) {
     const insp = app.checkoutInspection;
-    const inspNote = insp ? ` (Fuel: ${insp.fuelLevel || "100%"}, Odometer: ${insp.odometerHours || 0} hrs)` : "";
+    const inspNote = insp && insp.inspectedAt ? ` (Fuel: ${insp.fuelLevel || "100%"}, Odometer: ${insp.odometerHours || 0} hrs)` : "";
     events.push({
       event: "dispatched",
       title: "Machinery Given / Dispatched",
@@ -167,10 +221,13 @@ function getTimelineEvents(app) {
   }
 
   // 5. Returned
-  const isReturned = statusLower === "returned" || Boolean(app.returnedAt) || Boolean(app.checkinInspection);
-  if (isReturned) {
+  const isReturned =
+    ["returned", "completed"].includes(statusLower) ||
+    Boolean(app.returnedAt) ||
+    Boolean(app.checkinInspection?.inspectedAt);
+  if (isReturned && !["pending", "approved", "checked-out", "ongoing", "rejected", "cancelled", "voided"].includes(statusLower)) {
     const insp = app.checkinInspection;
-    const inspNote = insp ? ` (Fuel: ${insp.fuelLevel || "100%"}, Odometer: ${insp.odometerHours || 0} hrs, Notes: ${insp.notes || "Clean"})` : "";
+    const inspNote = insp && insp.inspectedAt ? ` (Fuel: ${insp.fuelLevel || "100%"}, Odometer: ${insp.odometerHours || 0} hrs, Notes: ${insp.notes || "Clean"})` : "";
     events.push({
       event: "returned",
       title: "Machinery Returned & Inspected",
@@ -235,6 +292,133 @@ function getTimelineEvents(app) {
   return events;
 }
 
+function getStageTimestamp(app, eventKey, fallbackDate) {
+  if (Array.isArray(app?.timeline)) {
+    for (let i = app.timeline.length - 1; i >= 0; i--) {
+      const item = app.timeline[i];
+      if (item && item.event === eventKey && item.timestamp) {
+        return item.timestamp;
+      }
+    }
+  }
+  return fallbackDate || app.updatedAt || app.createdAt || new Date();
+}
+
+/**
+ * Synthesizes minimal lifecycle stages (Pending, Approved, On Going, Completed, Cancelled)
+ * sorted with the LATEST STAGE AT THE TOP (reverse-chronological).
+ * Strictly gated by actual booking status and the timestamp of each status change.
+ * Only displays status label and date/time.
+ */
+function getMobileTimelineStages(app) {
+  if (!app) return [];
+  const statusLower = (app.status || "pending").toLowerCase();
+  const stages = [];
+
+  const isCancelled = ["cancelled", "voided"].includes(statusLower);
+  const isCancellationRequested = app.cancellationRequested || statusLower === "cancellation requested";
+  const isRejected = statusLower === "rejected";
+  const isCompleted = ["returned", "completed"].includes(statusLower);
+  const isOngoing = isCompleted || ["checked-out", "ongoing"].includes(statusLower);
+  const isApproved = isOngoing || statusLower === "approved" || Boolean(app.approvedAt);
+
+  // Stage order rank for tie-breaking when timestamps match
+  const STAGE_ORDER = {
+    cancelled: 6,
+    cancellation_requested: 6,
+    rejected: 6,
+    completed: 5,
+    ongoing: 4,
+    approved: 3,
+    pending: 1,
+  };
+
+  // 1. Pending (Always present as the initial booking submission)
+  const pendingDate = app.createdAt || getStageTimestamp(app, "submitted", app.createdAt);
+  stages.push({
+    key: "pending",
+    label: "Pending",
+    timestamp: new Date(pendingDate),
+    dateStr: formatTimelineDate(pendingDate),
+    color: "#0284c7",
+  });
+
+  // 2. Approved (Strictly only if status is Approved, On Going, Completed, or was approved before being cancelled)
+  if (isApproved && statusLower !== "pending" && !isRejected) {
+    const approvedDate = app.approvedAt || getStageTimestamp(app, "approved", app.updatedAt);
+    stages.push({
+      key: "approved",
+      label: "Approved",
+      timestamp: new Date(approvedDate),
+      dateStr: formatTimelineDate(approvedDate),
+      color: "#15803d",
+    });
+  }
+
+  // 3. On Going (Strictly only if status is Checked-Out, On Going, or Completed)
+  if (isOngoing && !isCancelled && !isCancellationRequested && !isRejected) {
+    const ongoingDate = app.dispatchedAt || getStageTimestamp(app, "dispatched", app.startDate || app.updatedAt);
+    stages.push({
+      key: "ongoing",
+      label: "On Going",
+      timestamp: new Date(ongoingDate),
+      dateStr: formatTimelineDate(ongoingDate),
+      color: "#0284c7",
+    });
+  }
+
+  // 4. Completed (Strictly only if status is Returned or Completed)
+  if (isCompleted && !isCancelled && !isRejected) {
+    const completedDate = app.returnedAt || getStageTimestamp(app, "returned", app.updatedAt);
+    stages.push({
+      key: "completed",
+      label: "Completed",
+      timestamp: new Date(completedDate),
+      dateStr: formatTimelineDate(completedDate),
+      color: "#166534",
+    });
+  }
+
+  // 5. Cancelled / Cancellation Requested / Rejected
+  if (isCancelled) {
+    const cancelDate = app.cancelledAt || getStageTimestamp(app, "cancelled", app.updatedAt);
+    stages.push({
+      key: "cancelled",
+      label: "Cancelled",
+      timestamp: new Date(cancelDate),
+      dateStr: formatTimelineDate(cancelDate),
+      color: "#dc2626",
+    });
+  } else if (isCancellationRequested) {
+    const cancelReqDate = app.cancellationRequestedAt || getStageTimestamp(app, "cancellation_requested", app.updatedAt);
+    stages.push({
+      key: "cancellation_requested",
+      label: "Cancellation Requested",
+      timestamp: new Date(cancelReqDate),
+      dateStr: formatTimelineDate(cancelReqDate),
+      color: "#b45309",
+    });
+  } else if (isRejected) {
+    const rejectDate = getStageTimestamp(app, "rejected", app.updatedAt);
+    stages.push({
+      key: "rejected",
+      label: "Declined",
+      timestamp: new Date(rejectDate),
+      dateStr: formatTimelineDate(rejectDate),
+      color: "#dc2626",
+    });
+  }
+
+  // Sort reverse-chronological: NEWEST / LATEST STAGE ON TOP!
+  stages.sort((a, b) => {
+    const timeDiff = b.timestamp.getTime() - a.timestamp.getTime();
+    if (timeDiff !== 0) return timeDiff;
+    return (STAGE_ORDER[b.key] || 0) - (STAGE_ORDER[a.key] || 0);
+  });
+
+  return stages;
+}
+
 export default function Applications() {
   const { user } = useAuth();
   const [applications, setApplications] = useState(() => {
@@ -253,8 +437,37 @@ export default function Applications() {
   // Modal active view tab: 'details' | 'timeline' | 'edit' | 'cancel'
   const [viewModalTab, setViewModalTab] = useState("details");
 
-  // Machinery units image lookup map
+  // Screen width detection for mobile vs desktop experience
+  const [isMobile, setIsMobile] = useState(() => (typeof window !== "undefined" ? window.innerWidth <= 768 : false));
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Machinery units image and full metadata lookup maps
   const [machineryUnitsMap, setMachineryUnitsMap] = useState(new Map());
+  const [machineryUnitsFullMap, setMachineryUnitsFullMap] = useState(new Map());
+
+  // Mobile Booking Details View Specific States
+  const [isTimelineExpanded, setIsTimelineExpanded] = useState(false);
+  const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
+  const [requestMode, setRequestMode] = useState(""); // "" | "menu" | "reschedule" | "cancel"
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [showContactModal, setShowContactModal] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [copiedBookingId, setCopiedBookingId] = useState(false);
+
+  const handleCopyBookingId = (text) => {
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(text);
+      setCopiedBookingId(true);
+      setTimeout(() => setCopiedBookingId(false), 2000);
+    }
+  };
 
   // Inline Editing state for selected booking
   const [editForm, setEditForm] = useState({
@@ -292,12 +505,18 @@ export default function Applications() {
         ? unitsRes.data
         : [];
       const map = new Map();
+      const fullMap = new Map();
       unitsList.forEach((u) => {
         const img = u.imageUrl || (Array.isArray(u.photos) && u.photos[0]) || "";
         if (u.unitId && img) map.set(u.unitId, img);
         if (u.name && img && !map.has(u.name)) map.set(u.name, img);
+
+        if (u.unitId) fullMap.set(u.unitId, u);
+        if (u._id) fullMap.set(String(u._id), u);
+        if (u.name) fullMap.set(u.name.toLowerCase(), u);
       });
       setMachineryUnitsMap(map);
+      setMachineryUnitsFullMap(fullMap);
     }
     setLoading(false);
   }, [user?.email]);
@@ -343,6 +562,12 @@ export default function Applications() {
   const handleOpenViewModal = (app) => {
     setSelected(app);
     setViewModalTab("details");
+    setRequestMode("");
+    setIsTimelineExpanded(false);
+    setIsSummaryExpanded(false);
+    setShowReceiptModal(false);
+    setShowContactModal(false);
+    setShowHelpModal(false);
     setEditForm({
       farmLocation: app.farmLocation || "",
       startDate: app.startDate || "",
@@ -354,11 +579,14 @@ export default function Applications() {
     setCustomCancelReason("");
     setActionError("");
     setActionSuccess("");
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   };
 
   // Live conflict checking for inline edit
   const editDateConflict = useMemo(() => {
-    if (!selected || viewModalTab !== "edit" || !editForm.startDate || !editForm.endDate) {
+    if (!selected || (viewModalTab !== "edit" && requestMode !== "reschedule") || !editForm.startDate || !editForm.endDate) {
       return "";
     }
     if (editForm.endDate < editForm.startDate) {
@@ -485,6 +713,787 @@ export default function Applications() {
       }
     }
   };
+
+  // Mobile Full-Page Details View (Matches Picture 1 & Picture 2 for Mobile Screens)
+  if (isMobile && selected) {
+    const statusInfo = getStatusInfo(selected.status, selected.cancellationRequested);
+    const displayId = selected.displayId || (selected._id ? `APP-${String(selected._id).slice(-6).toUpperCase()}` : "APP");
+    const modelName = selected.machineryModel || selected.equipment;
+    const dateRangeStr = formatBookingDateRange(selected.startDate, selected.endDate);
+    const days = getDaysCount(selected.startDate, selected.endDate);
+    const totalAmount = selected.totalAmount || (selected.ratePerHectare || 2500) * (selected.hectares || 1);
+    const operatorInfo = getAppOperatorInfo(selected, machineryUnitsFullMap);
+    const operatorPhone =
+      operatorInfo.phone ||
+      selected.driverPhone ||
+      (operatorInfo.name && !operatorInfo.name.toLowerCase().includes("self-operated")
+        ? "(0926) 463 8983"
+        : "");
+    const farmLoc = (selected.farmLocation || selected.farmFormattedAddress || "").trim() || "Kalilangan, Bukidnon";
+    const targetUnit =
+      machineryUnitsFullMap?.get(selected.machineryUnitId) ||
+      machineryUnitsFullMap?.get(selected.equipment?.toLowerCase?.()) ||
+      machineryUnitsFullMap?.get(selected.machineryModel?.toLowerCase?.());
+    const unitTargetId =
+      selected.machineryUnitId ||
+      targetUnit?.unitId ||
+      targetUnit?._id ||
+      targetUnit?.id ||
+      "";
+    const unitDetailUrl = unitTargetId ? `/member/book/${encodeURIComponent(unitTargetId)}` : `/member/book`;
+    const timelineStages = getMobileTimelineStages(selected);
+    const latestStage = timelineStages[0] || { label: "Pending", dateStr: formatDateDisplay(selected.createdAt), color: "#0284c7" };
+    const isPending = (selected.status || "Pending").toLowerCase() === "pending" && !selected.cancellationRequested;
+
+    return (
+      <div className="member-page" style={{ padding: 0, margin: 0, background: "#f8fafc", minHeight: "100vh", width: "100%" }}>
+        <div className="mobile-detail-page">
+          {/* 1. Header with back button */}
+          <div className="mobile-detail-header">
+            <button
+              type="button"
+              className="mobile-back-btn"
+              onClick={() => {
+                setSelected(null);
+                setRequestMode("");
+                setActionError("");
+                setActionSuccess("");
+              }}
+              aria-label="Back to bookings"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </button>
+            <h1 className="mobile-detail-title">Booking Details</h1>
+            <div style={{ width: "24px" }} />
+          </div>
+
+          {/* Action alerts if any (Clean full-width rectangular banners) */}
+          {actionError && (
+            <div style={{ margin: "0 0 8px", padding: "10px 16px", background: "#fef2f2", color: "#b91c1c", borderRadius: 0, fontSize: "0.82rem", borderTop: "1px solid #fecdd3", borderBottom: "1px solid #fecdd3" }}>
+              {actionError}
+            </div>
+          )}
+          {actionSuccess && (
+            <div style={{ margin: "0 0 8px", padding: "10px 16px", background: "#f0fdf4", color: "#166534", borderRadius: 0, fontSize: "0.82rem", borderTop: "1px solid #bbf7d0", borderBottom: "1px solid #bbf7d0" }}>
+              {actionSuccess}
+            </div>
+          )}
+
+          {/* Unified Single Container (Matches Reference E-Commerce Order View) */}
+          <div className="mobile-unified-container">
+            {/* 1. Top Status Section: Latest Stage at top + Line Down connecting date & timeline */}
+            <div style={{ padding: "14px 16px", borderBottom: "1px solid #f1f5f9" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span
+                    style={{
+                      display: "inline-block",
+                      width: "8px",
+                      height: "8px",
+                      borderRadius: "50%",
+                      background: latestStage.color || "#0284c7",
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span style={{ fontSize: "0.86rem", fontWeight: 700, color: "#0f172a" }}>
+                    {latestStage.label}
+                  </span>
+                </div>
+                <span style={{ fontSize: "0.76rem", fontWeight: 600, color: "#0284c7" }}>
+                  {dateRangeStr}
+                </span>
+              </div>
+
+              {/* Vertical line down track connecting date and timeline */}
+              <div style={{ marginLeft: "3.5px", paddingLeft: "14px", borderLeft: "1.5px solid #cbd5e1" }}>
+                {/* When collapsed: show latest date only */}
+                {!isTimelineExpanded && (
+                  <div style={{ fontSize: "0.72rem", color: "#64748b", padding: "2px 0 6px" }}>
+                    {latestStage.dateStr}
+                  </div>
+                )}
+
+                {/* When expanded: show the full list of timeline stages sliding down with animation */}
+                {isTimelineExpanded && (
+                  <div
+                    className="timeline-dropdown-anim"
+                    style={{
+                      paddingTop: "2px",
+                      paddingBottom: "8px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "12px",
+                    }}
+                  >
+                    {timelineStages.map((stage, idx) => (
+                      <div key={stage.key || idx} style={{ position: "relative", fontSize: "0.76rem" }}>
+                        <span
+                          style={{
+                            position: "absolute",
+                            left: "-18px",
+                            top: "4px",
+                            width: "7px",
+                            height: "7px",
+                            borderRadius: "50%",
+                            background: idx === 0 ? stage.color || "#0284c7" : "#94a3b8",
+                          }}
+                        />
+                        <div style={{ fontWeight: 700, color: idx === 0 ? "#0f172a" : "#475569" }}>
+                          {stage.label}
+                        </div>
+                        <div style={{ fontSize: "0.7rem", color: "#64748b", marginTop: "1px" }}>
+                          {stage.dateStr}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Booking Timeline toggle button - goes down below the timeline when expanded, with up/down arrow */}
+                <button
+                  type="button"
+                  onClick={() => setIsTimelineExpanded((prev) => !prev)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: "2px 0",
+                    fontSize: "0.74rem",
+                    color: "#64748b",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    marginTop: isTimelineExpanded ? "4px" : "0",
+                  }}
+                >
+                  <span>Booking Timeline</span>
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    {isTimelineExpanded ? (
+                      <polyline points="18 15 12 9 6 15" />
+                    ) : (
+                      <polyline points="6 9 12 15 18 9" />
+                    )}
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* 2. Farm Location & Operator Section (Clean, Small Font, Crisp Rectangular Layout) */}
+            <div style={{ padding: "11px 16px", borderBottom: "1px solid #f1f5f9", display: "flex", flexDirection: "column", gap: "9px", background: "#ffffff" }}>
+              {/* Row 1: Farm Location */}
+              <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                <div style={{ color: "#0284c7", marginTop: "2px", flexShrink: 0 }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                    <circle cx="12" cy="10" r="3" />
+                  </svg>
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "1px" }}>
+                    Farm Location
+                  </div>
+                  <div style={{ fontSize: "0.78rem", fontWeight: 600, color: "#0f172a", lineHeight: 1.3 }}>
+                    {farmLoc}
+                  </div>
+                  {selected.farmFormattedAddress && selected.farmLocation && selected.farmFormattedAddress !== selected.farmLocation && (
+                    <div style={{ fontSize: "0.68rem", color: "#64748b", marginTop: "1px" }}>
+                      {selected.farmFormattedAddress}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Row 2: Assigned Operator & Phone Number */}
+              <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                <div style={{ color: "#166534", marginTop: "2px", flexShrink: 0 }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "1px" }}>
+                    Assigned Operator
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "6px" }}>
+                    <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "#0f172a" }}>
+                      {operatorInfo.name || "Self-Operated / Own Driver"}
+                    </span>
+                    {operatorPhone ? (
+                      <a
+                        href={`tel:${operatorPhone.replace(/[^0-9+]/g, "")}`}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          fontSize: "0.7rem",
+                          fontWeight: 700,
+                          color: "#0284c7",
+                          textDecoration: "none",
+                          background: "#f0f9ff",
+                          border: "1px solid #bae6fd",
+                          padding: "2px 6px",
+                          borderRadius: 0,
+                        }}
+                        title={`Call ${operatorInfo.name || "operator"}`}
+                      >
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                        </svg>
+                        <span>{operatorPhone}</span>
+                      </a>
+                    ) : (
+                      <span style={{ fontSize: "0.68rem", color: "#64748b" }}>
+                        {operatorInfo.required ? "Assigned by Depot" : "Self-Operated"}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Store Header & Machinery Item */}
+            <div style={{ padding: "14px 16px 12px" }}>
+              {/* Store Header: KIMPC RENTAL MACHINERY (No Icon, No Arrow) */}
+              <div style={{ marginBottom: "12px" }}>
+                <span style={{ fontWeight: 800, fontSize: "0.84rem", color: "#0f172a", letterSpacing: "0.02em" }}>
+                  KIMPC RENTAL MACHINERY
+                </span>
+              </div>
+
+              {/* Machinery Item Row: Clickable Link to the unit (Picture, Name, Rental Fee) */}
+              <Link
+                to={unitDetailUrl}
+                style={{
+                  display: "flex",
+                  gap: "12px",
+                  alignItems: "center",
+                  marginBottom: "10px",
+                  textDecoration: "none",
+                  color: "inherit",
+                  cursor: "pointer",
+                }}
+                title={`View ${modelName} unit details`}
+              >
+                <img
+                  src={
+                    selected.imageUrl ||
+                    machineryUnitsMap.get(selected.machineryUnitId) ||
+                    machineryUnitsMap.get(selected.equipment) ||
+                    "/images/kimpc logo.png"
+                  }
+                  alt={modelName}
+                  style={{
+                    width: "64px",
+                    height: "64px",
+                    borderRadius: 0,
+                    objectFit: "cover",
+                    border: "1px solid #e2e8f0",
+                    background: "#f8fafc",
+                    flexShrink: 0,
+                  }}
+                  onError={(e) => {
+                    e.currentTarget.src = "/images/kimpc logo.png";
+                    e.currentTarget.style.objectFit = "contain";
+                  }}
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <strong style={{ fontSize: "0.92rem", fontWeight: 700, color: "#0f172a", display: "block", lineHeight: 1.3, marginBottom: "4px" }}>
+                    {modelName}
+                  </strong>
+                  <span style={{ fontWeight: 800, fontSize: "0.98rem", color: "#0f172a" }}>
+                    ₱{Number(totalAmount).toLocaleString()}
+                  </span>
+                </div>
+              </Link>
+
+              {/* Request Button below machinery */}
+              <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: "6px" }}>
+                {requestMode === "" ? (
+                  <button
+                    type="button"
+                    onClick={() => setRequestMode("menu")}
+                    style={{
+                      padding: "6px 18px",
+                      background: "#ffffff",
+                      border: "1px solid #cbd5e1",
+                      borderRadius: 0,
+                      fontSize: "0.8rem",
+                      fontWeight: 600,
+                      color: "#334155",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Request
+                  </button>
+                ) : requestMode === "menu" ? (
+                  <div style={{ width: "100%", background: "#f8fafc", borderRadius: 0, padding: "10px 12px", border: "1px solid #e2e8f0" }}>
+                    <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "8px", textTransform: "uppercase" }}>
+                      Select Request Action:
+                    </div>
+                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                      {isPending && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRequestMode("reschedule");
+                            setActionError("");
+                          }}
+                          style={{
+                            flex: 1,
+                            padding: "8px 12px",
+                            background: "#eff6ff",
+                            border: "1px solid #bfdbfe",
+                            borderRadius: 0,
+                            color: "#1d4ed8",
+                            fontWeight: 700,
+                            fontSize: "0.78rem",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Reschedule Booking
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRequestMode("cancel");
+                          setActionError("");
+                        }}
+                        style={{
+                          flex: 1,
+                          padding: "8px 12px",
+                          background: "#fef2f2",
+                          border: "1px solid #fecdd3",
+                          borderRadius: 0,
+                          color: "#dc2626",
+                          fontWeight: 700,
+                          fontSize: "0.78rem",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Cancel Booking
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRequestMode("")}
+                        style={{
+                          padding: "8px 12px",
+                          background: "#ffffff",
+                          border: "1px solid #cbd5e1",
+                          borderRadius: 0,
+                          color: "#64748b",
+                          fontSize: "0.78rem",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Back
+                      </button>
+                    </div>
+                  </div>
+                ) : requestMode === "reschedule" ? (
+                  /* Inline Reschedule Form */
+                  <div style={{ width: "100%", background: "#f8fafc", borderRadius: 0, padding: "12px", border: "1px solid #bfdbfe" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                      <strong style={{ fontSize: "0.84rem", color: "#1d4ed8" }}>Reschedule Booking Dates</strong>
+                      <button type="button" onClick={() => setRequestMode("")} style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: "0.8rem" }}>✕</button>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "0.78rem" }}>
+                      <div>
+                        <label style={{ display: "block", color: "#475569", marginBottom: "2px", fontWeight: 600 }}>Start Date</label>
+                        <input
+                          type="date"
+                          value={editForm.startDate}
+                          onChange={(e) => setEditForm((prev) => ({ ...prev, startDate: e.target.value }))}
+                          style={{ width: "100%", padding: "6px 8px", borderRadius: 0, border: "1px solid #cbd5e1", boxSizing: "border-box" }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: "block", color: "#475569", marginBottom: "2px", fontWeight: 600 }}>End Date</label>
+                        <input
+                          type="date"
+                          value={editForm.endDate}
+                          onChange={(e) => setEditForm((prev) => ({ ...prev, endDate: e.target.value }))}
+                          style={{ width: "100%", padding: "6px 8px", borderRadius: 0, border: "1px solid #cbd5e1", boxSizing: "border-box" }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: "block", color: "#475569", marginBottom: "2px", fontWeight: 600 }}>Hectares</label>
+                        <input
+                          type="number"
+                          min="1"
+                          step="0.5"
+                          value={editForm.hectares}
+                          onChange={(e) => setEditForm((prev) => ({ ...prev, hectares: e.target.value }))}
+                          style={{ width: "100%", padding: "6px 8px", borderRadius: 0, border: "1px solid #cbd5e1", boxSizing: "border-box" }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: "block", color: "#475569", marginBottom: "2px", fontWeight: 600 }}>Farm Location</label>
+                        <input
+                          type="text"
+                          value={editForm.farmLocation}
+                          onChange={(e) => setEditForm((prev) => ({ ...prev, farmLocation: e.target.value }))}
+                          placeholder="Barangay / Purok"
+                          style={{ width: "100%", padding: "6px 8px", borderRadius: 0, border: "1px solid #cbd5e1", boxSizing: "border-box" }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: "block", color: "#475569", marginBottom: "2px", fontWeight: 600 }}>Reason for Reschedule</label>
+                        <input
+                          type="text"
+                          value={editForm.rescheduleReason}
+                          onChange={(e) => setEditForm((prev) => ({ ...prev, rescheduleReason: e.target.value }))}
+                          placeholder="e.g. Heavy rain, soil wet..."
+                          style={{ width: "100%", padding: "6px 8px", borderRadius: 0, border: "1px solid #cbd5e1", boxSizing: "border-box" }}
+                        />
+                      </div>
+                      {editDateConflict && (
+                        <div style={{ color: "#b91c1c", fontSize: "0.74rem", background: "#fef2f2", padding: "6px 8px", borderRadius: 0 }}>
+                          {editDateConflict}
+                        </div>
+                      )}
+                      <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            await handleInlineSaveEdit();
+                            setRequestMode("");
+                          }}
+                          disabled={isSavingEdit || Boolean(editDateConflict)}
+                          style={{ flex: 1, padding: "7px 12px", background: "#166534", color: "#ffffff", border: "none", borderRadius: 0, fontWeight: 700, fontSize: "0.78rem", cursor: "pointer" }}
+                        >
+                          {isSavingEdit ? "Saving..." : "Save Reschedule"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRequestMode("")}
+                          style={{ padding: "7px 12px", background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: 0, color: "#64748b", fontSize: "0.78rem", cursor: "pointer" }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* Inline Cancel Form */
+                  <div style={{ width: "100%", background: "#fef2f2", borderRadius: 0, padding: "12px", border: "1px solid #fecdd3" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                      <strong style={{ fontSize: "0.84rem", color: "#b91c1c" }}>Cancel Booking</strong>
+                      <button type="button" onClick={() => setRequestMode("")} style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: "0.8rem" }}>✕</button>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "0.78rem" }}>
+                      <div>
+                        <label style={{ display: "block", color: "#475569", marginBottom: "2px", fontWeight: 600 }}>Reason for Cancellation</label>
+                        <select
+                          value={selectedCancelReason}
+                          onChange={(e) => setSelectedCancelReason(e.target.value)}
+                          style={{ width: "100%", padding: "6px 8px", borderRadius: 0, border: "1px solid #cbd5e1", boxSizing: "border-box" }}
+                        >
+                          <option value="">-- Choose a reason --</option>
+                          {CANCELLATION_REASONS.map((r) => (
+                            <option key={r} value={r}>{r}</option>
+                          ))}
+                        </select>
+                      </div>
+                      {selectedCancelReason === "Other" && (
+                        <div>
+                          <label style={{ display: "block", color: "#475569", marginBottom: "2px", fontWeight: 600 }}>Specify Reason</label>
+                          <textarea
+                            rows={2}
+                            value={customCancelReason}
+                            onChange={(e) => setCustomCancelReason(e.target.value)}
+                            placeholder="Provide details..."
+                            style={{ width: "100%", padding: "6px 8px", borderRadius: 0, border: "1px solid #cbd5e1", boxSizing: "border-box" }}
+                          />
+                        </div>
+                      )}
+                      <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            await handleInlineConfirmCancel();
+                          }}
+                          disabled={isSubmittingCancellation || cancellingId === (selected._id || selected.id)}
+                          style={{ flex: 1, padding: "7px 12px", background: "#dc2626", color: "#ffffff", border: "none", borderRadius: 0, fontWeight: 700, fontSize: "0.78rem", cursor: "pointer" }}
+                        >
+                          {isSubmittingCancellation ? "Submitting..." : isPending ? "Confirm Cancellation" : "Submit Cancellation Request"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRequestMode("")}
+                          style={{ padding: "7px 12px", background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: 0, color: "#64748b", fontSize: "0.78rem", cursor: "pointer" }}
+                        >
+                          Back
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 3. Financials & Booking Summary */}
+            <div style={{ padding: "14px 16px", borderTop: "1px solid #f1f5f9" }}>
+              {/* Total Row */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "#0f172a" }}>Total</span>
+                <span style={{ fontSize: "1.05rem", fontWeight: 800, color: "#0f172a" }}>
+                  ₱{Number(totalAmount).toLocaleString()}
+                </span>
+              </div>
+
+              {/* Order No. Row with Copy button */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                <span style={{ fontSize: "0.8rem", color: "#64748b" }}>Booking No.</span>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span style={{ fontFamily: "monospace", fontSize: "0.82rem", fontWeight: 700, color: "#0f172a" }}>
+                    {displayId}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyBookingId(displayId)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: copiedBookingId ? "#166534" : "#0284c7",
+                      fontSize: "0.78rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      padding: "2px 4px",
+                    }}
+                  >
+                    {copiedBookingId ? "Copied!" : "Copy"}
+                  </button>
+                </div>
+              </div>
+
+              {/* View Booking Summary Dropdown with Full Computation */}
+              <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: "8px" }}>
+                <button
+                  type="button"
+                  onClick={() => setIsSummaryExpanded((prev) => !prev)}
+                  style={{
+                    width: "100%",
+                    background: "none",
+                    border: "none",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                    fontSize: "0.78rem",
+                    color: "#0284c7",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    padding: "4px 0",
+                  }}
+                >
+                  <span>View Booking Summary</span>
+                  <span style={{ fontSize: "0.72rem", transition: "transform 0.2s ease", transform: isSummaryExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>
+                    ∨
+                  </span>
+                </button>
+
+                {isSummaryExpanded && (
+                  <div style={{ marginTop: "10px", background: "#f8fafc", borderRadius: 0, border: "1px solid #e2e8f0", padding: "10px 12px", fontSize: "0.76rem", display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#64748b" }}>Rate per Hectare:</span>
+                      <span style={{ fontWeight: 600, color: "#0f172a" }}>₱{Number(selected.ratePerHectare || 2500).toLocaleString()} / ha</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#64748b" }}>Coverage:</span>
+                      <span style={{ fontWeight: 600, color: "#0f172a" }}>{selected.hectares || 1} ha ({days}d)</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#64748b" }}>Machinery Subtotal:</span>
+                      <span style={{ fontWeight: 600, color: "#0f172a" }}>₱{Number((selected.ratePerHectare || 2500) * (selected.hectares || 1)).toLocaleString()}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#64748b" }}>Operator Fee:</span>
+                      <span style={{ fontWeight: 600, color: "#0f172a" }}>{selected.operatorFee ? `₱${Number(selected.operatorFee).toLocaleString()}` : "₱0.00 (Included)"}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#64748b" }}>Tax (VAT 0%):</span>
+                      <span style={{ fontWeight: 600, color: "#0f172a" }}>₱0.00 (Coop Exempt)</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px dashed #e2e8f0", paddingTop: "6px" }}>
+                      <span style={{ color: "#0f172a", fontWeight: 700 }}>Total:</span>
+                      <span style={{ fontWeight: 800, color: "#166534" }}>₱{Number(totalAmount).toLocaleString()}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#64748b" }}>Mode of Payment:</span>
+                      <span style={{ fontWeight: 600, color: "#0f172a" }}>{selected.paymentMethod || "Cash"} ({selected.paymentStatus || "Pending"})</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#64748b" }}>Book Date:</span>
+                      <span style={{ fontWeight: 600, color: "#0f172a" }}>{formatDateDisplay(selected.createdAt)}</span>
+                    </div>
+                    {(Boolean(selected.cancelledAt) || Boolean(selected.cancellationRequestedAt) || (selected.status || "").toLowerCase().includes("cancel")) && (
+                      <div style={{ display: "flex", justifyContent: "space-between", color: "#dc2626", borderTop: "1px dashed #fecdd3", paddingTop: "6px" }}>
+                        <span>Cancellation Date:</span>
+                        <span style={{ fontWeight: 700 }}>{formatDateDisplay(selected.cancelledAt || selected.cancellationRequestedAt || selected.updatedAt)}</span>
+                      </div>
+                    )}
+                    {selected.cancellationReason && (
+                      <div style={{ fontSize: "0.72rem", color: "#991b1b", background: "#fef2f2", padding: "6px 8px", borderRadius: 0 }}>
+                        <strong>Cancellation Reason:</strong> {selected.cancellationReason}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 4. Action List Items (Picture 2: Single-color #475569 line SVG icons, unified minimalist style) */}
+            <div style={{ borderTop: "1px solid #f1f5f9" }}>
+              {/* Item 1: Receipt */}
+              <button
+                type="button"
+                className="mobile-action-list-item"
+                onClick={() => setShowReceiptModal(true)}
+              >
+                <div className="mobile-action-list-left">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16l3-2 3 2 3-2 3 2 3-2 3 2V8l-6-6z" />
+                    <path d="M14 2v6h6" />
+                    <line x1="8" y1="13" x2="16" y2="13" />
+                    <line x1="8" y1="17" x2="13" y2="17" />
+                  </svg>
+                  <span>Receipt</span>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </button>
+
+              <div className="mobile-action-divider" />
+
+              {/* Item 2: Contact Manager */}
+              <button
+                type="button"
+                className="mobile-action-list-item"
+                onClick={() => setShowContactModal(true)}
+              >
+                <div className="mobile-action-list-left">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    <line x1="8" y1="9" x2="16" y2="9" />
+                    <line x1="8" y1="13" x2="13" y2="13" />
+                  </svg>
+                  <span>Contact Manager</span>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </button>
+
+              <div className="mobile-action-divider" />
+
+              {/* Item 3: Rental Guidelines & Policies */}
+              <button
+                type="button"
+                className="mobile-action-list-item"
+                onClick={() => setShowHelpModal(true)}
+              >
+                <div className="mobile-action-list-left">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
+                  <span>Rental Guidelines &amp; Policies</span>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Modal Popups on Mobile */}
+        {showReceiptModal && (
+          <ReceiptModal
+            app={selected}
+            onClose={() => setShowReceiptModal(false)}
+            user={user}
+            operatorInfo={operatorInfo}
+          />
+        )}
+        {showContactModal && (
+          <ContactManagerModal
+            onClose={() => setShowContactModal(false)}
+          />
+        )}
+        {showHelpModal && (
+          <HelpPoliciesModal
+            onClose={() => setShowHelpModal(false)}
+          />
+        )}
+        {previewGcashImage && (
+          <div
+            className="member-modal-backdrop"
+            role="presentation"
+            onClick={() => setPreviewGcashImage(null)}
+            style={{ background: "rgba(15, 23, 42, 0.85)", zIndex: 10000 }}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "#ffffff",
+                borderRadius: "16px",
+                padding: "20px",
+                maxWidth: "500px",
+                width: "90%",
+                maxHeight: "90vh",
+                overflow: "auto",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.35)",
+                textAlign: "center",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                <strong style={{ fontSize: "1rem", color: "#0f172a" }}>GCash Payment Screenshot Proof</strong>
+                <button
+                  type="button"
+                  onClick={() => setPreviewGcashImage(null)}
+                  style={{ background: "#f1f5f9", border: "none", borderRadius: "50%", width: "28px", height: "28px", cursor: "pointer" }}
+                >
+                  ✕
+                </button>
+              </div>
+              <img
+                src={previewGcashImage}
+                alt="GCash Screenshot"
+                style={{ width: "100%", maxHeight: "65vh", objectFit: "contain", borderRadius: "8px", border: "1px solid #e2e8f0" }}
+              />
+              <button
+                type="button"
+                className="member-button member-button-outline"
+                onClick={() => setPreviewGcashImage(null)}
+                style={{ marginTop: "14px", width: "100%" }}
+              >
+                Close Preview
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="member-page" style={{ width: "100%", maxWidth: "1400px", margin: "0 auto", paddingBottom: "40px" }}>
@@ -729,7 +1738,7 @@ export default function Applications() {
         </div>
 
         {/* Mobile Phone Card View (Visible only on phone screens <= 768px) */}
-        <div className="member-mobile-bookings-list member-mobile-only" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+        <div className="member-mobile-bookings-list member-mobile-only" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           {visibleApplications.map((app) => {
             const statusInfo = getStatusInfo(app.status, app.cancellationRequested);
             const displayId = app.displayId || (app._id ? `APP-${String(app._id).slice(-6).toUpperCase()}` : "APP");
@@ -738,30 +1747,31 @@ export default function Applications() {
             const days = getDaysCount(app.startDate, app.endDate);
             const totalAmount = app.totalAmount || (app.ratePerHectare || 2500) * (app.hectares || 1);
             const isPaid = (app.paymentStatus || "").toLowerCase() === "paid" || (app.paymentStatus || "").toLowerCase() === "settled";
+            const operatorInfo = getAppOperatorInfo(app, machineryUnitsFullMap);
 
             return (
               <div
                 key={app._id || app.id}
                 style={{
                   background: "#ffffff",
-                  borderRadius: "14px",
+                  borderRadius: "10px",
                   border: "1px solid #e2e8f0",
-                  padding: "16px",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                  padding: "10px 12px",
+                  boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
                 }}
               >
-                {/* Top Bar: Booking ID + Status Badge */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                  <span style={{ fontFamily: "monospace", fontWeight: 800, fontSize: "0.95rem", color: "#0f172a" }}>
+                {/* Top Bar: Booking ID + Status Text (Word only, no card background) */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                  <span style={{ fontFamily: "monospace", fontWeight: 800, fontSize: "0.85rem", color: "#0f172a" }}>
                     {displayId}
                   </span>
-                  <span className={`wz-status-pill wz-status-${statusInfo.slug}`} style={{ fontSize: "0.72rem", padding: "3px 10px", borderRadius: "999px" }}>
+                  <span style={{ fontSize: "0.78rem", fontWeight: 700, color: statusInfo.textColor || "#0f172a" }}>
                     {statusInfo.label}
                   </span>
                 </div>
 
                 {/* Machinery Image & Info */}
-                <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
                   <img
                     src={
                       app.imageUrl ||
@@ -771,11 +1781,11 @@ export default function Applications() {
                     }
                     alt={modelName}
                     style={{
-                      width: "54px",
-                      height: "54px",
-                      borderRadius: "10px",
+                      width: "42px",
+                      height: "42px",
+                      borderRadius: "8px",
                       objectFit: "cover",
-                      border: "1px solid #cbd5e1",
+                      border: "1px solid #e2e8f0",
                       background: "#f8fafc",
                       flexShrink: 0,
                     }}
@@ -784,26 +1794,26 @@ export default function Applications() {
                       e.currentTarget.style.objectFit = "contain";
                     }}
                   />
-                  <div>
-                    <strong style={{ fontSize: "0.98rem", color: "#0f172a", display: "block" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <strong style={{ fontSize: "0.88rem", color: "#0f172a", display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {modelName}
                     </strong>
-                    <span style={{ fontSize: "0.76rem", color: "#64748b" }}>
-                      {app.hectares ? `${app.hectares} hectare${app.hectares > 1 ? "s" : ""}` : "1 hectare"} • {app.farmLocation || "Kalilangan"}
+                    <span style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                      {app.hectares ? `${app.hectares} ha` : "1 ha"} • {app.farmLocation || "Kalilangan"}
                     </span>
                   </div>
                 </div>
 
-                {/* Details Card Strip */}
-                <div style={{ background: "#f8fafc", borderRadius: "10px", padding: "10px 12px", marginBottom: "12px", fontSize: "0.82rem", display: "flex", flexDirection: "column", gap: "6px" }}>
+                {/* Details Strip */}
+                <div style={{ background: "#f8fafc", borderRadius: "8px", padding: "8px 10px", marginBottom: "8px", fontSize: "0.76rem", display: "flex", flexDirection: "column", gap: "4px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <span style={{ color: "#64748b" }}>Schedule:</span>
                     <span style={{ fontWeight: 600, color: "#0f172a" }}>{dateRangeStr} ({days}d)</span>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: "#64748b" }}>Driver:</span>
-                    <span style={{ fontWeight: 600, color: "#0f172a" }}>
-                      {app.driverName || (app.driverOption === "With Cooperative Driver" ? "Coop Driver Assigned" : "Self-Operated / Own Driver")}
+                    <span style={{ color: "#64748b" }}>Operator:</span>
+                    <span style={{ fontWeight: 600, color: "#334155" }}>
+                      {operatorInfo.name}
                     </span>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -814,12 +1824,12 @@ export default function Applications() {
                     <span style={{ color: "#64748b" }}>Payment:</span>
                     <span
                       style={{
-                        fontSize: "0.74rem",
+                        fontSize: "0.72rem",
                         fontWeight: 700,
                         color: isPaid ? "#15803d" : "#b45309",
                         background: isPaid ? "#dcfce7" : "#fef3c7",
-                        padding: "2px 8px",
-                        borderRadius: "6px",
+                        padding: "1px 6px",
+                        borderRadius: "4px",
                       }}
                     >
                       {isPaid ? "Paid" : "Pending"} ({app.paymentMethod || "Cash"})
@@ -827,31 +1837,26 @@ export default function Applications() {
                   </div>
                 </div>
 
-                {/* Tap to View Details / Actions */}
+                {/* Tap to View Details (No eye icon, plain "View Details" text) */}
                 <button
                   type="button"
                   onClick={() => handleOpenViewModal(app)}
                   style={{
                     width: "100%",
-                    padding: "10px 16px",
+                    padding: "7px 12px",
                     background: "#f0fdf4",
                     border: "1px solid #bbf7d0",
-                    borderRadius: "8px",
+                    borderRadius: "6px",
                     color: "#166534",
                     fontWeight: 700,
-                    fontSize: "0.84rem",
+                    fontSize: "0.78rem",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    gap: "8px",
                     cursor: "pointer",
                   }}
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-                    <circle cx="12" cy="12" r="3" />
-                  </svg>
-                  <span>View Details, History &amp; Actions</span>
+                  View Details
                 </button>
               </div>
             );
@@ -1522,6 +2527,21 @@ export default function Applications() {
                 Close
               </button>
 
+              <button
+                type="button"
+                className="member-button member-button-outline"
+                onClick={() => setShowReceiptModal(true)}
+                style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16l3-2 3 2 3-2 3 2 3-2 3 2V8l-6-6z" />
+                  <path d="M14 2v6h6" />
+                  <line x1="8" y1="13" x2="16" y2="13" />
+                  <line x1="8" y1="17" x2="13" y2="17" />
+                </svg>
+                <span>Receipt</span>
+              </button>
+
               {viewModalTab === "edit" && (
                 <button
                   className="member-button member-button-primary"
@@ -1599,7 +2619,7 @@ export default function Applications() {
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-              <strong style={{ fontSize: "1rem", color: "#0f172a" }}>📱 GCash Payment Screenshot Proof</strong>
+              <strong style={{ fontSize: "1rem", color: "#0f172a" }}>GCash Payment Screenshot Proof</strong>
               <button
                 type="button"
                 onClick={() => setPreviewGcashImage(null)}
@@ -1624,6 +2644,393 @@ export default function Applications() {
           </div>
         </div>
       )}
+
+      {/* Official KIMPC Receipt Modal on Desktop */}
+      {showReceiptModal && selected && (
+        <ReceiptModal
+          app={selected}
+          onClose={() => setShowReceiptModal(false)}
+          user={user}
+          operatorInfo={getAppOperatorInfo(selected, machineryUnitsFullMap)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Official KIMPC Machinery Rental Receipt Modal (Picture 2: Receipt)
+ */
+function ReceiptModal({ app, onClose, user, operatorInfo }) {
+  if (!app) return null;
+  const displayId = app.displayId || (app._id ? `APP-${String(app._id).slice(-6).toUpperCase()}` : "APP");
+  const modelName = app.machineryModel || app.equipment;
+  const dateRangeStr = formatBookingDateRange(app.startDate, app.endDate);
+  const days = getDaysCount(app.startDate, app.endDate);
+  const totalAmount = app.totalAmount || (app.ratePerHectare || 2500) * (app.hectares || 1);
+  const statusInfo = getStatusInfo(app.status, app.cancellationRequested);
+  const isPaid = (app.paymentStatus || "").toLowerCase() === "paid" || (app.paymentStatus || "").toLowerCase() === "settled";
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  return (
+    <div
+      className="member-modal-backdrop"
+      role="presentation"
+      onClick={onClose}
+      style={{ zIndex: 10002, background: "rgba(15, 23, 42, 0.75)" }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "#ffffff",
+          borderRadius: 0,
+          padding: "24px 20px",
+          maxWidth: "480px",
+          width: "92%",
+          maxHeight: "90vh",
+          overflowY: "auto",
+          boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
+          position: "relative",
+          fontFamily: "inherit",
+        }}
+      >
+        {/* Receipt Header */}
+        <div style={{ textAlign: "center", borderBottom: "1px dashed #cbd5e1", paddingBottom: "14px", marginBottom: "16px" }}>
+          <img
+            src="/images/kimpc logo.png"
+            alt="KIMPC Logo"
+            style={{ width: "48px", height: "48px", margin: "0 auto 8px", display: "block" }}
+            onError={(e) => { e.currentTarget.style.display = "none"; }}
+          />
+          <h3 style={{ margin: "0 0 2px", fontSize: "1.02rem", fontWeight: 800, color: "#0f172a" }}>
+            KALILANGAN INTEGRATED MULTIPURPOSE COOPERATIVE
+          </h3>
+          <p style={{ margin: "0 0 4px", fontSize: "0.74rem", color: "#64748b" }}>
+            Purok 2, Poblacion, Kalilangan, Bukidnon
+          </p>
+          <div style={{ display: "inline-block", background: "#f1f5f9", padding: "2px 8px", borderRadius: "4px", fontSize: "0.7rem", fontWeight: 700, color: "#475569" }}>
+            OFFICIAL MACHINERY RENTAL RECEIPT
+          </div>
+        </div>
+
+        {/* Receipt Meta */}
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem", marginBottom: "12px", color: "#475569" }}>
+          <div>
+            <div><strong>Receipt No:</strong> <span style={{ fontFamily: "monospace" }}>{displayId}</span></div>
+            <div><strong>Date Issued:</strong> {formatDateDisplay(app.createdAt || new Date())}</div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div><strong>Status:</strong> <span style={{ color: statusInfo.textColor, fontWeight: 700 }}>{statusInfo.label}</span></div>
+            <div><strong>Payment:</strong> <span style={{ color: isPaid ? "#15803d" : "#b45309", fontWeight: 700 }}>{app.paymentStatus || "Pending"}</span></div>
+          </div>
+        </div>
+
+        {/* Member & Booking Info Box */}
+        <div style={{ background: "#f8fafc", borderRadius: "10px", padding: "12px", marginBottom: "14px", fontSize: "0.8rem", border: "1px solid #f1f5f9" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+            <span style={{ color: "#64748b" }}>Member:</span>
+            <strong style={{ color: "#0f172a" }}>{user?.name || app.applicantName || user?.email}</strong>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+            <span style={{ color: "#64748b" }}>Farm Location:</span>
+            <span style={{ color: "#0f172a", fontWeight: 600 }}>{app.farmLocation || "Kalilangan"}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+            <span style={{ color: "#64748b" }}>Rental Schedule:</span>
+            <span style={{ color: "#0f172a", fontWeight: 600 }}>{dateRangeStr} ({days} days)</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ color: "#64748b" }}>Operator:</span>
+            <span style={{ color: "#334155", fontWeight: 600 }}>{operatorInfo?.name || "Cooperative Operator"}</span>
+          </div>
+        </div>
+
+        {/* Line Items Table */}
+        <div style={{ borderTop: "1px solid #e2e8f0", borderBottom: "1px solid #e2e8f0", padding: "10px 0", marginBottom: "14px", fontSize: "0.8rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, color: "#64748b", marginBottom: "6px", fontSize: "0.72rem", textTransform: "uppercase" }}>
+            <span>Item Description</span>
+            <span>Amount</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+            <div>
+              <div style={{ fontWeight: 600, color: "#0f172a" }}>{modelName}</div>
+              <div style={{ fontSize: "0.72rem", color: "#64748b" }}>{app.hectares || 1} hectare(s) @ ₱{Number(app.ratePerHectare || 2500).toLocaleString()}</div>
+            </div>
+            <span style={{ fontWeight: 700, color: "#0f172a" }}>₱{Number(totalAmount).toLocaleString()}</span>
+          </div>
+          {operatorInfo?.required && (
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "#475569", marginTop: "4px" }}>
+              <span>Cooperative Operator Service</span>
+              <span>Included</span>
+            </div>
+          )}
+        </div>
+
+        {/* Total Box */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "18px", padding: "8px 12px", background: "#f0fdf4", borderRadius: "8px", border: "1px solid #bbf7d0" }}>
+          <span style={{ fontWeight: 800, fontSize: "0.95rem", color: "#166534" }}>TOTAL AMOUNT</span>
+          <span style={{ fontWeight: 900, fontSize: "1.15rem", color: "#166534" }}>₱{Number(totalAmount).toLocaleString()}</span>
+        </div>
+
+        {/* Payment Method Details */}
+        <div style={{ fontSize: "0.74rem", color: "#64748b", textAlign: "center", marginBottom: "18px" }}>
+          Payment Method: <strong>{app.paymentMethod || "Cash"}</strong> {app.cashPaymentOption ? `(${app.cashPaymentOption})` : ""}
+          <br />
+          Thank you for choosing KIMPC Agricultural Machinery Services.
+        </div>
+
+        {/* Action Buttons */}
+        <div style={{ display: "flex", gap: "10px" }}>
+          <button
+            type="button"
+            onClick={handlePrint}
+            style={{
+              flex: 1,
+              padding: "10px 14px",
+              background: "#166534",
+              color: "#ffffff",
+              border: "none",
+              borderRadius: "8px",
+              fontWeight: 700,
+              fontSize: "0.82rem",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "6px",
+            }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 9 6 2 18 2 18 9" />
+              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+              <rect x="6" y="14" width="12" height="8" />
+            </svg>
+            <span>Print / Save PDF</span>
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              padding: "10px 16px",
+              background: "#f1f5f9",
+              color: "#475569",
+              border: "none",
+              borderRadius: "8px",
+              fontWeight: 700,
+              fontSize: "0.82rem",
+              cursor: "pointer",
+            }}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Cooperative Manager Contact Modal (Picture 2: Contact seller)
+ */
+function ContactManagerModal({ onClose }) {
+  return (
+    <div
+      className="member-modal-backdrop"
+      role="presentation"
+      onClick={onClose}
+      style={{ zIndex: 10002, background: "rgba(15, 23, 42, 0.75)" }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "#ffffff",
+          borderRadius: 0,
+          padding: "20px",
+          maxWidth: "440px",
+          width: "90%",
+          boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
+          position: "relative",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+          <h3 style={{ margin: 0, fontSize: "1.02rem", fontWeight: 800, color: "#0f172a", display: "flex", alignItems: "center", gap: "8px" }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              <line x1="8" y1="9" x2="16" y2="9" />
+              <line x1="8" y1="13" x2="13" y2="13" />
+            </svg>
+            <span>Contact Manager</span>
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{ background: "#f1f5f9", border: "none", borderRadius: "50%", width: "28px", height: "28px", cursor: "pointer", color: "#64748b", fontWeight: 700 }}
+          >
+            ✕
+          </button>
+        </div>
+
+        <p style={{ fontSize: "0.82rem", color: "#64748b", margin: "0 0 16px" }}>
+          Reach out directly to the KIMPC Machinery Operations Manager for dispatch questions, scheduling changes, or urgent inquiries.
+        </p>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "18px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px", background: "#f8fafc", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+            </svg>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600 }}>MANAGER HOTLINE</div>
+              <div style={{ fontSize: "0.92rem", fontWeight: 800, color: "#0f172a" }}>+63 917 123 4567</div>
+            </div>
+            <a
+              href="tel:+639171234567"
+              style={{
+                padding: "6px 12px",
+                background: "#166534",
+                color: "#ffffff",
+                borderRadius: "6px",
+                fontSize: "0.76rem",
+                fontWeight: 700,
+                textDecoration: "none",
+              }}
+            >
+              Call
+            </a>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px", background: "#f8fafc", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+              <polyline points="22,6 12,13 2,6" />
+            </svg>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600 }}>OFFICIAL EMAIL</div>
+              <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#0f172a" }}>kimpc.kalilangan@gmail.com</div>
+            </div>
+            <a
+              href="mailto:kimpc.kalilangan@gmail.com?subject=Booking Inquiry"
+              style={{
+                padding: "6px 12px",
+                background: "#0284c7",
+                color: "#ffffff",
+                borderRadius: "6px",
+                fontSize: "0.76rem",
+                fontWeight: 700,
+                textDecoration: "none",
+              }}
+            >
+              Email
+            </a>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px", background: "#f8fafc", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+              <circle cx="12" cy="10" r="3" />
+            </svg>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600 }}>COOPERATIVE OFFICE</div>
+              <div style={{ fontSize: "0.84rem", fontWeight: 600, color: "#0f172a" }}>Purok 2, Poblacion, Kalilangan, Bukidnon</div>
+              <div style={{ fontSize: "0.7rem", color: "#94a3b8" }}>Mon – Sat: 8:00 AM – 5:00 PM</div>
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          style={{ width: "100%", padding: "10px", background: "#f1f5f9", border: "none", borderRadius: "8px", color: "#475569", fontWeight: 700, fontSize: "0.84rem", cursor: "pointer" }}
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Rental Guidelines & Policies Modal (Picture 2: Rental Guidelines)
+ */
+function HelpPoliciesModal({ onClose }) {
+  return (
+    <div
+      className="member-modal-backdrop"
+      role="presentation"
+      onClick={onClose}
+      style={{ zIndex: 10002, background: "rgba(15, 23, 42, 0.75)" }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "#ffffff",
+          borderRadius: 0,
+          padding: "20px",
+          maxWidth: "480px",
+          width: "90%",
+          maxHeight: "85vh",
+          overflowY: "auto",
+          boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
+          position: "relative",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+          <h3 style={{ margin: 0, fontSize: "1.02rem", fontWeight: 800, color: "#0f172a", display: "flex", alignItems: "center", gap: "8px" }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            <span>Rental Guidelines &amp; Policies</span>
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{ background: "#f1f5f9", border: "none", borderRadius: "50%", width: "28px", height: "28px", cursor: "pointer", color: "#64748b", fontWeight: 700 }}
+          >
+            ✕
+          </button>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px", fontSize: "0.8rem", color: "#334155", lineHeight: 1.5, marginBottom: "18px" }}>
+          <div style={{ background: "#f8fafc", padding: "10px 12px", borderRadius: "8px", borderLeft: "3px solid #166534" }}>
+            <strong style={{ color: "#0f172a", display: "block", marginBottom: "4px" }}>1. Booking &amp; Confirmation</strong>
+            Pending requests undergo cooperative verification. Once approved by management, the machinery is reserved and prepared for field dispatch.
+          </div>
+
+          <div style={{ background: "#f8fafc", padding: "10px 12px", borderRadius: "8px", borderLeft: "3px solid #0284c7" }}>
+            <strong style={{ color: "#0f172a", display: "block", marginBottom: "4px" }}>2. Operator &amp; Safety Requirements</strong>
+            Units designated with operator required are operated exclusively by accredited KIMPC personnel to protect equipment warranties and ensure farm safety.
+          </div>
+
+          <div style={{ background: "#f8fafc", padding: "10px 12px", borderRadius: "8px", borderLeft: "3px solid #f59e0b" }}>
+            <strong style={{ color: "#0f172a", display: "block", marginBottom: "4px" }}>3. Reschedule &amp; Cancellation Policy</strong>
+            Members may reschedule or cancel pending bookings at any time without fees. For approved bookings, cancellation requests require manager approval.
+          </div>
+
+          <div style={{ background: "#f8fafc", padding: "10px 12px", borderRadius: "8px", borderLeft: "3px solid #64748b" }}>
+            <strong style={{ color: "#0f172a", display: "block", marginBottom: "4px" }}>4. Checkout &amp; Return Inspection</strong>
+            Fuel levels and hour meter readings are documented upon dispatch and checked again upon return. Fuel consumed during self-operated rentals must be replenished.
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          style={{ width: "100%", padding: "10px", background: "#f1f5f9", border: "none", borderRadius: "8px", color: "#475569", fontWeight: 700, fontSize: "0.84rem", cursor: "pointer" }}
+        >
+          Understood
+        </button>
+      </div>
     </div>
   );
 }

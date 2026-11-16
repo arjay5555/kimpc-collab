@@ -2,6 +2,7 @@ const https = require("https");
 const Account = require("../models/Account");
 const SystemSetting = require("../models/SystemSetting");
 const { getEffectiveOneSignalKeys } = require("./apiKeyManager");
+const { sendMemberNotificationEmail } = require("./mailer");
 
 /**
  * Checks if OneSignal credentials are fully configured (custom or code default)
@@ -41,14 +42,38 @@ function makeOneSignalRequest(path, method, payload, apiKey) {
         try {
           const parsed = body ? JSON.parse(body) : {};
           if (res.statusCode >= 200 && res.statusCode < 300) {
-            resolve({ ok: true, status: res.statusCode, data: parsed });
+            if (Array.isArray(parsed.errors) && parsed.errors.length > 0 && !parsed.id) {
+              resolve({
+                ok: false,
+                status: res.statusCode,
+                error: parsed.errors.join("; "),
+                data: parsed,
+              });
+            } else if (parsed.errors && typeof parsed.errors === "object" && !Array.isArray(parsed.errors) && !parsed.id) {
+              const errMsg = Object.values(parsed.errors).flat().join("; ");
+              resolve({
+                ok: false,
+                status: res.statusCode,
+                error: errMsg || "OneSignal rejected the notification.",
+                data: parsed,
+              });
+            } else {
+              resolve({ ok: true, status: res.statusCode, data: parsed });
+            }
           } else {
-            resolve({ ok: false, status: res.statusCode, error: parsed.errors || parsed.message || body });
+            const errMsg = Array.isArray(parsed.errors)
+              ? parsed.errors.join("; ")
+              : parsed.errors || parsed.message || body;
+            resolve({ ok: false, status: res.statusCode, error: errMsg });
           }
         } catch (err) {
           resolve({ ok: false, status: res.statusCode, error: `Invalid JSON response: ${body}` });
         }
       });
+    });
+
+    req.setTimeout(8000, () => {
+      req.destroy(new Error("OneSignal API request timed out."));
     });
 
     req.on("error", (err) => {
@@ -108,9 +133,8 @@ async function sendPushNotification({ email, title, message, url, data = {} }) {
   }
 
   // 2. Prepare payload
-  const fallbackUrl = process.env.APP_BASE_URL
-    ? `${process.env.APP_BASE_URL}/member/bookings`
-    : "http://localhost:5173/member/bookings";
+  const baseOrigin = (process.env.APP_BASE_URL || "http://localhost:3000").replace(/\/+$/, "");
+  const fallbackUrl = `${baseOrigin}/member/bookings`;
 
   const targetUrl = url || fallbackUrl;
 
@@ -122,7 +146,6 @@ async function sendPushNotification({ email, title, message, url, data = {} }) {
     target_channel: "push",
     headings: { en: title || "KIMPC Booking Update" },
     contents: { en: message || "You have an update on your equipment booking." },
-    url: targetUrl,
     web_url: targetUrl,
     data: {
       ...data,
@@ -206,9 +229,27 @@ async function sendBookingStatusPush(application, status, customMessage = "") {
       message = `Your booking for ${equipment} is now ${status}.`;
   }
 
-  const appUrl = process.env.APP_BASE_URL
-    ? `${process.env.APP_BASE_URL}/member/bookings`
-    : "http://localhost:5173/member/bookings";
+  const baseOrigin = (process.env.APP_BASE_URL || "http://localhost:3000").replace(/\/+$/, "");
+  const appUrl = `${baseOrigin}/member/bookings`;
+  const cleanEmail = String(application.memberEmail || "").trim().toLowerCase();
+
+  try {
+    const member = await Account.findOne({ email: cleanEmail }).select("fullName memberSettings").lean();
+    if (member?.memberSettings?.notifications?.email !== false) {
+      sendMemberNotificationEmail({
+        toEmail: cleanEmail,
+        fullName: member?.fullName || application.memberName || "Member",
+        title,
+        message,
+        actionUrl: appUrl,
+        category: "Booking Update",
+      }).catch((err) => {
+        console.warn(`[Mailer] Background booking status email warning for ${cleanEmail}:`, err.message);
+      });
+    }
+  } catch (err) {
+    console.warn(`[Mailer] Could not check email preference for ${cleanEmail}:`, err.message);
+  }
 
   return sendPushNotification({
     email: application.memberEmail,
@@ -223,8 +264,36 @@ async function sendBookingStatusPush(application, status, customMessage = "") {
   });
 }
 
+async function getOneSignalWebStatus() {
+  const { appId, restApiKey } = await getEffectiveOneSignalKeys();
+  if (!appId || !restApiKey) {
+    return { configured: false, webConfigured: false, players: 0 };
+  }
+  try {
+    const res = await makeOneSignalRequest(`/apps/${encodeURIComponent(appId)}`, "GET", null, restApiKey);
+    if (!res.ok || !res.data) {
+      return { configured: true, webConfigured: null, players: null };
+    }
+    const webConfigured = Boolean(
+      res.data.chrome_web_origin ||
+        res.data.chrome_web_sub_domain ||
+        res.data.safari_site_origin
+    );
+    return {
+      configured: true,
+      webConfigured,
+      chromeWebOrigin: res.data.chrome_web_origin || null,
+      players: Number(res.data.players || 0),
+      messageablePlayers: Number(res.data.messageable_players || 0),
+    };
+  } catch {
+    return { configured: true, webConfigured: null, players: null };
+  }
+}
+
 module.exports = {
   isConfigured,
   sendPushNotification,
   sendBookingStatusPush,
+  getOneSignalWebStatus,
 };

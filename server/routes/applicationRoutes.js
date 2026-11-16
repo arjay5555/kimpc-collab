@@ -17,6 +17,8 @@ const {
 } = require("../services/googleCalendarService");
 const cloudinaryService = require("../services/cloudinaryService");
 const oneSignalService = require("../services/oneSignalService");
+const geoService = require("../services/geoService");
+const ocrService = require("../services/ocrService");
 
 const {
   STATUSES,
@@ -166,10 +168,27 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
     const bookingType = clean(req.body.bookingType).toLowerCase() || "hectare";
     const farmLocation = clean(req.body.farmLocation || req.body.location);
     const farmFormattedAddress = clean(req.body.farmFormattedAddress || farmLocation);
-    const farmCoordinates = {
-      lat: req.body.farmCoordinates?.lat != null ? Number(req.body.farmCoordinates.lat) : (req.body.lat != null ? Number(req.body.lat) : null),
-      lng: req.body.farmCoordinates?.lng != null ? Number(req.body.farmCoordinates.lng) : (req.body.lng != null ? Number(req.body.lng) : null),
-    };
+    const parsedCoords = geoService.parseCoordPair(
+      req.body.farmCoordinates?.lat ?? req.body.lat,
+      req.body.farmCoordinates?.lng ?? req.body.lng
+    );
+    const farmCoordinates = parsedCoords || { lat: null, lng: null };
+    let deliveryDistanceKm = Number.isFinite(Number(req.body.deliveryDistanceKm)) && req.body.deliveryDistanceKm !== null
+      ? Number(req.body.deliveryDistanceKm)
+      : null;
+    let estimatedTravelMinutes = Number.isFinite(Number(req.body.estimatedTravelMinutes)) && req.body.estimatedTravelMinutes !== null
+      ? Math.round(Number(req.body.estimatedTravelMinutes))
+      : null;
+
+    if (parsedCoords && (deliveryDistanceKm === null || estimatedTravelMinutes === null)) {
+      try {
+        const route = await geoService.calculateDeliveryRoute(parsedCoords.lat, parsedCoords.lng);
+        if (deliveryDistanceKm === null) deliveryDistanceKm = route.distanceKm ?? null;
+        if (estimatedTravelMinutes === null) estimatedTravelMinutes = route.durationMinutes ?? null;
+      } catch {
+        // Non-blocking fallback when geo routing cannot be computed
+      }
+    }
     if (!equipment || !startDate || !endDate) {
       return fail(res, 400, "Equipment and booking dates are required.");
     }
@@ -262,7 +281,14 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
     const totalAmount = Math.round(ratePerHectare * hectares);
     const unitBrandModel = [targetUnit?.brand, targetUnit?.model].map((s) => clean(s)).filter(Boolean).join(" ");
     const machineryModel = clean(unitBrandModel || req.body.machineryModel || targetUnit?.name || "Standard Model");
-    const assignedDriver = clean(targetUnit?.assignedDriver || (targetUnit?.operatorIncluded ? "Coop Operator Assigned" : "Self-Operated"));
+    let assignedDriver = clean(targetUnit?.assignedDriver);
+    if (!assignedDriver || assignedDriver === "Unassigned") {
+      if (targetUnit?.operatorRequired || targetUnit?.operatorIncluded) {
+        assignedDriver = "Coop Operator Assigned";
+      } else {
+        assignedDriver = "Self-Operated";
+      }
+    }
     const driverPhone = clean(targetUnit?.driverPhone || "");
     const now = new Date();
 
@@ -271,6 +297,7 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
     let gcashProof = paymentMethod === "GCash" ? clean(req.body.gcashProof) : "";
 
     // Upload GCash receipt proof to Cloudinary if base64 data URI provided
+    const rawGcashProofInput = gcashProof;
     if (paymentMethod === "GCash" && gcashProof && gcashProof.startsWith("data:image/")) {
       try {
         const uploadResult = await cloudinaryService.uploadImage(gcashProof, {
@@ -280,6 +307,46 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
         gcashProof = uploadResult.url;
       } catch (err) {
         console.warn("Could not upload GCash proof to Cloudinary, saving local fallback/base64:", err.message);
+      }
+    }
+
+    let gcashOcr = undefined;
+    if (paymentMethod === "GCash" && gcashProof) {
+      if (req.body.gcashOcr && (req.body.gcashOcr.referenceNumber || req.body.gcashOcr.rawText)) {
+        const o = req.body.gcashOcr;
+        const cleanRef = clean(o.referenceNumber || "");
+        const dup = await ocrService.checkDuplicateReference(cleanRef).catch(() => false);
+        gcashOcr = {
+          referenceNumber: cleanRef,
+          amount: o.amount != null && Number.isFinite(Number(o.amount)) ? Number(o.amount) : null,
+          dateTime: clean(o.dateTime || ""),
+          recipientText: clean(o.recipientText || ""),
+          matchesKimpcNumber: Boolean(o.matchesKimpcNumber),
+          amountMatchesExpected:
+            o.amount != null && Number.isFinite(Number(o.amount))
+              ? Math.abs(Number(o.amount) - totalAmount) < 1
+              : null,
+          isDuplicateReference: dup,
+          rawText: String(o.rawText || "").slice(0, 2000),
+          scannedAt: o.scannedAt ? new Date(o.scannedAt) : new Date(),
+          source: clean(o.source || "ocr.space"),
+        };
+      } else {
+        try {
+          const ocrRes = await ocrService.scanGcashReceipt({
+            imageDataUrl: rawGcashProofInput.startsWith("data:image/") ? rawGcashProofInput : "",
+            imageUrl: gcashProof.startsWith("http") ? gcashProof : "",
+            expectedAmount: totalAmount,
+          });
+          if (ocrRes.ok && ocrRes.extracted) {
+            gcashOcr = {
+              ...ocrRes.extracted,
+              scannedAt: new Date(),
+            };
+          }
+        } catch {
+          // Non-blocking fallback if OCR provider times out
+        }
       }
     }
 
@@ -318,12 +385,15 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
       farmLocation,
       farmCoordinates,
       farmFormattedAddress,
+      deliveryDistanceKm,
+      estimatedTravelMinutes,
       status: "Pending",
       paymentStatus: "Pending",
       paymentAmount: 0,
       paymentMethod,
       cashPaymentOption,
       gcashProof,
+      ...(gcashOcr ? { gcashOcr } : {}),
       receiptNo,
       paymentHistory: [],
       refunds: [],
@@ -359,6 +429,8 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
         farmLocation,
       farmCoordinates,
       farmFormattedAddress,
+      deliveryDistanceKm,
+      estimatedTravelMinutes,
         paymentMethod,
         totalAmount,
       },
@@ -744,6 +816,25 @@ const handleApplicationUpdate = async (req, res) => {
       existing.endDate = newEndDate;
       if (req.body.farmLocation !== undefined) {
         existing.farmLocation = clean(req.body.farmLocation);
+      }
+      if (req.body.farmFormattedAddress !== undefined) {
+        existing.farmFormattedAddress = clean(req.body.farmFormattedAddress);
+      }
+      if (req.body.farmCoordinates !== undefined) {
+        const updatedCoords = geoService.parseCoordPair(req.body.farmCoordinates?.lat, req.body.farmCoordinates?.lng);
+        existing.farmCoordinates = updatedCoords || { lat: null, lng: null };
+        if (updatedCoords) {
+          try {
+            const route = await geoService.calculateDeliveryRoute(updatedCoords.lat, updatedCoords.lng);
+            existing.deliveryDistanceKm = route.distanceKm ?? null;
+            existing.estimatedTravelMinutes = route.durationMinutes ?? null;
+          } catch {
+            // Non-blocking
+          }
+        } else {
+          existing.deliveryDistanceKm = null;
+          existing.estimatedTravelMinutes = null;
+        }
       }
       if (req.body.bookingType) {
         existing.bookingType = clean(req.body.bookingType);
@@ -2077,6 +2168,47 @@ router.post("/applications/:id/review-flagged-payment", authManager, async (req,
   } catch (error) {
     console.error("Error reviewing flagged payment:", error);
     return res.status(500).json({ error: "Failed to review flagged payment." });
+  }
+});
+
+/**
+ * POST /api/applications/:id/scan-gcash
+ * Manager-triggered OCR.space scan on an uploaded GCash proof screenshot, persisted to the booking.
+ */
+router.post("/applications/:id/scan-gcash", authManager, async (req, res) => {
+  try {
+    const id = clean(req.params.id);
+    if (!mongoose.Types.ObjectId.isValid(id)) return fail(res, 400, "Invalid booking ID.");
+
+    const existing = await Application.findById(id);
+    if (!existing) return fail(res, 404, "Booking not found.");
+    if (!existing.gcashProof) return fail(res, 400, "No GCash proof screenshot is attached to this booking.");
+
+    const result = await ocrService.scanGcashReceipt({
+      imageDataUrl: existing.gcashProof.startsWith("data:image/") ? existing.gcashProof : "",
+      imageUrl: existing.gcashProof.startsWith("http") ? existing.gcashProof : "",
+      expectedAmount: existing.totalAmount || null,
+      excludeApplicationId: existing._id,
+    });
+
+    if (!result.ok) {
+      return res.status(result.disabled ? 403 : 422).json(result);
+    }
+
+    existing.gcashOcr = {
+      ...result.extracted,
+      scannedAt: new Date(),
+    };
+    await existing.save();
+
+    return res.json({
+      ok: true,
+      gcashOcr: existing.gcashOcr,
+      application: existing,
+    });
+  } catch (err) {
+    console.error("Error scanning application GCash proof:", err);
+    return res.status(500).json({ ok: false, error: "Failed to scan GCash receipt." });
   }
 });
 

@@ -8,7 +8,7 @@ const authenticate = require("../middleware/authenticate");
 const { logAudit } = require("../services/auditLogger");
 const authManager = require("../middleware/authManager");
 const { fail, clean, cleanEmail } = require("./routeHelpers");
-const { sendMemberSupportEmail } = require("../services/mailer");
+const { sendMemberSupportEmail, sendMemberNotificationEmail } = require("../services/mailer");
 const cloudinaryService = require("../services/cloudinaryService");
 const oneSignalService = require("../services/oneSignalService");
 
@@ -25,11 +25,35 @@ router.post("/notifications/announce", authManager, async (req, res) => {
   if (!title || !message) return fail(res, 400, "Announcement title and message are required.");
   const targetEmail = cleanEmail(req.body.memberEmail);
   const members = targetEmail
-    ? await Account.find({ email: targetEmail, role: "member", isArchived: { $ne: true } }).select("email memberSettings").lean()
-    : await Account.find({ role: "member", isArchived: { $ne: true } }).select("email memberSettings").lean();
+    ? await Account.find({ email: targetEmail, role: "member", isArchived: { $ne: true } }).select("email fullName memberSettings").lean()
+    : await Account.find({ role: "member", isArchived: { $ne: true } }).select("email fullName memberSettings").lean();
   const recipients = members.filter((member) => member.memberSettings?.notifications?.inApp !== false && member.memberSettings?.notifications?.systemUpdates !== false);
   if (recipients.length === 0) return fail(res, 404, "No opted-in member recipients were found.");
   await Notification.insertMany(recipients.map(({ email }) => ({ memberEmail: email, title, message, type: "system" })));
+
+  // Dispatch Web Push & Email notifications in background according to each member's notification preferences
+  const baseOrigin = (process.env.APP_BASE_URL || "http://localhost:3000").replace(/\/+$/, "");
+  for (const recipient of members) {
+    if (recipient.memberSettings?.notifications?.systemUpdates === false) continue;
+    if (recipient.memberSettings?.notifications?.push !== false) {
+      oneSignalService.sendPushNotification({
+        email: recipient.email,
+        title,
+        message,
+        url: `${baseOrigin}/member/notifications`,
+      }).catch(() => {});
+    }
+    if (recipient.memberSettings?.notifications?.email !== false) {
+      sendMemberNotificationEmail({
+        toEmail: recipient.email,
+        fullName: recipient.fullName,
+        title,
+        message,
+        actionUrl: `${baseOrigin}/member/notifications`,
+        category: "Announcement",
+      }).catch(() => {});
+    }
+  }
 
   await logAudit({
     action: "ANNOUNCEMENT_SENT",
@@ -54,6 +78,10 @@ router.get("/member/preferences", async (req, res) => {
   res.json({
     theme: req.user.memberSettings?.theme || "light",
     defaultFarmLocation: req.user.memberSettings?.defaultFarmLocation || "",
+    defaultFarmCoordinates: {
+      lat: req.user.memberSettings?.defaultFarmCoordinates?.lat ?? null,
+      lng: req.user.memberSettings?.defaultFarmCoordinates?.lng ?? null,
+    },
     notifications: {
       email: req.user.memberSettings?.notifications?.email ?? true,
       inApp: req.user.memberSettings?.notifications?.inApp ?? true,
@@ -74,8 +102,21 @@ router.patch("/member/preferences", async (req, res) => {
   }
   if (req.body.defaultFarmLocation !== undefined) {
     const location = clean(req.body.defaultFarmLocation);
-    if (location.length > 240) return fail(res, 400, "Farm location must be 240 characters or fewer.");
+    if (location.length > 500) return fail(res, 400, "Farm location must be 500 characters or fewer.");
     settings.defaultFarmLocation = location;
+  }
+  if (req.body.defaultFarmCoordinates !== undefined) {
+    const rawCoords = req.body.defaultFarmCoordinates;
+    if (rawCoords === null || (rawCoords.lat == null && rawCoords.lng == null)) {
+      settings.defaultFarmCoordinates = { lat: null, lng: null };
+    } else {
+      const lat = Number(rawCoords.lat);
+      const lng = Number(rawCoords.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        return fail(res, 400, "Invalid default farm coordinates.");
+      }
+      settings.defaultFarmCoordinates = { lat: Number(lat.toFixed(6)), lng: Number(lng.toFixed(6)) };
+    }
   }
   if (req.body.notifications !== undefined) {
     const allowed = ["email", "inApp", "bookingReminders", "systemUpdates", "push"];
@@ -90,7 +131,7 @@ router.patch("/member/preferences", async (req, res) => {
   req.user.memberSettings = settings;
   await req.user.save();
 
-  await logAudit({
+  void logAudit({
     action: "PREFERENCES_UPDATED",
     module: "Accounts & Roles",
     actorEmail: req.user.email,
@@ -111,6 +152,10 @@ router.patch("/member/preferences", async (req, res) => {
   return res.json({
     theme: settings.theme || "light",
     defaultFarmLocation: settings.defaultFarmLocation || "",
+    defaultFarmCoordinates: {
+      lat: settings.defaultFarmCoordinates?.lat ?? null,
+      lng: settings.defaultFarmCoordinates?.lng ?? null,
+    },
     notifications: {
       email: settings.notifications?.email ?? true,
       inApp: settings.notifications?.inApp ?? true,
@@ -123,14 +168,89 @@ router.patch("/member/preferences", async (req, res) => {
 
 router.post("/member/push/test", async (req, res) => {
   try {
-    const result = await oneSignalService.sendPushNotification({
-      email: req.user.email,
-      title: "KIMPC Web Push Test 🚜",
-      message: "Push notifications are active! You will receive instant updates whenever your machinery bookings change status.",
+    const pushEnabled = req.user.memberSettings?.notifications?.push !== false;
+    const emailEnabled = req.user.memberSettings?.notifications?.email !== false;
+
+    if (!pushEnabled && !emailEnabled) {
+      return fail(res, 400, "Enable Web Push Notifications or Email Notifications first before sending a test.");
+    }
+
+    const title = "KIMPC Notification Test 🚜";
+    const message =
+      "Notifications are active! You will receive live updates whenever your machinery bookings change status.";
+    const baseOrigin = (process.env.APP_BASE_URL || "http://localhost:3000").replace(/\/+$/, "");
+
+    let pushSent = false;
+    let pushError = "";
+    if (pushEnabled) {
+      const pushResult = await oneSignalService.sendPushNotification({
+        email: req.user.email,
+        title,
+        message,
+        url: `${baseOrigin}/member/settings`,
+      });
+
+      if (pushResult.skipped) {
+        pushError =
+          pushResult.reason === "disabled_by_admin"
+            ? "OneSignal Web Push is disabled in Admin System Settings."
+            : "Web Push notifications are turned off in your Member Settings.";
+      } else if (!pushResult.ok) {
+        const errText = String(pushResult.error || "Failed to dispatch OneSignal test push.");
+        if (errText.toLowerCase().includes("not subscribed")) {
+          const statusInfo = await oneSignalService.getOneSignalWebStatus();
+          if (statusInfo.webConfigured === false) {
+            pushError =
+              "OneSignal Web Push platform is not configured yet for this App ID (no Web Site URL set in OneSignal Dashboard → Settings → Platforms → Web).";
+          } else {
+            pushError =
+              "This browser is not subscribed in OneSignal yet. Allow notifications in your browser, then toggle Web Push off and back on.";
+          }
+        } else {
+          pushError = errText;
+        }
+      } else {
+        pushSent = true;
+      }
+    }
+
+    let emailSent = false;
+    let emailError = "";
+    if (emailEnabled) {
+      const emailResult = await sendMemberNotificationEmail({
+        toEmail: req.user.email,
+        fullName: req.user.fullName,
+        title,
+        message,
+        actionUrl: `${baseOrigin}/member/settings`,
+        category: "Notification Test",
+      });
+      if (emailResult?.sent) {
+        emailSent = true;
+      } else {
+        emailError = emailResult?.error || emailResult?.reason || "Email could not be delivered.";
+      }
+    }
+
+    if (!pushSent && !emailSent) {
+      const combinedError = [pushError, emailError].filter(Boolean).join(" | ") || "Could not deliver test notification.";
+      return fail(res, 400, combinedError);
+    }
+
+    const parts = [];
+    if (pushSent) parts.push("Web Push");
+    if (emailSent) parts.push(`Email (${req.user.email})`);
+
+    return res.json({
+      ok: true,
+      pushSent,
+      emailSent,
+      pushError: pushError || undefined,
+      emailError: emailError || undefined,
+      message: `Test notification sent via ${parts.join(" and ")}!`,
     });
-    return res.json(result);
   } catch (err) {
-    return fail(res, 500, err.message || "Failed to trigger test push.");
+    return fail(res, 500, err.message || "Failed to trigger test notification.");
   }
 });
 
@@ -162,7 +282,7 @@ router.patch(["/member/profile", "/member/update-profile"], async (req, res) => 
   if (!req.user.fullName) return fail(res, 400, "Full name is required.");
   await req.user.save();
 
-  await logAudit({
+  void logAudit({
     action: "PROFILE_UPDATED",
     module: "Accounts & Roles",
     actorEmail: req.user.email,

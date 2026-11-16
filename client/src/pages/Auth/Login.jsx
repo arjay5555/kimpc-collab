@@ -53,7 +53,7 @@ export default function Login() {
   const [facebookEnabled, setFacebookEnabled] = useState(true);
   const [facebookAppId, setFacebookAppId] = useState("4031349940338782");
   const [recaptchaEnabled, setRecaptchaEnabled] = useState(true);
-  const [recaptchaSiteKey, setRecaptchaSiteKey] = useState("6LfrJe0tAAAAAIIeW87yfUlJuzJOokkWT4KM6UG5");
+  const [recaptchaSiteKey, setRecaptchaSiteKey] = useState("");
   const recaptchaWidgetRef = useRef(null);
 
   // Set body class for background image styling
@@ -97,7 +97,7 @@ export default function Login() {
 
   // Dynamically render reCAPTCHA v2 widget
   useEffect(() => {
-    if (mode !== "login" || !recaptchaEnabled) return;
+    if (mode !== "login" || !recaptchaEnabled || !recaptchaSiteKey) return;
 
     let timer;
     const tryRender = () => {
@@ -115,7 +115,7 @@ export default function Login() {
       }
     };
 
-    timer = setInterval(tryRender, 400);
+    timer = setInterval(tryRender, 200);
     return () => clearInterval(timer);
   }, [mode, recaptchaEnabled, recaptchaSiteKey]);
 
@@ -544,6 +544,54 @@ export default function Login() {
       <main className="coop-login-stage">
         {/* Left Column: Unified Auth Card */}
         <section className={`coop-login-card ${mode === "signup" ? "signup-mode" : ""}`} id="login">
+          {/* Top Segmented Mode Switcher (Seamless Navigation on Phone & Desktop) */}
+          {(mode === "login" || mode === "signup") && (
+            <div className="coop-auth-tabs-wrap" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === "login"}
+                className={`coop-auth-tab ${mode === "login" ? "active" : ""}`}
+                onClick={() => {
+                  setMode("login");
+                  setLoginFeedback({ message: "", isError: false });
+                }}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === "signup"}
+                className={`coop-auth-tab ${mode === "signup" ? "active" : ""}`}
+                onClick={() => {
+                  setMode("signup");
+                  setSignupFeedback({ message: "", isError: false });
+                }}
+              >
+                Register
+              </button>
+            </div>
+          )}
+
+          {(mode === "forgot" || mode === "verify") && (
+            <button
+              type="button"
+              className="coop-auth-back-btn"
+              onClick={() => {
+                setMode("login");
+                setForgotFeedback({ message: "", isError: false });
+                setVerifyFeedback({ message: "", isError: false });
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="19" y1="12" x2="5" y2="12"></line>
+                <polyline points="12 19 5 12 12 5"></polyline>
+              </svg>
+              <span>Back to Sign In</span>
+            </button>
+          )}
+
           {/* VIEW 1: Log In Container */}
           {mode === "login" && (
             <div id="login-view" className="coop-auth-view active">
@@ -634,8 +682,8 @@ export default function Login() {
                   </div>
 
                   {recaptchaEnabled && (
-                    <div className="coop-recaptcha-wrap">
-                      <div className="g-recaptcha" id="login-recaptcha" data-sitekey="6LfrJe0tAAAAAIIeW87yfUlJuzJOokkWT4KM6UG5"></div>
+                    <div className="coop-recaptcha-wrap" key={recaptchaSiteKey || "recaptcha"}>
+                      <div id="login-recaptcha" data-sitekey={recaptchaSiteKey}></div>
                     </div>
                   )}
 
@@ -1043,6 +1091,22 @@ export default function Login() {
           </aside>
         </div>
       </main>
+
+      {/* Mobile-Friendly Navigation & Copyright Footer */}
+      <footer className="coop-mobile-footer">
+        <div className="coop-mobile-links">
+          <a href="#machinery" className="coop-mobile-link">Fleet</a>
+          <span className="coop-dot-sep">•</span>
+          <a href="#how-it-works" className="coop-mobile-link">How It Works</a>
+          <span className="coop-dot-sep">•</span>
+          <a href="#cooperative" className="coop-mobile-link">Benefits</a>
+          <span className="coop-dot-sep">•</span>
+          <a href="#contact" className="coop-mobile-link">Contact</a>
+        </div>
+        <p className="coop-mobile-copy">
+          © {new Date().getFullYear()} KIMPC Cooperative Machinery Rental • All rights reserved
+        </p>
+      </footer>
     </div>
   );
 }

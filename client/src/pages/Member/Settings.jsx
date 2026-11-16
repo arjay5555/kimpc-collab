@@ -3,11 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { api } from "../../services/api";
 import MemberTopbar from "../../components/MemberTopbar";
+import FarmLocationPicker from "../../components/FarmLocationPicker";
 import { setPushEnabled, getPushStatus, isPushSupported } from "../../services/oneSignal";
 
 const initialPreferences = {
   theme: "light",
   defaultFarmLocation: "",
+  defaultFarmCoordinates: null,
   notifications: { email: true, inApp: true, bookingReminders: true, systemUpdates: true, push: true },
 };
 
@@ -42,6 +44,20 @@ export default function Settings() {
   const [error, setError] = useState("");
   const [pushInfo, setPushInfo] = useState({ supported: true, permission: "default", optedIn: false });
   const [isTestingPush, setIsTestingPush] = useState(false);
+  const [isTogglingPush, setIsTogglingPush] = useState(false);
+
+  const userSnapshotRef = useRef({
+    fullName: user?.fullName || "",
+    avatar: user?.avatar || "",
+    updateProfile,
+  });
+  useEffect(() => {
+    userSnapshotRef.current = {
+      fullName: user?.fullName || "",
+      avatar: user?.avatar || "",
+      updateProfile,
+    };
+  }, [user?.fullName, user?.avatar, updateProfile]);
 
   const fetchMyMessages = useCallback(async () => {
     try {
@@ -56,9 +72,10 @@ export default function Settings() {
 
   useEffect(() => {
     let active = true;
+    const targetEmail = user?.email || "";
     Promise.all([
       api("/member/preferences"),
-      api(`/accounts/${encodeURIComponent(user?.email || "")}`),
+      targetEmail ? api(`/accounts/${encodeURIComponent(targetEmail)}`) : Promise.resolve({ ok: false }),
       api("/member/messages"),
     ])
       .then(([preferencesResponse, profileResponse, messagesResponse]) => {
@@ -79,9 +96,9 @@ export default function Settings() {
         if (profileResponse.ok) {
           const d = profileResponse.data || {};
           const savedAvatar =
-            d.avatar || localStorage.getItem(`kimpc-avatar-${user?.email || "current"}`) || "";
+            d.avatar || localStorage.getItem(`kimpc-avatar-${targetEmail || "current"}`) || "";
           setProfile({
-            fullName: d.fullName || user?.fullName || "",
+            fullName: d.fullName || userSnapshotRef.current.fullName || "",
             phone: d.phone || "",
             address: d.address || "",
             city: d.city || "",
@@ -89,8 +106,8 @@ export default function Settings() {
             avatar: savedAvatar,
             cooperativeId: d.cooperativeId || "",
           });
-          if (savedAvatar) {
-            updateProfile({ avatar: savedAvatar });
+          if (savedAvatar && savedAvatar !== userSnapshotRef.current.avatar) {
+            userSnapshotRef.current.updateProfile?.({ avatar: savedAvatar });
           }
         }
 
@@ -110,21 +127,30 @@ export default function Settings() {
         if (active) {
           setError("Could not load saved settings.");
           setLoading(false);
-        getPushStatus().then((info) => {
-          if (active) setPushInfo(info);
-        });
+          getPushStatus().then((info) => {
+            if (active) setPushInfo(info);
+          });
         }
       });
 
     return () => {
       active = false;
     };
-  }, [user?.email, updateProfile, user?.fullName]);
+  }, [user?.email]);
 
-  // Save Preferences
-  const savePreferences = async (patch) => {
+  // Save Preferences (optimistic UI for instant response)
+  const savePreferences = async (patch, customFeedback = "Preferences updated successfully.") => {
     setFeedback("");
     setError("");
+    if (patch.theme) {
+      localStorage.setItem("member-theme", patch.theme);
+      window.dispatchEvent(new CustomEvent("member-theme-change", { detail: patch.theme }));
+      setPreferences((current) => ({ ...current, theme: patch.theme }));
+    }
+    if (patch.defaultFarmLocation !== undefined) {
+      localStorage.setItem("member-default-location", patch.defaultFarmLocation || "");
+    }
+
     const response = await api("/member/preferences", { method: "PATCH", body: patch });
     if (!response.ok) {
       setError(response.data?.error || "Could not save your settings.");
@@ -133,17 +159,17 @@ export default function Settings() {
     const value = response.data;
     setPreferences((current) => ({
       ...current,
-      ...value,
-      notifications: { ...current.notifications, ...value.notifications },
+      ...(patch.theme !== undefined ? { theme: value.theme } : {}),
+      ...(patch.defaultFarmLocation !== undefined ? { defaultFarmLocation: value.defaultFarmLocation } : {}),
+      ...(patch.defaultFarmCoordinates !== undefined ? { defaultFarmCoordinates: value.defaultFarmCoordinates } : {}),
+      notifications: {
+        ...current.notifications,
+        ...(patch.notifications ? value.notifications : {}),
+      },
     }));
-    if (patch.defaultFarmLocation !== undefined) {
-      localStorage.setItem("member-default-location", value.defaultFarmLocation || "");
+    if (customFeedback) {
+      setFeedback(customFeedback);
     }
-    if (patch.theme) {
-      localStorage.setItem("member-theme", patch.theme);
-      window.dispatchEvent(new CustomEvent("member-theme-change", { detail: patch.theme }));
-    }
-    setFeedback("Preferences updated successfully.");
     return true;
   };
 
@@ -189,8 +215,16 @@ export default function Settings() {
     setFeedback("");
 
     const reader = new FileReader();
+    reader.onerror = () => {
+      setError("Could not read the selected image file.");
+      setIsUploadingAvatar(false);
+    };
     reader.onload = (event) => {
       const img = new Image();
+      img.onerror = () => {
+        setError("Could not decode the selected image. Try a JPG or PNG file.");
+        setIsUploadingAvatar(false);
+      };
       img.onload = async () => {
         try {
           const canvas = document.createElement("canvas");
@@ -241,6 +275,7 @@ export default function Settings() {
       img.src = event.target.result;
     };
     reader.readAsDataURL(file);
+    e.target.value = "";
   };
 
   const handleRemoveAvatar = async () => {
@@ -316,30 +351,53 @@ export default function Settings() {
   };
 
   const updateNotification = (key, value) => {
-    const notifications = { ...preferences.notifications, [key]: value };
-    setPreferences((current) => ({ ...current, notifications }));
-    savePreferences({ notifications });
+    setPreferences((current) => ({
+      ...current,
+      notifications: { ...current.notifications, [key]: value },
+    }));
+    savePreferences({ notifications: { [key]: value } });
   };
 
   const handlePushToggle = async (checked) => {
+    if (isTogglingPush) return;
+    setIsTogglingPush(true);
     setError("");
     setFeedback("");
-    if (checked) {
-      const res = await setPushEnabled(true);
-      if (res.permission === "denied") {
-        setError("Browser notifications are blocked. Please enable notification permissions in your browser's site settings.");
-        updateNotification("push", false);
+    try {
+      if (checked) {
+        setPreferences((current) => ({
+          ...current,
+          notifications: { ...current.notifications, push: true },
+        }));
+        const res = await setPushEnabled(true);
+        if (res.permission === "denied") {
+          setError("Browser notifications are blocked. Please enable notification permissions in your browser's site settings.");
+          setPreferences((current) => ({
+            ...current,
+            notifications: { ...current.notifications, push: false },
+          }));
+          await savePreferences({ notifications: { push: false } }, "");
+        } else {
+          await savePreferences(
+            { notifications: { push: true } },
+            "Push notifications enabled! You will receive live updates when your booking status changes."
+          );
+        }
       } else {
-        updateNotification("push", true);
-        setFeedback("Push notifications enabled! You will receive live updates when your booking status changes.");
+        setPreferences((current) => ({
+          ...current,
+          notifications: { ...current.notifications, push: false },
+        }));
+        await Promise.all([
+          setPushEnabled(false),
+          savePreferences({ notifications: { push: false } }, "Push notifications turned off."),
+        ]);
       }
-    } else {
-      await setPushEnabled(false);
-      updateNotification("push", false);
-      setFeedback("Push notifications turned off.");
+      const updated = await getPushStatus();
+      setPushInfo(updated);
+    } finally {
+      setIsTogglingPush(false);
     }
-    const updated = await getPushStatus();
-    setPushInfo(updated);
   };
 
   const handleTestPush = async () => {
@@ -348,13 +406,16 @@ export default function Settings() {
     setFeedback("");
     try {
       const res = await api("/member/push/test", { method: "POST" });
-      if (res.ok) {
-        setFeedback("Test push notification dispatched! Check your device or notification tray.");
+      if (res.ok && res.data?.ok !== false) {
+        setFeedback(res.data?.message || "Test notification dispatched! Check your notification tray or email.");
+        if (res.data?.pushError || res.data?.emailError) {
+          setError([res.data.pushError, res.data.emailError].filter(Boolean).join(" | "));
+        }
       } else {
-        setError(res.data?.error || "Could not trigger test push.");
+        setError(res.data?.error || "Could not trigger test notification.");
       }
     } catch {
-      setError("Error sending test push notification.");
+      setError("Error sending test notification.");
     } finally {
       setIsTestingPush(false);
     }
@@ -876,38 +937,30 @@ export default function Settings() {
 
         {/* Default Farm Location Subcard */}
         <div style={{ marginTop: "20px", padding: "16px 18px", background: "#f8fafc", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
-          <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, color: "#0f172a", marginBottom: "4px" }}>
-            Default Farm Location / Landmark
-          </label>
-          <p style={{ margin: "0 0 10px", color: "#64748b", fontSize: "0.78rem" }}>
-            This location will automatically prefill new machinery booking applications to save you time.
-          </p>
-          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-            <input
-              type="text"
-              maxLength={240}
-              placeholder="e.g. Ninoy Aquino, Kalilangan, Bukidnon (near public elementary school)"
-              value={preferences.defaultFarmLocation}
-              onChange={(e) => setPreferences({ ...preferences, defaultFarmLocation: e.target.value })}
-              style={{
-                flex: "1 1 280px",
-                padding: "10px 14px",
-                borderRadius: "8px",
-                border: "1px solid #cbd5e1",
-                fontSize: "0.88rem",
-                background: "#ffffff",
-              }}
-            />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "8px" }}>
+            <div>
+              <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, color: "#0f172a", marginBottom: "2px" }}>
+                Default Farm Location &amp; Map Pin (PSGC + OpenStreetMap)
+              </label>
+              <p style={{ margin: 0, color: "#64748b", fontSize: "0.78rem" }}>
+                Select your barangay or pin your farm on the map to prefill new machinery bookings and calculate route distance.
+              </p>
+            </div>
             <button
               type="button"
-              onClick={() => savePreferences({ defaultFarmLocation: preferences.defaultFarmLocation })}
+              onClick={() =>
+                savePreferences({
+                  defaultFarmLocation: preferences.defaultFarmLocation,
+                  defaultFarmCoordinates: preferences.defaultFarmCoordinates,
+                })
+              }
               style={{
                 background: "#ffffff",
                 border: "1.5px solid #166534",
                 color: "#166534",
                 fontWeight: 700,
                 fontSize: "0.84rem",
-                padding: "10px 20px",
+                padding: "9px 18px",
                 borderRadius: "8px",
                 cursor: "pointer",
                 whiteSpace: "nowrap",
@@ -917,6 +970,20 @@ export default function Settings() {
               Save Farm Location
             </button>
           </div>
+          <FarmLocationPicker
+            height={230}
+            value={{
+              location: preferences.defaultFarmLocation,
+              coordinates: preferences.defaultFarmCoordinates,
+            }}
+            onChange={(geo) =>
+              setPreferences((current) => ({
+                ...current,
+                defaultFarmLocation: geo.location || "",
+                defaultFarmCoordinates: geo.coordinates || null,
+              }))
+            }
+          />
         </div>
 
         {/* Theme Appearance & Language Grid */}
@@ -1084,13 +1151,13 @@ export default function Settings() {
             ))}
           </div>
 
-          {/* Web Push Status & Live Test */}
+          {/* Web Push & Email Test Status */}
           <div
             style={{
               marginTop: "12px",
               padding: "12px 14px",
-              background: preferences.notifications.push ? "#f0fdf4" : "#f1f5f9",
-              border: preferences.notifications.push ? "1px solid #bbf7d0" : "1px solid #e2e8f0",
+              background: (preferences.notifications.push || preferences.notifications.email) ? "#f0fdf4" : "#f1f5f9",
+              border: (preferences.notifications.push || preferences.notifications.email) ? "1px solid #bbf7d0" : "1px solid #e2e8f0",
               borderRadius: "10px",
               display: "flex",
               alignItems: "center",
@@ -1100,19 +1167,26 @@ export default function Settings() {
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <span style={{ fontSize: "1.2rem" }}>{preferences.notifications.push ? "🔔" : "🔕"}</span>
+              <span style={{ fontSize: "1.2rem" }}>{(preferences.notifications.push || preferences.notifications.email) ? "🔔" : "🔕"}</span>
               <div>
-                <div style={{ fontSize: "0.78rem", fontWeight: 700, color: preferences.notifications.push ? "#166534" : "#475569" }}>
-                  OneSignal Web Push: {preferences.notifications.push ? "Enabled & Linked" : "Turned Off"}
+                <div style={{ fontSize: "0.78rem", fontWeight: 700, color: (preferences.notifications.push || preferences.notifications.email) ? "#166534" : "#475569" }}>
+                  Web Push:{" "}
+                  {!preferences.notifications.push
+                    ? "Turned Off"
+                    : pushInfo.subscriptionId
+                    ? "Subscribed ✓"
+                    : "Enabled (Browser Not Subscribed in OneSignal)"}
+                  {" • "}
+                  Email: {preferences.notifications.email ? "Enabled" : "Turned Off"}
                 </div>
-                <div style={{ fontSize: "0.72rem", color: preferences.notifications.push ? "#15803d" : "#64748b" }}>
-                  {preferences.notifications.push
-                    ? "You will receive instant desktop/mobile push alerts when your bookings are Approved, Dispatched, or Rescheduled."
-                    : "Enable Web Push to stay updated in real-time when managers review your booking requests."}
+                <div style={{ fontSize: "0.72rem", color: (preferences.notifications.push || preferences.notifications.email) ? "#15803d" : "#64748b" }}>
+                  {preferences.notifications.push || preferences.notifications.email
+                    ? "Receive instant booking approval, dispatch, reminder, and announcement alerts via your enabled channels."
+                    : "Enable Web Push or Email Notifications to receive updates when managers review your booking requests."}
                 </div>
               </div>
             </div>
-            {preferences.notifications.push && (
+            {(preferences.notifications.push || preferences.notifications.email) && (
               <button
                 type="button"
                 onClick={handleTestPush}
@@ -1132,7 +1206,7 @@ export default function Settings() {
                   boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
                 }}
               >
-                {isTestingPush ? "Dispatching..." : "Send Test Push"}
+                {isTestingPush ? "Sending..." : "Send Test Notification"}
               </button>
             )}
           </div>

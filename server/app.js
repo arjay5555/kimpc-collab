@@ -13,6 +13,8 @@ const managerRoutes = require("./routes/manager");
 const apiRoutes = require("./routes/api");
 const uploadRoutes = require("./routes/uploadRoutes");
 const weatherRoutes = require("./routes/weatherRoutes");
+const geoRoutes = require("./routes/geoRoutes");
+const ocrRoutes = require("./routes/ocrRoutes");
 
 const app = express();
 
@@ -56,6 +58,8 @@ app.use("/api", (req, res, next) => {
 // 5. API Routes
 app.use("/api/upload", uploadRoutes);
 app.use("/api/weather", weatherRoutes);
+app.use("/api/geo", geoRoutes);
+app.use("/api/ocr", ocrRoutes);
 app.use("/api/calendar", calendarRoutes);
 app.use("/api/manager", authManager);
 app.use("/api/manager", managerRoutes);
@@ -72,8 +76,8 @@ if (fs.existsSync(clientDist)) {
     maxAge: "1y",
     immutable: true,
     setHeaders: (res, filePath) => {
-      // index.html must NEVER be cached long-term so user always receives the latest deployed version
-      if (filePath.endsWith("index.html")) {
+      // index.html and service worker scripts must NEVER be cached long-term
+      if (filePath.endsWith("index.html") || filePath.endsWith("OneSignalSDKWorker.js")) {
         res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
         res.setHeader("Pragma", "no-cache");
         res.setHeader("Expires", "0");

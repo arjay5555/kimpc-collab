@@ -1,3 +1,5 @@
+const fs = require("fs");
+const path = require("path");
 const nodemailer = require("nodemailer");
 const { Resend } = require("resend");
 const SystemSetting = require("../models/SystemSetting");
@@ -33,7 +35,7 @@ function createSmtpTransporter() {
  * 2. SMTP / Nodemailer (if SMTP_USER and SMTP_PASS are configured)
  * 3. Safe Console Simulation (if no live email credentials are set)
  */
-async function dispatchEmail({ to, subject, html, text, replyTo }) {
+async function dispatchEmail({ to, subject, html, text, replyTo, attachments, headers }) {
   const resendApiKey = (process.env.RESEND_API_KEY || "").trim();
   const defaultFrom =
     process.env.EMAIL_FROM ||
@@ -55,6 +57,8 @@ async function dispatchEmail({ to, subject, html, text, replyTo }) {
         text,
       };
       if (replyTo) mailOptions.replyTo = replyTo;
+      if (attachments && attachments.length) mailOptions.attachments = attachments;
+      if (headers) mailOptions.headers = headers;
 
       const info = await smtpTransporter.sendMail(mailOptions);
       console.log(`[EMAIL DISPATCH SUCCESS (SMTP)] Real email sent to ${to}. Message ID: ${info.messageId}`);
@@ -78,6 +82,13 @@ async function dispatchEmail({ to, subject, html, text, replyTo }) {
         text,
       };
       if (replyTo) resendPayload.reply_to = replyTo;
+      if (attachments && attachments.length) {
+        resendPayload.attachments = attachments.map((att) => ({
+          filename: att.filename,
+          content: att.content || (att.path && fs.existsSync(att.path) ? fs.readFileSync(att.path) : undefined),
+        }));
+      }
+      if (headers) resendPayload.headers = headers;
 
       const { data, error } = await resend.emails.send(resendPayload);
       if (error) {
@@ -319,59 +330,89 @@ Kalilangan Irrigators Multi-Purpose Cooperative
  * Send 6-digit OTP verification email to the administrator for account deletion.
  */
 async function sendDeleteOtpEmail({ toEmail, otpCode, targetName, targetRole, targetEmail }) {
-  const subject = `[KIMPC Security] Verification OTP: ${otpCode} - Confirm Account Deletion`;
+  const subject = `Verification Code: ${otpCode} - Confirm Account Deletion`;
+
+  const logoPath = path.join(__dirname, "../public/images/kimpc-logo-print.png");
+  const attachments = [];
+  if (fs.existsSync(logoPath)) {
+    attachments.push({
+      filename: "kimpc-logo.png",
+      path: logoPath,
+      cid: "kimpc-logo",
+    });
+  }
+
   const htmlContent = `
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
     <head>
       <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>KIMPC Security Verification</title>
       <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f5f7f3; margin: 0; padding: 24px; color: #1d2928; }
-        .card { max-width: 520px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #dfe6df; padding: 32px; box-shadow: 0 8px 24px rgba(29, 41, 40, 0.06); }
-        .header { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; border-bottom: 1px solid #edf2ed; padding-bottom: 16px; }
-        .logo { background: #0d766e; color: #ffffff; font-weight: 800; font-size: 1.1rem; width: 36px; height: 36px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; }
-        .title { font-size: 1.1rem; font-weight: 700; color: #0d766e; margin: 0; }
-        .warning-box { background: #fff5f5; border-left: 4px solid #e53e3e; padding: 12px 16px; border-radius: 6px; margin: 18px 0; font-size: 0.88rem; color: #9b2c2c; }
-        .otp-box { text-align: center; margin: 28px 0; background: #f0fdf4; border: 2px dashed #0d766e; border-radius: 10px; padding: 20px; }
-        .otp-code { font-family: monospace; font-size: 2.2rem; font-weight: 800; letter-spacing: 8px; color: #0d766e; margin: 6px 0; }
-        .footer { font-size: 0.75rem; color: #718096; margin-top: 24px; border-top: 1px solid #edf2ed; padding-top: 16px; line-height: 1.5; }
+        body { margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #0f172a; }
+        table { border-collapse: collapse; }
       </style>
     </head>
-    <body>
-      <div class="card">
-        <div class="header">
-          <div class="logo">K</div>
-          <div>
-            <p class="title">KIMPC Portal Security</p>
-            <small style="color: #64746f;">Kalilangan Irrigators Multi-Purpose Cooperative</small>
+    <body style="margin: 0; padding: 32px 16px; background-color: #f8fafc;">
+      <div style="max-width: 520px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 36px 32px; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);">
+        <!-- Authentic Header with Logo -->
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 100%; border-bottom: 1px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 24px;">
+          <tr>
+            <td style="width: 44px; vertical-align: middle;">
+              <img src="cid:kimpc-logo" width="38" height="38" alt="KIMPC Logo" style="display: block; border-radius: 8px; border: 1px solid #e2e8f0; object-fit: contain; background: #ffffff;" />
+            </td>
+            <td style="vertical-align: middle; padding-left: 12px;">
+              <div style="font-size: 15px; font-weight: 700; color: #0f172a; line-height: 1.2;">KIMPC Cooperative</div>
+              <div style="font-size: 12px; color: #64748b; line-height: 1.3; margin-top: 2px;">Security Verification</div>
+            </td>
+          </tr>
+        </table>
+
+        <h1 style="font-size: 18px; font-weight: 700; color: #0f172a; margin: 0 0 10px; line-height: 1.3;">
+          Confirm Account Deletion
+        </h1>
+        <p style="font-size: 14px; line-height: 1.55; color: #475569; margin: 0 0 20px;">
+          You requested authorization to permanently delete the following account from the KIMPC system:
+        </p>
+
+        <!-- Minimalist Target Summary Table -->
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 100%; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 24px;">
+          <tr>
+            <td style="padding: 10px 16px; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #64748b; font-weight: 500; width: 30%;">Target Name</td>
+            <td style="padding: 10px 16px; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #0f172a; font-weight: 600;">${targetName || "User"}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 16px; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #64748b; font-weight: 500;">Email</td>
+            <td style="padding: 10px 16px; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #0f172a; font-weight: 600;">${targetEmail}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 16px; font-size: 13px; color: #64748b; font-weight: 500;">Role</td>
+            <td style="padding: 10px 16px; font-size: 13px; color: #0f172a; font-weight: 600;">${String(targetRole || "").toUpperCase()}</td>
+          </tr>
+        </table>
+
+        <!-- Minimalist Code Box -->
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; text-align: center; margin-bottom: 24px;">
+          <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; margin-bottom: 6px;">
+            One-Time Verification Code
+          </div>
+          <div style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 26px; font-weight: 700; letter-spacing: 8px; color: #0f172a; margin: 6px 0;">
+            ${otpCode}
+          </div>
+          <div style="font-size: 12px; color: #64748b;">
+            Expires in 5 minutes.
           </div>
         </div>
 
-        <h2 style="font-size: 1.3rem; margin-top: 0; color: #1a202c;">Authorize Account Deletion</h2>
-        <p style="font-size: 0.92rem; line-height: 1.5; color: #4a5568;">
-          You requested authorization to permanently delete the following user account from the KIMPC system:
+        <p style="font-size: 12px; line-height: 1.5; color: #94a3b8; margin: 0 0 20px;">
+          If you did not initiate this deletion request, please immediately sign in to your administrator dashboard and change your password.
         </p>
 
-        <div class="warning-box">
-          <strong>Target:</strong> ${targetName || "User"}<br>
-          <strong>Email:</strong> ${targetEmail}<br>
-          <strong>Role:</strong> ${String(targetRole || "").toUpperCase()}
-        </div>
-
-        <p style="font-size: 0.9rem; color: #4a5568;">Use the one-time verification code below to authorize this permanent deletion:</p>
-
-        <div class="otp-box">
-          <div style="font-size: 0.78rem; text-transform: uppercase; letter-spacing: 1px; color: #234e52; font-weight: 700;">One-Time Verification Code</div>
-          <div class="otp-code">${otpCode}</div>
-          <div style="font-size: 0.78rem; color: #4a5568;">Expires in <strong>5 minutes</strong></div>
-        </div>
-
-        <p style="font-size: 0.82rem; color: #718096;">
-          If you did not initiate this deletion request, please immediately sign in to your administrator dashboard and change your admin password.
-        </p>
-
-        <div class="footer">
-          This is an automated security notification sent by the KIMPC (Kalilangan Irrigators Multi-Purpose Cooperative) Platform. Please do not reply directly to this email.
+        <!-- Footer -->
+        <div style="border-top: 1px solid #f1f5f9; padding-top: 18px; font-size: 12px; line-height: 1.6; color: #94a3b8; text-align: center;">
+          <p style="margin: 0 0 4px; font-weight: 600; color: #64748b;">Kalilangan Irrigators Multi-Purpose Cooperative (KIMPC)</p>
+          <p style="margin: 0;">Automated Security Notification • Please do not reply directly to this email.</p>
         </div>
       </div>
     </body>
@@ -382,7 +423,8 @@ async function sendDeleteOtpEmail({ toEmail, otpCode, targetName, targetRole, ta
     to: toEmail,
     subject,
     html: htmlContent,
-    text: `Your KIMPC 6-digit verification code to delete ${targetName} (${targetEmail}) is: ${otpCode}. It expires in 5 minutes.`,
+    text: `Your KIMPC verification code to confirm deletion of ${targetName} (${targetEmail}) is: ${otpCode}. Expires in 5 minutes.`,
+    attachments,
   });
 }
 
@@ -413,87 +455,111 @@ async function sendDeveloperIntegrationAuthEmail({
   otpCode,
   expiryMinutes = 15,
 }) {
-  const subject = `[KIMPC Security Shield] Action Required: Authorize Integration Change by ${adminName || adminEmail}`;
+  const subject = `Authorization Request: System Integration Change (${adminName || adminEmail})`;
+
+  const logoPath = path.join(__dirname, "../public/images/kimpc-logo-print.png");
+  const attachments = [];
+  if (fs.existsSync(logoPath)) {
+    attachments.push({
+      filename: "kimpc-logo.png",
+      path: logoPath,
+      cid: "kimpc-logo",
+    });
+  }
+
   const htmlContent = `
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>KIMPC Security Authorization</title>
       <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; color: #1e293b; }
-        .card { max-width: 540px; margin: 0 auto; background: #ffffff; border-radius: 14px; border: 1px solid #e2e8f0; padding: 36px 32px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); }
-        .header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; border-bottom: 1px solid #f1f5f9; padding-bottom: 18px; }
-        .logo { background: #0f172a; color: #ffffff; font-weight: 800; font-size: 1.2rem; width: 40px; height: 40px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; }
-        .title { font-size: 1.1rem; font-weight: 700; color: #0f172a; margin: 0; }
-        .subtitle { font-size: 0.78rem; color: #64748b; margin: 2px 0 0; }
-        .badge { display: inline-block; padding: 4px 10px; background: #fef3c7; color: #92400e; border: 1px solid #fde68a; border-radius: 6px; font-size: 0.75rem; font-weight: 700; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.05em; }
-        .info-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; margin: 18px 0; font-size: 0.88rem; }
-        .info-row { display: flex; justify-content: space-between; margin-bottom: 8px; }
-        .info-row:last-child { margin-bottom: 0; }
-        .info-label { color: #64748b; font-weight: 600; }
-        .info-val { color: #0f172a; font-weight: 700; }
-        .btn-container { margin: 24px 0 16px; }
-        .btn-auth { display: inline-block; background: #166534; color: #ffffff !important; padding: 12px 24px; border-radius: 8px; font-size: 0.92rem; font-weight: 700; text-decoration: none; text-align: center; margin-right: 10px; }
-        .btn-deny { display: inline-block; background: #ffffff; color: #dc2626 !important; border: 1px solid #fca5a5; padding: 11px 20px; border-radius: 8px; font-size: 0.92rem; font-weight: 700; text-decoration: none; text-align: center; }
-        .otp-container { text-align: center; background: #f0fdf4; border: 1px dashed #166534; border-radius: 8px; padding: 14px; margin-top: 20px; }
-        .otp-code { font-family: monospace; font-size: 1.8rem; font-weight: 800; letter-spacing: 6px; color: #166534; margin: 4px 0; }
-        .footer { font-size: 0.75rem; color: #94a3b8; margin-top: 28px; border-top: 1px solid #f1f5f9; padding-top: 18px; line-height: 1.5; }
+        body { margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #0f172a; -webkit-font-smoothing: antialiased; }
+        table { border-collapse: collapse; }
+        a { color: inherit; }
       </style>
     </head>
-    <body>
-      <div class="card">
-        <div class="header">
-          <div class="logo">K</div>
-          <div>
-            <p class="title">KIMPC Security Shield</p>
-            <p class="subtitle">System Developer Dual-Authorization Protocol</p>
-          </div>
-        </div>
+    <body style="margin: 0; padding: 32px 16px; background-color: #f8fafc;">
+      <!-- Hidden Preheader for authentic inbox preview -->
+      <div style="display: none; font-size: 1px; color: #ffffff; line-height: 1px; max-height: 0px; max-width: 0px; opacity: 0; overflow: hidden;">
+        An administrator has requested dual-control authorization to update external integrations. Valid for ${expiryMinutes} minutes.
+      </div>
 
-        <div class="badge">Security Gate: Developer Verification</div>
+      <div style="max-width: 520px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 36px 32px; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);">
+        <!-- Authentic Brand Header with Official Logo -->
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 100%; border-bottom: 1px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 24px;">
+          <tr>
+            <td style="width: 44px; vertical-align: middle;">
+              <img src="cid:kimpc-logo" width="38" height="38" alt="KIMPC Logo" style="display: block; border-radius: 8px; border: 1px solid #e2e8f0; object-fit: contain; background: #ffffff;" />
+            </td>
+            <td style="vertical-align: middle; padding-left: 12px;">
+              <div style="font-size: 15px; font-weight: 700; color: #0f172a; line-height: 1.2;">KIMPC Cooperative</div>
+              <div style="font-size: 12px; color: #64748b; line-height: 1.3; margin-top: 2px;">Security Authorization Gate</div>
+            </td>
+          </tr>
+        </table>
 
-        <h2 style="font-size: 1.25rem; margin: 0 0 10px; color: #0f172a;">Authorize Integration Modification</h2>
-        <p style="font-size: 0.9rem; line-height: 1.5; color: #475569; margin: 0 0 14px;">
-          An administrator has verified their 6-digit security PIN and requested authorization from the <strong>System Developer</strong> to modify external integrations.
+        <!-- Main Title & Professional Intro -->
+        <h1 style="font-size: 18px; font-weight: 700; color: #0f172a; margin: 0 0 10px; line-height: 1.3;">
+          Integration Modification Request
+        </h1>
+        <p style="font-size: 14px; line-height: 1.55; color: #475569; margin: 0 0 20px;">
+          An administrator has initiated a dual-control authorization request to update external integration credentials in the KIMPC Admin Portal. Please review the details below:
         </p>
 
-        <div class="info-box">
-          <div class="info-row">
-            <span class="info-label">Requesting Admin:</span>
-            <span class="info-val">${adminName || "Admin"} (${adminEmail})</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">Action Target:</span>
-            <span class="info-val">${actionDescription || "System Integrations & API Keys"}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">Valid For:</span>
-            <span class="info-val">${expiryMinutes} Minutes</span>
-          </div>
-        </div>
+        <!-- Minimalist Request Summary Table -->
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 100%; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 24px;">
+          <tr>
+            <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #64748b; font-weight: 500; width: 36%;">Administrator</td>
+            <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #0f172a; font-weight: 600;">
+              ${adminName || "System Admin"} <span style="font-size: 12px; color: #64748b; font-weight: 400;">(${adminEmail})</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #64748b; font-weight: 500;">Action Target</td>
+            <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #0f172a; font-weight: 600;">
+              ${actionDescription || "System Integrations & API Keys"}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 12px 16px; font-size: 13px; color: #64748b; font-weight: 500;">Valid For</td>
+            <td style="padding: 12px 16px; font-size: 13px; color: #0f172a; font-weight: 600;">
+              ${expiryMinutes} Minutes
+            </td>
+          </tr>
+        </table>
 
-        <div class="btn-container">
-          <a href="${authorizeUrl}" class="btn-auth" target="_blank" rel="noopener noreferrer">
-            ✓ Authorize Changes
+        <!-- Single Primary Action + Discreet Decline Link -->
+        <div style="text-align: center; margin: 28px 0 24px;">
+          <a href="${authorizeUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #166534; color: #ffffff !important; padding: 12px 32px; border-radius: 8px; font-size: 14px; font-weight: 600; text-decoration: none; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
+            Authorize Request
           </a>
-          <a href="${denyUrl}" class="btn-deny" target="_blank" rel="noopener noreferrer">
-            ✕ Deny Request
-          </a>
-        </div>
-
-        <div class="otp-container">
-          <div style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: #166534; font-weight: 700;">
-            Alternative: 6-Digit Developer OTP
-          </div>
-          <div class="otp-code">${otpCode}</div>
-          <div style="font-size: 0.74rem; color: #64748b;">
-            Give this code to the administrator if you prefer verbal/direct authorization.
+          <div style="margin-top: 14px;">
+            <a href="${denyUrl}" target="_blank" rel="noopener noreferrer" style="font-size: 13px; color: #64748b; text-decoration: underline;">
+              Decline this request
+            </a>
           </div>
         </div>
 
-        <div class="footer">
-          This dual-authorization check is triggered whenever external API credentials, OAuth providers, or integration toggles are modified. If you did not expect this request, click "Deny Request" immediately.
+        <!-- Clean, Minimalist Verification Code Block -->
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; text-align: center; margin-top: 24px;">
+          <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; margin-bottom: 6px;">
+            Direct Authorization Code
+          </div>
+          <div style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 24px; font-weight: 700; letter-spacing: 6px; color: #0f172a; margin: 4px 0 6px;">
+            ${otpCode}
+          </div>
+          <div style="font-size: 12px; color: #64748b;">
+            Provide this 6-digit code to the administrator if approving in person.
+          </div>
+        </div>
+
+        <!-- Authentic Corporate Cooperative Footer -->
+        <div style="border-top: 1px solid #f1f5f9; margin-top: 32px; padding-top: 20px; font-size: 12px; line-height: 1.6; color: #94a3b8; text-align: center;">
+          <p style="margin: 0 0 4px; font-weight: 600; color: #64748b;">Kalilangan Irrigators Multi-Purpose Cooperative (KIMPC)</p>
+          <p style="margin: 0 0 6px;">Automated Security Notification • Dual-Authorization Protocol</p>
+          <p style="margin: 0;">If you did not initiate or expect this request, click decline immediately to protect your system.</p>
         </div>
       </div>
     </body>
@@ -501,17 +567,19 @@ async function sendDeveloperIntegrationAuthEmail({
   `;
 
   const textContent = `
-[KIMPC Security Shield] Action Required: Authorize Integration Change
+[KIMPC Cooperative] Security Authorization Request
 
-An administrator has requested authorization to modify system integrations:
-- Admin: ${adminName || "Admin"} (${adminEmail})
+An administrator has requested dual-control authorization to update external integrations:
+- Administrator: ${adminName || "System Admin"} (${adminEmail})
 - Target: ${actionDescription || "System Integrations & API Keys"}
-- Developer OTP: ${otpCode}
+- Developer Code: ${otpCode}
+- Validity: ${expiryMinutes} minutes
 
-Click to Authorize: ${authorizeUrl}
-Click to Deny: ${denyUrl}
+Authorize: ${authorizeUrl}
+Decline: ${denyUrl}
 
-This request expires in ${expiryMinutes} minutes.
+If you did not expect this request, click decline immediately.
+Kalilangan Irrigators Multi-Purpose Cooperative (KIMPC)
   `.trim();
 
   return dispatchEmail({
@@ -519,6 +587,7 @@ This request expires in ${expiryMinutes} minutes.
     subject,
     html: htmlContent,
     text: textContent,
+    attachments,
   });
 }
 
@@ -535,89 +604,89 @@ async function sendAccountLockoutSecurityEmail({
   userAgent,
   resetPasswordUrl,
 }) {
-  const subject = `[KIMPC Security Shield] Security Alert: Your Account has been Temporarily Locked`;
+  const subject = `Security Alert: Account Temporarily Locked (${fullName || toEmail})`;
   const timeFormatted = new Date().toLocaleString("en-US", { timeZone: "Asia/Manila", dateStyle: "medium", timeStyle: "short" });
+
+  const logoPath = path.join(__dirname, "../public/images/kimpc-logo-print.png");
+  const attachments = [];
+  if (fs.existsSync(logoPath)) {
+    attachments.push({
+      filename: "kimpc-logo.png",
+      path: logoPath,
+      cid: "kimpc-logo",
+    });
+  }
+
   const htmlContent = `
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>KIMPC Security Alert</title>
       <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; color: #1e293b; }
-        .card { max-width: 520px; margin: 0 auto; background: #ffffff; border-radius: 14px; border: 1px solid #e2e8f0; padding: 34px 28px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); }
-        .header { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; border-bottom: 1px solid #f1f5f9; padding-bottom: 16px; }
-        .logo { background: #991b1b; color: #ffffff; font-weight: 800; font-size: 1.2rem; width: 40px; height: 40px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; }
-        .title { font-size: 1.08rem; font-weight: 700; color: #0f172a; margin: 0; }
-        .subtitle { font-size: 0.78rem; color: #64748b; margin: 2px 0 0; }
-        .alert-badge { display: inline-block; padding: 5px 12px; background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; border-radius: 6px; font-size: 0.76rem; font-weight: 800; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.05em; }
-        .info-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin: 18px 0; font-size: 0.86rem; }
-        .info-row { display: flex; justify-content: space-between; margin-bottom: 8px; }
-        .info-row:last-child { margin-bottom: 0; }
-        .info-label { color: #64748b; font-weight: 600; }
-        .info-val { color: #0f172a; font-weight: 700; }
-        .btn-reset { display: inline-block; background: #0f172a; color: #ffffff !important; padding: 12px 24px; border-radius: 8px; font-size: 0.90rem; font-weight: 700; text-decoration: none; text-align: center; margin-top: 10px; }
-        .footer { font-size: 0.74rem; color: #94a3b8; margin-top: 26px; border-top: 1px solid #f1f5f9; padding-top: 16px; line-height: 1.5; }
+        body { margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #0f172a; }
+        table { border-collapse: collapse; }
       </style>
     </head>
-    <body>
-      <div class="card">
-        <div class="header">
-          <div class="logo">🛡️</div>
-          <div>
-            <p class="title">KIMPC Security Shield</p>
-            <p class="subtitle">Account Protection Protocol</p>
-          </div>
-        </div>
+    <body style="margin: 0; padding: 32px 16px; background-color: #f8fafc;">
+      <div style="max-width: 520px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 36px 32px; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);">
+        <!-- Authentic Header with Logo -->
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 100%; border-bottom: 1px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 24px;">
+          <tr>
+            <td style="width: 44px; vertical-align: middle;">
+              <img src="cid:kimpc-logo" width="38" height="38" alt="KIMPC Logo" style="display: block; border-radius: 8px; border: 1px solid #e2e8f0; object-fit: contain; background: #ffffff;" />
+            </td>
+            <td style="vertical-align: middle; padding-left: 12px;">
+              <div style="font-size: 15px; font-weight: 700; color: #0f172a; line-height: 1.2;">KIMPC Cooperative</div>
+              <div style="font-size: 12px; color: #64748b; line-height: 1.3; margin-top: 2px;">Security Alert</div>
+            </td>
+          </tr>
+        </table>
 
-        <div class="alert-badge">⚠️ Account Temporarily Locked</div>
-
-        <h2 style="font-size: 1.2rem; margin: 0 0 10px; color: #0f172a;">Multiple Failed Login Attempts Detected</h2>
-        <p style="font-size: 0.88rem; line-height: 1.5; color: #475569; margin: 0 0 14px;">
+        <h1 style="font-size: 18px; font-weight: 700; color: #0f172a; margin: 0 0 10px; line-height: 1.3;">
+          Account Temporarily Locked
+        </h1>
+        <p style="font-size: 14px; line-height: 1.55; color: #475569; margin: 0 0 16px;">
           Hello <strong>${fullName || "Member"}</strong>,
         </p>
-        <p style="font-size: 0.88rem; line-height: 1.5; color: #475569; margin: 0 0 14px;">
-          We detected <strong>${attempts} consecutive failed sign-in attempts</strong> on your KIMPC account (<strong>${toEmail}</strong>). For your protection, your account sign-in has been temporarily locked for <strong>${lockoutMinutes} minutes</strong>.
+        <p style="font-size: 14px; line-height: 1.55; color: #475569; margin: 0 0 20px;">
+          We detected <strong>${attempts} consecutive failed sign-in attempts</strong> on your KIMPC account (<strong>${toEmail}</strong>). For your security, account sign-in has been temporarily locked for <strong>${lockoutMinutes} minutes</strong>.
         </p>
 
-        <div class="info-box">
-          <div class="info-row">
-            <span class="info-label">Account Role:</span>
-            <span class="info-val">${(role || "member").toUpperCase()}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">Time (PHT):</span>
-            <span class="info-val">${timeFormatted}</span>
-          </div>
+        <!-- Details Table -->
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 100%; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 24px;">
+          <tr>
+            <td style="padding: 10px 16px; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #64748b; font-weight: 500; width: 34%;">Role</td>
+            <td style="padding: 10px 16px; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #0f172a; font-weight: 600;">${(role || "member").toUpperCase()}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 16px; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #64748b; font-weight: 500;">Time</td>
+            <td style="padding: 10px 16px; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #0f172a; font-weight: 600;">${timeFormatted}</td>
+          </tr>
           ${ipAddress ? `
-          <div class="info-row">
-            <span class="info-label">IP Address:</span>
-            <span class="info-val">${ipAddress}</span>
-          </div>` : ""}
-          <div class="info-row">
-            <span class="info-label">Lockout Duration:</span>
-            <span class="info-val">${lockoutMinutes} Minutes</span>
-          </div>
-        </div>
-
-        <h3 style="font-size: 0.95rem; margin: 18px 0 6px; color: #0f172a;">What should you do?</h3>
-        <p style="font-size: 0.84rem; line-height: 1.5; color: #475569; margin: 0 0 10px;">
-          • <strong>If this was you:</strong> You may wait ${lockoutMinutes} minutes for the security lock to automatically expire, or reset your password immediately using the link below.
-        </p>
-        <p style="font-size: 0.84rem; line-height: 1.5; color: #475569; margin: 0 0 16px;">
-          • <strong>If this wasn't you:</strong> Someone may be attempting to access your account. We strongly recommend resetting your password immediately:
-        </p>
+          <tr>
+            <td style="padding: 10px 16px; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #64748b; font-weight: 500;">IP Address</td>
+            <td style="padding: 10px 16px; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #0f172a; font-weight: 600;">${ipAddress}</td>
+          </tr>` : ""}
+          <tr>
+            <td style="padding: 10px 16px; font-size: 13px; color: #64748b; font-weight: 500;">Duration</td>
+            <td style="padding: 10px 16px; font-size: 13px; color: #0f172a; font-weight: 600;">${lockoutMinutes} Minutes</td>
+          </tr>
+        </table>
 
         ${resetPasswordUrl ? `
-        <div style="text-align: center; margin: 18px 0;">
-          <a href="${resetPasswordUrl}" class="btn-reset" target="_blank" rel="noopener noreferrer">
-            🔒 Reset Account Password
+        <div style="text-align: center; margin: 24px 0;">
+          <a href="${resetPasswordUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #0f172a; color: #ffffff !important; padding: 12px 28px; border-radius: 8px; font-size: 14px; font-weight: 600; text-decoration: none;">
+            Reset Password
           </a>
         </div>
         ` : ""}
 
-        <div class="footer">
-          This security alert was automatically generated by the KIMPC Security Shield to protect members, managers, and administrators against unauthorized access.
+        <!-- Footer -->
+        <div style="border-top: 1px solid #f1f5f9; padding-top: 18px; margin-top: 24px; font-size: 12px; line-height: 1.6; color: #94a3b8; text-align: center;">
+          <p style="margin: 0 0 4px; font-weight: 600; color: #64748b;">Kalilangan Irrigators Multi-Purpose Cooperative (KIMPC)</p>
+          <p style="margin: 0;">Automated Security Alert • If this was not you, reset your password immediately.</p>
         </div>
       </div>
     </body>
@@ -625,25 +694,97 @@ async function sendAccountLockoutSecurityEmail({
   `;
 
   const textContent = `
-[KIMPC Security Shield] Security Alert: Your Account has been Temporarily Locked
+[KIMPC Security Alert] Your Account has been Temporarily Locked
 
 Hello ${fullName || "Member"},
 
-We detected ${attempts} consecutive failed sign-in attempts on your KIMPC account (${toEmail}).
-For your protection, sign-in is temporarily locked for ${lockoutMinutes} minutes.
+We detected ${attempts} consecutive failed sign-in attempts on your account (${toEmail}).
+For your security, sign-in is temporarily locked for ${lockoutMinutes} minutes.
 
 Time: ${timeFormatted}
 ${ipAddress ? `IP Address: ${ipAddress}\n` : ""}
 If this was not you, please reset your password immediately:
-${resetPasswordUrl || "http://localhost:5173/forgot-password"}
+${resetPasswordUrl || "Please visit the KIMPC portal to reset your password."}
 
-Thank you,
-KIMPC Security Shield
+Kalilangan Irrigators Multi-Purpose Cooperative (KIMPC)
   `.trim();
 
   return dispatchEmail({
     to: toEmail,
     subject,
+    html: htmlContent,
+    text: textContent,
+    attachments,
+  });
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/**
+ * Send a general member notification email (booking updates, reminders, announcements, test alerts).
+ */
+async function sendMemberNotificationEmail({ toEmail, fullName, title, message, actionUrl, category = "Notification" }) {
+  const recipient = String(toEmail || "").trim().toLowerCase();
+  if (!recipient) {
+    return { sent: false, error: "Recipient email is required." };
+  }
+
+  const baseOrigin = (process.env.APP_BASE_URL || "http://localhost:3000").replace(/\/+$/, "");
+  const linkUrl = actionUrl || `${baseOrigin}/member/bookings`;
+  const cleanTitle = String(title || "KIMPC Machinery Update").trim();
+  const cleanMessage = String(message || "You have a new notification from KIMPC.").trim();
+  const safeName = escapeHtml(fullName ? fullName.trim() : "Member");
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; background-color: #f8fafc; margin: 0; padding: 24px 0; }
+        .container { max-width: 560px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 32px; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04); }
+        .badge { display: inline-block; background: #ecfdf5; color: #166534; font-size: 0.72rem; font-weight: 700; padding: 4px 10px; border-radius: 999px; letter-spacing: 0.03em; text-transform: uppercase; margin-bottom: 12px; }
+        h1 { color: #0f172a; font-size: 1.2rem; margin: 0 0 12px; }
+        p { font-size: 0.92rem; line-height: 1.6; color: #334155; margin: 0 0 16px; }
+        .msg-box { background: #f8fafc; border-left: 4px solid #166534; border-radius: 8px; padding: 14px 16px; margin: 16px 0 22px; color: #1e293b; font-size: 0.9rem; line-height: 1.55; }
+        .btn { display: inline-block; background-color: #166534; color: #ffffff !important; font-weight: 600; font-size: 0.88rem; text-decoration: none; padding: 11px 22px; border-radius: 8px; }
+        .footer { font-size: 0.76rem; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 16px; margin-top: 26px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="badge">${escapeHtml(category)}</div>
+        <h1>${escapeHtml(cleanTitle)}</h1>
+        <p>Hello ${safeName},</p>
+        <div class="msg-box">${escapeHtml(cleanMessage)}</div>
+        <a href="${escapeHtml(linkUrl)}" class="btn" target="_blank" rel="noopener noreferrer">Open KIMPC Portal</a>
+        <div class="footer">
+          You received this email because Email Notifications are enabled in your KIMPC Member Settings.
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const textContent = `
+[KIMPC] ${cleanTitle}
+
+Hello ${fullName ? fullName.trim() : "Member"},
+
+${cleanMessage}
+
+Open portal: ${linkUrl}
+  `.trim();
+
+  return dispatchEmail({
+    to: recipient,
+    subject: `[KIMPC] ${cleanTitle}`,
     html: htmlContent,
     text: textContent,
   });
@@ -657,4 +798,5 @@ module.exports = {
   sendMemberSupportEmail,
   sendDeveloperIntegrationAuthEmail,
   sendAccountLockoutSecurityEmail,
+  sendMemberNotificationEmail,
 };

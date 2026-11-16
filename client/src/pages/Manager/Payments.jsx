@@ -5,6 +5,7 @@ import { computePaymentSummary } from "../../utils/paymentSummary";
 import ManagerSidebar from "../../components/ManagerSidebar";
 import ManagerSearchBar from "../../components/ManagerSearchBar";
 import ManagerTopbar from "../../components/ManagerTopbar";
+import GcashOcrBadge from "../../components/GcashOcrBadge";
 import "../../styles/admin-kimpc.css";
 
 function getDaysCount(startDate, endDate) {
@@ -212,6 +213,7 @@ export default function Payments() {
         paymentMethod: app.paymentMethod || app.financials?.paymentMethod || "Cash",
         cashPaymentOption: app.cashPaymentOption || "",
         gcashProof: app.gcashProof || "",
+        gcashOcr: app.gcashOcr || null,
         receiptNo: app.receiptNo || "",
         cancellationReason: app.cancellationReason || "",
         bookingVoidReason: app.bookingVoidReason || "",
@@ -468,7 +470,8 @@ export default function Payments() {
       paymentMethod: isRefundMode
         ? firstRefundable?.entry?.paymentMethod || picked?.paymentMethod || "Cash"
         : picked?.paymentMethod || "Cash",
-      referenceNumber: "",
+      referenceNumber:
+        !isRefundMode && picked?.gcashOcr?.referenceNumber ? picked.gcashOcr.referenceNumber : "",
       dateReceived: toLocalDateTimeInputValue(),
       receiptNo: generateNextOrNo(picked),
       notes:
@@ -520,7 +523,8 @@ export default function Payments() {
         paymentMethod: isRefundMode
           ? firstRefundable?.entry?.paymentMethod || selected?.paymentMethod || "Cash"
           : selected?.paymentMethod || "Cash",
-        referenceNumber: "",
+        referenceNumber:
+          !isRefundMode && selected?.gcashOcr?.referenceNumber ? selected.gcashOcr.referenceNumber : "",
         receiptNo: generateNextOrNo(selected),
         notes:
           isRefundMode && selected?.cancellationReason
@@ -1599,6 +1603,43 @@ export default function Payments() {
                   />
                 </div>
 
+                {selectedBookingForPayment?.gcashProof && paymentForm.paymentType !== "Refund Payment" && (
+                  <GcashOcrBadge
+                    ocr={selectedBookingForPayment.gcashOcr}
+                    expectedAmount={selectedBookingForPayment.balanceDue || selectedBookingForPayment.rentalCharge}
+                    onApplyToForm={(ocr) =>
+                      setPaymentForm((prev) => ({
+                        ...prev,
+                        referenceNumber: ocr.referenceNumber || prev.referenceNumber,
+                        amount:
+                          ocr.amount != null && (!prev.amount || Number(prev.amount) === selectedBookingForPayment.balanceDue)
+                            ? String(ocr.amount)
+                            : prev.amount,
+                      }))
+                    }
+                    onScanClick={async () => {
+                      const targetId = selectedBookingForPayment.rawId || selectedBookingForPayment.id;
+                      const res = await api(`/applications/${encodeURIComponent(targetId)}/scan-gcash`, {
+                        method: "POST",
+                      });
+                      if (res.ok && res.data?.gcashOcr) {
+                        const updatedOcr = res.data.gcashOcr;
+                        setPaymentForm((prev) => ({
+                          ...prev,
+                          referenceNumber: updatedOcr.referenceNumber || prev.referenceNumber,
+                        }));
+                        setLiveApplications((prev) =>
+                          prev.map((app) =>
+                            (app._id || app.id) === selectedBookingForPayment.rawId
+                              ? { ...app, gcashOcr: updatedOcr }
+                              : app
+                          )
+                        );
+                      }
+                    }}
+                  />
+                )}
+
                 {/* Live Summary */}
                 <div className="wz-payrec-summary">
                   <div className="wz-payrec-summary-head">
@@ -1837,7 +1878,7 @@ export default function Payments() {
                 </div>
 
                 {viewingBooking.gcashProof && (
-                  <div className="wz-payview-proof">
+                  <div className="wz-payview-proof" style={{ display: "grid", gap: "8px" }}>
                     <button
                       type="button"
                       className="wz-payview-proof-thumb"
@@ -1845,6 +1886,26 @@ export default function Payments() {
                     >
                       View Uploaded Payment Proof Screenshot
                     </button>
+                    <GcashOcrBadge
+                      ocr={viewingBooking.gcashOcr}
+                      expectedAmount={viewingBooking.rentalCharge}
+                      onScanClick={async () => {
+                        const targetId = viewingBooking.rawId || viewingBooking.id;
+                        const res = await api(`/applications/${encodeURIComponent(targetId)}/scan-gcash`, {
+                          method: "POST",
+                        });
+                        if (res.ok && res.data?.gcashOcr) {
+                          const updatedOcr = res.data.gcashOcr;
+                          setLiveApplications((prev) =>
+                            prev.map((app) =>
+                              (app._id || app.id) === viewingBooking.rawId
+                                ? { ...app, gcashOcr: updatedOcr }
+                                : app
+                            )
+                          );
+                        }
+                      }}
+                    />
                   </div>
                 )}
               </div>
