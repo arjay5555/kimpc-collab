@@ -47,6 +47,7 @@ router.get("/accounts", async (req, res) => {
   }
 });
 
+// GET /api/accounts/:email - Retrieve one account by email address.
 router.get("/accounts/:email", async (req, res) => {
   try {
     const account = await Account.findOne({ email: cleanEmail(req.params.email) });
@@ -1319,6 +1320,7 @@ router.get("/audit-logs", async (req, res) => {
   }
 });
 
+// DELETE /api/audit-logs - Purge audit logs and record the purge event.
 router.delete("/audit-logs", async (req, res) => {
   try {
     const adminEmail = cleanEmail(req.body?.adminEmail || req.headers["x-admin-email"] || "admin");
@@ -1410,6 +1412,7 @@ router.post("/admin/impersonate/:userId", requireAdmin, async (req, res) => {
   }
 });
 
+// POST /api/admin/impersonate/end - Record the end of an administrator impersonation session.
 router.post("/admin/impersonate/end", async (req, res) => {
   try {
     const adminEmail = cleanEmail(req.body?.adminEmail || req.headers["x-admin-email"] || "admin");
@@ -1439,4 +1442,3 @@ router.post("/admin/impersonate/end", async (req, res) => {
 });
 
 module.exports = router;
-

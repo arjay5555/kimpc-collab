@@ -1,36 +1,71 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { api, getCachedApiData } from "../../services/api";
+import { api } from "../../services/api";
 import ManagerSidebar from "../../components/ManagerSidebar";
 import ManagerTopbar from "../../components/ManagerTopbar";
 import "../../styles/admin-kimpc.css";
+
+const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function getMonthlySeries(entries, startDate, monthCount, valueKey) {
+  const valuesByMonth = new Map(
+    (entries || []).map((entry) => [`${entry.year}-${entry.month}`, Number(entry[valueKey]) || 0])
+  );
+  return Array.from({ length: monthCount }, (_, index) => {
+    const date = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() + index, 1));
+    const year = date.getUTCFullYear();
+    const month = date.getUTCMonth() + 1;
+    return {
+      year,
+      month,
+      label: MONTH_LABELS[month - 1],
+      value: valuesByMonth.get(`${year}-${month}`) || 0,
+    };
+  });
+}
+
+function formatCompactNumber(value) {
+  if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
+  return Math.round(value).toLocaleString();
+}
+
+function getTrendBadge(currentValue = 0, previousValue = 0) {
+  const current = Number(currentValue) || 0;
+  const previous = Number(previousValue) || 0;
+  if (previous === 0) {
+    return current > 0
+      ? { label: "↑ New", className: "wz-trend-positive" }
+      : { label: "0%", className: "wz-trend-neutral" };
+  }
+
+  const change = Math.round(((current - previous) / Math.abs(previous)) * 100);
+  if (change === 0) return { label: "0%", className: "wz-trend-neutral" };
+  return change > 0
+    ? { label: `↑ +${change}%`, className: "wz-trend-positive" }
+    : { label: `↓ ${change}%`, className: "wz-trend-negative" };
+}
 
 export default function ManagerDashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  // Data stats (initialized to placeholder until live MongoDB data loads)
-  const [stats, setStats] = useState(() => {
-    const cachedStats = getCachedApiData("/manager/stats");
-    return cachedStats || {
-      totalRevenue: "—",
-      newBookings: "—",
-      rentedMachinery: "—",
-      availableMachinery: "—",
-    };
+  // Dashboard metrics refresh automatically while the page is open.
+  const [stats, setStats] = useState({
+    totalRevenue: "—",
+    newBookings: "—",
+    rentedMachinery: "—",
+    availableMachinery: "—",
   });
-  const [loadingStats, setLoadingStats] = useState(() => !getCachedApiData("/machinery-units"));
-  const [liveUnits, setLiveUnits] = useState(() => {
-    const cachedUnits = getCachedApiData("/machinery-units");
-    return Array.isArray(cachedUnits) ? cachedUnits : (cachedUnits?.data || []);
-  });
-
-  // Machinery availability checker state (defaults to today's date)
-  const [selectedMachineryType, setSelectedMachineryType] = useState("4WD Tractor");
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split("T")[0]);
-  const [selectedTime, setSelectedTime] = useState("10:00 AM");
-  const [availResult, setAvailResult] = useState(null);
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [dashboardMetrics, setDashboardMetrics] = useState(null);
+  const [dashboardError, setDashboardError] = useState("");
+  const [earningsRange, setEarningsRange] = useState("8");
+  const [rentStatusRange, setRentStatusRange] = useState("week");
+  const [bookingsYear, setBookingsYear] = useState(() => new Date().getUTCFullYear());
+  const [lastUpdated, setLastUpdated] = useState("");
+  const [dashboardNow, setDashboardNow] = useState(() => new Date());
 
   // Reminders list (persisted in localStorage, no hardcoded future dates)
   const [reminders, setReminders] = useState(() => {
@@ -52,98 +87,57 @@ export default function ManagerDashboard() {
 
   useEffect(() => {
     let isMounted = true;
-    if (!getCachedApiData("/machinery-units")) {
-      setLoadingStats(true);
-    }
+    let isFetching = false;
 
-    Promise.all([
-      api("/machinery-units"),
-      api("/applications"),
-      api("/transactions"),
-    ])
-      .then(([unitsRes, appsRes, txRes]) => {
-        if (!isMounted) return;
-
-        const units = Array.isArray(unitsRes.data?.data)
-          ? unitsRes.data.data
-          : Array.isArray(unitsRes.data)
-          ? unitsRes.data
-          : [];
-        const apps = Array.isArray(appsRes.data?.data)
-          ? appsRes.data.data
-          : Array.isArray(appsRes.data)
-          ? appsRes.data
-          : [];
-        const txs = Array.isArray(txRes.data?.data)
-          ? txRes.data.data
-          : Array.isArray(txRes.data)
-          ? txRes.data
-          : [];
-
-        setLiveUnits(units);
-
-        const available = units.filter((u) => (u.status || "").toLowerCase() === "available").length;
-        const rented = units.filter((u) => {
-          const s = (u.status || "").toLowerCase();
-          return s === "rented" || s === "in use" || s === "checked-out";
-        }).length;
-
-        // Calculate real revenue from completed transactions and settled bookings
-        let totalRev = 0;
-        txs.forEach((t) => {
-          if ((t.status || "").toLowerCase() !== "declined") {
-            totalRev += Number(t.amount || 0);
-          }
-        });
-        if (totalRev === 0) {
-          apps.forEach((a) => {
-            if (a.paymentStatus === "Fully Paid" || a.paymentStatus === "Downpayment Paid") {
-              totalRev += Number(a.totalAmount || a.downpaymentAmount || 0);
-            }
-          });
-        }
-
-        const pendingBookings = apps.filter((a) => (a.status || "").toLowerCase() === "pending").length;
-
-        setStats({
-          totalRevenue: `₱${totalRev.toLocaleString()}`,
-          newBookings: `${pendingBookings || apps.length}`,
-          rentedMachinery: `${rented}`,
-          availableMachinery: `${available}`,
-        });
+    const loadMetrics = async () => {
+      if (isFetching) return;
+      isFetching = true;
+      const response = await api("/manager/dashboard/metrics");
+      isFetching = false;
+      if (!isMounted) return;
+      if (!response.ok) {
+        setDashboardError(response.data?.error || "Could not load dashboard metrics.");
         setLoadingStats(false);
-      })
-      .catch((err) => {
-        console.warn("Could not load dashboard metrics:", err);
-        if (isMounted) setLoadingStats(false);
+        return;
+      }
+
+      const data = response.data;
+      if (
+        !data?.revenue ||
+        !Array.isArray(data.revenue.byMonth) ||
+        !data.revenue.sevenDayComparison ||
+        !data?.bookings ||
+        !Array.isArray(data.bookings.byMonth) ||
+        !data.bookings.statusByStartDate ||
+        !data?.fleetStatus
+      ) {
+        setDashboardError("Dashboard metrics response is incomplete.");
+        setLoadingStats(false);
+        return;
+      }
+
+      setDashboardMetrics(data);
+      setStats({
+        totalRevenue: `₱${Number(data.revenue.allTime || 0).toLocaleString()}`,
+        newBookings: `${data.bookings.thisMonth || 0}`,
+        rentedMachinery: `${data.fleetStatus.rented || 0}`,
+        availableMachinery: `${data.fleetStatus.available || 0}`,
       });
+      const updatedAt = data.asOf || new Date().toISOString();
+      setLastUpdated(updatedAt);
+      setDashboardNow(new Date(updatedAt));
+      setDashboardError("");
+      setLoadingStats(false);
+    };
+
+    loadMetrics();
+    const refreshTimer = window.setInterval(loadMetrics, 30000);
 
     return () => {
       isMounted = false;
+      window.clearInterval(refreshTimer);
     };
   }, []);
-
-  const handleCheckAvailability = () => {
-    const matching = liveUnits.filter((u) => {
-      const typeMatch =
-        !selectedMachineryType ||
-        (u.category || "").toLowerCase().includes(selectedMachineryType.toLowerCase()) ||
-        (u.name || "").toLowerCase().includes(selectedMachineryType.toLowerCase());
-      const isAvail = (u.status || "").toLowerCase() === "available";
-      return typeMatch && isAvail;
-    });
-
-    setAvailResult({
-      type: selectedMachineryType,
-      date: selectedDate,
-      time: selectedTime,
-      availableUnits: matching.length,
-      names:
-        matching.length > 0
-          ? matching.slice(0, 5).map((u) => `${u.unitId || "Unit"} (${u.name || "Equipment"})`)
-          : ["No units currently available for this category."],
-    });
-  };
 
   const handleAddReminder = (e) => {
     e.preventDefault();
@@ -171,6 +165,71 @@ export default function ManagerDashboard() {
     navigate("/login");
   };
 
+  const currentYear = dashboardNow.getUTCFullYear();
+  const currentMonth = dashboardNow.getUTCMonth() + 1;
+  const earningsMonthCount = earningsRange === "year" ? currentMonth : Number(earningsRange);
+  const earningsStart = earningsRange === "year"
+    ? new Date(Date.UTC(currentYear, 0, 1))
+    : new Date(Date.UTC(currentYear, currentMonth - earningsMonthCount, 1));
+  const earningsSeries = getMonthlySeries(
+    dashboardMetrics?.revenue?.byMonth,
+    earningsStart,
+    earningsMonthCount,
+    "total"
+  );
+  const earningsMax = Math.max(...earningsSeries.map((entry) => entry.value), 0);
+  const earningsAxisMax = earningsMax > 0 ? Math.ceil(earningsMax / 4) * 4 : 4;
+  const earningsPoints = earningsSeries.map((entry, index) => ({
+    ...entry,
+    x: earningsSeries.length === 1 ? 282 : 45 + (475 * index) / (earningsSeries.length - 1),
+    y: 175 - (155 * entry.value) / earningsAxisMax,
+  }));
+  const earningsLinePath = earningsPoints
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
+    .join(" ");
+  const earningsAreaPath = earningsPoints.length
+    ? `${earningsLinePath} L ${earningsPoints[earningsPoints.length - 1].x} 175 L ${earningsPoints[0].x} 175 Z`
+    : "";
+  const earningsPeak = earningsSeries.reduce(
+    (peak, entry, index) => (entry.value > (peak?.value || 0) ? { ...earningsPoints[index] } : peak),
+    null
+  );
+  const bookingsSeries = getMonthlySeries(
+    dashboardMetrics?.bookings?.byMonth,
+    new Date(Date.UTC(bookingsYear, 0, 1)),
+    12,
+    "count"
+  );
+  const bookingsMax = Math.max(...bookingsSeries.map((entry) => entry.value), 0);
+  const bookingsAxisMax = Math.max(bookingsMax, 4);
+  const bookingsPeak = bookingsSeries.reduce(
+    (peak, entry, index) => (entry.value > (peak?.value || 0) ? { ...bookingsSeries[index], x: 60 + index * 38 } : peak),
+    null
+  );
+  const statusCounts = dashboardMetrics?.bookings?.statusByStartDate?.[rentStatusRange] || {};
+  const rentStatusGroups = [
+    { label: "Active", count: (statusCounts.Approved || 0) + (statusCounts["Checked-Out"] || 0), color: "#182538" },
+    { label: "Pending", count: (statusCounts.Pending || 0) + (statusCounts["Cancellation Requested"] || 0), color: "#94a3b8" },
+    { label: "Returned", count: statusCounts.Returned || 0, color: "#0284c7" },
+    { label: "Cancelled", count: (statusCounts.Cancelled || 0) + (statusCounts.Rejected || 0), color: "#ff3b5c" },
+  ];
+  const rentStatusTotal = rentStatusGroups.reduce((total, group) => total + group.count, 0);
+  let rentStatusOffset = 0;
+  const rentStatusSegments = rentStatusGroups.map((group) => {
+    const length = rentStatusTotal ? (group.count / rentStatusTotal) * 345.58 : 0;
+    const segment = { ...group, length, offset: rentStatusOffset };
+    rentStatusOffset += length;
+    return segment;
+  });
+  const revenueTrend = getTrendBadge(
+    dashboardMetrics?.revenue?.sevenDayComparison?.current,
+    dashboardMetrics?.revenue?.sevenDayComparison?.previous
+  );
+  const bookingTrend = getTrendBadge(
+    dashboardMetrics?.bookings?.sevenDayComparison?.current,
+    dashboardMetrics?.bookings?.sevenDayComparison?.previous
+  );
+
   return (
     <div className="wz-dashboard-container">
       {/* ================= Left Navigation Sidebar ================= */}
@@ -180,6 +239,20 @@ export default function ManagerDashboard() {
       <main className="wz-content-wrapper">
         {/* Top Header Bar */}
         <ManagerTopbar title="Dashboard" />
+        {dashboardError && (
+          <div role="alert" style={{ marginBottom: "16px", color: "#b91c1c", fontSize: "0.82rem" }}>
+            {dashboardError}
+          </div>
+        )}
+        {loadingStats ? (
+          <div role="status" style={{ marginBottom: "16px", color: "#64748b", fontSize: "0.78rem" }}>
+            Loading dashboard metrics...
+          </div>
+        ) : lastUpdated ? (
+          <div role="status" style={{ marginBottom: "16px", color: "#64748b", fontSize: "0.72rem", textAlign: "right" }}>
+            Live data · Updated {new Date(lastUpdated).toLocaleTimeString()}
+          </div>
+        ) : null}
 
         {/* 4 KPI Top Cards */}
         <div className="wz-kpi-grid">
@@ -195,8 +268,8 @@ export default function ManagerDashboard() {
               </div>
             </div>
             <div className="wz-kpi-badge-wrap">
-              <span className="wz-trend-badge wz-trend-positive">↑ +2.86%</span>
-              <span className="wz-trend-subtitle">from last week</span>
+              <span className={`wz-trend-badge ${revenueTrend.className}`}>{revenueTrend.label}</span>
+              <span className="wz-trend-subtitle">vs previous 7 days</span>
             </div>
           </div>
 
@@ -217,8 +290,8 @@ export default function ManagerDashboard() {
               </div>
             </div>
             <div className="wz-kpi-badge-wrap">
-              <span className="wz-trend-badge wz-trend-positive">↑ +1.73%</span>
-              <span className="wz-trend-subtitle">from last week</span>
+              <span className={`wz-trend-badge ${bookingTrend.className}`}>{bookingTrend.label}</span>
+              <span className="wz-trend-subtitle">vs previous 7 days</span>
             </div>
           </div>
 
@@ -241,8 +314,7 @@ export default function ManagerDashboard() {
               </div>
             </div>
             <div className="wz-kpi-badge-wrap">
-              <span className="wz-trend-badge wz-trend-negative">↓ -2.86%</span>
-              <span className="wz-trend-subtitle">from last week</span>
+              <span className="wz-trend-subtitle">Current fleet count</span>
             </div>
           </div>
 
@@ -264,8 +336,7 @@ export default function ManagerDashboard() {
               </div>
             </div>
             <div className="wz-kpi-badge-wrap">
-              <span className="wz-trend-badge wz-trend-positive">↑ +3.45%</span>
-              <span className="wz-trend-subtitle">from last week</span>
+              <span className="wz-trend-subtitle">Current fleet count</span>
             </div>
           </div>
         </div>
@@ -276,14 +347,18 @@ export default function ManagerDashboard() {
           <div className="wz-card">
             <div className="wz-card-header">
               <h2 className="wz-card-title">Earnings Summary</h2>
-              <select className="wz-dropdown-select" defaultValue="8">
+              <select
+                className="wz-dropdown-select"
+                value={earningsRange}
+                onChange={(event) => setEarningsRange(event.target.value)}
+              >
                 <option value="8">Last 8 Month ˅</option>
                 <option value="6">Last 6 Month</option>
-                <option value="12">This Year</option>
+                <option value="year">This Year</option>
               </select>
             </div>
 
-            {/* SVG Spline Line Chart in Philippine Peso */}
+            {/* SVG Revenue Chart */}
             <div style={{ width: "100%", height: "210px", position: "relative" }}>
               <svg width="100%" height="100%" viewBox="0 0 540 200" preserveAspectRatio="none">
                 <defs>
@@ -293,55 +368,41 @@ export default function ManagerDashboard() {
                   </linearGradient>
                 </defs>
 
-                {/* Y-axis grid lines with ₱ Peso labels */}
-                <line x1="45" y1="20" x2="520" y2="20" stroke="#f1f5f9" strokeWidth="1" />
-                <text x="5" y="24" fill="#94a3b8" fontSize="11" fontWeight="500">₱24K</text>
+                {[1, 0.75, 0.5, 0.25, 0].map((ratio, index) => {
+                  const y = 20 + index * 38.75;
+                  return (
+                    <g key={ratio}>
+                      <line x1="45" y1={y} x2="520" y2={y} stroke={ratio === 0 ? "#e2e8f0" : "#f1f5f9"} strokeWidth="1" />
+                      <text x="5" y={y + 4} fill="#94a3b8" fontSize="11" fontWeight="500">
+                        ₱{formatCompactNumber(earningsAxisMax * ratio)}
+                      </text>
+                    </g>
+                  );
+                })}
 
-                <line x1="45" y1="60" x2="520" y2="60" stroke="#f1f5f9" strokeWidth="1" />
-                <text x="5" y="64" fill="#94a3b8" fontSize="11" fontWeight="500">₱18K</text>
+                {earningsAreaPath && <path d={earningsAreaPath} fill="url(#managerEarningsGradient)" />}
+                {earningsLinePath && <path d={earningsLinePath} fill="none" stroke="#ff3b5c" strokeWidth="2.8" />}
 
-                <line x1="45" y1="100" x2="520" y2="100" stroke="#f1f5f9" strokeWidth="1" />
-                <text x="5" y="104" fill="#94a3b8" fontSize="11" fontWeight="500">₱12K</text>
+                {earningsPeak && earningsMax > 0 && (
+                  <>
+                    <circle cx={earningsPeak.x} cy={earningsPeak.y} r="4.5" fill="#0f172a" stroke="#ffffff" strokeWidth="2" />
+                    <g transform={`translate(${Math.min(435, Math.max(45, earningsPeak.x - 40))}, ${Math.max(4, Math.min(130, earningsPeak.y - 44))})`}>
+                      <rect width="80" height="38" rx="8" fill="#ffffff" stroke="#e2e8f0" strokeWidth="1" filter="drop-shadow(0 2px 5px rgba(0,0,0,0.06))" />
+                      <text x="40" y="15" textAnchor="middle" fill="#64748b" fontSize="9" fontWeight="600">
+                        {earningsPeak.label} {earningsPeak.year}
+                      </text>
+                      <text x="40" y="30" textAnchor="middle" fill="#0f172a" fontSize="12" fontWeight="800">
+                        ₱{Math.round(earningsPeak.value).toLocaleString()}
+                      </text>
+                    </g>
+                  </>
+                )}
 
-                <line x1="45" y1="140" x2="520" y2="140" stroke="#f1f5f9" strokeWidth="1" />
-                <text x="12" y="144" fill="#94a3b8" fontSize="11" fontWeight="500">₱6K</text>
-
-                <line x1="45" y1="175" x2="520" y2="175" stroke="#e2e8f0" strokeWidth="1" />
-                <text x="22" y="179" fill="#94a3b8" fontSize="11" fontWeight="500">₱0</text>
-
-                {/* Gradient area under the curve */}
-                <path
-                  d="M 50 120 C 85 110, 110 135, 140 128 C 170 120, 195 80, 225 60 C 255 115, 280 128, 310 110 C 345 85, 375 125, 410 115 C 445 100, 480 85, 515 115 L 515 175 L 50 175 Z"
-                  fill="url(#managerEarningsGradient)"
-                />
-
-                {/* Main smooth curve */}
-                <path
-                  d="M 50 120 C 85 110, 110 135, 140 128 C 170 120, 195 80, 225 60 C 255 115, 280 128, 310 110 C 345 85, 375 125, 410 115 C 445 100, 480 85, 515 115"
-                  fill="none"
-                  stroke="#ff3b5c"
-                  strokeWidth="2.8"
-                />
-
-                {/* Peak point indicator at April */}
-                <circle cx="225" cy="60" r="4.5" fill="#0f172a" stroke="#ffffff" strokeWidth="2" />
-
-                {/* Floating tooltip badge */}
-                <g transform="translate(185, 8)">
-                  <rect width="80" height="38" rx="8" fill="#ffffff" stroke="#e2e8f0" strokeWidth="1" filter="drop-shadow(0 2px 5px rgba(0,0,0,0.06))" />
-                  <text x="40" y="15" textAnchor="middle" fill="#64748b" fontSize="9" fontWeight="600">April 2028</text>
-                  <text x="40" y="30" textAnchor="middle" fill="#0f172a" fontSize="12" fontWeight="800">₱18,450</text>
-                </g>
-
-                {/* X-axis Month Labels */}
-                <text x="50" y="194" fill="#94a3b8" fontSize="11" textAnchor="middle">Jan</text>
-                <text x="115" y="194" fill="#94a3b8" fontSize="11" textAnchor="middle">Feb</text>
-                <text x="175" y="194" fill="#94a3b8" fontSize="11" textAnchor="middle">Mar</text>
-                <text x="225" y="194" fill="#94a3b8" fontSize="11" textAnchor="middle">Apr</text>
-                <text x="290" y="194" fill="#94a3b8" fontSize="11" textAnchor="middle">May</text>
-                <text x="350" y="194" fill="#94a3b8" fontSize="11" textAnchor="middle">Jun</text>
-                <text x="415" y="194" fill="#94a3b8" fontSize="11" textAnchor="middle">Jul</text>
-                <text x="480" y="194" fill="#94a3b8" fontSize="11" textAnchor="middle">Aug</text>
+                {earningsPoints.map((point) => (
+                  <text key={`${point.year}-${point.month}`} x={point.x} y="194" fill="#94a3b8" fontSize="11" textAnchor="middle">
+                    {point.label}
+                  </text>
+                ))}
               </svg>
             </div>
           </div>
@@ -350,7 +411,11 @@ export default function ManagerDashboard() {
           <div className="wz-card">
             <div className="wz-card-header">
               <h2 className="wz-card-title">Rent Status</h2>
-              <select className="wz-dropdown-select" defaultValue="week">
+              <select
+                className="wz-dropdown-select"
+                value={rentStatusRange}
+                onChange={(event) => setRentStatusRange(event.target.value)}
+              >
                 <option value="week">This Week ˅</option>
                 <option value="month">This Month</option>
               </select>
@@ -359,80 +424,37 @@ export default function ManagerDashboard() {
             {/* SVG Donut Chart */}
             <div className="wz-donut-container">
               <svg width="150" height="150" viewBox="0 0 160 160">
-                {/* Circumference = 2 * PI * 55 = 345.57 */}
-                {/* 1. Active: 58% (navy) */}
-                <circle
-                  cx="80"
-                  cy="80"
-                  r="55"
-                  fill="transparent"
-                  stroke="#182538"
-                  strokeWidth="22"
-                  strokeDasharray="200.4 145.1"
-                  strokeDashoffset="0"
-                  transform="rotate(-90 80 80)"
-                />
-                {/* 2. Pending: 24% (slate/light blue) */}
-                <circle
-                  cx="80"
-                  cy="80"
-                  r="55"
-                  fill="transparent"
-                  stroke="#94a3b8"
-                  strokeWidth="22"
-                  strokeDasharray="82.9 262.6"
-                  strokeDashoffset="-200.4"
-                  transform="rotate(-90 80 80)"
-                />
-                {/* 3. Cancelled: 18% (coral red) */}
-                <circle
-                  cx="80"
-                  cy="80"
-                  r="55"
-                  fill="transparent"
-                  stroke="#ff3b5c"
-                  strokeWidth="22"
-                  strokeDasharray="62.2 283.3"
-                  strokeDashoffset="-283.3"
-                  transform="rotate(-90 80 80)"
-                />
+                <circle cx="80" cy="80" r="55" fill="transparent" stroke="#e2e8f0" strokeWidth="22" />
+                {rentStatusSegments.map((segment) => segment.length > 0 && (
+                  <circle
+                    key={segment.label}
+                    cx="80"
+                    cy="80"
+                    r="55"
+                    fill="transparent"
+                    stroke={segment.color}
+                    strokeWidth="22"
+                    strokeDasharray={`${segment.length} ${345.58 - segment.length}`}
+                    strokeDashoffset={-segment.offset}
+                    transform="rotate(-90 80 80)"
+                  />
+                ))}
               </svg>
             </div>
 
             {/* Donut Legend List */}
             <div className="wz-legend-list">
-              <div className="wz-legend-item">
-                <div className="wz-legend-label">
-                  <div className="wz-legend-dot" style={{ backgroundColor: "#182538" }} />
-                  <span>Active</span>
+              {rentStatusGroups.map((group) => (
+                <div className="wz-legend-item" key={group.label}>
+                  <div className="wz-legend-label">
+                    <div className="wz-legend-dot" style={{ backgroundColor: group.color }} />
+                    <span>{group.label}</span>
+                  </div>
+                  <div className="wz-legend-stat">
+                    <span>{group.count.toLocaleString()} ({rentStatusTotal ? Math.round((group.count / rentStatusTotal) * 100) : 0}%)</span>
+                  </div>
                 </div>
-                <div className="wz-legend-stat">
-                  <span>58%</span>
-                  <span className="wz-legend-arrow-up">↑</span>
-                </div>
-              </div>
-
-              <div className="wz-legend-item">
-                <div className="wz-legend-label">
-                  <div className="wz-legend-dot" style={{ backgroundColor: "#94a3b8" }} />
-                  <span>Pending</span>
-                </div>
-                <div className="wz-legend-stat">
-                  <span>24%</span>
-                  <span className="wz-legend-arrow-down">↓</span>
-                </div>
-              </div>
-
-              <div className="wz-legend-item">
-                <div className="wz-legend-label">
-                  <div className="wz-legend-dot" style={{ backgroundColor: "#ff3b5c" }} />
-                  <span>Cancelled</span>
-                </div>
-                <div className="wz-legend-stat">
-                  <span>18%</span>
-                  <span className="wz-legend-arrow-up">↑</span>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
         </div>
@@ -443,86 +465,71 @@ export default function ManagerDashboard() {
           <div className="wz-card">
             <div className="wz-card-header">
               <h2 className="wz-card-title">Bookings Overview</h2>
-              <select className="wz-dropdown-select" defaultValue="year">
-                <option value="year">This Year ˅</option>
-                <option value="prev">Last Year</option>
+              <select
+                className="wz-dropdown-select"
+                value={bookingsYear}
+                onChange={(event) => setBookingsYear(Number(event.target.value))}
+              >
+                <option value={currentYear}>This Year ˅</option>
+                <option value={currentYear - 1}>Last Year</option>
               </select>
             </div>
 
-            {/* SVG Bar Chart for Jan-Dec */}
+            {/* SVG Monthly Bookings Chart */}
             <div className="wz-barchart-wrap">
               <svg width="100%" height="100%" viewBox="0 0 540 180" preserveAspectRatio="none">
-                {/* Y-axis grid lines */}
-                <line x1="38" y1="20" x2="520" y2="20" stroke="#f1f5f9" strokeWidth="1" />
-                <text x="8" y="24" fill="#94a3b8" fontSize="10">1.2K</text>
+                {[1, 0.75, 0.5, 0.25, 0].map((ratio, index) => {
+                  const y = 20 + index * 33.75;
+                  return (
+                    <g key={ratio}>
+                      <line x1="38" y1={y} x2="520" y2={y} stroke={ratio === 0 ? "#e2e8f0" : "#f1f5f9"} strokeWidth="1" />
+                      <text x="8" y={y + 4} fill="#94a3b8" fontSize="10">
+                        {Math.round(bookingsAxisMax * ratio).toLocaleString()}
+                      </text>
+                    </g>
+                  );
+                })}
 
-                <line x1="38" y1="55" x2="520" y2="55" stroke="#f1f5f9" strokeWidth="1" />
-                <text x="12" y="59" fill="#94a3b8" fontSize="10">900</text>
+                {bookingsSeries.map((entry, index) => {
+                  const x = 52 + index * 38;
+                  const barHeight = (entry.value / bookingsAxisMax) * 125;
+                  const isPeak = bookingsMax > 0 && entry.value === bookingsMax;
+                  return (
+                    <g key={`${entry.year}-${entry.month}`}>
+                      <rect
+                        x={x}
+                        y={155 - barHeight}
+                        width="16"
+                        height={barHeight}
+                        rx="4"
+                        ry="4"
+                        fill={isPeak ? "#ff3b5c" : "#182538"}
+                      />
+                      <text
+                        x={x + 8}
+                        y="172"
+                        fill={isPeak ? "#ff3b5c" : "#94a3b8"}
+                        fontSize="10"
+                        fontWeight={isPeak ? "700" : "400"}
+                        textAnchor="middle"
+                      >
+                        {entry.label}
+                      </text>
+                    </g>
+                  );
+                })}
 
-                <line x1="38" y1="90" x2="520" y2="90" stroke="#f1f5f9" strokeWidth="1" />
-                <text x="12" y="94" fill="#94a3b8" fontSize="10">600</text>
-
-                <line x1="38" y1="125" x2="520" y2="125" stroke="#f1f5f9" strokeWidth="1" />
-                <text x="12" y="129" fill="#94a3b8" fontSize="10">300</text>
-
-                <line x1="38" y1="155" x2="520" y2="155" stroke="#e2e8f0" strokeWidth="1" />
-                <text x="24" y="158" fill="#94a3b8" fontSize="10">0</text>
-
-                {/* 12 Bars for Jan - Dec */}
-                {/* Jan */}
-                <rect x="52" y="105" width="16" height="50" rx="4" ry="4" fill="#182538" />
-                <text x="60" y="172" fill="#94a3b8" fontSize="10" textAnchor="middle">Jan</text>
-
-                {/* Feb */}
-                <rect x="90" y="80" width="16" height="75" rx="4" ry="4" fill="#182538" />
-                <text x="98" y="172" fill="#94a3b8" fontSize="10" textAnchor="middle">Feb</text>
-
-                {/* Mar */}
-                <rect x="128" y="92" width="16" height="63" rx="4" ry="4" fill="#182538" />
-                <text x="136" y="172" fill="#94a3b8" fontSize="10" textAnchor="middle">Mar</text>
-
-                {/* Apr */}
-                <rect x="166" y="65" width="16" height="90" rx="4" ry="4" fill="#182538" />
-                <text x="174" y="172" fill="#94a3b8" fontSize="10" textAnchor="middle">Apr</text>
-
-                {/* May */}
-                <rect x="204" y="85" width="16" height="70" rx="4" ry="4" fill="#182538" />
-                <text x="212" y="172" fill="#94a3b8" fontSize="10" textAnchor="middle">May</text>
-
-                {/* Jun (Highlighted in Red with Tooltip) */}
-                <rect x="242" y="50" width="16" height="105" rx="4" ry="4" fill="#ff3b5c" />
-                <text x="250" y="172" fill="#ff3b5c" fontSize="10" fontWeight="700" textAnchor="middle">Jun</text>
-
-                {/* Tooltip Tag above June */}
-                <g transform="translate(216, 8)">
-                  <rect width="68" height="34" rx="6" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="0.8" />
-                  <text x="34" y="13" textAnchor="middle" fill="#64748b" fontSize="8" fontWeight="600">June 2028</text>
-                  <text x="34" y="27" textAnchor="middle" fill="#0f172a" fontSize="11" fontWeight="800">985</text>
-                </g>
-
-                {/* Jul */}
-                <rect x="280" y="90" width="16" height="65" rx="4" ry="4" fill="#182538" />
-                <text x="288" y="172" fill="#94a3b8" fontSize="10" textAnchor="middle">Jul</text>
-
-                {/* Aug */}
-                <rect x="318" y="80" width="16" height="75" rx="4" ry="4" fill="#182538" />
-                <text x="326" y="172" fill="#94a3b8" fontSize="10" textAnchor="middle">Aug</text>
-
-                {/* Sep */}
-                <rect x="356" y="72" width="16" height="83" rx="4" ry="4" fill="#182538" />
-                <text x="364" y="172" fill="#94a3b8" fontSize="10" textAnchor="middle">Sep</text>
-
-                {/* Oct */}
-                <rect x="394" y="88" width="16" height="67" rx="4" ry="4" fill="#182538" />
-                <text x="402" y="172" fill="#94a3b8" fontSize="10" textAnchor="middle">Oct</text>
-
-                {/* Nov */}
-                <rect x="432" y="95" width="16" height="60" rx="4" ry="4" fill="#182538" />
-                <text x="440" y="172" fill="#94a3b8" fontSize="10" textAnchor="middle">Nov</text>
-
-                {/* Dec */}
-                <rect x="470" y="78" width="16" height="77" rx="4" ry="4" fill="#182538" />
-                <text x="478" y="172" fill="#94a3b8" fontSize="10" textAnchor="middle">Dec</text>
+                {bookingsPeak && bookingsMax > 0 && (
+                  <g transform={`translate(${Math.min(450, Math.max(38, bookingsPeak.x - 26))}, 8)`}>
+                    <rect width="68" height="34" rx="6" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="0.8" />
+                    <text x="34" y="13" textAnchor="middle" fill="#64748b" fontSize="8" fontWeight="600">
+                      {bookingsPeak.label} {bookingsPeak.year}
+                    </text>
+                    <text x="34" y="27" textAnchor="middle" fill="#0f172a" fontSize="11" fontWeight="800">
+                      {bookingsPeak.value.toLocaleString()}
+                    </text>
+                  </g>
+                )}
               </svg>
             </div>
 
@@ -580,104 +587,14 @@ export default function ManagerDashboard() {
             </div>
           </div>
         </div>
-      </main>
 
-      {/* ================= Right Sidebar Panel ================= */}
-      <aside className="wz-right-panel">
-        {/* Machinery Availability (was "Car Availability") */}
-        <div className="wz-right-header">
-          <h3 className="wz-right-title">Machinery Availability</h3>
-          <span className="wz-dots-menu">•••</span>
-        </div>
-
-        <div className="wz-avail-card">
-          {/* 1. Machinery Type Select Dropdown (was "Car Type") */}
-          <div className="wz-input-row">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 17h18" />
-              <circle cx="7" cy="17" r="3" />
-              <circle cx="17" cy="17" r="3" />
-              <path d="M9 14h6" />
-              <path d="M4 14V8h8l4 6" />
-            </svg>
-            <select
-              value={selectedMachineryType}
-              onChange={(e) => setSelectedMachineryType(e.target.value)}
-            >
-              <option value="4WD Tractor">4WD Farm Tractor</option>
-              <option value="Combine Harvester">Combine Harvester</option>
-              <option value="Rotary Tiller / Rotavator">Rotary Tiller / Rotavator</option>
-              <option value="Rice Transplanter">Rice Transplanter</option>
-              <option value="Round Baler">Round Baler</option>
-              <option value="Hauling Trailer Truck">Hauling Trailer Truck</option>
-              <option value="Precision Boom Sprayer">Precision Boom Sprayer</option>
-            </select>
+        <section className="wz-card wz-machinery-types-section">
+          <div className="wz-card-header">
+            <h2 className="wz-card-title">Machinery Types</h2>
+            <span className="wz-dots-menu">•••</span>
           </div>
 
-          {/* 2. Date Picker */}
-          <div className="wz-input-row">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-              <line x1="16" y1="2" x2="16" y2="6" />
-              <line x1="8" y1="2" x2="8" y2="6" />
-              <line x1="3" y1="10" x2="21" y2="10" />
-            </svg>
-            <input
-              type="text"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              placeholder="e.g. 17 August 2028"
-            />
-          </div>
-
-          {/* 3. Time Picker */}
-          <div className="wz-input-row">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12 6 12 12 16 14" />
-            </svg>
-            <input
-              type="text"
-              value={selectedTime}
-              onChange={(e) => setSelectedTime(e.target.value)}
-              placeholder="10:00 AM"
-            />
-          </div>
-
-          {/* Check Button */}
-          <button className="wz-btn-check" onClick={handleCheckAvailability}>
-            Check
-          </button>
-
-          {availResult && (
-            <div
-              style={{
-                marginTop: "12px",
-                padding: "10px",
-                borderRadius: "8px",
-                background: "#ecfdf5",
-                border: "1px solid #a7f3d0",
-                fontSize: "0.78rem",
-                color: "#065f46",
-              }}
-            >
-              <strong>{availResult.availableUnits} units available</strong> for {availResult.type} on {availResult.date}:
-              <ul style={{ margin: "4px 0 0", paddingLeft: "16px" }}>
-                {availResult.names.map((n, i) => (
-                  <li key={i}>{n}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-
-        {/* Machinery Types List (was "Car Types") */}
-        <div className="wz-right-header">
-          <h3 className="wz-right-title">Machinery Types</h3>
-          <span className="wz-dots-menu">•••</span>
-        </div>
-
-        <div>
+          <div className="wz-machinery-types-grid">
           {/* Harvester */}
           <div
             className={`wz-machinery-type-item ${activeCategory === "Harvester" ? "selected" : ""}`}
@@ -803,8 +720,9 @@ export default function ManagerDashboard() {
               </div>
             </div>
           </div>
-        </div>
-      </aside>
+          </div>
+        </section>
+      </main>
     </div>
   );
 }

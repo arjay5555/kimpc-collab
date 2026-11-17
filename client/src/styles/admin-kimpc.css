@@ -608,6 +608,16 @@
 }
 
 /* Machinery Types Progress List */
+.wz-machinery-types-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 4px 18px;
+}
+
+.wz-machinery-types-grid .wz-machinery-type-item {
+  margin-bottom: 0;
+}
+
 .wz-machinery-type-item {
   display: flex;
   align-items: center;
