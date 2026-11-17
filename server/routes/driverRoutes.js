@@ -218,6 +218,18 @@ router.put("/drivers/:id", authManager, async (req, res) => {
 
     await driver.save();
 
+    await logAudit({
+      action: "DRIVER_UPDATED",
+      module: "Machinery Fleet",
+      actorEmail: req.user?.email || "manager",
+      actorName: req.user?.fullName || "",
+      actorRole: req.user?.role || "manager",
+      actorId: req.user?._id,
+      affectedRecord: `Driver: ${driver.name}`,
+      details: { driverId: driver._id, name: driver.name, status: driver.status, phone: driver.phone },
+      req,
+    });
+
     return res.json({ ok: true, data: driver });
   } catch (error) {
     console.error("Error updating driver:", error);
@@ -229,7 +241,21 @@ router.put("/drivers/:id", authManager, async (req, res) => {
 router.delete("/drivers/:id", authManager, async (req, res) => {
   try {
     const id = req.params.id;
-    await Driver.findByIdAndDelete(id);
+    const deleted = await Driver.findByIdAndDelete(id);
+    if (!deleted) return fail(res, 404, "Driver not found.");
+
+    await logAudit({
+      action: "DRIVER_DELETED",
+      module: "Machinery Fleet",
+      actorEmail: req.user?.email || "manager",
+      actorName: req.user?.fullName || "",
+      actorRole: req.user?.role || "manager",
+      actorId: req.user?._id,
+      affectedRecord: `Driver: ${deleted.name}`,
+      details: { driverId: deleted._id, name: deleted.name, phone: deleted.phone },
+      req,
+    });
+
     return res.json({ ok: true, message: "Driver removed." });
   } catch (error) {
     console.error("Error deleting driver:", error);

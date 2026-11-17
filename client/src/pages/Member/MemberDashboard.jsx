@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { api } from "../../services/api";
+import { api, getCachedApiData } from "../../services/api";
 import { getApplicationsUrl, unwrapListResponse } from "../../services/memberPortal";
 import MemberTopbar from "../../components/MemberTopbar";
 
@@ -31,14 +31,23 @@ function formatTimeAgo(dateInput) {
 export default function MemberDashboard() {
   const { user } = useAuth();
 
-  const [applications, setApplications] = useState([]);
+  const [applications, setApplications] = useState(() => {
+    const cached = getCachedApiData("/applications");
+    return Array.isArray(cached) ? cached : [];
+  });
   const [machineryUnitsMap, setMachineryUnitsMap] = useState(new Map());
-  const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [notifications, setNotifications] = useState(() => {
+    const cached = getCachedApiData("/notifications");
+    return Array.isArray(cached) ? cached : (cached?.notifications || []);
+  });
+  const [loading, setLoading] = useState(() => !getCachedApiData("/applications"));
   const [loadError, setLoadError] = useState("");
 
   const fetchData = useCallback(async () => {
     try {
+      if (!getCachedApiData("/applications")) {
+        setLoading(true);
+      }
       const [appsRes, unitsRes, notifsRes] = await Promise.all([
         api(getApplicationsUrl(user?.email)),
         api("/machinery-units"),
@@ -754,65 +763,114 @@ export default function MemberDashboard() {
               </Link>
             </div>
 
-            {/* Table */}
+            {/* Bookings Display: Table for desktop, clean cards for mobile */}
             {pendingList.length > 0 ? (
-              <div style={{ overflowX: "auto", width: "100%", WebkitOverflowScrolling: "touch" }}>
-                <table style={{ width: "100%", minWidth: "340px", borderCollapse: "collapse", fontSize: "0.84rem" }}>
-                  <thead>
-                    <tr style={{ background: "#f1f5f9" }}>
-                      <th style={{ padding: "8px 10px", textAlign: "left", color: "#475569", fontWeight: 700, borderRadius: "6px 0 0 6px" }}>
-                        Booking ID
-                      </th>
-                      <th style={{ padding: "8px 10px", textAlign: "left", color: "#475569", fontWeight: 700 }}>
-                        Machinery
-                      </th>
-                      <th style={{ padding: "8px 10px", textAlign: "left", color: "#475569", fontWeight: 700 }}>
-                        Requested Date
-                      </th>
-                      <th style={{ padding: "8px 10px", textAlign: "left", color: "#475569", fontWeight: 700, borderRadius: "0 6px 6px 0" }}>
-                        Status
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pendingList.slice(0, 4).map((item) => (
-                      <tr key={item._id || item.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                        <td style={{ padding: "10px 10px", fontWeight: 600, color: "#0f172a" }}>
-                          {item.displayId || (item._id ? `BK-${String(item._id).slice(-4).toUpperCase()}` : "BK-1045")}
-                        </td>
-                        <td style={{ padding: "10px 10px", color: "#0f172a" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#166534" strokeWidth="2">
-                              <path d="M3 16h13l2-5h3l1 5v3h-2" />
-                              <circle cx="7" cy="19" r="2" />
-                              <circle cx="18" cy="19" r="2" />
-                            </svg>
-                            <span>{item.machineryModel || item.equipment}</span>
-                          </div>
-                        </td>
-                        <td style={{ padding: "10px 10px", color: "#334155" }}>
-                          {formatDateDisplay(item.startDate)}
-                        </td>
-                        <td style={{ padding: "10px 10px" }}>
-                          <span
-                            style={{
-                              background: "#fef3c7",
-                              color: "#92400e",
-                              fontSize: "0.72rem",
-                              fontWeight: 700,
-                              padding: "3px 8px",
-                              borderRadius: "6px",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            Pending Review
-                          </span>
-                        </td>
+              <>
+                {/* Desktop Table View */}
+                <div className="member-desktop-only" style={{ overflowX: "auto", width: "100%", WebkitOverflowScrolling: "touch" }}>
+                  <table style={{ width: "100%", minWidth: "340px", borderCollapse: "collapse", fontSize: "0.84rem" }}>
+                    <thead>
+                      <tr style={{ background: "#f1f5f9" }}>
+                        <th style={{ padding: "8px 10px", textAlign: "left", color: "#475569", fontWeight: 700, borderRadius: "6px 0 0 6px" }}>
+                          Booking ID
+                        </th>
+                        <th style={{ padding: "8px 10px", textAlign: "left", color: "#475569", fontWeight: 700 }}>
+                          Machinery
+                        </th>
+                        <th style={{ padding: "8px 10px", textAlign: "left", color: "#475569", fontWeight: 700 }}>
+                          Requested Date
+                        </th>
+                        <th style={{ padding: "8px 10px", textAlign: "left", color: "#475569", fontWeight: 700, borderRadius: "0 6px 6px 0" }}>
+                          Status
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {pendingList.slice(0, 4).map((item) => (
+                        <tr key={item._id || item.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                          <td style={{ padding: "10px 10px", fontWeight: 600, color: "#0f172a" }}>
+                            {item.displayId || (item._id ? `BK-${String(item._id).slice(-4).toUpperCase()}` : "BK-1045")}
+                          </td>
+                          <td style={{ padding: "10px 10px", color: "#0f172a" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#166534" strokeWidth="2">
+                                <path d="M3 16h13l2-5h3l1 5v3h-2" />
+                                <circle cx="7" cy="19" r="2" />
+                                <circle cx="18" cy="19" r="2" />
+                              </svg>
+                              <span>{item.machineryModel || item.equipment}</span>
+                            </div>
+                          </td>
+                          <td style={{ padding: "10px 10px", color: "#334155" }}>
+                            {formatDateDisplay(item.startDate)}
+                          </td>
+                          <td style={{ padding: "10px 10px" }}>
+                            <span
+                              style={{
+                                background: "#fef3c7",
+                                color: "#92400e",
+                                fontSize: "0.72rem",
+                                fontWeight: 700,
+                                padding: "3px 8px",
+                                borderRadius: "6px",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              Pending Review
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Cards View (Hidden on desktop, active on mobile) */}
+                <div className="member-mobile-only" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {pendingList.slice(0, 4).map((item) => (
+                    <div
+                      key={item._id || item.id}
+                      style={{
+                        background: "#f8fafc",
+                        borderRadius: "10px",
+                        padding: "12px 14px",
+                        border: "1px solid #e2e8f0",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "3px" }}>
+                          <span style={{ fontWeight: 800, fontFamily: "monospace", fontSize: "0.85rem", color: "#0f172a" }}>
+                            {item.displayId || (item._id ? `BK-${String(item._id).slice(-4).toUpperCase()}` : "BK-1045")}
+                          </span>
+                          <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "#1e293b" }}>
+                            {item.machineryModel || item.equipment}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: "0.74rem", color: "#64748b" }}>
+                          Requested: {formatDateDisplay(item.startDate)}
+                        </span>
+                      </div>
+                      <span
+                        style={{
+                          background: "#fef3c7",
+                          color: "#92400e",
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          padding: "3px 8px",
+                          borderRadius: "6px",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        Pending Review
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
             ) : (
               <div style={{ padding: "24px 0", color: "#64748b", fontSize: "0.85rem" }}>
                 No pending requests at this time. All requests are cleared.

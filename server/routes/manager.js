@@ -1,5 +1,6 @@
 const express = require("express");
 const mongoose = require("mongoose");
+const Account = require("../models/Account");
 const SupportMessage = require("../models/SupportMessage");
 const Notification = require("../models/Notification");
 const { clean, fail } = require("./routeHelpers");
@@ -34,6 +35,35 @@ const router = express.Router();
 
 router.get("/calendar/events", getCalendarEvents);
 router.get("/bookings", listBookings);
+router.get("/members", async (req, res) => {
+  try {
+    const members = await Account.find({
+      role: "member",
+      isArchived: { $ne: true },
+      isSuspended: { $ne: true },
+    })
+      .select("fullName email phone address address2 city region cooperativeId avatar memberSettings.defaultFarmLocation verificationStatus")
+      .sort({ fullName: 1 })
+      .lean();
+
+    const formatted = members.map((m) => ({
+      id: String(m._id),
+      fullName: m.fullName || m.email,
+      email: m.email,
+      phone: m.phone || "",
+      address: [m.address, m.address2, m.city, m.region].filter(Boolean).join(", "),
+      defaultFarmLocation: m.memberSettings?.defaultFarmLocation || "",
+      cooperativeId: m.cooperativeId || "",
+      avatar: m.avatar || "",
+      verificationStatus: m.verificationStatus || "pending",
+    }));
+
+    res.json({ ok: true, members: formatted });
+  } catch (err) {
+    console.error("Error fetching cooperative members:", err);
+    res.status(500).json({ error: "Failed to fetch member accounts." });
+  }
+});
 router.patch("/bookings/:id/approve", approveBooking);
 router.patch("/bookings/:id/reject", rejectBooking);
 router.patch("/bookings/:id/resolve", resolveBookingConflict);
@@ -122,6 +152,20 @@ router.patch("/messages/:id/read", async (req, res) => {
       { new: true }
     );
     if (!msg) return fail(res, 404, "Message not found.");
+
+    await logAudit({
+      action: "MEMBER_INQUIRY_READ",
+      module: "Member Messages",
+      actorEmail: req.user?.email || "manager",
+      actorName: req.user?.fullName || "",
+      actorRole: req.user?.role || "manager",
+      actorId: req.user?._id,
+      affectedRecord: `${msg.memberName} (${msg.memberEmail}) - "${msg.subject}"`,
+      details: `Marked member inquiry "${msg.subject}" as read.`,
+      status: "Success",
+      req,
+    });
+
     res.json({ ok: true, data: msg });
   } catch (err) {
     res.status(500).json({ error: "Failed to mark as read." });
@@ -132,7 +176,22 @@ router.patch("/messages/:id/read", async (req, res) => {
 router.delete("/messages/:id", async (req, res) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 400, "Invalid message id.");
-    await SupportMessage.findByIdAndDelete(req.params.id);
+    const deleted = await SupportMessage.findByIdAndDelete(req.params.id);
+    if (!deleted) return fail(res, 404, "Message not found.");
+
+    await logAudit({
+      action: "MEMBER_INQUIRY_DELETED",
+      module: "Member Messages",
+      actorEmail: req.user?.email || "manager",
+      actorName: req.user?.fullName || "",
+      actorRole: req.user?.role || "manager",
+      actorId: req.user?._id,
+      affectedRecord: `${deleted.memberName} (${deleted.memberEmail}) - "${deleted.subject}"`,
+      details: `Deleted member inquiry "${deleted.subject}".`,
+      status: "Success",
+      req,
+    });
+
     res.json({ ok: true, message: "Message deleted." });
   } catch (err) {
     res.status(500).json({ error: "Failed to delete message." });
@@ -168,7 +227,26 @@ router.get("/reports/pdf", async (req, res) => {
       req.user?.fullName ||
       (req.user?.firstName && req.user?.lastName ? `${req.user.firstName} ${req.user.lastName}` : null) ||
       req.user?.name ||
-      "Operations Manager";
+      req.user?.email ||
+      (req.user?.role === "admin" ? "System Administrator" : "Operations Manager");
+
+    await logAudit({
+      action: "REPORT_PDF_EXPORTED",
+      module: "Financial Reports",
+      actorEmail: req.user?.email || "system",
+      actorName: loggedInManager,
+      actorRole: req.user?.role || "manager",
+      actorId: req.user?._id,
+      affectedRecord: `${reportData.reportTitle || "Report"} (${reportData.period.startDate} to ${reportData.period.endDate})`,
+      details: {
+        reportType: reportData.reportType,
+        startDate: reportData.period.startDate,
+        endDate: reportData.period.endDate,
+        filename,
+      },
+      status: "Success",
+      req,
+    });
 
     reportService.generateReportPDF(reportData, res, {
       loggedInManager,

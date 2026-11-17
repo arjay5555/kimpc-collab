@@ -9,6 +9,7 @@ const MachineryUnit = require("../models/MachineryUnit");
 const MachineryMaintenance = require("../models/MachineryMaintenance");
 const Application = require("../models/Application");
 const Account = require("../models/Account");
+const SystemSetting = require("../models/SystemSetting");
 
 const authManager = require("../middleware/authManager");
 const { logAudit } = require("../services/auditLogger");
@@ -409,7 +410,7 @@ async function seedDefaultMachineryUnits() {
  */
 function normalizeUnit(unit) {
   const obj = unit.toObject ? unit.toObject() : { ...unit };
-  if (!obj.brand || !obj.model || obj.brand === "Generic" || obj.model === "Standard") {
+  if (obj.brand === "Generic" || obj.model === "Standard") {
     const rawName = obj.name || "";
     if (rawName.includes("John Deere")) {
       obj.brand = "John Deere";
@@ -493,13 +494,123 @@ router.post("/machinery-units/upload-photo", authManager, async (req, res) => {
   }
 });
 
+const TYPE_PREFIXES_SETTING_KEY = "machinery_type_prefixes";
+
+function normalizePrefix(raw) {
+  return String(raw || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+}
+
+function escapeRegExp(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function extractIdPrefixAndNumber(unitId) {
+  const match = String(unitId || "")
+    .trim()
+    .toUpperCase()
+    .match(/^([A-Z0-9]+)-(\d+)$/);
+  if (!match) return null;
+  return { prefix: match[1], num: parseInt(match[2], 10) };
+}
+
+function normalizePhotosInput(rawPhotos, rawImageUrl) {
+  const seen = new Set();
+  const list = [];
+  if (Array.isArray(rawPhotos)) {
+    rawPhotos.forEach((p) => {
+      const val = clean(p);
+      if (val && !seen.has(val)) {
+        seen.add(val);
+        list.push(val);
+      }
+    });
+  }
+  const fallbackMain = clean(rawImageUrl);
+  if (fallbackMain && list.length === 0) {
+    list.push(fallbackMain);
+  }
+  const capped = list.slice(0, 5);
+  return {
+    photos: capped,
+    imageUrl: capped[0] || "",
+  };
+}
+
+async function loadTypePrefixesAndNextNumbers() {
+  const saved = await SystemSetting.getSystemSetting(TYPE_PREFIXES_SETTING_KEY, {});
+  const typePrefixes = {};
+  if (saved && typeof saved === "object" && !Array.isArray(saved)) {
+    for (const [k, v] of Object.entries(saved)) {
+      const typeName = clean(k);
+      const pref = normalizePrefix(v);
+      if (typeName && pref) {
+        typePrefixes[typeName] = pref;
+      }
+    }
+  }
+
+  const allUnits = await MachineryUnit.find({}).select("unitId category").lean();
+  const prefixNextNumbers = {};
+
+  allUnits.forEach((u) => {
+    const parsed = extractIdPrefixAndNumber(u.unitId);
+    if (parsed) {
+      const currentNext = prefixNextNumbers[parsed.prefix] || 1;
+      if (parsed.num >= currentNext) {
+        prefixNextNumbers[parsed.prefix] = parsed.num + 1;
+      }
+      const cat = clean(u.category);
+      if (cat) {
+        const existingKey = Object.keys(typePrefixes).find(
+          (k) => k.toLowerCase() === cat.toLowerCase()
+        );
+        const ownerOfPrefix = Object.entries(typePrefixes).find(
+          ([, p]) => p === parsed.prefix
+        )?.[0];
+        if (!existingKey && !ownerOfPrefix) {
+          typePrefixes[cat] = parsed.prefix;
+        }
+      }
+    }
+  });
+
+  return { typePrefixes, prefixNextNumbers, allUnits };
+}
+
+function findPrefixConflictOwner(prefix, category, typePrefixes, allUnits) {
+  const cleanPref = normalizePrefix(prefix);
+  if (!cleanPref) return null;
+  const catLower = clean(category).toLowerCase();
+
+  for (const [typeName, savedPref] of Object.entries(typePrefixes)) {
+    if (savedPref === cleanPref && typeName.toLowerCase() !== catLower) {
+      return typeName;
+    }
+  }
+
+  for (const u of allUnits) {
+    const parsed = extractIdPrefixAndNumber(u.unitId);
+    if (parsed && parsed.prefix === cleanPref) {
+      const uCat = clean(u.category);
+      if (uCat && uCat.toLowerCase() !== catLower) {
+        return uCat;
+      }
+    }
+  }
+
+  return null;
+}
+
 /**
  * GET /api/machinery-units
  * Returns machinery units with summary counts, search, filtering, and role-based data scrubbing.
  */
 router.get("/machinery-units", optionalAuth, async (req, res) => {
   try {
-    await seedDefaultMachineryUnits();
+    // Auto-seeding disabled so cooperative manager can manage authentic KIMPC machinery units cleanly.
 
     const {
       search,
@@ -606,11 +717,15 @@ router.get("/machinery-units", optionalAuth, async (req, res) => {
       });
     }
 
+    const { typePrefixes, prefixNextNumbers } = await loadTypePrefixesAndNextNumbers();
+
     res.json({
       ok: true,
       data: units,
       total: totalMatching,
       counts,
+      typePrefixes,
+      prefixNextNumbers,
       page: pageNum,
       limit: limitNum,
     });
@@ -751,9 +866,9 @@ router.post("/machinery-units", authManager, async (req, res) => {
     const memberRate = Number(body.memberRate !== undefined ? body.memberRate : body.ratePerDay);
     const operatingCondition = clean(body.operatingCondition) || "Operational";
 
-    // Required fields check
-    if (!unitId || !name || !brand || !model) {
-      return fail(res, 400, "Asset Code (Unit ID), Machinery Name, Brand, and Model are required.");
+    // Required fields check (Unit Name, Unit ID, Type, and Billing rate)
+    if (!unitId || !name) {
+      return fail(res, 400, "Unit ID and Unit Name are required.");
     }
     if (!category) {
       return fail(res, 400, "Machinery Type / Category is required.");
@@ -769,7 +884,10 @@ router.post("/machinery-units", authManager, async (req, res) => {
     }
 
     // Numeric validation checks
-    const nonmemberRate = body.nonmemberRate !== undefined && body.nonmemberRate !== "" ? Number(body.nonmemberRate) : null;
+    const nonmemberRate =
+      body.nonmemberRate !== undefined && body.nonmemberRate !== "" && body.nonmemberRate !== null
+        ? Number(body.nonmemberRate)
+        : null;
     if (nonmemberRate !== null && (isNaN(nonmemberRate) || nonmemberRate < 0)) {
       return fail(res, 400, "Non-member rate cannot be negative.");
     }
@@ -800,11 +918,14 @@ router.post("/machinery-units", authManager, async (req, res) => {
     const transportIncluded = Boolean(body.transportIncluded);
     const operatorRequired = Boolean(body.operatorRequired);
 
+    const operatorFeeBasis = clean(body.operatorFeeBasis) || "per day";
     let additionalOperatorFee = Number(body.additionalOperatorFee || 0);
     if (operatorIncluded) {
       additionalOperatorFee = 0; // Prevent charging if included in rate
-    } else if (additionalOperatorFee < 0) {
+    } else if (isNaN(additionalOperatorFee) || additionalOperatorFee < 0) {
       return fail(res, 400, "Additional operator fee cannot be negative.");
+    } else if (operatorFeeBasis === "per %" && additionalOperatorFee > 100) {
+      return fail(res, 400, "Operator percentage fee cannot exceed 100%.");
     }
 
     let additionalTransportFee = Number(body.additionalTransportFee || 0);
@@ -823,10 +944,72 @@ router.post("/machinery-units", authManager, async (req, res) => {
       }
     }
 
-    // Asset code uniqueness check
-    const existing = await MachineryUnit.findOne({ unitId });
+    // Unit ID & Prefix uniqueness checks
+    const requestedPrefix = normalizePrefix(body.unitPrefix);
+    const parsedUnitId = extractIdPrefixAndNumber(unitId);
+    const effectivePrefix = requestedPrefix || parsedUnitId?.prefix || "";
+
+    const { typePrefixes, allUnits } = await loadTypePrefixesAndNextNumbers();
+
+    const existing = await MachineryUnit.findOne({
+      unitId: { $regex: new RegExp(`^${escapeRegExp(unitId)}$`, "i") },
+    });
     if (existing) {
-      return fail(res, 409, `A machinery unit with Asset Code "${unitId}" already exists.`);
+      return fail(res, 409, `A machinery unit with Unit ID "${unitId}" already exists.`);
+    }
+
+    if (effectivePrefix) {
+      const prefixOwner = findPrefixConflictOwner(
+        effectivePrefix,
+        category,
+        typePrefixes,
+        allUnits
+      );
+      if (prefixOwner) {
+        return fail(
+          res,
+          409,
+          `Prefix "${effectivePrefix}" is already used by "${prefixOwner}". Please use a unique prefix.`
+        );
+      }
+
+      const existingKeyForCategory = Object.keys(typePrefixes).find(
+        (k) => k.toLowerCase() === category.toLowerCase()
+      );
+      const savedPrefForCategory = existingKeyForCategory
+        ? typePrefixes[existingKeyForCategory]
+        : "";
+      const hasExistingUnitsInCategory = allUnits.some(
+        (u) => clean(u.category).toLowerCase() === category.toLowerCase()
+      );
+      if (
+        hasExistingUnitsInCategory &&
+        savedPrefForCategory &&
+        requestedPrefix &&
+        requestedPrefix !== savedPrefForCategory
+      ) {
+        return fail(
+          res,
+          409,
+          `Type "${category}" already uses prefix "${savedPrefForCategory}".`
+        );
+      }
+    }
+
+    if (parsedUnitId && parsedUnitId.prefix !== effectivePrefix) {
+      const idPrefixOwner = findPrefixConflictOwner(
+        parsedUnitId.prefix,
+        category,
+        typePrefixes,
+        allUnits
+      );
+      if (idPrefixOwner) {
+        return fail(
+          res,
+          409,
+          `Unit ID prefix "${parsedUnitId.prefix}" belongs to "${idPrefixOwner}".`
+        );
+      }
     }
 
     const attachments = Array.isArray(body.attachments)
@@ -834,6 +1017,11 @@ router.post("/machinery-units", authManager, async (req, res) => {
       : typeof body.attachments === "string" && body.attachments.trim()
       ? body.attachments.split(",").map((s) => s.trim()).filter(Boolean)
       : [];
+
+    const { photos: normalizedPhotos, imageUrl: mainImageUrl } = normalizePhotosInput(
+      body.photos,
+      body.imageUrl
+    );
 
     const newUnit = await MachineryUnit.create({
       unitId,
@@ -843,8 +1031,8 @@ router.post("/machinery-units", authManager, async (req, res) => {
       model,
       serialNumber,
       modelYear: clean(body.modelYear) || String(new Date().getFullYear()),
-      imageUrl: clean(body.imageUrl),
-      photos: Array.isArray(body.photos) ? body.photos : (body.imageUrl ? [body.imageUrl] : []),
+      imageUrl: mainImageUrl,
+      photos: normalizedPhotos,
       horsepower,
       capacity: clean(body.capacity),
       fuelType: clean(body.fuelType) || "Diesel",
@@ -860,7 +1048,7 @@ router.post("/machinery-units", authManager, async (req, res) => {
       fuelIncluded,
       transportIncluded,
       additionalOperatorFee,
-      operatorFeeBasis: clean(body.operatorFeeBasis) || "per day",
+      operatorFeeBasis,
       additionalTransportFee,
       transportFeeBasis: clean(body.transportFeeBasis) || "per trip",
       operatingCondition,
@@ -884,18 +1072,37 @@ router.post("/machinery-units", authManager, async (req, res) => {
     });
 
     const managerEmail = req.user?.email || "manager";
+
+    if (effectivePrefix) {
+      const existingKeyForCategory = Object.keys(typePrefixes).find(
+        (k) => k.toLowerCase() === category.toLowerCase()
+      );
+      const targetKey = existingKeyForCategory || category;
+      if (typePrefixes[targetKey] !== effectivePrefix) {
+        typePrefixes[targetKey] = effectivePrefix;
+        await SystemSetting.setSystemSetting(
+          TYPE_PREFIXES_SETTING_KEY,
+          typePrefixes,
+          "Unique uppercase Unit ID prefixes per machinery type",
+          managerEmail
+        );
+      }
+    }
+
+    const modelLabel = [name, [brand, model].filter(Boolean).join(" ")].filter(Boolean).join(" - ");
     await logAudit({
       action: "MACHINERY_UNIT_CREATED",
       actorEmail: managerEmail,
       actorRole: req.user?.role || "manager",
       actorId: req.user?._id,
-      details: `Registered machinery unit ${unitId} (${name}, ${brand} ${model}). Condition: ${operatingCondition}, Rate: ₱${memberRate}/${pricingUnit}.`,
+      details: `Registered machinery unit ${unitId} (${modelLabel}). Condition: ${operatingCondition}, Rate: ₱${memberRate}/${pricingUnit}.`,
       req,
     });
 
     res.status(201).json({
       ok: true,
       data: normalizeUnit(newUnit),
+      typePrefixes,
       message: `Machinery unit ${unitId} successfully registered.`,
     });
   } catch (err) {
@@ -961,13 +1168,17 @@ router.put("/machinery-units/:id", authManager, async (req, res) => {
     // Update Basic Information
     if (body.name) unit.name = clean(body.name);
     if (body.category) unit.category = clean(body.category);
-    if (body.brand) unit.brand = clean(body.brand);
-    if (body.model) unit.model = clean(body.model);
+    if (body.brand !== undefined) unit.brand = clean(body.brand);
+    if (body.model !== undefined) unit.model = clean(body.model);
     if (body.serialNumber !== undefined) unit.serialNumber = newSerial;
     if (body.modelYear !== undefined) unit.modelYear = clean(body.modelYear);
-    if (body.imageUrl !== undefined) unit.imageUrl = clean(body.imageUrl);
-    if (body.photos !== undefined) {
-      unit.photos = Array.isArray(body.photos) ? body.photos : (body.imageUrl ? [body.imageUrl] : []);
+    if (body.photos !== undefined || body.imageUrl !== undefined) {
+      const { photos: normalizedPhotos, imageUrl: mainImageUrl } = normalizePhotosInput(
+        body.photos !== undefined ? body.photos : unit.photos,
+        body.imageUrl !== undefined ? body.imageUrl : unit.imageUrl
+      );
+      unit.photos = normalizedPhotos;
+      unit.imageUrl = mainImageUrl;
     }
 
     // Update Specifications
@@ -996,12 +1207,13 @@ router.put("/machinery-units/:id", authManager, async (req, res) => {
       unit.ratePerHour = unit.pricingUnit === "Per Hour" ? rate : Math.round(rate / 6);
     }
     if (body.nonmemberRate !== undefined) {
-      const nmRate = Number(body.nonmemberRate);
-      if (isNaN(nmRate) || nmRate < 0) return fail(res, 400, "Non-member rate cannot be negative.");
+      const nmRate =
+        body.nonmemberRate === "" || body.nonmemberRate === null ? null : Number(body.nonmemberRate);
+      if (nmRate !== null && (isNaN(nmRate) || nmRate < 0)) return fail(res, 400, "Non-member rate cannot be negative.");
       unit.nonmemberRate = nmRate;
     }
     if (body.minRentalQuantity !== undefined) {
-      const minQty = Number(body.minRentalQuantity);
+      const minQty = Number(body.minRentalQuantity || 1);
       if (isNaN(minQty) || minQty <= 0) return fail(res, 400, "Minimum rental quantity must be greater than zero.");
       unit.minRentalQuantity = minQty;
     }
@@ -1011,14 +1223,17 @@ router.put("/machinery-units/:id", authManager, async (req, res) => {
     if (body.fuelIncluded !== undefined) unit.fuelIncluded = Boolean(body.fuelIncluded);
     if (body.transportIncluded !== undefined) unit.transportIncluded = Boolean(body.transportIncluded);
 
+    if (body.operatorFeeBasis) unit.operatorFeeBasis = clean(body.operatorFeeBasis);
     if (unit.operatorIncluded) {
       unit.additionalOperatorFee = 0;
     } else if (body.additionalOperatorFee !== undefined) {
-      const fee = Number(body.additionalOperatorFee);
-      if (fee < 0) return fail(res, 400, "Additional operator fee cannot be negative.");
+      const fee = body.additionalOperatorFee === "" || body.additionalOperatorFee === null ? 0 : Number(body.additionalOperatorFee);
+      if (isNaN(fee) || fee < 0) return fail(res, 400, "Additional operator fee cannot be negative.");
+      if ((unit.operatorFeeBasis || "per day") === "per %" && fee > 100) {
+        return fail(res, 400, "Operator percentage fee cannot exceed 100%.");
+      }
       unit.additionalOperatorFee = fee;
     }
-    if (body.operatorFeeBasis) unit.operatorFeeBasis = clean(body.operatorFeeBasis);
 
     if (unit.transportIncluded) {
       unit.additionalTransportFee = 0;

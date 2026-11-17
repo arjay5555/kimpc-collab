@@ -1,23 +1,46 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../../services/api";
+import { api, getCachedApiData } from "../../services/api";
 import AdminSidebar from "../../components/AdminSidebar";
 import AdminTopbar from "../../components/AdminTopbar";
 import "../../styles/admin-kimpc.css";
 
 export default function AdminDashboard() {
-  const [stats, setStats] = useState({ accounts: 0, bookings: 0 });
-  const [settings, setSettings] = useState({
-    googleLoginEnabled: true,
-    facebookLoginEnabled: true,
-    recaptchaEnabled: true,
-    weatherEnabled: true,
-    oneSignalEnabled: true,
-    cloudinaryEnabled: true,
+  const [stats, setStats] = useState(() => {
+    const acc = getCachedApiData("/accounts");
+    const app = getCachedApiData("/applications");
+    return {
+      accounts: Array.isArray(acc) ? acc.length : 0,
+      bookings: Array.isArray(app) ? app.length : 0,
+    };
   });
-  const [loading, setLoading] = useState(true);
+  const [settings, setSettings] = useState(() => {
+    const cachedCfg = getCachedApiData("/config");
+    if (cachedCfg) {
+      return {
+        googleLoginEnabled: cachedCfg.googleLoginEnabled !== false,
+        facebookLoginEnabled: cachedCfg.facebookLoginEnabled !== false,
+        recaptchaEnabled: cachedCfg.recaptchaEnabled !== false,
+        weatherEnabled: cachedCfg.weatherEnabled !== false,
+        oneSignalEnabled: cachedCfg.oneSignalEnabled !== false,
+        cloudinaryEnabled: cachedCfg.cloudinaryEnabled !== false,
+      };
+    }
+    return {
+      googleLoginEnabled: true,
+      facebookLoginEnabled: true,
+      recaptchaEnabled: true,
+      weatherEnabled: true,
+      oneSignalEnabled: true,
+      cloudinaryEnabled: true,
+    };
+  });
+  const [loading, setLoading] = useState(() => !getCachedApiData("/accounts"));
   const [feedback, setFeedback] = useState({ message: "", isError: false });
-  const [recentLogs, setRecentLogs] = useState([]);
+  const [recentLogs, setRecentLogs] = useState(() => {
+    const cachedLogs = getCachedApiData("/admin/audit-logs?limit=50");
+    return cachedLogs?.logs || (Array.isArray(cachedLogs) ? cachedLogs : []);
+  });
   const [logFilterModule, setLogFilterModule] = useState("all");
   const [logSearchQuery, setLogSearchQuery] = useState("");
   const [selectedAuditLog, setSelectedAuditLog] = useState(null);

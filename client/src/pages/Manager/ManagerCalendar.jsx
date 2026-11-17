@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { api, getAuthToken, getSignedInEmail } from "../../services/api";
+import { api, getAuthToken, getSignedInEmail, getCachedApiData } from "../../services/api";
 import ManagerSidebar from "../../components/ManagerSidebar";
 import ManagerTopbar from "../../components/ManagerTopbar";
 import "../../styles/admin-kimpc.css";
@@ -137,8 +137,11 @@ export default function ManagerCalendar() {
   const [searchQuery, setSearchQuery] = useState("");
 
   // Live applications from API
-  const [applications, setApplications] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [applications, setApplications] = useState(() => {
+    const cached = getCachedApiData("/applications");
+    return Array.isArray(cached) ? cached : [];
+  });
+  const [loading, setLoading] = useState(() => !getCachedApiData("/applications"));
 
   // Selected event for the right sidebar detail panel
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -158,7 +161,9 @@ export default function ManagerCalendar() {
 
   // Fetch live applications
   const fetchApplications = async () => {
-    setLoading(true);
+    if (!getCachedApiData("/applications")) {
+      setLoading(true);
+    }
     try {
       const res = await api("/applications");
       if (res.ok && Array.isArray(res.data)) {
@@ -728,7 +733,7 @@ export default function ManagerCalendar() {
                   padding: "6px 10px",
                   borderRadius: "6px",
                   background: "#f1f5f9",
-                  color: "#64748b",
+                  color: "var(--wz-text-muted, #64748b)",
                   fontSize: "0.76rem",
                   fontWeight: 600,
                   border: "1px solid #e2e8f0",
@@ -767,7 +772,7 @@ export default function ManagerCalendar() {
                     borderRadius: "6px",
                     border: "1px solid #cbd5e1",
                     background: "#ffffff",
-                    color: "#334155",
+                    color: "var(--wz-text-main, #334155)",
                     fontSize: "0.74rem",
                     fontWeight: 600,
                     cursor: syncingCalendar ? "not-allowed" : "pointer",
@@ -806,7 +811,7 @@ export default function ManagerCalendar() {
                   borderRadius: "6px",
                   border: "1px solid #cbd5e1",
                   background: "#ffffff",
-                  color: "#1e293b",
+                  color: "var(--wz-text-main, #1e293b)",
                   fontSize: "0.76rem",
                   fontWeight: 700,
                   cursor: "pointer",
@@ -860,7 +865,7 @@ export default function ManagerCalendar() {
               {weatherLoading ? (
                 <>
                   <span style={{ fontSize: "0.85rem" }}>⏳</span>
-                  <span style={{ color: "#64748b", fontWeight: 500 }}>Weather...</span>
+                  <span style={{ color: "var(--wz-text-muted, #64748b)", fontWeight: 500 }}>Weather...</span>
                 </>
               ) : weatherDisabled ? (
                 <>
@@ -882,7 +887,7 @@ export default function ManagerCalendar() {
                     <span>⛅</span>
                   )}
                   <span>{Math.round(weatherData.current.temp_c)}°C</span>
-                  <span style={{ color: "#64748b", fontWeight: 600, fontSize: "0.72rem" }}>
+                  <span style={{ color: "var(--wz-text-muted, #64748b)", fontWeight: 600, fontSize: "0.72rem" }}>
                     Kalilangan
                   </span>
                   {weatherData.forecast?.[0]?.chance_of_rain > 0 && (
@@ -903,7 +908,7 @@ export default function ManagerCalendar() {
               ) : (
                 <>
                   <span>☁️</span>
-                  <span style={{ color: "#64748b", fontWeight: 500 }}>Weather</span>
+                  <span style={{ color: "var(--wz-text-muted, #64748b)", fontWeight: 500 }}>Weather</span>
                   {weatherError && <span style={{ color: "#ef4444", fontSize: "0.65rem" }} title={weatherError}>●</span>}
                 </>
               )}
@@ -971,7 +976,7 @@ export default function ManagerCalendar() {
                     </span>
                   )}
                 </div>
-                <div style={{ fontSize: "0.76rem", color: "#475569", marginTop: "3px" }}>
+                <div style={{ fontSize: "0.76rem", color: "var(--wz-text-muted, #475569)", marginTop: "3px" }}>
                   Real-time agricultural conditions from WeatherAPI.com to assist heavy machinery scheduling and rainfall planning.
                 </div>
               </div>
@@ -991,7 +996,7 @@ export default function ManagerCalendar() {
                     padding: "4px 9px",
                     fontSize: "0.72rem",
                     fontWeight: 600,
-                    color: "#334155",
+                    color: "var(--wz-text-main, #334155)",
                     cursor: weatherLoading ? "wait" : "pointer",
                   }}
                   title="Refresh weather from WeatherAPI.com"
@@ -1005,7 +1010,7 @@ export default function ManagerCalendar() {
                   style={{
                     background: "transparent",
                     border: "none",
-                    color: "#64748b",
+                    color: "var(--wz-text-muted, #64748b)",
                     fontSize: "1.2rem",
                     fontWeight: 700,
                     cursor: "pointer",
@@ -1035,8 +1040,8 @@ export default function ManagerCalendar() {
                     }}
                   >
                     <div style={{ fontSize: "1.5rem", marginBottom: "8px" }}>⏳</div>
-                    <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#64748b" }}>Loading Day {idx}...</div>
-                    <div style={{ fontSize: "0.72rem", color: "#94a3b8", marginTop: "4px" }}>Fetching Kalilangan data</div>
+                    <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--wz-text-muted, #64748b)" }}>Loading Day {idx}...</div>
+                    <div style={{ fontSize: "0.72rem", color: "var(--wz-text-muted, #94a3b8)", marginTop: "4px" }}>Fetching Kalilangan data</div>
                   </div>
                 ))}
               </div>
@@ -1126,7 +1131,7 @@ export default function ManagerCalendar() {
                     <div style={{ fontSize: "0.84rem", fontWeight: 700, color: "#991b1b" }}>
                       Weather Service Currently Unavailable
                     </div>
-                    <div style={{ fontSize: "0.74rem", color: "#64748b", marginTop: "2px" }}>
+                    <div style={{ fontSize: "0.74rem", color: "var(--wz-text-muted, #64748b)", marginTop: "2px" }}>
                       {weatherError} • Calendar bookings, schedules, and machinery dispatch remain fully functional.
                     </div>
                   </div>
@@ -1176,10 +1181,10 @@ export default function ManagerCalendar() {
                       {/* Day Label & Badge */}
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                         <div>
-                          <div style={{ fontSize: "0.86rem", fontWeight: 800, color: "#0f172a" }}>
+                          <div style={{ fontSize: "0.86rem", fontWeight: 800, color: "var(--wz-text-main, #0f172a)" }}>
                             {isToday ? "Today" : idx === 1 ? "Tomorrow" : day.dayName}
                           </div>
-                          <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 500 }}>
+                          <div style={{ fontSize: "0.72rem", color: "var(--wz-text-muted, #64748b)", fontWeight: 500 }}>
                             {day.date}
                           </div>
                         </div>
@@ -1202,17 +1207,17 @@ export default function ManagerCalendar() {
                           <span style={{ fontSize: "1.8rem" }}>⛅</span>
                         )}
                         <div>
-                          <div style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a", lineHeight: 1.1 }}>
+                          <div style={{ fontSize: "1.15rem", fontWeight: 800, color: "var(--wz-text-main, #0f172a)", lineHeight: 1.1 }}>
                             {Math.round(day.temp_c)}°C
                           </div>
-                          <div style={{ fontSize: "0.76rem", color: "#334155", fontWeight: 600 }}>
+                          <div style={{ fontSize: "0.76rem", color: "var(--wz-text-main, #334155)", fontWeight: 600 }}>
                             {day.condition}
                           </div>
                         </div>
                       </div>
 
                       {/* Temperature Range */}
-                      <div style={{ fontSize: "0.72rem", color: "#64748b", margin: "4px 0", display: "flex", justifyContent: "space-between" }}>
+                      <div style={{ fontSize: "0.72rem", color: "var(--wz-text-muted, #64748b)", margin: "4px 0", display: "flex", justifyContent: "space-between" }}>
                         <span>Range: <strong>{Math.round(day.min_temp_c)}°C</strong> – <strong>{Math.round(day.max_temp_c)}°C</strong></span>
                         <span>Humidity: <strong>{day.humidity}%</strong></span>
                       </div>
@@ -1268,7 +1273,7 @@ export default function ManagerCalendar() {
                   transform: "translateY(-50%)",
                   border: "none",
                   background: "transparent",
-                  color: "#94a3b8",
+                  color: "var(--wz-text-muted, #94a3b8)",
                   cursor: "pointer",
                   fontWeight: 700,
                 }}
@@ -1279,7 +1284,7 @@ export default function ManagerCalendar() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-            <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#64748b" }}>Status:</span>
+            <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--wz-text-muted, #64748b)" }}>Status:</span>
             <select
               className="wz-cal-select"
               value={statusFilter}
@@ -1293,7 +1298,7 @@ export default function ManagerCalendar() {
 
             {equipmentOptions.length > 0 && (
               <>
-                <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#64748b", marginLeft: "6px" }}>Unit:</span>
+                <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--wz-text-muted, #64748b)", marginLeft: "6px" }}>Unit:</span>
                 <select
                   className="wz-cal-select"
                   value={equipmentFilter}
@@ -1488,13 +1493,13 @@ export default function ManagerCalendar() {
                         year: "numeric",
                       })}
                     </h3>
-                    <p style={{ margin: "4px 0 0", fontSize: "0.82rem", color: "#64748b" }}>
+                    <p style={{ margin: "4px 0 0", fontSize: "0.82rem", color: "var(--wz-text-muted, #64748b)" }}>
                       Showing all scheduled dispatches, returns, and field operations for this date.
                     </p>
                   </div>
 
                   <div className="wz-cal-day-banner-stats">
-                    <span className="wz-cal-day-stat-pill" style={{ background: "#f1f5f9", color: "#334155" }}>
+                    <span className="wz-cal-day-stat-pill" style={{ background: "#f1f5f9", color: "var(--wz-text-main, #334155)" }}>
                       <strong>{dayViewEvents.length}</strong> Total Events
                     </span>
                     <span className="wz-cal-day-stat-pill" style={{ background: "#fef3c7", color: "#92400e" }}>
@@ -1586,17 +1591,17 @@ export default function ManagerCalendar() {
                                         >
                                           {evt.timeExact} ({isPickup ? "Pickup - Yellow" : "Return - Red"})
                                         </span>
-                                        <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "#64748b" }}>
+                                        <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--wz-text-muted, #64748b)" }}>
                                           • {evt.agenda}
                                         </span>
                                         {evt.isRescheduled && (
                                           <span className="wz-cal-rescheduled-badge">Rescheduled</span>
                                         )}
                                       </div>
-                                      <div style={{ fontSize: "0.98rem", fontWeight: 800, color: "#0f172a", marginTop: "2px" }}>
+                                      <div style={{ fontSize: "0.98rem", fontWeight: 800, color: "var(--wz-text-main, #0f172a)", marginTop: "2px" }}>
                                         {evt.equipment}
                                       </div>
-                                      <div style={{ fontSize: "0.78rem", color: "#475569", marginTop: "2px" }}>
+                                      <div style={{ fontSize: "0.78rem", color: "var(--wz-text-muted, #475569)", marginTop: "2px" }}>
                                         Member: <strong>{evt.clientName}</strong> ({evt.clientPhone}) • Driver: <strong>{evt.driver}</strong>
                                       </div>
                                     </div>
@@ -1649,7 +1654,7 @@ export default function ManagerCalendar() {
               <div className="wz-cal-detail-header">
                 <div>
                   <h3 className="wz-cal-detail-title">Schedule Detail</h3>
-                  <span style={{ fontSize: "0.76rem", color: "#64748b", fontWeight: 600 }}>
+                  <span style={{ fontSize: "0.76rem", color: "var(--wz-text-muted, #64748b)", fontWeight: 600 }}>
                     Ref: {selectedEvent.displayId}
                   </span>
                 </div>
@@ -1698,7 +1703,7 @@ export default function ManagerCalendar() {
                     className="wz-cal-client-avatar"
                   />
                   <div className="wz-cal-client-name">{selectedEvent.clientName}</div>
-                  <div style={{ fontSize: "0.78rem", color: "#64748b" }}>{selectedEvent.clientEmail}</div>
+                  <div style={{ fontSize: "0.78rem", color: "var(--wz-text-muted, #64748b)" }}>{selectedEvent.clientEmail}</div>
                 </div>
 
                 <div className="wz-cal-meta-list">
@@ -1732,7 +1737,7 @@ export default function ManagerCalendar() {
                   {selectedEvent.isRescheduled && selectedEvent.originalStartDate && (
                     <div className="wz-cal-meta-row">
                       <span className="wz-cal-meta-key">Original Date</span>
-                      <span className="wz-cal-meta-val" style={{ textDecoration: "line-through", color: "#94a3b8" }}>
+                      <span className="wz-cal-meta-val" style={{ textDecoration: "line-through", color: "var(--wz-text-muted, #94a3b8)" }}>
                         {selectedEvent.originalStartDate} to {selectedEvent.originalEndDate}
                       </span>
                     </div>
@@ -1804,7 +1809,7 @@ export default function ManagerCalendar() {
                     padding: "7px 14px",
                     background: "transparent",
                     border: "1px solid #cbd5e1",
-                    color: "#64748b",
+                    color: "var(--wz-text-muted, #64748b)",
                     borderRadius: "8px",
                     fontSize: "0.8rem",
                     fontWeight: 600,

@@ -47,6 +47,22 @@ function getTrendBadge(currentValue = 0, previousValue = 0) {
     : { label: `↓ ${change}%`, className: "wz-trend-negative" };
 }
 
+function getApplicationId(application) {
+  return String(application?.id || application?._id || "");
+}
+
+function formatRequestDateTime(value) {
+  if (!value) return "Not available";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Not available" : date.toLocaleString();
+}
+
+function formatEquipmentQuantity(request) {
+  const parsedQuantity = Number(request.quantity ?? request.equipmentQuantity ?? 1);
+  const quantity = Number.isFinite(parsedQuantity) && parsedQuantity > 0 ? parsedQuantity : 1;
+  return `${quantity} ${quantity === 1 ? "unit" : "units"}`;
+}
+
 export default function ManagerDashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -84,6 +100,11 @@ export default function ManagerDashboard() {
   // Active machinery category selection in right sidebar
   const [activeCategory, setActiveCategory] = useState("Harvester");
   const [financialsOpen, setFinancialsOpen] = useState(false);
+  const [equipmentRequests, setEquipmentRequests] = useState([]);
+  const [equipmentRequestsLoading, setEquipmentRequestsLoading] = useState(true);
+  const [equipmentRequestsError, setEquipmentRequestsError] = useState("");
+  const [processingRequestId, setProcessingRequestId] = useState("");
+  const [approvalConfirmationRequest, setApprovalConfirmationRequest] = useState(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -139,6 +160,53 @@ export default function ManagerDashboard() {
     };
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+    let isFetching = false;
+
+    const loadEquipmentRequests = async () => {
+      if (isFetching) return;
+      isFetching = true;
+      try {
+        const response = await api("/applications", { skipCache: true });
+        if (!isMounted) return;
+        if (!response.ok) {
+          setEquipmentRequestsError(response.data?.error || "Could not load equipment requests.");
+          return;
+        }
+
+        const applications = Array.isArray(response.data)
+          ? response.data
+          : Array.isArray(response.data?.applications)
+            ? response.data.applications
+            : null;
+        if (!applications) {
+          setEquipmentRequestsError("Equipment request data is unavailable.");
+          return;
+        }
+
+        setEquipmentRequests(
+          applications.filter((application) => (application.status || "").toLowerCase() === "pending")
+        );
+        setEquipmentRequestsError("");
+      } catch (error) {
+        console.error("Could not load equipment requests:", error);
+        if (isMounted) setEquipmentRequestsError("Could not load equipment requests. Please try again.");
+      } finally {
+        isFetching = false;
+        if (isMounted) setEquipmentRequestsLoading(false);
+      }
+    };
+
+    loadEquipmentRequests();
+    const refreshTimer = window.setInterval(loadEquipmentRequests, 15000);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(refreshTimer);
+    };
+  }, []);
+
   const handleAddReminder = (e) => {
     e.preventDefault();
     if (!newReminderText.trim()) return;
@@ -158,6 +226,37 @@ export default function ManagerDashboard() {
     } catch (err) {}
     setNewReminderText("");
     setShowAddReminder(false);
+  };
+
+  const updateEquipmentRequestStatus = async (request, status) => {
+    const requestId = getApplicationId(request);
+    if (!requestId) {
+      setEquipmentRequestsError("This equipment request is missing its application ID.");
+      return;
+    }
+
+    setProcessingRequestId(requestId);
+    setEquipmentRequestsError("");
+    try {
+      const response = await api(`/applications/${encodeURIComponent(requestId)}`, {
+        method: "PATCH",
+        body: { status },
+      });
+      if (!response.ok) {
+        setEquipmentRequestsError(response.data?.error || `Could not ${status.toLowerCase()} this request.`);
+        return;
+      }
+
+      setEquipmentRequests((current) =>
+        current.filter((application) => getApplicationId(application) !== requestId)
+      );
+      if (status === "Approved") setApprovalConfirmationRequest(null);
+    } catch (error) {
+      console.error(`Could not ${status.toLowerCase()} equipment request:`, error);
+      setEquipmentRequestsError(`Could not ${status.toLowerCase()} this request. Please try again.`);
+    } finally {
+      setProcessingRequestId("");
+    }
   };
 
   const handleLogout = () => {
@@ -245,11 +344,11 @@ export default function ManagerDashboard() {
           </div>
         )}
         {loadingStats ? (
-          <div role="status" style={{ marginBottom: "16px", color: "#64748b", fontSize: "0.78rem" }}>
+          <div role="status" style={{ marginBottom: "16px", color: "var(--wz-text-muted, #64748b)", fontSize: "0.78rem" }}>
             Loading dashboard metrics...
           </div>
         ) : lastUpdated ? (
-          <div role="status" style={{ marginBottom: "16px", color: "#64748b", fontSize: "0.72rem", textAlign: "right" }}>
+          <div role="status" style={{ marginBottom: "16px", color: "var(--wz-text-muted, #64748b)", fontSize: "0.72rem", textAlign: "right" }}>
             Live data · Updated {new Date(lastUpdated).toLocaleTimeString()}
           </div>
         ) : null}
@@ -259,7 +358,7 @@ export default function ManagerDashboard() {
           {/* Card 1: Total Revenue (using Philippine Peso) */}
           <div className="wz-kpi-card">
             <div className="wz-kpi-left">
-              <div className="wz-kpi-icon-wrap" style={{ color: "#0f172a" }}>
+              <div className="wz-kpi-icon-wrap" style={{ color: "var(--wz-text-main, #0f172a)" }}>
                 ₱
               </div>
               <div>
@@ -341,6 +440,85 @@ export default function ManagerDashboard() {
           </div>
         </div>
 
+        <section className="wz-card wz-equipment-requests-card" aria-labelledby="equipment-requests-title">
+          <div className="wz-card-header">
+            <h2 className="wz-card-title" id="equipment-requests-title">Equipment Requests</h2>
+            <span className="wz-equipment-requests-count">{equipmentRequests.length} pending</span>
+          </div>
+          {equipmentRequestsError && (
+            <div role="alert" className="wz-equipment-requests-error">
+              {equipmentRequestsError}
+            </div>
+          )}
+          {equipmentRequestsLoading ? (
+            <div role="status" className="wz-equipment-requests-empty">Loading equipment requests...</div>
+          ) : equipmentRequests.length === 0 ? (
+            <div className="wz-equipment-requests-empty">There are no pending equipment requests.</div>
+          ) : (
+            <div className="wz-equipment-requests-list">
+              {equipmentRequests.map((request) => {
+                const requestId = getApplicationId(request);
+                const submittedAt = formatRequestDateTime(request.submittedAt || request.createdAt);
+
+                return (
+                  <article className="wz-equipment-request" key={requestId || request.displayId}>
+                    <div className="wz-equipment-request-details">
+                      <div>
+                        <span className="wz-equipment-request-label">Member</span>
+                        <strong>{request.memberName || request.memberEmail || "Member"}</strong>
+                      </div>
+                      <div>
+                        <span className="wz-equipment-request-label">Equipment</span>
+                        <strong>{request.equipment || request.machineryModel || "Equipment"}</strong>
+                      </div>
+                      <div>
+                        <span className="wz-equipment-request-label">Quantity</span>
+                        <strong>{formatEquipmentQuantity(request)}</strong>
+                      </div>
+                      <div>
+                        <span className="wz-equipment-request-label">Request date &amp; time</span>
+                        <strong>{submittedAt}</strong>
+                      </div>
+                      <div>
+                        <span className="wz-equipment-request-label">Booking schedule</span>
+                        <strong>{request.startDate || "Not specified"} – {request.endDate || "Not specified"}</strong>
+                      </div>
+                      {request.hectares != null && request.hectares !== "" && (
+                        <div>
+                          <span className="wz-equipment-request-label">Area</span>
+                          <strong>{request.hectares} hectares</strong>
+                        </div>
+                      )}
+                      <div>
+                        <span className="wz-equipment-request-label">Status</span>
+                        <strong>{request.status || "Pending"}</strong>
+                      </div>
+                    </div>
+                    <div className="wz-equipment-request-actions">
+                      <button
+                        type="button"
+                        className="wz-btn-approve"
+                        disabled={!requestId || Boolean(processingRequestId)}
+                        onClick={() => setApprovalConfirmationRequest(request)}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        className="wz-btn-reject"
+                        disabled={!requestId || Boolean(processingRequestId)}
+                        onClick={() => updateEquipmentRequestStatus(request, "Rejected")}
+                      >
+                        {processingRequestId === requestId ? "Updating..." : "Reject"}
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
         {/* Middle Row: Earnings Summary (₱) + Rent Status (Active, Pending, Cancelled) */}
         <div className="wz-dashboard-grid-2">
           {/* Earnings Summary Card */}
@@ -373,7 +551,7 @@ export default function ManagerDashboard() {
                   return (
                     <g key={ratio}>
                       <line x1="45" y1={y} x2="520" y2={y} stroke={ratio === 0 ? "#e2e8f0" : "#f1f5f9"} strokeWidth="1" />
-                      <text x="5" y={y + 4} fill="#94a3b8" fontSize="11" fontWeight="500">
+                      <text x="5" y={y + 4} fill="var(--wz-text-muted, #94a3b8)" fontSize="11" fontWeight="500">
                         ₱{formatCompactNumber(earningsAxisMax * ratio)}
                       </text>
                     </g>
@@ -388,10 +566,10 @@ export default function ManagerDashboard() {
                     <circle cx={earningsPeak.x} cy={earningsPeak.y} r="4.5" fill="#0f172a" stroke="#ffffff" strokeWidth="2" />
                     <g transform={`translate(${Math.min(435, Math.max(45, earningsPeak.x - 40))}, ${Math.max(4, Math.min(130, earningsPeak.y - 44))})`}>
                       <rect width="80" height="38" rx="8" fill="#ffffff" stroke="#e2e8f0" strokeWidth="1" filter="drop-shadow(0 2px 5px rgba(0,0,0,0.06))" />
-                      <text x="40" y="15" textAnchor="middle" fill="#64748b" fontSize="9" fontWeight="600">
+                      <text x="40" y="15" textAnchor="middle" fill="var(--wz-text-muted, #64748b)" fontSize="9" fontWeight="600">
                         {earningsPeak.label} {earningsPeak.year}
                       </text>
-                      <text x="40" y="30" textAnchor="middle" fill="#0f172a" fontSize="12" fontWeight="800">
+                      <text x="40" y="30" textAnchor="middle" fill="var(--wz-text-main, #0f172a)" fontSize="12" fontWeight="800">
                         ₱{Math.round(earningsPeak.value).toLocaleString()}
                       </text>
                     </g>
@@ -399,7 +577,7 @@ export default function ManagerDashboard() {
                 )}
 
                 {earningsPoints.map((point) => (
-                  <text key={`${point.year}-${point.month}`} x={point.x} y="194" fill="#94a3b8" fontSize="11" textAnchor="middle">
+                  <text key={`${point.year}-${point.month}`} x={point.x} y="194" fill="var(--wz-text-muted, #94a3b8)" fontSize="11" textAnchor="middle">
                     {point.label}
                   </text>
                 ))}
@@ -483,7 +661,7 @@ export default function ManagerDashboard() {
                   return (
                     <g key={ratio}>
                       <line x1="38" y1={y} x2="520" y2={y} stroke={ratio === 0 ? "#e2e8f0" : "#f1f5f9"} strokeWidth="1" />
-                      <text x="8" y={y + 4} fill="#94a3b8" fontSize="10">
+                      <text x="8" y={y + 4} fill="var(--wz-text-muted, #94a3b8)" fontSize="10">
                         {Math.round(bookingsAxisMax * ratio).toLocaleString()}
                       </text>
                     </g>
@@ -522,10 +700,10 @@ export default function ManagerDashboard() {
                 {bookingsPeak && bookingsMax > 0 && (
                   <g transform={`translate(${Math.min(450, Math.max(38, bookingsPeak.x - 26))}, 8)`}>
                     <rect width="68" height="34" rx="6" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="0.8" />
-                    <text x="34" y="13" textAnchor="middle" fill="#64748b" fontSize="8" fontWeight="600">
+                    <text x="34" y="13" textAnchor="middle" fill="var(--wz-text-muted, #64748b)" fontSize="8" fontWeight="600">
                       {bookingsPeak.label} {bookingsPeak.year}
                     </text>
-                    <text x="34" y="27" textAnchor="middle" fill="#0f172a" fontSize="11" fontWeight="800">
+                    <text x="34" y="27" textAnchor="middle" fill="var(--wz-text-main, #0f172a)" fontSize="11" fontWeight="800">
                       {bookingsPeak.value.toLocaleString()}
                     </text>
                   </g>
@@ -723,6 +901,60 @@ export default function ManagerDashboard() {
           </div>
         </section>
       </main>
+      {approvalConfirmationRequest && (
+        <div
+          className="wz-modal-overlay"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !processingRequestId) {
+              setApprovalConfirmationRequest(null);
+            }
+          }}
+        >
+          <section
+            className="wz-modal-content wz-equipment-request-confirmation"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="equipment-request-confirmation-title"
+          >
+            <h2 className="wz-card-title" id="equipment-request-confirmation-title">
+              Are you sure you want to approve this request?
+            </h2>
+            <div className="wz-equipment-request-confirm-details">
+              <div><span>Member</span><strong>{approvalConfirmationRequest.memberName || approvalConfirmationRequest.memberEmail || "Member"}</strong></div>
+              <div><span>Equipment</span><strong>{approvalConfirmationRequest.equipment || approvalConfirmationRequest.machineryModel || "Equipment"}</strong></div>
+              <div><span>Quantity</span><strong>{formatEquipmentQuantity(approvalConfirmationRequest)}</strong></div>
+              {approvalConfirmationRequest.machineryUnitId && (
+                <div><span>Equipment unit</span><strong>{approvalConfirmationRequest.machineryUnitId}</strong></div>
+              )}
+              <div><span>Request date &amp; time</span><strong>{formatRequestDateTime(approvalConfirmationRequest.submittedAt || approvalConfirmationRequest.createdAt)}</strong></div>
+              <div><span>Booking schedule</span><strong>{approvalConfirmationRequest.startDate || "Not specified"} – {approvalConfirmationRequest.endDate || "Not specified"}</strong></div>
+              {approvalConfirmationRequest.hectares != null && approvalConfirmationRequest.hectares !== "" && (
+                <div><span>Area</span><strong>{approvalConfirmationRequest.hectares} hectares</strong></div>
+              )}
+              <div><span>Status</span><strong>{approvalConfirmationRequest.status || "Pending"}</strong></div>
+            </div>
+            <div className="wz-equipment-request-confirm-actions">
+              <button
+                type="button"
+                className="wz-equipment-request-cancel"
+                disabled={Boolean(processingRequestId)}
+                onClick={() => setApprovalConfirmationRequest(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="wz-btn-approve"
+                disabled={Boolean(processingRequestId)}
+                onClick={() => updateEquipmentRequestStatus(approvalConfirmationRequest, "Approved")}
+              >
+                {processingRequestId ? "Updating..." : "Confirm"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

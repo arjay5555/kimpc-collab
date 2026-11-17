@@ -100,7 +100,10 @@ export default function Expenses() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [dateRangeFilter, setDateRangeFilter] = useState("All Time");
   const [sortBy, setSortBy] = useState("date_desc");
-  const [pageSize, setPageSize] = useState(8);
+  const [pageSize, setPageSize] = useState(() => {
+    const saved = localStorage.getItem("kimpc_manager_pageSize");
+    return saved ? Number(saved) : 8;
+  });
   const [currentPage, setCurrentPage] = useState(1);
 
   // Chart hover month
@@ -255,31 +258,6 @@ export default function Expenses() {
     setIsModalOpen(false);
   };
 
-  // CSV Download export
-  const handleDownloadCsv = () => {
-    const headers = ["Expense ID", "Expense Title", "Category", "Quantity", "Amount (PHP)", "Date", "Status"];
-    const rows = filteredTransactions.map((t) => [
-      t.id,
-      `"${t.title.replace(/"/g, '""')}"`,
-      `"${t.category}"`,
-      t.quantity,
-      t.amount,
-      t.date,
-      t.status,
-    ]);
-
-    const csvContent =
-      "data:text/csv;charset=utf-8," +
-      [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `expenses_report_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   // Tooltip details for hover point
   const currentHovered = MONTHS_DATA[hoveredMonthIndex] || MONTHS_DATA[4];
 
@@ -429,7 +407,7 @@ export default function Expenses() {
                       padding: "6px 12px",
                       fontSize: "0.8rem",
                       fontWeight: "600",
-                      color: "#475569",
+                      color: "var(--wz-text-muted, #475569)",
                       outline: "none",
                       cursor: "pointer",
                     }}
@@ -569,20 +547,20 @@ export default function Expenses() {
                           strokeWidth="1"
                           filter="drop-shadow(0 4px 6px rgba(0,0,0,0.06))"
                         />
-                        <text x="12" y="18" fill="#64748b" fontSize="10" fontWeight="700">
+                        <text x="12" y="18" fill="var(--wz-text-muted, #64748b)" fontSize="10" fontWeight="700">
                           {currentHovered.month} 2028
                         </text>
                         {/* Income row */}
                         <circle cx="16" cy="30" r="3" fill="#182538" />
-                        <text x="25" y="33" fill="#64748b" fontSize="9.5" fontWeight="500">
+                        <text x="25" y="33" fill="var(--wz-text-muted, #64748b)" fontSize="9.5" fontWeight="500">
                           Income:
                         </text>
-                        <text x="118" y="33" textAnchor="end" fill="#0f172a" fontSize="9.5" fontWeight="800">
+                        <text x="118" y="33" textAnchor="end" fill="var(--wz-text-main, #0f172a)" fontSize="9.5" fontWeight="800">
                           ₱{currentHovered.income.toLocaleString()}
                         </text>
                         {/* Expense row */}
                         <circle cx="16" cy="44" r="3" fill="#ff3b5c" />
-                        <text x="25" y="47" fill="#64748b" fontSize="9.5" fontWeight="500">
+                        <text x="25" y="47" fill="var(--wz-text-muted, #64748b)" fontSize="9.5" fontWeight="500">
                           Expense:
                         </text>
                         <text x="118" y="47" textAnchor="end" fill="#ff3b5c" fontSize="9.5" fontWeight="800">
@@ -598,10 +576,10 @@ export default function Expenses() {
             {/* Right Column: Expense Breakdown Card */}
             <div className="wz-expense-breakdown-card">
               <div className="wz-breakdown-header">
-                <span style={{ fontSize: "0.95rem", fontWeight: "800", color: "#0f172a" }}>
+                <span style={{ fontSize: "0.95rem", fontWeight: "800", color: "var(--wz-text-main, #0f172a)" }}>
                   Expense Breakdown
                 </span>
-                <button style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: "1rem" }}>
+                <button style={{ background: "transparent", border: "none", color: "var(--wz-text-muted, #94a3b8)", cursor: "pointer", fontSize: "1rem" }}>
                   •••
                 </button>
               </div>
@@ -615,7 +593,7 @@ export default function Expenses() {
                     padding: "4px 10px",
                     fontSize: "0.76rem",
                     fontWeight: "600",
-                    color: "#475569",
+                    color: "var(--wz-text-muted, #475569)",
                     outline: "none",
                     cursor: "pointer",
                   }}
@@ -750,7 +728,7 @@ export default function Expenses() {
 
                 <div className="wz-breakdown-row">
                   <div className="wz-breakdown-row-left">
-                    <span className="wz-breakdown-pct-pill" style={{ background: "#cbd5e1", color: "#334155" }}>5%</span>
+                    <span className="wz-breakdown-pct-pill" style={{ background: "#cbd5e1", color: "var(--wz-text-main, #334155)" }}>5%</span>
                     <span>Marketing</span>
                   </div>
                   <span className="wz-breakdown-amount">₱500</span>
@@ -762,7 +740,7 @@ export default function Expenses() {
           {/* Bottom Full-Width Section: Recent Transactions Card */}
           <section className="wz-recent-transactions-card">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
-              <span style={{ fontSize: "1.05rem", fontWeight: "800", color: "#0f172a" }}>
+              <span style={{ fontSize: "1.05rem", fontWeight: "800", color: "var(--wz-text-main, #0f172a)" }}>
                 Recent Transactions
               </span>
             </div>
@@ -817,30 +795,6 @@ export default function Expenses() {
 
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <button
-                  onClick={handleDownloadCsv}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    background: "#f8fafc",
-                    border: "1px solid var(--wz-border)",
-                    borderRadius: "8px",
-                    padding: "8px 14px",
-                    fontSize: "0.82rem",
-                    fontWeight: "600",
-                    cursor: "pointer",
-                    color: "#334155",
-                  }}
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" />
-                  </svg>
-                  Download CSV
-                </button>
-
-                <button
                   onClick={openCreateModal}
                   style={{
                     display: "inline-flex",
@@ -889,7 +843,7 @@ export default function Expenses() {
                 <tbody>
                   {filteredTransactions.length === 0 ? (
                     <tr>
-                      <td colSpan="8" style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>
+                      <td colSpan="8" style={{ textAlign: "center", padding: "40px", color: "var(--wz-text-muted, #94a3b8)" }}>
                         No transactions found matching your search.
                       </td>
                     </tr>
@@ -911,7 +865,7 @@ export default function Expenses() {
                               style={{ cursor: "pointer" }}
                             />
                           </td>
-                          <td style={{ fontWeight: "700", color: "#0f172a" }}>
+                          <td style={{ fontWeight: "700", color: "var(--wz-text-main, #0f172a)" }}>
                             {item.title}
                           </td>
                           <td>
@@ -920,16 +874,16 @@ export default function Expenses() {
                                 className="wz-cat-dot"
                                 style={{ backgroundColor: item.categoryColor || "#ff3b5c" }}
                               />
-                              <span style={{ color: "#334155" }}>{item.category}</span>
+                              <span style={{ color: "var(--wz-text-main, #334155)" }}>{item.category}</span>
                             </span>
                           </td>
-                          <td style={{ textAlign: "center", fontWeight: "600", color: "#475569" }}>
+                          <td style={{ textAlign: "center", fontWeight: "600", color: "var(--wz-text-muted, #475569)" }}>
                             {item.quantity}
                           </td>
-                          <td style={{ fontWeight: "800", color: "#0f172a" }}>
+                          <td style={{ fontWeight: "800", color: "var(--wz-text-main, #0f172a)" }}>
                             ₱{item.amount.toLocaleString()}
                           </td>
-                          <td style={{ color: "#64748b" }}>{item.date}</td>
+                          <td style={{ color: "var(--wz-text-muted, #64748b)" }}>{item.date}</td>
                           <td>
                             {item.status === "Completed" ? (
                               <span className="wz-badge-trans-completed">Completed</span>
@@ -963,14 +917,16 @@ export default function Expenses() {
 
             {/* Pagination Controls */}
             <div className="wz-table-footer" style={{ padding: "14px 20px", borderTop: "1px solid var(--wz-border)", background: "#ffffff" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", color: "#64748b" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", color: "var(--wz-text-muted, #64748b)" }}>
                 <span>Results per page:</span>
                 <select
                   className="wz-dropdown-select"
                   value={pageSize}
                   onChange={(e) => {
-                    setPageSize(Number(e.target.value));
+                    const val = Number(e.target.value);
+                    setPageSize(val);
                     setCurrentPage(1);
+                    localStorage.setItem("kimpc_manager_pageSize", String(val));
                   }}
                 >
                   <option value="8">8</option>
@@ -1051,7 +1007,7 @@ export default function Expenses() {
                 justifyContent: "space-between",
               }}
             >
-              <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: "800", color: "#0f172a" }}>
+              <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: "800", color: "var(--wz-text-main, #0f172a)" }}>
                 {editingExpense ? "Edit Expense Entry" : "Add New Expense"}
               </h3>
               <button
@@ -1061,7 +1017,7 @@ export default function Expenses() {
                   border: "none",
                   fontSize: "1.2rem",
                   cursor: "pointer",
-                  color: "#94a3b8",
+                  color: "var(--wz-text-muted, #94a3b8)",
                 }}
               >
                 ✕
@@ -1070,7 +1026,7 @@ export default function Expenses() {
 
             <form onSubmit={handleSaveModal} style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
               <div>
-                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "700", color: "#475569", marginBottom: "6px" }}>
+                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "700", color: "var(--wz-text-muted, #475569)", marginBottom: "6px" }}>
                   Expense Description *
                 </label>
                 <input
@@ -1091,7 +1047,7 @@ export default function Expenses() {
               </div>
 
               <div>
-                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "700", color: "#475569", marginBottom: "6px" }}>
+                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "700", color: "var(--wz-text-muted, #475569)", marginBottom: "6px" }}>
                   Category *
                 </label>
                 <select
@@ -1117,7 +1073,7 @@ export default function Expenses() {
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
                 <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "700", color: "#475569", marginBottom: "6px" }}>
+                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "700", color: "var(--wz-text-muted, #475569)", marginBottom: "6px" }}>
                     Quantity *
                   </label>
                   <input
@@ -1138,7 +1094,7 @@ export default function Expenses() {
                 </div>
 
                 <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "700", color: "#475569", marginBottom: "6px" }}>
+                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "700", color: "var(--wz-text-muted, #475569)", marginBottom: "6px" }}>
                     Amount (₱) *
                   </label>
                   <input
@@ -1161,7 +1117,7 @@ export default function Expenses() {
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
                 <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "700", color: "#475569", marginBottom: "6px" }}>
+                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "700", color: "var(--wz-text-muted, #475569)", marginBottom: "6px" }}>
                     Date *
                   </label>
                   <input
@@ -1181,7 +1137,7 @@ export default function Expenses() {
                 </div>
 
                 <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "700", color: "#475569", marginBottom: "6px" }}>
+                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "700", color: "var(--wz-text-muted, #475569)", marginBottom: "6px" }}>
                     Status *
                   </label>
                   <select
@@ -1211,7 +1167,7 @@ export default function Expenses() {
                     borderRadius: "8px",
                     border: "1px solid #e2e8f0",
                     background: "transparent",
-                    color: "#64748b",
+                    color: "var(--wz-text-muted, #64748b)",
                     fontWeight: "600",
                     fontSize: "0.85rem",
                     cursor: "pointer",

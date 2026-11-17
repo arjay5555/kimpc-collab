@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { api } from "../../services/api";
+import { api, getCachedApiData } from "../../services/api";
 import ManagerSidebar from "../../components/ManagerSidebar";
 import ManagerSearchBar from "../../components/ManagerSearchBar";
 import ManagerTopbar from "../../components/ManagerTopbar";
@@ -25,7 +25,7 @@ const FUEL_TYPES = ["Diesel", "Gasoline", "Electric", "Hybrid", "Biofuel", "Othe
 // Pricing units
 const PRICING_UNITS = ["Per Hectare", "Per Hour", "Per Day"];
 
-// Fee basis options
+// Fee basis options (Transport Fee)
 const FEE_BASIS_OPTIONS = [
   "per booking",
   "per hectare",
@@ -33,6 +33,19 @@ const FEE_BASIS_OPTIONS = [
   "per day",
   "per trip",
 ];
+
+// Operator fee billing basis options (dynamic label & unit depending on choice)
+const OPERATOR_FEE_OPTIONS = [
+  { value: "per %", label: "Per % (%)", inputLabel: "Operator Percentage (%)", unit: "%", placeholder: "15", step: "0.5", max: "100" },
+  { value: "per day", label: "Per Day (₱)", inputLabel: "Rate per Day (₱)", unit: "₱ / day", placeholder: "500", step: "50" },
+  { value: "per trip", label: "Per Trip (₱)", inputLabel: "Rate per Trip (₱)", unit: "₱ / trip", placeholder: "300", step: "50" },
+  { value: "per hectare", label: "Per Hectare (₱)", inputLabel: "Rate per Hectare (₱)", unit: "₱ / ha", placeholder: "250", step: "50" },
+  { value: "per hour", label: "Per Hour (₱)", inputLabel: "Rate per Hour (₱)", unit: "₱ / hr", placeholder: "100", step: "10" },
+  { value: "per booking", label: "Per Booking (₱)", inputLabel: "Flat Fee / Booking (₱)", unit: "₱ / booking", placeholder: "500", step: "50" },
+];
+
+const getOperatorFeeMeta = (basis) =>
+  OPERATOR_FEE_OPTIONS.find((opt) => opt.value === basis) || OPERATOR_FEE_OPTIONS[1];
 
 // Operating condition options
 const OPERATING_CONDITIONS = ["Operational", "Under Maintenance", "Retired"];
@@ -51,6 +64,7 @@ const ACQUISITION_SOURCES = [
 const EMPTY_UNIT_FORM = {
   // 1. Basic Information
   unitId: "",
+  unitPrefix: "",
   name: "",
   category: "Tractor",
   brand: "",
@@ -68,16 +82,16 @@ const EMPTY_UNIT_FORM = {
 
   // 3. Rental & Pricing
   pricingUnit: "Per Hectare",
-  memberRate: 2800,
-  nonmemberRate: 3500,
+  memberRate: "",
+  nonmemberRate: "",
   minRentalQuantity: 1,
   operatorRequired: false,
   operatorIncluded: false,
   fuelIncluded: false,
   transportIncluded: false,
-  additionalOperatorFee: 0,
+  additionalOperatorFee: "",
   operatorFeeBasis: "per day",
-  additionalTransportFee: 0,
+  additionalTransportFee: "",
   transportFeeBasis: "per trip",
 
   // 4. Condition & Maintenance
@@ -123,13 +137,40 @@ export default function Units() {
   const navigate = useNavigate();
 
   // Data states
-  const [units, setUnits] = useState([]);
-  const [counts, setCounts] = useState({ total: 0, operational: 0, underMaintenance: 0, retired: 0 });
-  const [loading, setLoading] = useState(true);
+  const [units, setUnits] = useState(() => {
+    const cached = getCachedApiData("/machinery-units");
+    return Array.isArray(cached) ? cached : (cached?.data || []);
+  });
+  const [typePrefixes, setTypePrefixes] = useState(() => {
+    const cached = getCachedApiData("/machinery-units");
+    return cached?.typePrefixes && typeof cached.typePrefixes === "object"
+      ? cached.typePrefixes
+      : {};
+  });
+  const [prefixNextNumbers, setPrefixNextNumbers] = useState(() => {
+    const cached = getCachedApiData("/machinery-units");
+    return cached?.prefixNextNumbers && typeof cached.prefixNextNumbers === "object"
+      ? cached.prefixNextNumbers
+      : {};
+  });
+  const [counts, setCounts] = useState(() => {
+    const cached = getCachedApiData("/machinery-units");
+    if (cached?.counts) return cached.counts;
+    const list = Array.isArray(cached) ? cached : (cached?.data || []);
+    const total = list.length;
+    const operational = list.filter((u) => (u.operatingCondition || u.status) === "Operational" || (u.status === "Available")).length;
+    const underMaintenance = list.filter((u) => (u.operatingCondition || u.status) === "Under Maintenance" || ["Maintenance", "Repair"].includes(u.status)).length;
+    const retired = list.filter((u) => (u.operatingCondition || u.status) === "Retired" || ["Dispose", "Unavailable", "Retired"].includes(u.status)).length;
+    return { total, operational, underMaintenance, retired };
+  });
+  const [loading, setLoading] = useState(() => !getCachedApiData("/machinery-units"));
   const [feedback, setFeedback] = useState({ message: "", isError: false });
 
   // Registered Drivers state & Assign Driver Modal
-  const [drivers, setDrivers] = useState([]);
+  const [drivers, setDrivers] = useState(() => {
+    const cached = getCachedApiData("/drivers");
+    return Array.isArray(cached) ? cached : [];
+  });
   const [driversLoading, setDriversLoading] = useState(false);
   const [driverModalUnit, setDriverModalUnit] = useState(null);
   const [driverSearchQuery, setDriverSearchQuery] = useState("");
@@ -142,24 +183,29 @@ export default function Units() {
   const [filterCondition, setFilterCondition] = useState("All");
   const [sortBy, setSortBy] = useState("newest");
 
-  // View Mode: 'table' (primary required view) or 'grid' (cards)
-  const [viewMode, setViewMode] = useState("table");
-
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(8);
+  const [pageSize, setPageSize] = useState(() => {
+    const saved = localStorage.getItem("kimpc_manager_pageSize");
+    return saved ? Number(saved) : 8;
+  });
 
   // Modals
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingUnit, setEditingUnit] = useState(null);
-  const [activeFormTab, setActiveFormTab] = useState("basic"); // basic | specs | pricing | condition | ownership | other
+  const [activeFormTab, setActiveFormTab] = useState("basic"); // basic | specs | service
   const [unitForm, setUnitForm] = useState(EMPTY_UNIT_FORM);
   const [formErrors, setFormErrors] = useState({});
+  const [savingUnit, setSavingUnit] = useState(false);
+  const [unitSaveError, setUnitSaveError] = useState("");
+  const [customTypeMode, setCustomTypeMode] = useState(false);
+  const [lastSelectedType, setLastSelectedType] = useState("Tractor");
 
   // View Details Modal
   const [viewingUnit, setViewingUnit] = useState(null);
   const [unitDetailsData, setUnitDetailsData] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
+  const [activeViewPhotoIndex, setActiveViewPhotoIndex] = useState(0);
 
   // Retire Modal
   const [retiringUnit, setRetiringUnit] = useState(null);
@@ -175,6 +221,9 @@ export default function Units() {
 
   // Image Upload State
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [showPhotoUrlInput, setShowPhotoUrlInput] = useState(false);
+  const [photoUrlDraft, setPhotoUrlDraft] = useState("");
+  const [photoError, setPhotoError] = useState("");
   const fileInputRef = useRef(null);
 
   // Fetch registered drivers from API
@@ -206,11 +255,19 @@ export default function Units() {
   // Fetch machinery units
   const fetchUnits = async () => {
     try {
-      setLoading(true);
+      if (!getCachedApiData("/machinery-units")) {
+        setLoading(true);
+      }
       const res = await api("/machinery-units");
       if (res.ok && res.data) {
         const list = Array.isArray(res.data) ? res.data : (res.data.data || []);
         setUnits(list);
+        if (res.data.typePrefixes && typeof res.data.typePrefixes === "object") {
+          setTypePrefixes(res.data.typePrefixes);
+        }
+        if (res.data.prefixNextNumbers && typeof res.data.prefixNextNumbers === "object") {
+          setPrefixNextNumbers(res.data.prefixNextNumbers);
+        }
         if (res.data.counts) {
           setCounts(res.data.counts);
         } else {
@@ -324,6 +381,32 @@ export default function Units() {
     return result;
   }, [units, searchQuery, filterType, filterCondition, sortBy]);
 
+  // Existing machinery types (defaults + any custom types saved in inventory)
+  const availableMachineryTypes = useMemo(() => {
+    const baseWithoutOther = MACHINERY_TYPES.filter((t) => t !== "Other");
+    const seen = new Set(baseWithoutOther.map((t) => t.toLowerCase()));
+    const result = [...baseWithoutOther];
+
+    units.forEach((u) => {
+      const cat = String(u.category || "").trim();
+      if (cat && !seen.has(cat.toLowerCase()) && cat.toLowerCase() !== "other") {
+        seen.add(cat.toLowerCase());
+        result.push(cat);
+      }
+    });
+
+    result.push("Other");
+    return result;
+  }, [units]);
+
+  const modalMachineryTypes = useMemo(() => {
+    const trimmed = String(unitForm.category || "").trim();
+    if (!trimmed || customTypeMode) return availableMachineryTypes;
+    return availableMachineryTypes.includes(trimmed)
+      ? availableMachineryTypes
+      : [trimmed, ...availableMachineryTypes];
+  }, [availableMachineryTypes, unitForm.category, customTypeMode]);
+
   // Paginated units
   const totalPages = Math.max(1, Math.ceil(filteredUnits.length / pageSize));
   const paginatedUnits = useMemo(() => {
@@ -344,15 +427,96 @@ export default function Units() {
     }
   }, [feedback]);
 
+  const normalizePrefix = (raw) =>
+    String(raw || "")
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "")
+      .slice(0, 8);
+
+  const extractIdPrefixAndNum = (unitId) => {
+    const match = String(unitId || "")
+      .trim()
+      .toUpperCase()
+      .match(/^([A-Z0-9]+)-(\d+)$/);
+    if (!match) return null;
+    return { prefix: match[1], num: parseInt(match[2], 10) };
+  };
+
+  const getSavedPrefixForType = (typeName) => {
+    const cleanType = String(typeName || "").trim().toLowerCase();
+    if (!cleanType) return "";
+    for (const [k, v] of Object.entries(typePrefixes || {})) {
+      if (k.toLowerCase() === cleanType && v) {
+        return normalizePrefix(v);
+      }
+    }
+    const existingUnit = units.find(
+      (u) =>
+        String(u.category || "").trim().toLowerCase() === cleanType &&
+        extractIdPrefixAndNum(u.unitId)
+    );
+    return existingUnit ? extractIdPrefixAndNum(existingUnit.unitId).prefix : "";
+  };
+
+  const findPrefixConflict = (prefix, currentTypeName) => {
+    const cleanPref = normalizePrefix(prefix);
+    if (!cleanPref) return null;
+    const currentLower = String(currentTypeName || "").trim().toLowerCase();
+
+    for (const [k, v] of Object.entries(typePrefixes || {})) {
+      if (normalizePrefix(v) === cleanPref && k.toLowerCase() !== currentLower) {
+        return k;
+      }
+    }
+
+    const conflictingUnit = units.find((u) => {
+      const parsed = extractIdPrefixAndNum(u.unitId);
+      const uCat = String(u.category || "").trim();
+      return parsed && parsed.prefix === cleanPref && uCat.toLowerCase() !== currentLower;
+    });
+    return conflictingUnit ? conflictingUnit.category : null;
+  };
+
+  const hasExistingUnitsForType = (typeName) => {
+    const cleanType = String(typeName || "").trim().toLowerCase();
+    if (!cleanType) return false;
+    return units.some((u) => String(u.category || "").trim().toLowerCase() === cleanType);
+  };
+
+  const getNextUnitIdForPrefix = (prefix) => {
+    const cleanPref = normalizePrefix(prefix);
+    if (!cleanPref) return "";
+    let maxNum = prefixNextNumbers[cleanPref] ? prefixNextNumbers[cleanPref] - 1 : 0;
+    units.forEach((u) => {
+      const parsed = extractIdPrefixAndNum(u.unitId);
+      if (parsed && parsed.prefix === cleanPref && parsed.num > maxNum) {
+        maxNum = parsed.num;
+      }
+    });
+    const nextNum = maxNum + 1;
+    return `${cleanPref}-${String(nextNum).padStart(3, "0")}`;
+  };
+
   // Open Add Modal
   const openAddModal = () => {
     setEditingUnit(null);
+    const initialCat = EMPTY_UNIT_FORM.category;
+    const savedPref = getSavedPrefixForType(initialCat);
     setUnitForm({
       ...EMPTY_UNIT_FORM,
-      unitId: `U-${Math.floor(100 + Math.random() * 900)}`,
+      category: initialCat,
+      unitPrefix: savedPref,
+      unitId: savedPref ? getNextUnitIdForPrefix(savedPref) : "",
     });
     setFormErrors({});
+    setUnitSaveError("");
+    setCustomTypeMode(false);
+    setLastSelectedType(initialCat);
     setActiveFormTab("basic");
+    setShowPhotoUrlInput(false);
+    setPhotoUrlDraft("");
+    setPhotoError("");
     if (!drivers || drivers.length === 0) {
       fetchDrivers();
     }
@@ -362,16 +526,35 @@ export default function Units() {
   // Open Edit Modal
   const openEditModal = (u) => {
     setEditingUnit(u);
+    setShowPhotoUrlInput(false);
+    setPhotoUrlDraft("");
+    setPhotoError("");
+    const canonicalCat =
+      availableMachineryTypes.find(
+        (t) => t.toLowerCase() === String(u.category || "").trim().toLowerCase()
+      ) ||
+      String(u.category || "").trim() ||
+      "Tractor";
+    const resolvedPref =
+      getSavedPrefixForType(canonicalCat) || extractIdPrefixAndNum(u.unitId)?.prefix || "";
+    const mergedPhotos = Array.from(
+      new Set(
+        [u.imageUrl, ...(Array.isArray(u.photos) ? u.photos : [])]
+          .map((s) => String(s || "").trim())
+          .filter(Boolean)
+      )
+    ).slice(0, 5);
     setUnitForm({
       unitId: u.unitId || "",
+      unitPrefix: resolvedPref,
       name: u.name || "",
-      category: u.category || "Tractor",
+      category: canonicalCat,
       brand: u.brand || "",
       model: u.model || "",
       serialNumber: u.serialNumber || "",
       modelYear: u.modelYear || String(new Date().getFullYear()),
-      imageUrl: u.imageUrl || "",
-      photos: Array.isArray(u.photos) ? u.photos : (u.imageUrl ? [u.imageUrl] : []),
+      imageUrl: mergedPhotos[0] || "",
+      photos: mergedPhotos,
 
       horsepower: u.horsepower !== null && u.horsepower !== undefined ? u.horsepower : "",
       capacity: u.capacity || "",
@@ -379,16 +562,16 @@ export default function Units() {
       attachments: Array.isArray(u.attachments) ? u.attachments.join(", ") : (u.attachments || ""),
 
       pricingUnit: u.pricingUnit || "Per Hectare",
-      memberRate: u.memberRate !== undefined ? u.memberRate : (u.ratePerDay || 2500),
+      memberRate: u.memberRate !== undefined && u.memberRate !== null ? u.memberRate : (u.ratePerDay ?? ""),
       nonmemberRate: u.nonmemberRate !== undefined && u.nonmemberRate !== null ? u.nonmemberRate : "",
       minRentalQuantity: u.minRentalQuantity || 1,
       operatorRequired: Boolean(u.operatorRequired),
       operatorIncluded: Boolean(u.operatorIncluded),
       fuelIncluded: Boolean(u.fuelIncluded),
       transportIncluded: Boolean(u.transportIncluded),
-      additionalOperatorFee: u.additionalOperatorFee || 0,
+      additionalOperatorFee: u.additionalOperatorFee > 0 ? u.additionalOperatorFee : "",
       operatorFeeBasis: u.operatorFeeBasis || "per day",
-      additionalTransportFee: u.additionalTransportFee || 0,
+      additionalTransportFee: u.additionalTransportFee > 0 ? u.additionalTransportFee : "",
       transportFeeBasis: u.transportFeeBasis || "per trip",
 
       operatingCondition: u.operatingCondition || (
@@ -414,6 +597,9 @@ export default function Units() {
       driverPhone: u.driverPhone || "",
     });
     setFormErrors({});
+    setUnitSaveError("");
+    setCustomTypeMode(false);
+    setLastSelectedType(canonicalCat);
     setActiveFormTab("basic");
     if (!drivers || drivers.length === 0) {
       fetchDrivers();
@@ -424,6 +610,7 @@ export default function Units() {
   // Open View Details Modal
   const openViewDetails = async (u) => {
     setViewingUnit(u);
+    setActiveViewPhotoIndex(0);
     setDetailsLoading(true);
     setUnitDetailsData(null);
     try {
@@ -533,130 +720,385 @@ export default function Units() {
     }
   };
 
-  // Image Upload and Canvas Optimization
-  const handleFileChange = (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
+  // Image Upload and Canvas Optimization (up to 5 photos; index 0 is main)
+  const optimizeImageToBase64 = (file) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("Failed to read image file."));
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("Invalid image file."));
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const MAX_WIDTH = 1200;
+          const MAX_HEIGHT = 1200;
+          let width = img.width;
+          let height = img.height;
 
-    // Validate type
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      alert("Invalid image type. Please select a JPEG, PNG, or WebP photo.");
-      return;
-    }
-
-    // Validate size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      alert("File size exceeds 5MB limit. Please choose a smaller image.");
-      return;
-    }
-
-    // Optimize image using HTML5 Canvas
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const MAX_WIDTH = 1200;
-        const MAX_HEIGHT = 1200;
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > MAX_WIDTH) {
-            height = Math.round((height * MAX_WIDTH) / width);
-            width = MAX_WIDTH;
-          }
-        } else {
-          if (height > MAX_HEIGHT) {
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height = Math.round((height * MAX_WIDTH) / width);
+              width = MAX_WIDTH;
+            }
+          } else if (height > MAX_HEIGHT) {
             width = Math.round((width * MAX_HEIGHT) / height);
             height = MAX_HEIGHT;
           }
-        }
 
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0, width, height);
-
-        const optimizedBase64 = canvas.toDataURL("image/jpeg", 0.85);
-
-        // Upload to server
-        uploadOptimizedPhoto(optimizedBase64, file.name);
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", 0.85));
+        };
+        img.src = event.target.result;
       };
-      img.src = event.target.result;
-    };
-    reader.readAsDataURL(file);
-  };
+      reader.readAsDataURL(file);
+    });
 
-  const uploadOptimizedPhoto = async (base64Data, filename) => {
+  const handleFileChange = async (e) => {
+    const selectedFiles = Array.from(e.target.files || []);
+    if (selectedFiles.length === 0) return;
+
+    const currentCount = (unitForm.photos || []).filter(Boolean).length;
+    const remainingSlots = 5 - currentCount;
+    if (remainingSlots <= 0) {
+      setPhotoError("Maximum 5 photos allowed.");
+      e.target.value = "";
+      return;
+    }
+
+    const errors = [];
+    const validFiles = [];
+    for (const file of selectedFiles) {
+      if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+        errors.push(`${file.name}: use JPEG, PNG, or WebP.`);
+        continue;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        errors.push(`${file.name}: exceeds 5MB limit.`);
+        continue;
+      }
+      validFiles.push(file);
+    }
+
+    if (validFiles.length > remainingSlots) {
+      errors.push(`Max 5 photos. Added first ${remainingSlots}.`);
+    }
+
+    const queue = validFiles.slice(0, remainingSlots);
+    setPhotoError(errors[0] || "");
+    if (queue.length === 0) {
+      e.target.value = "";
+      return;
+    }
+
     setUploadingImage(true);
     try {
-      const res = await api("/machinery-units/upload-photo", {
-        method: "POST",
-        body: { image: base64Data, filename },
-      });
-
-      if (res.ok && res.data?.imageUrl) {
-        setUnitForm((prev) => ({
-          ...prev,
-          imageUrl: res.data.imageUrl,
-          photos: [res.data.imageUrl, ...(prev.photos || []).filter((p) => p !== res.data.imageUrl)],
-        }));
-      } else {
-        alert(res.data?.error || "Failed to upload photo to server.");
+      for (const file of queue) {
+        const base64Data = await optimizeImageToBase64(file);
+        const res = await api("/machinery-units/upload-photo", {
+          method: "POST",
+          body: { image: base64Data, filename: file.name },
+        });
+        if (res.ok && res.data?.imageUrl) {
+          const uploadedUrl = res.data.imageUrl;
+          setUnitForm((prev) => {
+            const current = (prev.photos || []).filter(Boolean);
+            if (current.length >= 5 || current.includes(uploadedUrl)) return prev;
+            const nextPhotos = [...current, uploadedUrl].slice(0, 5);
+            return {
+              ...prev,
+              photos: nextPhotos,
+              imageUrl: nextPhotos[0] || "",
+            };
+          });
+        } else {
+          setPhotoError(res.data?.error || `Failed to upload ${file.name}.`);
+        }
       }
     } catch {
-      alert("Error uploading machinery photo.");
+      setPhotoError("Error uploading machinery photo.");
     } finally {
       setUploadingImage(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
-  // Client-Side Validation
+  const handleRemovePhoto = (index) => {
+    setPhotoError("");
+    setUnitForm((prev) => {
+      const nextPhotos = (prev.photos || []).filter((_, i) => i !== index);
+      return {
+        ...prev,
+        photos: nextPhotos,
+        imageUrl: nextPhotos[0] || "",
+      };
+    });
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleSetMainPhoto = (index) => {
+    if (index <= 0) return;
+    setPhotoError("");
+    setUnitForm((prev) => {
+      const current = [...(prev.photos || [])];
+      const [chosen] = current.splice(index, 1);
+      if (!chosen) return prev;
+      const nextPhotos = [chosen, ...current].slice(0, 5);
+      return {
+        ...prev,
+        photos: nextPhotos,
+        imageUrl: nextPhotos[0] || "",
+      };
+    });
+  };
+
+  const handleAddPhotoUrl = () => {
+    const trimmed = String(photoUrlDraft || "").trim();
+    if (!trimmed) return;
+    const current = (unitForm.photos || []).filter(Boolean);
+    if (current.length >= 5) {
+      setPhotoError("Maximum 5 photos allowed.");
+      return;
+    }
+    if (current.includes(trimmed)) {
+      setPhotoError("Photo already added.");
+      return;
+    }
+    const nextPhotos = [...current, trimmed].slice(0, 5);
+    setUnitForm((prev) => ({
+      ...prev,
+      photos: nextPhotos,
+      imageUrl: nextPhotos[0] || "",
+    }));
+    setPhotoUrlDraft("");
+    setPhotoError("");
+    setShowPhotoUrlInput(false);
+  };
+
+  const updateUnitField = (field, value) => {
+    setUnitForm((prev) => ({ ...prev, [field]: value }));
+    if (formErrors[field] || (field === "operatorFeeBasis" && formErrors.additionalOperatorFee)) {
+      setFormErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        if (field === "operatorFeeBasis") delete next.additionalOperatorFee;
+        return next;
+      });
+    }
+    if (unitSaveError) setUnitSaveError("");
+  };
+
+  const handleTypeSelected = (nextType) => {
+    const savedPref = getSavedPrefixForType(nextType);
+    setUnitForm((prev) => ({
+      ...prev,
+      category: nextType,
+      unitPrefix: editingUnit ? prev.unitPrefix : savedPref,
+      unitId: !editingUnit ? (savedPref ? getNextUnitIdForPrefix(savedPref) : "") : prev.unitId,
+    }));
+    setFormErrors((prev) => {
+      const next = { ...prev };
+      delete next.category;
+      delete next.unitPrefix;
+      delete next.unitId;
+      return next;
+    });
+    if (unitSaveError) setUnitSaveError("");
+  };
+
+  const handleCustomTypeInput = (rawVal) => {
+    const matchedPref = getSavedPrefixForType(rawVal);
+    const effectivePref = matchedPref || unitForm.unitPrefix;
+    const conflict = effectivePref ? findPrefixConflict(effectivePref, rawVal) : null;
+
+    setUnitForm((prev) => ({
+      ...prev,
+      category: rawVal,
+      unitPrefix: matchedPref || prev.unitPrefix,
+      unitId: !editingUnit
+        ? matchedPref && !conflict
+          ? getNextUnitIdForPrefix(matchedPref)
+          : conflict
+          ? ""
+          : prev.unitId
+        : prev.unitId,
+    }));
+
+    setFormErrors((prev) => {
+      const next = { ...prev };
+      delete next.category;
+      if (conflict) {
+        next.unitPrefix = `Used by ${conflict}`;
+      } else if (next.unitPrefix?.startsWith("Used by")) {
+        delete next.unitPrefix;
+      }
+      return next;
+    });
+    if (unitSaveError) setUnitSaveError("");
+  };
+
+  const handlePrefixChange = (rawVal) => {
+    const cleanPref = normalizePrefix(rawVal);
+    const conflict = cleanPref ? findPrefixConflict(cleanPref, unitForm.category) : null;
+    const nextId =
+      !editingUnit && cleanPref && !conflict
+        ? getNextUnitIdForPrefix(cleanPref)
+        : !editingUnit
+        ? ""
+        : unitForm.unitId;
+
+    setUnitForm((prev) => ({
+      ...prev,
+      unitPrefix: cleanPref,
+      unitId: nextId,
+    }));
+
+    setFormErrors((prev) => {
+      const next = { ...prev };
+      if (conflict) {
+        next.unitPrefix = `Used by ${conflict}`;
+      } else {
+        delete next.unitPrefix;
+      }
+      delete next.unitId;
+      return next;
+    });
+    if (unitSaveError) setUnitSaveError("");
+  };
+
+  // Client-Side Validation (only Type, Unit ID, Unit Name, Billing, and Member Rate are required)
   const validateForm = () => {
     const errs = {};
-    if (!unitForm.unitId.trim()) errs.unitId = "Asset Code is required.";
-    if (!unitForm.name.trim()) errs.name = "Machinery Name is required.";
-    if (!unitForm.brand.trim()) errs.brand = "Brand is required.";
-    if (!unitForm.model.trim()) errs.model = "Model is required.";
-    if (!unitForm.pricingUnit) errs.pricingUnit = "Pricing Unit is required.";
+    if (!String(unitForm.category || "").trim()) errs.category = "Required";
+
+    if (!editingUnit) {
+      const cleanPref = normalizePrefix(unitForm.unitPrefix);
+      if (cleanPref) {
+        const conflict = findPrefixConflict(cleanPref, unitForm.category);
+        if (conflict) errs.unitPrefix = `Used by ${conflict}`;
+      }
+    }
+
+    const cleanUnitId = unitForm.unitId.trim();
+    if (!cleanUnitId) {
+      errs.unitId = "Required";
+    } else if (!editingUnit) {
+      const dupId = units.some(
+        (u) => String(u.unitId || "").trim().toUpperCase() === cleanUnitId.toUpperCase()
+      );
+      if (dupId) {
+        errs.unitId = "Already exists";
+      } else {
+        const parsed = extractIdPrefixAndNum(cleanUnitId);
+        if (parsed) {
+          const idConflict = findPrefixConflict(parsed.prefix, unitForm.category);
+          if (idConflict) errs.unitId = `Prefix used by ${idConflict}`;
+        }
+      }
+    }
+
+    if (!unitForm.name.trim()) errs.name = "Required";
+    if (!unitForm.pricingUnit) errs.pricingUnit = "Required";
 
     const rate = Number(unitForm.memberRate);
-    if (isNaN(rate) || rate < 0) errs.memberRate = "Member rate must be a non-negative number.";
+    if (unitForm.memberRate === "" || isNaN(rate) || rate < 0) errs.memberRate = "Required";
 
-    if (unitForm.nonmemberRate !== "" && Number(unitForm.nonmemberRate) < 0) {
-      errs.nonmemberRate = "Non-member rate cannot be negative.";
+    if (unitForm.nonmemberRate !== "" && (isNaN(Number(unitForm.nonmemberRate)) || Number(unitForm.nonmemberRate) < 0)) {
+      errs.nonmemberRate = "Invalid rate";
     }
 
-    const minQty = Number(unitForm.minRentalQuantity);
-    if (isNaN(minQty) || minQty <= 0) errs.minRentalQuantity = "Minimum quantity must be greater than zero.";
+    if (
+      unitForm.minRentalQuantity !== "" &&
+      (isNaN(Number(unitForm.minRentalQuantity)) || Number(unitForm.minRentalQuantity) <= 0)
+    ) {
+      errs.minRentalQuantity = "Must be > 0";
+    }
+
+    if (!unitForm.operatorIncluded && unitForm.additionalOperatorFee !== "") {
+      const opFee = Number(unitForm.additionalOperatorFee);
+      if (isNaN(opFee) || opFee < 0) {
+        errs.additionalOperatorFee = "Invalid fee";
+      } else if (unitForm.operatorFeeBasis === "per %" && opFee > 100) {
+        errs.additionalOperatorFee = "Max 100%";
+      }
+    }
+
+    if (!unitForm.transportIncluded && unitForm.additionalTransportFee !== "") {
+      const trFee = Number(unitForm.additionalTransportFee);
+      if (isNaN(trFee) || trFee < 0) {
+        errs.additionalTransportFee = "Invalid fee";
+      }
+    }
 
     if (unitForm.horsepower !== "" && Number(unitForm.horsepower) < 0) {
-      errs.horsepower = "Horsepower cannot be negative.";
+      errs.horsepower = "Invalid value";
     }
 
-    if (Number(unitForm.currentMeterReading) < 0) {
-      errs.currentMeterReading = "Meter reading cannot be negative.";
+    if (unitForm.currentMeterReading !== "" && Number(unitForm.currentMeterReading) < 0) {
+      errs.currentMeterReading = "Invalid value";
     }
 
-    if (Number(unitForm.acquisitionCost) < 0) {
-      errs.acquisitionCost = "Acquisition cost cannot be negative.";
+    if (unitForm.acquisitionCost !== "" && Number(unitForm.acquisitionCost) < 0) {
+      errs.acquisitionCost = "Invalid value";
     }
 
     setFormErrors(errs);
-    return Object.keys(errs).length === 0;
+    if (Object.keys(errs).length > 0) {
+      if (
+        errs.unitId ||
+        errs.unitPrefix ||
+        errs.name ||
+        errs.category ||
+        errs.pricingUnit ||
+        errs.memberRate ||
+        errs.nonmemberRate ||
+        errs.minRentalQuantity ||
+        errs.additionalOperatorFee ||
+        errs.additionalTransportFee
+      ) {
+        setActiveFormTab("basic");
+      } else if (errs.horsepower || errs.currentMeterReading) {
+        setActiveFormTab("specs");
+      } else if (errs.acquisitionCost) {
+        setActiveFormTab("service");
+      }
+      return false;
+    }
+    return true;
   };
 
   // Handle Save (Add or Edit)
   const handleSaveUnit = async (e) => {
     e.preventDefault();
+    if (savingUnit) return;
+    setUnitSaveError("");
+
     if (!validateForm()) {
-      alert("Please check the form for errors before saving.");
+      setUnitSaveError("Please check highlighted fields.");
       return;
     }
 
+    const rawCategory = String(unitForm.category || "").trim();
+    const canonicalCategory =
+      availableMachineryTypes.find((t) => t.toLowerCase() === rawCategory.toLowerCase()) ||
+      rawCategory;
+    const normalizedPhotos = Array.from(
+      new Set(
+        (Array.isArray(unitForm.photos) ? unitForm.photos : [])
+          .map((p) => String(p || "").trim())
+          .filter(Boolean)
+      )
+    ).slice(0, 5);
+
     const payload = {
       ...unitForm,
+      unitId: unitForm.unitId.trim(),
+      unitPrefix: normalizePrefix(unitForm.unitPrefix),
+      category: canonicalCategory,
+      photos: normalizedPhotos,
+      imageUrl: normalizedPhotos[0] || "",
       memberRate: Number(unitForm.memberRate),
       nonmemberRate: unitForm.nonmemberRate !== "" ? Number(unitForm.nonmemberRate) : null,
       minRentalQuantity: Number(unitForm.minRentalQuantity || 1),
@@ -671,38 +1113,42 @@ export default function Units() {
     };
 
     try {
+      setSavingUnit(true);
       if (editingUnit) {
-        // Edit Unit
         const res = await api(`/machinery-units/${editingUnit._id || editingUnit.id || editingUnit.unitId}`, {
           method: "PUT",
           body: payload,
         });
 
         if (res.ok) {
-          setFeedback({ message: `Unit ${unitForm.unitId} (${unitForm.name}) updated successfully!`, isError: false });
+          setFeedback({ message: `Unit ${unitForm.unitId} updated.`, isError: false });
           setShowAddModal(false);
           setEditingUnit(null);
           fetchUnits();
         } else {
-          alert(res.data?.error || "Failed to update machinery unit.");
+          setUnitSaveError(res.data?.error || "Failed to update unit.");
         }
       } else {
-        // Add Unit
         const res = await api("/machinery-units", {
           method: "POST",
           body: payload,
         });
 
         if (res.ok) {
-          setFeedback({ message: `Machinery unit ${unitForm.unitId} added successfully!`, isError: false });
+          if (res.data?.typePrefixes) {
+            setTypePrefixes(res.data.typePrefixes);
+          }
+          setFeedback({ message: `Unit ${unitForm.unitId} added.`, isError: false });
           setShowAddModal(false);
           fetchUnits();
         } else {
-          alert(res.data?.error || "Failed to create machinery unit.");
+          setUnitSaveError(res.data?.error || "Failed to register unit.");
         }
       }
     } catch {
-      alert("Network error saving unit.");
+      setUnitSaveError("Network error while saving unit.");
+    } finally {
+      setSavingUnit(false);
     }
   };
 
@@ -826,7 +1272,7 @@ export default function Units() {
                   onChange: setFilterType,
                   options: [
                     { value: "All", label: "All Machinery Types" },
-                    ...MACHINERY_TYPES.map((t) => ({ value: t, label: t })),
+                    ...availableMachineryTypes.map((t) => ({ value: t, label: t })),
                   ],
                 },
                 {
@@ -858,33 +1304,6 @@ export default function Units() {
           </div>
 
           <div className="wz-units-right-actions">
-            {/* View Mode Toggle (Table / Grid) */}
-            <div className="wz-view-toggle">
-              <button
-                className={`wz-view-btn ${viewMode === "table" ? "active" : ""}`}
-                onClick={() => setViewMode("table")}
-                title="Table View"
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <line x1="3" y1="6" x2="21" y2="6" />
-                  <line x1="3" y1="12" x2="21" y2="12" />
-                  <line x1="3" y1="18" x2="21" y2="18" />
-                </svg>
-              </button>
-              <button
-                className={`wz-view-btn ${viewMode === "grid" ? "active" : ""}`}
-                onClick={() => setViewMode("grid")}
-                title="Card Grid View"
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <rect x="3" y="3" width="7" height="7" rx="1" />
-                  <rect x="14" y="3" width="7" height="7" rx="1" />
-                  <rect x="14" y="14" width="7" height="7" rx="1" />
-                  <rect x="3" y="14" width="7" height="7" rx="1" />
-                </svg>
-              </button>
-            </div>
-
             {/* Add Unit Button */}
             <button
               className="wz-btn-add-unit"
@@ -895,7 +1314,7 @@ export default function Units() {
           </div>
         </div>
 
-        {/* ================= Primary Content: Table or Grid View ================= */}
+        {/* ================= Primary Content: List / Table View ================= */}
         {loading ? (
           <div
             style={{
@@ -904,7 +1323,7 @@ export default function Units() {
               borderRadius: "16px",
               padding: "60px 24px",
               textAlign: "center",
-              color: "#64748b",
+              color: "var(--wz-text-muted, #64748b)",
             }}
           >
             Loading machinery fleet units...
@@ -917,16 +1336,16 @@ export default function Units() {
               borderRadius: "16px",
               padding: "60px 24px",
               textAlign: "center",
-              color: "#64748b",
+              color: "var(--wz-text-muted, #64748b)",
             }}
           >
             <div style={{ fontSize: "1.8rem", marginBottom: "8px" }}>🚜</div>
-            <h3 style={{ margin: "0 0 6px 0", color: "#0f172a", fontSize: "1.1rem" }}>No machinery units found</h3>
+            <h3 style={{ margin: "0 0 6px 0", color: "var(--wz-text-main, #0f172a)", fontSize: "1.1rem" }}>No machinery units found</h3>
             <p style={{ margin: 0, fontSize: "0.85rem" }}>
               No units matched your filter or search query. Try clearing your search or adding a new unit.
             </p>
           </div>
-        ) : viewMode === "table" ? (
+        ) : (
           /* ================= Primary Table View ================= */
           <div className="wz-table-card" style={{ padding: 0, overflow: "hidden" }}>
             <div className="wz-table-responsive">
@@ -965,9 +1384,9 @@ export default function Units() {
                               style={{ width: "36px", height: "36px", borderRadius: "6px", objectFit: "cover" }}
                             />
                             <div>
-                              <div style={{ fontWeight: "700", color: "#0f172a" }}>{u.name}</div>
+                              <div style={{ fontWeight: "700", color: "var(--wz-text-main, #0f172a)" }}>{u.name}</div>
                               {u.serialNumber && (
-                                <div style={{ fontSize: "0.72rem", color: "#94a3b8" }}>S/N: {u.serialNumber}</div>
+                                <div style={{ fontSize: "0.72rem", color: "var(--wz-text-muted, #94a3b8)" }}>S/N: {u.serialNumber}</div>
                               )}
                             </div>
                           </div>
@@ -975,22 +1394,22 @@ export default function Units() {
 
                         {/* 3. Type (Category) */}
                         <td>
-                          <span style={{ fontSize: "0.82rem", fontWeight: "600", color: "#334155" }}>
+                          <span style={{ fontSize: "0.82rem", fontWeight: "600", color: "var(--wz-text-main, #334155)" }}>
                             {u.category}
                           </span>
                         </td>
 
                         {/* 4. Rental Rate */}
                         <td>
-                          <div style={{ fontWeight: "700", color: "#0f172a" }}>
+                          <div style={{ fontWeight: "700", color: "var(--wz-text-main, #0f172a)" }}>
                             ₱{Number(u.memberRate !== undefined ? u.memberRate : u.ratePerDay).toLocaleString()}
-                            <span style={{ fontSize: "0.75rem", fontWeight: "500", color: "#64748b" }}>
+                            <span style={{ fontSize: "0.75rem", fontWeight: "500", color: "var(--wz-text-muted, #64748b)" }}>
                               {" "}
                               {u.pricingUnit === "Per Hectare" ? "/hec" : u.pricingUnit === "Per Hour" ? "/hr" : "/day"}
                             </span>
                           </div>
-                          {u.nonmemberRate && (
-                            <div style={{ fontSize: "0.7rem", color: "#94a3b8" }}>
+                          {u.nonmemberRate > 0 && (
+                            <div style={{ fontSize: "0.7rem", color: "var(--wz-text-muted, #94a3b8)" }}>
                               Non-member: ₱{Number(u.nonmemberRate).toLocaleString()}
                             </div>
                           )}
@@ -1000,17 +1419,17 @@ export default function Units() {
                         <td>
                           {u.assignedDriver && u.assignedDriver !== "Unassigned" ? (
                             <div>
-                              <div style={{ fontWeight: "700", color: "#0f172a", fontSize: "0.86rem" }}>
+                              <div style={{ fontWeight: "700", color: "var(--wz-text-main, #0f172a)", fontSize: "0.86rem" }}>
                                 {u.assignedDriver}
                               </div>
                               {u.driverPhone && (
-                                <div style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                                <div style={{ fontSize: "0.72rem", color: "var(--wz-text-muted, #64748b)" }}>
                                   {u.driverPhone}
                                 </div>
                               )}
                             </div>
                           ) : (
-                            <span style={{ color: "#94a3b8", fontStyle: "italic", fontSize: "0.82rem" }}>
+                            <span style={{ color: "var(--wz-text-muted, #94a3b8)", fontStyle: "italic", fontSize: "0.82rem" }}>
                               Unassigned
                             </span>
                           )}
@@ -1033,36 +1452,35 @@ export default function Units() {
                           )}
                         </td>
 
-                        {/* 7. Actions: ONLY Icon Buttons */}
-                        <td>
-                          <div style={{ display: "flex", gap: "6px", justifyContent: "center" }}>
-                            {/* 1. View Icon Button */}
-                            <button
-                              className="wz-action-icon-btn view"
-                              onClick={() => openViewDetails(u)}
-                              title="View Details"
-                              aria-label="View Details"
-                            >
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                                <circle cx="12" cy="12" r="3" />
-                              </svg>
-                            </button>
-
-                            {/* 2. Change Status Icon Button (Operational, Maintenance, Retire) */}
-                            <button
-                              className="wz-action-icon-btn status"
-                              onClick={() => openChangeStatusModal(u)}
-                              title="Change Status (Operational, Maintenance, Retire)"
-                              aria-label="Change Status"
-                            >
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="23 4 23 10 17 10" />
-                                <polyline points="1 20 1 14 7 14" />
-                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                              </svg>
-                            </button>
-                          </div>
+                        {/* 7. Actions: View Details */}
+                        <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
+                          <button
+                            type="button"
+                            onClick={() => openViewDetails(u)}
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              padding: "4px 8px",
+                              color: "#059669",
+                              fontSize: "0.82rem",
+                              fontWeight: "700",
+                              cursor: "pointer",
+                              display: "inline-block",
+                              textDecoration: "none",
+                              transition: "all 0.15s ease",
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.color = "#047857";
+                              e.currentTarget.style.textDecoration = "underline";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.color = "#059669";
+                              e.currentTarget.style.textDecoration = "none";
+                            }}
+                            title="View Details"
+                          >
+                            View Details
+                          </button>
                         </td>
                       </tr>
                     );
@@ -1071,119 +1489,21 @@ export default function Units() {
               </table>
             </div>
           </div>
-        ) : (
-          /* ================= Optional Card Grid View ================= */
-          <div className="wz-units-container">
-            {paginatedUnits.map((u) => {
-              const cond = u.operatingCondition || (
-                u.status === "Available" ? "Operational" :
-                ["Maintenance", "Repair"].includes(u.status) ? "Under Maintenance" : "Retired"
-              );
-
-              return (
-                <div key={u._id || u.id || u.unitId} className="wz-unit-row-card">
-                  {/* Photo */}
-                  <div className="wz-unit-thumb-wrap">
-                    <img
-                      src={u.imageUrl || "https://images.unsplash.com/photo-1592982537447-7440770cbfc9?auto=format&fit=crop&w=700&q=80"}
-                      alt={u.name}
-                      className="wz-unit-thumb"
-                    />
-                  </div>
-
-                  {/* Brand & Name */}
-                  <div className="wz-unit-col-brand">
-                    <span className="wz-unit-code-badge" style={{ marginBottom: "4px" }}>{u.unitId}</span>
-                    <span className="wz-unit-brand-name">{u.brand}</span>
-                    <h3 className="wz-unit-model-title">{u.name}</h3>
-                    <div style={{ marginTop: "4px" }}>
-                      {cond === "Operational" ? (
-                        <span className="wz-cond-badge wz-cond-operational">Operational</span>
-                      ) : cond === "Under Maintenance" ? (
-                        <span className="wz-cond-badge wz-cond-maintenance">Under Maintenance</span>
-                      ) : (
-                        <span className="wz-cond-badge wz-cond-retired">Retired</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Specs: Type */}
-                  <div className="wz-unit-col-spec">
-                    <span className="wz-unit-spec-label">Type</span>
-                    <span className="wz-unit-spec-value">{u.category}</span>
-                  </div>
-
-                  {/* Specs: Meter */}
-                  <div className="wz-unit-col-spec">
-                    <span className="wz-unit-spec-label">Meter</span>
-                    <span className="wz-unit-spec-value">{u.currentMeterReading || u.operatingHours || 0} {u.meterReadingUnit || "hrs"}</span>
-                  </div>
-
-                  {/* Price */}
-                  <div className="wz-unit-col-price">
-                    <span className="wz-unit-price-label">Rental Rate</span>
-                    <div>
-                      <span className="wz-unit-price-val">₱{Number(u.memberRate || u.ratePerDay).toLocaleString()}</span>
-                      <span className="wz-unit-price-unit"> {u.pricingUnit === "Per Hectare" ? "/hec" : u.pricingUnit === "Per Hour" ? "/hr" : "/day"}</span>
-                    </div>
-                  </div>
-
-                  {/* Assigned Driver */}
-                  <div className="wz-unit-col-spec" style={{ minWidth: "130px" }}>
-                    <span className="wz-unit-spec-label">Assigned Driver</span>
-                    <div
-                      className="wz-unit-spec-val"
-                      style={{
-                        fontWeight: "700",
-                        color: u.assignedDriver && u.assignedDriver !== "Unassigned" ? "#0f172a" : "#94a3b8",
-                        fontStyle: u.assignedDriver && u.assignedDriver !== "Unassigned" ? "normal" : "italic",
-                      }}
-                    >
-                      {u.assignedDriver && u.assignedDriver !== "Unassigned" ? u.assignedDriver : "Unassigned"}
-                    </div>
-                  </div>
-
-                  {/* Actions: ONLY Icon Buttons */}
-                  <div style={{ display: "flex", gap: "6px" }}>
-                    <button
-                      className="wz-action-icon-btn view"
-                      onClick={() => openViewDetails(u)}
-                      title="View Details"
-                      aria-label="View Details"
-                    >
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                        <circle cx="12" cy="12" r="3" />
-                      </svg>
-                    </button>
-
-                    <button
-                      className="wz-action-icon-btn status"
-                      onClick={() => openChangeStatusModal(u)}
-                      title="Change Status (Operational, Maintenance, Retire)"
-                      aria-label="Change Status"
-                    >
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="23 4 23 10 17 10" />
-                        <polyline points="1 20 1 14 7 14" />
-                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
         )}
 
         {/* ================= Bottom Pagination Footer ================= */}
         <div className="wz-table-footer" style={{ marginTop: "24px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", color: "#64748b" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", color: "var(--wz-text-muted, #64748b)" }}>
             <span>Results per page:</span>
             <select
               className="wz-dropdown-select"
               value={pageSize}
-              onChange={(e) => setPageSize(Number(e.target.value))}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                setPageSize(val);
+                setCurrentPage(1);
+                localStorage.setItem("kimpc_manager_pageSize", String(val));
+              }}
             >
               <option value="8">8</option>
               <option value="16">16</option>
@@ -1228,923 +1548,869 @@ export default function Units() {
         </div>
       </main>
 
-      {/* ================= 1. Add / Edit Unit Modal (Single Unified Scrollable Form) ================= */}
+      {/* ================= 1. Add / Edit Unit Modal (Minimalist 3-Tab Layout) ================= */}
       {showAddModal && (
-        <div className="wz-modal-overlay" onClick={() => setShowAddModal(false)}>
+        <div className="wz-booking-modal-overlay" onClick={() => !savingUnit && setShowAddModal(false)}>
           <div
-            className="wz-modal-content wz-modal-large"
+            className="wz-booking-modal-container wz-unit-modal-container"
             onClick={(e) => e.stopPropagation()}
-            style={{
-              maxWidth: "880px",
-              width: "95%",
-              maxHeight: "92vh",
-              display: "flex",
-              flexDirection: "column",
-              padding: 0,
-              overflow: "hidden",
-              borderRadius: "14px",
-              background: "#ffffff",
-              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
-            }}
           >
-            {/* Sticky Header */}
-            <div
-              style={{
-                padding: "16px 24px",
-                borderBottom: "1px solid #e2e8f0",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                background: "#ffffff",
-                flexShrink: 0,
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                {editingUnit ? (
-                  <span
-                    style={{
-                      background: "#eff6ff",
-                      color: "#0284c7",
-                      padding: "4px 10px",
-                      borderRadius: "6px",
-                      fontWeight: "800",
-                      fontSize: "0.85rem",
-                      border: "1px solid #bae6fd",
-                    }}
-                  >
-                    {unitForm.unitId}
-                  </span>
-                ) : (
-                  <span
-                    style={{
-                      background: "#f0fdf4",
-                      color: "#16a34a",
-                      padding: "4px 10px",
-                      borderRadius: "6px",
-                      fontWeight: "800",
-                      fontSize: "0.82rem",
-                      border: "1px solid #bbf7d0",
-                    }}
-                  >
-                    NEW ASSET
-                  </span>
-                )}
-                <div>
-                  <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: "800", color: "#0f172a" }}>
-                    {editingUnit ? `Edit Machinery Unit` : "Register New Machinery Unit"}
-                  </h3>
-                  <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
-                    Configure equipment specifications, pricing, and maintenance details. Scroll down to review all fields.
-                  </span>
-                </div>
+            {/* Header */}
+            <div className="wz-booking-modal-header">
+              <div className="wz-unit-modal-title-row">
+                <h3 className="wz-unit-modal-title">
+                  {editingUnit ? "Edit Unit" : "Register Unit"}
+                </h3>
+                <span className={`wz-unit-modal-pill ${editingUnit ? "is-edit" : "is-new"}`}>
+                  {editingUnit ? unitForm.unitId : "NEW"}
+                </span>
               </div>
               <button
                 type="button"
+                className="wz-unit-modal-close"
+                disabled={savingUnit}
                 onClick={() => setShowAddModal(false)}
-                style={{
-                  background: "#f1f5f9",
-                  border: "none",
-                  width: "32px",
-                  height: "32px",
-                  borderRadius: "8px",
-                  fontSize: "1.3rem",
-                  cursor: "pointer",
-                  color: "#64748b",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-                title="Close Modal"
-                aria-label="Close Modal"
+                aria-label="Close"
               >
                 &times;
               </button>
             </div>
 
-            {/* Form with Scrollable Body & Sticky Footer */}
-            <form onSubmit={handleSaveUnit} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-              <div
-                style={{
-                  flex: 1,
-                  overflowY: "auto",
-                  padding: "20px 24px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "18px",
-                  background: "#f8fafc",
-                }}
+            {/* 3-Tab Switcher */}
+            <div className="wz-modal-tab-bar" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeFormTab === "basic"}
+                className={`wz-modal-tab-btn ${activeFormTab === "basic" ? "active" : ""}`}
+                onClick={() => setActiveFormTab("basic")}
               >
-                {/* 1. Basic Information Card */}
-                <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "18px 20px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid #f1f5f9" }}>
-                    <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: "#eff6ff", color: "#0284c7", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
-                        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
-                      </svg>
-                    </div>
-                    <div>
-                      <h4 style={{ margin: 0, fontSize: "0.96rem", fontWeight: "800", color: "#0f172a" }}>1. Basic Information &amp; Operator</h4>
-                      <span style={{ fontSize: "0.76rem", color: "#64748b" }}>Core machinery identification, model details, driver assignment, and photo</span>
-                    </div>
-                  </div>
+                <span>Unit &amp; Rate</span>
+                {(formErrors.unitId ||
+                  formErrors.unitPrefix ||
+                  formErrors.name ||
+                  formErrors.category ||
+                  formErrors.pricingUnit ||
+                  formErrors.memberRate ||
+                  formErrors.nonmemberRate ||
+                  formErrors.minRentalQuantity ||
+                  formErrors.additionalOperatorFee ||
+                  formErrors.additionalTransportFee) && <span className="wz-unit-tab-dot" />}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeFormTab === "specs"}
+                className={`wz-modal-tab-btn ${activeFormTab === "specs" ? "active" : ""}`}
+                onClick={() => setActiveFormTab("specs")}
+              >
+                <span>Specs &amp; Notes</span>
+                {(formErrors.horsepower || formErrors.currentMeterReading) && (
+                  <span className="wz-unit-tab-dot" />
+                )}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeFormTab === "service"}
+                className={`wz-modal-tab-btn ${activeFormTab === "service" ? "active" : ""}`}
+                onClick={() => setActiveFormTab("service")}
+              >
+                <span>Service &amp; Asset</span>
+                {formErrors.acquisitionCost && <span className="wz-unit-tab-dot" />}
+              </button>
+            </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Unit / Asset Code *
+            {/* Form */}
+            <form
+              noValidate
+              onSubmit={handleSaveUnit}
+              style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}
+            >
+              <div className="wz-unit-modal-body">
+                {activeFormTab === "basic" && (
+                  <>
+                    {/* Unit Name at top */}
+                    <div className="wz-unit-field">
+                      <label className="wz-unit-label">
+                        Unit Name <span className="req">*</span>
                       </label>
                       <input
                         type="text"
-                        required
-                        disabled={Boolean(editingUnit)}
-                        placeholder="e.g. JD-5075-01"
-                        value={unitForm.unitId}
-                        onChange={(e) => setUnitForm({ ...unitForm, unitId: e.target.value })}
-                        style={{
-                          width: "100%",
-                          padding: "9px 12px",
-                          border: "1px solid #cbd5e1",
-                          borderRadius: "8px",
-                          fontSize: "0.88rem",
-                          background: editingUnit ? "#f1f5f9" : "#fff",
-                          cursor: editingUnit ? "not-allowed" : "text",
-                        }}
-                      />
-                      {formErrors.unitId && <span style={{ color: "#e11d48", fontSize: "0.75rem" }}>{formErrors.unitId}</span>}
-                      {editingUnit && <span style={{ fontSize: "0.72rem", color: "#64748b" }}>Unit ID is fixed and cannot be changed.</span>}
-                    </div>
-
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Machinery Name *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. 5075E Utility Tractor"
+                        placeholder="Utility Tractor"
                         value={unitForm.name}
-                        onChange={(e) => setUnitForm({ ...unitForm, name: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
+                        onChange={(e) => updateUnitField("name", e.target.value)}
+                        className={`wz-unit-input ${formErrors.name ? "is-error" : ""}`}
                       />
-                      {formErrors.name && <span style={{ color: "#e11d48", fontSize: "0.75rem" }}>{formErrors.name}</span>}
-                    </div>
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Machinery Type *
-                      </label>
-                      <select
-                        required
-                        value={unitForm.category}
-                        onChange={(e) => setUnitForm({ ...unitForm, category: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem", background: "#fff" }}
-                      >
-                        {MACHINERY_TYPES.map((t) => (
-                          <option key={t} value={t}>{t}</option>
-                        ))}
-                      </select>
+                      {formErrors.name && <span className="wz-unit-error">{formErrors.name}</span>}
                     </div>
 
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Brand *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. John Deere, Kubota"
-                        value={unitForm.brand}
-                        onChange={(e) => setUnitForm({ ...unitForm, brand: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
-                      {formErrors.brand && <span style={{ color: "#e11d48", fontSize: "0.75rem" }}>{formErrors.brand}</span>}
-                    </div>
+                    {/* Type + Compact Prefix + Unit ID */}
+                    <div className="wz-unit-identity-top">
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">
+                          Type <span className="req">*</span>
+                        </label>
+                        {customTypeMode ? (
+                          <div className="wz-unit-combo">
+                            <input
+                              type="text"
+                              autoFocus
+                              placeholder="New type"
+                              value={unitForm.category}
+                              onChange={(e) => handleCustomTypeInput(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Escape") {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleTypeSelected(
+                                    lastSelectedType || modalMachineryTypes[0] || "Tractor"
+                                  );
+                                  setCustomTypeMode(false);
+                                }
+                              }}
+                              className={`wz-unit-input ${formErrors.category ? "is-error" : ""}`}
+                            />
+                            <button
+                              type="button"
+                              className="wz-unit-type-toggle"
+                              title="Select existing type"
+                              aria-label="Select existing type"
+                              onClick={() => {
+                                const trimmed = String(unitForm.category || "").trim();
+                                const matched = modalMachineryTypes.find(
+                                  (t) => t.toLowerCase() === trimmed.toLowerCase()
+                                );
+                                handleTypeSelected(
+                                  matched || lastSelectedType || modalMachineryTypes[0] || "Tractor"
+                                );
+                                setCustomTypeMode(false);
+                              }}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="6 9 12 15 18 9" />
+                              </svg>
+                            </button>
+                          </div>
+                        ) : (
+                          <select
+                            value={unitForm.category}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === "__NEW_TYPE__") {
+                                setLastSelectedType(
+                                  unitForm.category || modalMachineryTypes[0] || "Tractor"
+                                );
+                                setUnitForm((prev) => ({
+                                  ...prev,
+                                  category: "",
+                                  unitPrefix: "",
+                                  unitId: "",
+                                }));
+                                setFormErrors((prev) => {
+                                  const next = { ...prev };
+                                  delete next.category;
+                                  delete next.unitPrefix;
+                                  delete next.unitId;
+                                  return next;
+                                });
+                                setCustomTypeMode(true);
+                              } else {
+                                setLastSelectedType(val);
+                                handleTypeSelected(val);
+                              }
+                            }}
+                            className={`wz-unit-select ${formErrors.category ? "is-error" : ""}`}
+                          >
+                            {modalMachineryTypes.map((t) => (
+                              <option key={t} value={t}>{t}</option>
+                            ))}
+                            <option value="__NEW_TYPE__">+ New type...</option>
+                          </select>
+                        )}
+                        {formErrors.category && <span className="wz-unit-error">{formErrors.category}</span>}
+                      </div>
 
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Model *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. 5075E, DC-70"
-                        value={unitForm.model}
-                        onChange={(e) => setUnitForm({ ...unitForm, model: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
-                      {formErrors.model && <span style={{ color: "#e11d48", fontSize: "0.75rem" }}>{formErrors.model}</span>}
-                    </div>
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Serial Number (Optional)
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. 1PY5075EKP012894"
-                        value={unitForm.serialNumber}
-                        onChange={(e) => setUnitForm({ ...unitForm, serialNumber: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Year Manufactured
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. 2023"
-                        value={unitForm.modelYear}
-                        onChange={(e) => setUnitForm({ ...unitForm, modelYear: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
-                    </div>
-                  </div>
-
-                  <div style={{ marginBottom: "16px" }}>
-                    <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                      Assigned Driver / Operator
-                    </label>
-                    <select
-                      value={unitForm.assignedDriver || "Unassigned"}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        const match = drivers.find((d) => d.name === val);
-                        setUnitForm({
-                          ...unitForm,
-                          assignedDriver: val,
-                          driverPhone: match ? (match.phone || "") : "",
-                        });
-                      }}
-                      style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem", background: "#fff" }}
-                    >
-                      <option value="Unassigned">Unassigned (No Operator Assigned)</option>
-                      {drivers.map((d) => (
-                        <option key={d._id || d.id || d.name} value={d.name}>
-                          {d.name} {d.phone ? `(${d.phone})` : ""} — {d.status || "Active"}
-                        </option>
-                      ))}
-                    </select>
-                    <span style={{ fontSize: "0.72rem", color: "#64748b" }}>
-                      Choose from registered KIMPC Drivers.
-                    </span>
-                  </div>
-
-                  {/* Photo Upload & URL */}
-                  <div style={{ border: "1px dashed #cbd5e1", borderRadius: "10px", padding: "14px 16px", background: "#f8fafc" }}>
-                    <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "8px" }}>
-                      Machinery Photo
-                    </label>
-
-                    <div style={{ display: "flex", gap: "14px", alignItems: "center", flexWrap: "wrap" }}>
-                      {unitForm.imageUrl ? (
-                        <img
-                          src={unitForm.imageUrl}
-                          alt="Preview"
-                          style={{ width: "90px", height: "68px", objectFit: "cover", borderRadius: "8px", border: "1px solid #cbd5e1", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">Prefix</label>
+                        <input
+                          type="text"
+                          maxLength={8}
+                          disabled={
+                            Boolean(editingUnit) ||
+                            (Boolean(getSavedPrefixForType(unitForm.category)) &&
+                              hasExistingUnitsForType(unitForm.category))
+                          }
+                          placeholder="TR"
+                          value={unitForm.unitPrefix}
+                          onChange={(e) => handlePrefixChange(e.target.value)}
+                          className={`wz-unit-input wz-unit-prefix-input ${formErrors.unitPrefix ? "is-error" : ""}`}
                         />
-                      ) : (
-                        <div style={{ width: "90px", height: "68px", background: "#e2e8f0", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", color: "#94a3b8", fontSize: "0.75rem", border: "1px solid #cbd5e1" }}>
-                          No Photo
+                        {formErrors.unitPrefix && <span className="wz-unit-error">{formErrors.unitPrefix}</span>}
+                      </div>
+
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">
+                          Unit ID <span className="req">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          disabled={Boolean(editingUnit)}
+                          placeholder="TR-001"
+                          value={unitForm.unitId}
+                          onChange={(e) => updateUnitField("unitId", e.target.value)}
+                          className={`wz-unit-input ${formErrors.unitId ? "is-error" : ""}`}
+                        />
+                        {formErrors.unitId && <span className="wz-unit-error">{formErrors.unitId}</span>}
+                      </div>
+                    </div>
+
+                    {/* Up to 5 Photos (1st is Main) */}
+                    <div className="wz-unit-photos-section">
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        multiple
+                        ref={fileInputRef}
+                        style={{ display: "none" }}
+                        onChange={handleFileChange}
+                      />
+                      <div className="wz-unit-photos-header">
+                        <label className="wz-unit-label">
+                          Photos
+                          <span className="wz-unit-photo-count">
+                            {(unitForm.photos || []).filter(Boolean).length}/5
+                          </span>
+                        </label>
+                        {(unitForm.photos || []).filter(Boolean).length < 5 && (
+                          <button
+                            type="button"
+                            className="wz-unit-url-toggle-btn"
+                            onClick={() => setShowPhotoUrlInput((v) => !v)}
+                          >
+                            {showPhotoUrlInput ? "Close" : "+ URL"}
+                          </button>
+                        )}
+                      </div>
+
+                      {showPhotoUrlInput && (
+                        <div className="wz-unit-photo-url-row">
+                          <input
+                            type="text"
+                            placeholder="Paste image URL"
+                            value={photoUrlDraft}
+                            onChange={(e) => setPhotoUrlDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleAddPhotoUrl();
+                              }
+                            }}
+                            className="wz-unit-input"
+                          />
+                          <button
+                            type="button"
+                            className="wz-unit-url-add-btn"
+                            onClick={handleAddPhotoUrl}
+                          >
+                            Add
+                          </button>
                         </div>
                       )}
 
-                      <div style={{ flex: 1, minWidth: "220px" }}>
-                        <input
-                          type="file"
-                          accept="image/jpeg,image/png,image/webp"
-                          ref={fileInputRef}
-                          style={{ display: "none" }}
-                          onChange={handleFileChange}
-                        />
-                        <button
-                          type="button"
-                          disabled={uploadingImage}
-                          onClick={() => fileInputRef.current && fileInputRef.current.click()}
-                          style={{
-                            padding: "7px 15px",
-                            background: "#0284c7",
-                            color: "#fff",
-                            border: "none",
-                            borderRadius: "6px",
-                            fontSize: "0.82rem",
-                            fontWeight: "600",
-                            cursor: "pointer",
-                            marginRight: "8px",
-                          }}
-                        >
-                          {uploadingImage ? "Uploading & Optimizing..." : "Upload Photo"}
-                        </button>
-                        <span style={{ fontSize: "0.75rem", color: "#64748b" }}>Max 5MB (JPG, PNG, WebP)</span>
+                      <div className="wz-unit-photo-grid">
+                        {Array.from({ length: 5 }, (_, idx) => {
+                          const currentPhotos = (unitForm.photos || []).filter(Boolean);
+                          const src = currentPhotos[idx] || "";
+                          const isMain = idx === 0 && Boolean(src);
+                          const isNextSlot = !src && idx === currentPhotos.length;
 
-                        <div style={{ marginTop: "8px" }}>
+                          if (src) {
+                            return (
+                              <div
+                                key={`${src}-${idx}`}
+                                role={isMain ? undefined : "button"}
+                                tabIndex={isMain ? undefined : 0}
+                                className={`wz-unit-photo-slot has-photo ${isMain ? "is-main" : ""}`}
+                                onClick={() => {
+                                  if (!isMain) handleSetMainPhoto(idx);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (!isMain && (e.key === "Enter" || e.key === " ")) {
+                                    e.preventDefault();
+                                    handleSetMainPhoto(idx);
+                                  }
+                                }}
+                                title={isMain ? "Main photo" : "Click to set as main"}
+                              >
+                                <img src={src} alt={isMain ? "Main photo" : `Photo ${idx + 1}`} />
+                                {isMain && <span className="wz-unit-main-badge">Main</span>}
+                                <button
+                                  type="button"
+                                  className="wz-unit-photo-remove"
+                                  aria-label="Remove photo"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRemovePhoto(idx);
+                                  }}
+                                >
+                                  &times;
+                                </button>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div
+                              key={`empty-slot-${idx}`}
+                              role="button"
+                              tabIndex={0}
+                              className={`wz-unit-photo-slot ${isNextSlot ? "" : "is-placeholder"}`}
+                              onClick={() => !uploadingImage && fileInputRef.current?.click()}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  if (!uploadingImage) fileInputRef.current?.click();
+                                }
+                              }}
+                              title="Upload photos"
+                            >
+                              {isNextSlot ? (
+                                <>
+                                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="3" y="3" width="18" height="18" rx="3" />
+                                    <circle cx="8.5" cy="8.5" r="1.5" />
+                                    <polyline points="21 15 16 10 5 21" />
+                                  </svg>
+                                  <span>{uploadingImage ? "Uploading..." : "Add"}</span>
+                                </>
+                              ) : (
+                                <span style={{ fontSize: "1rem", lineHeight: 1 }}>+</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {photoError && <span className="wz-unit-error">{photoError}</span>}
+                    </div>
+
+                    {/* Brand, Model, Status */}
+                    <div className="wz-unit-grid-3">
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">Brand</label>
+                        <input
+                          type="text"
+                          placeholder="Optional"
+                          value={unitForm.brand}
+                          onChange={(e) => updateUnitField("brand", e.target.value)}
+                          className="wz-unit-input"
+                        />
+                      </div>
+
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">Model</label>
+                        <input
+                          type="text"
+                          placeholder="Optional"
+                          value={unitForm.model}
+                          onChange={(e) => updateUnitField("model", e.target.value)}
+                          className="wz-unit-input"
+                        />
+                      </div>
+
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">Status</label>
+                        <select
+                          value={unitForm.operatingCondition}
+                          onChange={(e) => updateUnitField("operatingCondition", e.target.value)}
+                          className="wz-unit-select"
+                        >
+                          {OPERATING_CONDITIONS.map((c) => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Pricing */}
+                    <div className="wz-unit-section-divider">
+                      <div className="wz-unit-grid-3">
+                        <div className="wz-unit-field">
+                          <label className="wz-unit-label">
+                            Billing <span className="req">*</span>
+                          </label>
+                          <select
+                            value={unitForm.pricingUnit}
+                            onChange={(e) => updateUnitField("pricingUnit", e.target.value)}
+                            className="wz-unit-select"
+                          >
+                            {PRICING_UNITS.map((p) => (
+                              <option key={p} value={p}>{p}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="wz-unit-field">
+                          <label className="wz-unit-label">
+                            Member (₱) <span className="req">*</span>
+                          </label>
                           <input
-                            type="text"
-                            placeholder="Or paste direct image URL (https://...)"
-                            value={unitForm.imageUrl}
-                            onChange={(e) => setUnitForm({ ...unitForm, imageUrl: e.target.value })}
-                            style={{ width: "100%", padding: "7px 10px", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "0.82rem" }}
+                            type="number"
+                            min="0"
+                            step="1"
+                            placeholder="2800"
+                            value={unitForm.memberRate}
+                            onChange={(e) => updateUnitField("memberRate", e.target.value)}
+                            className={`wz-unit-input ${formErrors.memberRate ? "is-error" : ""}`}
+                          />
+                          {formErrors.memberRate && <span className="wz-unit-error">{formErrors.memberRate}</span>}
+                        </div>
+
+                        <div className="wz-unit-field">
+                          <label className="wz-unit-label">Non-Member (₱)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            placeholder="Optional"
+                            value={unitForm.nonmemberRate}
+                            onChange={(e) => updateUnitField("nonmemberRate", e.target.value)}
+                            className={`wz-unit-input ${formErrors.nonmemberRate ? "is-error" : ""}`}
+                          />
+                          {formErrors.nonmemberRate && <span className="wz-unit-error">{formErrors.nonmemberRate}</span>}
+                        </div>
+                      </div>
+
+                      <div className="wz-unit-grid-2">
+                        <div className="wz-unit-field">
+                          <label className="wz-unit-label">Operator</label>
+                          <select
+                            value={unitForm.assignedDriver || "Unassigned"}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const match = drivers.find((d) => d.name === val);
+                              setUnitForm((prev) => ({
+                                ...prev,
+                                assignedDriver: val,
+                                driverPhone: match ? (match.phone || "") : "",
+                              }));
+                            }}
+                            className="wz-unit-select"
+                          >
+                            <option value="Unassigned">Unassigned</option>
+                            {drivers.map((d) => (
+                              <option key={d._id || d.id || d.name} value={d.name}>
+                                {d.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="wz-unit-field">
+                          <label className="wz-unit-label">Min. Qty</label>
+                          <input
+                            type="number"
+                            min="0.1"
+                            step="0.5"
+                            placeholder="1"
+                            value={unitForm.minRentalQuantity}
+                            onChange={(e) => updateUnitField("minRentalQuantity", e.target.value)}
+                            className={`wz-unit-input ${formErrors.minRentalQuantity ? "is-error" : ""}`}
+                          />
+                          {formErrors.minRentalQuantity && (
+                            <span className="wz-unit-error">{formErrors.minRentalQuantity}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Inclusions & Conditional Add-on Fees */}
+                    <div className="wz-unit-section-divider">
+                      <span className="wz-unit-eyebrow">Rate Options</span>
+                      <div className="wz-unit-toggle-grid">
+                        {[
+                          { key: "operatorRequired", label: "Operator Required" },
+                          { key: "operatorIncluded", label: "Operator Included" },
+                          { key: "fuelIncluded", label: "Fuel Included" },
+                          { key: "transportIncluded", label: "Transport Included" },
+                        ].map((opt) => {
+                          const active = Boolean(unitForm[opt.key]);
+                          return (
+                            <button
+                              key={opt.key}
+                              type="button"
+                              aria-pressed={active}
+                              className={`wz-unit-toggle-pill ${active ? "active" : ""}`}
+                              onClick={() => updateUnitField(opt.key, !active)}
+                            >
+                              {active && (
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
+                                  <polyline points="20 6 9 17 4 12" />
+                                </svg>
+                              )}
+                              <span>{opt.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {!unitForm.operatorIncluded && (() => {
+                        const opMeta = getOperatorFeeMeta(unitForm.operatorFeeBasis);
+                        return (
+                          <div className="wz-unit-grid-2">
+                            <div className="wz-unit-field">
+                              <label className="wz-unit-label">Operator Fee Billing</label>
+                              <select
+                                value={unitForm.operatorFeeBasis}
+                                onChange={(e) => updateUnitField("operatorFeeBasis", e.target.value)}
+                                className="wz-unit-select"
+                              >
+                                {OPERATOR_FEE_OPTIONS.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div className="wz-unit-field">
+                              <label className="wz-unit-label">{opMeta.inputLabel}</label>
+                              <div className="wz-unit-input-with-suffix">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max={opMeta.max}
+                                  step={opMeta.step}
+                                  placeholder={opMeta.placeholder}
+                                  value={unitForm.additionalOperatorFee}
+                                  onChange={(e) => updateUnitField("additionalOperatorFee", e.target.value)}
+                                  className={`wz-unit-input ${formErrors.additionalOperatorFee ? "is-error" : ""}`}
+                                />
+                                <span className="wz-unit-input-suffix">{opMeta.unit}</span>
+                              </div>
+                              {formErrors.additionalOperatorFee && (
+                                <span className="wz-unit-error">{formErrors.additionalOperatorFee}</span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {!unitForm.transportIncluded && (
+                        <div className="wz-unit-field">
+                          <label className="wz-unit-label">Transport Fee (₱)</label>
+                          <div className="wz-unit-combo">
+                            <input
+                              type="number"
+                              min="0"
+                              step="50"
+                              placeholder="0"
+                              value={unitForm.additionalTransportFee}
+                              onChange={(e) => updateUnitField("additionalTransportFee", e.target.value)}
+                              className={`wz-unit-input ${formErrors.additionalTransportFee ? "is-error" : ""}`}
+                            />
+                            <select
+                              value={unitForm.transportFeeBasis}
+                              onChange={(e) => updateUnitField("transportFeeBasis", e.target.value)}
+                              className="wz-unit-select"
+                            >
+                              {FEE_BASIS_OPTIONS.map((b) => (
+                                <option key={b} value={b}>{b}</option>
+                              ))}
+                            </select>
+                          </div>
+                          {formErrors.additionalTransportFee && (
+                            <span className="wz-unit-error">{formErrors.additionalTransportFee}</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {activeFormTab === "specs" && (
+                  <>
+                    <div className="wz-unit-grid-3">
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">Power (HP)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          placeholder="75"
+                          value={unitForm.horsepower}
+                          onChange={(e) => updateUnitField("horsepower", e.target.value)}
+                          className={`wz-unit-input ${formErrors.horsepower ? "is-error" : ""}`}
+                        />
+                        {formErrors.horsepower && <span className="wz-unit-error">{formErrors.horsepower}</span>}
+                      </div>
+
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">Fuel</label>
+                        <select
+                          value={unitForm.fuelType}
+                          onChange={(e) => updateUnitField("fuelType", e.target.value)}
+                          className="wz-unit-select"
+                        >
+                          {FUEL_TYPES.map((f) => (
+                            <option key={f} value={f}>{f}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">Year</label>
+                        <input
+                          type="text"
+                          placeholder="2024"
+                          value={unitForm.modelYear}
+                          onChange={(e) => updateUnitField("modelYear", e.target.value)}
+                          className="wz-unit-input"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="wz-unit-grid-2">
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">Serial No.</label>
+                        <input
+                          type="text"
+                          placeholder="Optional"
+                          value={unitForm.serialNumber}
+                          onChange={(e) => updateUnitField("serialNumber", e.target.value)}
+                          className="wz-unit-input"
+                        />
+                      </div>
+
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">Capacity</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 600L tank"
+                          value={unitForm.capacity}
+                          onChange={(e) => updateUnitField("capacity", e.target.value)}
+                          className="wz-unit-input"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="wz-unit-grid-2">
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">Depot</label>
+                        <input
+                          type="text"
+                          placeholder="Main Co-op Depot"
+                          value={unitForm.storageLocation}
+                          onChange={(e) => updateUnitField("storageLocation", e.target.value)}
+                          className="wz-unit-input"
+                        />
+                      </div>
+
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">Meter Reading</label>
+                        <div className="wz-unit-combo">
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            placeholder="0"
+                            value={unitForm.currentMeterReading}
+                            onChange={(e) => updateUnitField("currentMeterReading", e.target.value)}
+                            className={`wz-unit-input ${formErrors.currentMeterReading ? "is-error" : ""}`}
+                          />
+                          <select
+                            value={unitForm.meterReadingUnit}
+                            onChange={(e) => updateUnitField("meterReadingUnit", e.target.value)}
+                            className="wz-unit-select"
+                          >
+                            <option value="Hours">Hours</option>
+                            <option value="Kilometers">Kilometers</option>
+                            <option value="Hectares">Hectares</option>
+                          </select>
+                        </div>
+                        {formErrors.currentMeterReading && (
+                          <span className="wz-unit-error">{formErrors.currentMeterReading}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="wz-unit-field">
+                      <label className="wz-unit-label">Attachments</label>
+                      <input
+                        type="text"
+                        placeholder="Disc plough, rotary tiller (comma-separated)"
+                        value={unitForm.attachments}
+                        onChange={(e) => updateUnitField("attachments", e.target.value)}
+                        className="wz-unit-input"
+                      />
+                    </div>
+
+                    <div className="wz-unit-section-divider">
+                      <div className="wz-unit-grid-2">
+                        <div className="wz-unit-field">
+                          <label className="wz-unit-label">Restrictions</label>
+                          <textarea
+                            rows="2"
+                            placeholder="Usage limits (optional)"
+                            value={unitForm.operatingRestrictions}
+                            onChange={(e) => updateUnitField("operatingRestrictions", e.target.value)}
+                            className="wz-unit-textarea"
+                          />
+                        </div>
+
+                        <div className="wz-unit-field">
+                          <label className="wz-unit-label">Internal Notes</label>
+                          <textarea
+                            rows="2"
+                            placeholder="Staff notes (optional)"
+                            value={unitForm.notes}
+                            onChange={(e) => updateUnitField("notes", e.target.value)}
+                            className="wz-unit-textarea"
                           />
                         </div>
                       </div>
                     </div>
-                  </div>
-                </div>
+                  </>
+                )}
 
-                {/* 2. Technical Specifications Card */}
-                <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "18px 20px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid #f1f5f9" }}>
-                    <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: "#f0fdf4", color: "#16a34a", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="3" />
-                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <h4 style={{ margin: 0, fontSize: "0.96rem", fontWeight: "800", color: "#0f172a" }}>2. Technical Specifications</h4>
-                      <span style={{ fontSize: "0.76rem", color: "#64748b" }}>Engine power, payload capacity, fuel requirements, and attached equipment</span>
-                    </div>
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Horsepower (HP)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        placeholder="e.g. 75"
-                        value={unitForm.horsepower}
-                        onChange={(e) => setUnitForm({ ...unitForm, horsepower: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Capacity (Tank, payload, or width)
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. 600L tank, 2.075m cutter width"
-                        value={unitForm.capacity}
-                        onChange={(e) => setUnitForm({ ...unitForm, capacity: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Fuel Type
-                      </label>
-                      <select
-                        value={unitForm.fuelType}
-                        onChange={(e) => setUnitForm({ ...unitForm, fuelType: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem", background: "#fff" }}
-                      >
-                        {FUEL_TYPES.map((f) => (
-                          <option key={f} value={f}>{f}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                      Attachments / Accessories
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Disc plough, Rotary tiller, Bale chute (comma-separated)"
-                      value={unitForm.attachments}
-                      onChange={(e) => setUnitForm({ ...unitForm, attachments: e.target.value })}
-                      style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                    />
-                  </div>
-                </div>
-
-                {/* 3. Rental & Pricing Card */}
-                <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "18px 20px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid #f1f5f9" }}>
-                    <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: "#fefce8", color: "#ca8a04", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <line x1="12" y1="1" x2="12" y2="23" />
-                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                      </svg>
-                    </div>
-                    <div>
-                      <h4 style={{ margin: 0, fontSize: "0.96rem", fontWeight: "800", color: "#0f172a" }}>3. Rental Rates &amp; Pricing</h4>
-                      <span style={{ fontSize: "0.76rem", color: "#64748b" }}>Member and non-member rates, minimum rental requirements, and included services</span>
-                    </div>
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Pricing Unit *
-                      </label>
-                      <select
-                        required
-                        value={unitForm.pricingUnit}
-                        onChange={(e) => setUnitForm({ ...unitForm, pricingUnit: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem", background: "#fff" }}
-                      >
-                        {PRICING_UNITS.map((p) => (
-                          <option key={p} value={p}>{p}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Member Rental Rate (₱) *
-                      </label>
-                      <input
-                        type="number"
-                        required
-                        min="0"
-                        step="1"
-                        placeholder="e.g. 2800"
-                        value={unitForm.memberRate}
-                        onChange={(e) => setUnitForm({ ...unitForm, memberRate: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
-                      {formErrors.memberRate && <span style={{ color: "#e11d48", fontSize: "0.75rem" }}>{formErrors.memberRate}</span>}
-                    </div>
-
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Non-Member Rental Rate (₱)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        placeholder="e.g. 3500"
-                        value={unitForm.nonmemberRate}
-                        onChange={(e) => setUnitForm({ ...unitForm, nonmemberRate: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
-                    </div>
-                  </div>
-
-                  <div style={{ marginBottom: "14px" }}>
-                    <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                      Minimum Rental Quantity * (e.g. Minimum Hectares / Hours / Days)
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      min="0.1"
-                      step="0.5"
-                      placeholder="1"
-                      value={unitForm.minRentalQuantity}
-                      onChange={(e) => setUnitForm({ ...unitForm, minRentalQuantity: e.target.value })}
-                      style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                    />
-                  </div>
-
-                  {/* Included Services Checkboxes */}
-                  <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "14px 16px", marginBottom: "14px" }}>
-                    <span style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "10px" }}>
-                      Included In Rental Rate Settings:
-                    </span>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                      <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.84rem", cursor: "pointer" }}>
+                {activeFormTab === "service" && (
+                  <>
+                    <span className="wz-unit-eyebrow">Service Schedule</span>
+                    <div className="wz-unit-grid-2">
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">Last Service Date</label>
                         <input
-                          type="checkbox"
-                          checked={unitForm.operatorRequired}
-                          onChange={(e) => setUnitForm({ ...unitForm, operatorRequired: e.target.checked })}
+                          type="date"
+                          value={unitForm.lastServiceDate}
+                          onChange={(e) => updateUnitField("lastServiceDate", e.target.value)}
+                          className="wz-unit-input"
                         />
-                        <span>Operator Required for this Unit</span>
-                      </label>
+                      </div>
 
-                      <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.84rem", cursor: "pointer" }}>
-                        <input
-                          type="checkbox"
-                          checked={unitForm.operatorIncluded}
-                          onChange={(e) => setUnitForm({ ...unitForm, operatorIncluded: e.target.checked })}
-                        />
-                        <span>Operator Included in Base Rate</span>
-                      </label>
-
-                      <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.84rem", cursor: "pointer" }}>
-                        <input
-                          type="checkbox"
-                          checked={unitForm.fuelIncluded}
-                          onChange={(e) => setUnitForm({ ...unitForm, fuelIncluded: e.target.checked })}
-                        />
-                        <span>Fuel Included in Base Rate</span>
-                      </label>
-
-                      <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.84rem", cursor: "pointer" }}>
-                        <input
-                          type="checkbox"
-                          checked={unitForm.transportIncluded}
-                          onChange={(e) => setUnitForm({ ...unitForm, transportIncluded: e.target.checked })}
-                        />
-                        <span>Transport Delivery Included in Base Rate</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Conditional Fees */}
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Additional Operator Fee (₱)
-                      </label>
-                      {unitForm.operatorIncluded ? (
-                        <div style={{ padding: "8px 12px", background: "#ecfdf5", border: "1px solid #a7f3d0", borderRadius: "8px", color: "#065f46", fontSize: "0.82rem" }}>
-                          ✓ Included in base rental rate (₱0 fee)
-                        </div>
-                      ) : (
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">Last Service Meter</label>
                         <input
                           type="number"
                           min="0"
-                          step="50"
-                          placeholder="e.g. 500"
-                          value={unitForm.additionalOperatorFee}
-                          onChange={(e) => setUnitForm({ ...unitForm, additionalOperatorFee: e.target.value })}
-                          style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
+                          placeholder="0"
+                          value={unitForm.lastServiceMeterReading}
+                          onChange={(e) => updateUnitField("lastServiceMeterReading", e.target.value)}
+                          className="wz-unit-input"
                         />
-                      )}
+                      </div>
                     </div>
 
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Operator Fee Pricing Basis
-                      </label>
-                      <select
-                        disabled={unitForm.operatorIncluded}
-                        value={unitForm.operatorFeeBasis}
-                        onChange={(e) => setUnitForm({ ...unitForm, operatorFeeBasis: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem", background: unitForm.operatorIncluded ? "#f1f5f9" : "#fff" }}
-                      >
-                        {FEE_BASIS_OPTIONS.map((b) => (
-                          <option key={b} value={b}>{b}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
+                    <div className="wz-unit-grid-2">
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">Next Service Date</label>
+                        <input
+                          type="date"
+                          value={unitForm.nextServiceDate}
+                          onChange={(e) => updateUnitField("nextServiceDate", e.target.value)}
+                          className="wz-unit-input"
+                        />
+                      </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Additional Transport Fee (₱)
-                      </label>
-                      {unitForm.transportIncluded ? (
-                        <div style={{ padding: "8px 12px", background: "#ecfdf5", border: "1px solid #a7f3d0", borderRadius: "8px", color: "#065f46", fontSize: "0.82rem" }}>
-                          ✓ Included in base rental rate (₱0 fee)
-                        </div>
-                      ) : (
+                      <div className="wz-unit-field">
+                        <label className="wz-unit-label">Next Service Meter</label>
                         <input
                           type="number"
                           min="0"
-                          step="50"
-                          placeholder="e.g. 1000"
-                          value={unitForm.additionalTransportFee}
-                          onChange={(e) => setUnitForm({ ...unitForm, additionalTransportFee: e.target.value })}
-                          style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
+                          placeholder="0"
+                          value={unitForm.nextServiceMeterReading}
+                          onChange={(e) => updateUnitField("nextServiceMeterReading", e.target.value)}
+                          className="wz-unit-input"
                         />
-                      )}
+                      </div>
                     </div>
 
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Transport Fee Pricing Basis
-                      </label>
-                      <select
-                        disabled={unitForm.transportIncluded}
-                        value={unitForm.transportFeeBasis}
-                        onChange={(e) => setUnitForm({ ...unitForm, transportFeeBasis: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem", background: unitForm.transportIncluded ? "#f1f5f9" : "#fff" }}
-                      >
-                        {FEE_BASIS_OPTIONS.map((b) => (
-                          <option key={b} value={b}>{b}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 4. Condition & Maintenance Card */}
-                <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "18px 20px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid #f1f5f9" }}>
-                    <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: "#fff7ed", color: "#ea580c", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <h4 style={{ margin: 0, fontSize: "0.96rem", fontWeight: "800", color: "#0f172a" }}>4. Condition &amp; Maintenance</h4>
-                      <span style={{ fontSize: "0.76rem", color: "#64748b" }}>Readings, operational status, and service dates</span>
-                    </div>
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Operating Condition *
-                      </label>
-                      <select
-                        required
-                        value={unitForm.operatingCondition}
-                        onChange={(e) => setUnitForm({ ...unitForm, operatingCondition: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem", background: "#fff" }}
-                      >
-                        {OPERATING_CONDITIONS.map((c) => (
-                          <option key={c} value={c}>{c}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Current Meter Reading
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        placeholder="e.g. 640"
-                        value={unitForm.currentMeterReading}
-                        onChange={(e) => setUnitForm({ ...unitForm, currentMeterReading: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
+                    <div className="wz-unit-field">
+                      <label className="wz-unit-label">Service Notes</label>
+                      <textarea
+                        rows="2"
+                        placeholder="Workshop remarks (optional)"
+                        value={unitForm.conditionNotes}
+                        onChange={(e) => updateUnitField("conditionNotes", e.target.value)}
+                        className="wz-unit-textarea"
                       />
                     </div>
 
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Meter Reading Unit
-                      </label>
-                      <select
-                        value={unitForm.meterReadingUnit}
-                        onChange={(e) => setUnitForm({ ...unitForm, meterReadingUnit: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem", background: "#fff" }}
-                      >
-                        <option value="Hours">Hours</option>
-                        <option value="Kilometers">Kilometers</option>
-                        <option value="Hectares">Hectares</option>
-                      </select>
-                    </div>
-                  </div>
+                    <div className="wz-unit-section-divider">
+                      <span className="wz-unit-eyebrow">Ownership</span>
+                      <div className="wz-unit-grid-3">
+                        <div className="wz-unit-field">
+                          <label className="wz-unit-label">Acquired Date</label>
+                          <input
+                            type="date"
+                            value={unitForm.acquisitionDate}
+                            onChange={(e) => updateUnitField("acquisitionDate", e.target.value)}
+                            className="wz-unit-input"
+                          />
+                        </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Last Service Date
-                      </label>
-                      <input
-                        type="date"
-                        value={unitForm.lastServiceDate}
-                        onChange={(e) => setUnitForm({ ...unitForm, lastServiceDate: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
-                    </div>
+                        <div className="wz-unit-field">
+                          <label className="wz-unit-label">Cost (₱)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1000"
+                            placeholder="0"
+                            value={unitForm.acquisitionCost}
+                            onChange={(e) => updateUnitField("acquisitionCost", e.target.value)}
+                            className={`wz-unit-input ${formErrors.acquisitionCost ? "is-error" : ""}`}
+                          />
+                          {formErrors.acquisitionCost && (
+                            <span className="wz-unit-error">{formErrors.acquisitionCost}</span>
+                          )}
+                        </div>
 
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Last Service Meter Reading
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder="e.g. 500"
-                        value={unitForm.lastServiceMeterReading}
-                        onChange={(e) => setUnitForm({ ...unitForm, lastServiceMeterReading: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
+                        <div className="wz-unit-field">
+                          <label className="wz-unit-label">Source</label>
+                          <select
+                            value={unitForm.acquisitionSource}
+                            onChange={(e) => updateUnitField("acquisitionSource", e.target.value)}
+                            className="wz-unit-select"
+                          >
+                            {ACQUISITION_SOURCES.map((s) => (
+                              <option key={s} value={s}>{s}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Next Service Date
-                      </label>
-                      <input
-                        type="date"
-                        value={unitForm.nextServiceDate}
-                        onChange={(e) => setUnitForm({ ...unitForm, nextServiceDate: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Next Service Meter Reading
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder="e.g. 750"
-                        value={unitForm.nextServiceMeterReading}
-                        onChange={(e) => setUnitForm({ ...unitForm, nextServiceMeterReading: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                      Condition &amp; Workshop Notes
-                    </label>
-                    <textarea
-                      rows="2"
-                      placeholder="e.g. Tier-4 diesel filter replaced; hydraulics pressure calibrated."
-                      value={unitForm.conditionNotes}
-                      onChange={(e) => setUnitForm({ ...unitForm, conditionNotes: e.target.value })}
-                      style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem", fontFamily: "inherit" }}
-                    />
-                  </div>
-                </div>
-
-                {/* 5. Ownership & Location Card */}
-                <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "18px 20px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid #f1f5f9" }}>
-                    <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: "#f5f3ff", color: "#7c3aed", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                        <polyline points="9 22 9 12 15 12 15 22" />
-                      </svg>
-                    </div>
-                    <div>
-                      <h4 style={{ margin: 0, fontSize: "0.96rem", fontWeight: "800", color: "#0f172a" }}>5. Ownership &amp; Location</h4>
-                      <span style={{ fontSize: "0.76rem", color: "#64748b" }}>Acquisition details, asset costs, and primary storage depot</span>
-                    </div>
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Acquisition Date
-                      </label>
-                      <input
-                        type="date"
-                        value={unitForm.acquisitionDate}
-                        onChange={(e) => setUnitForm({ ...unitForm, acquisitionDate: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Acquisition Cost (₱) — Manager Only
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="1000"
-                        placeholder="e.g. 1850000"
-                        value={unitForm.acquisitionCost}
-                        onChange={(e) => setUnitForm({ ...unitForm, acquisitionCost: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
-                    </div>
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Acquisition Source
-                      </label>
-                      <select
-                        value={unitForm.acquisitionSource}
-                        onChange={(e) => setUnitForm({ ...unitForm, acquisitionSource: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem", background: "#fff" }}
-                      >
-                        {ACQUISITION_SOURCES.map((s) => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                        Storage Depot Location
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Main Depot Shed A, Malaybalay"
-                        value={unitForm.storageLocation}
-                        onChange={(e) => setUnitForm({ ...unitForm, storageLocation: e.target.value })}
-                        style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* 6. Other Info Card */}
-                <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "18px 20px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid #f1f5f9" }}>
-                    <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: "#f1f5f9", color: "#475569", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                        <polyline points="14 2 14 8 20 8" />
-                        <line x1="16" y1="13" x2="8" y2="13" />
-                        <line x1="16" y1="17" x2="8" y2="17" />
-                        <polyline points="10 9 9 9 8 9" />
-                      </svg>
-                    </div>
-                    <div>
-                      <h4 style={{ margin: 0, fontSize: "0.96rem", fontWeight: "800", color: "#0f172a" }}>6. Restrictions &amp; Internal Notes</h4>
-                      <span style={{ fontSize: "0.76rem", color: "#64748b" }}>Operational limitations for farmers and internal staff documentation</span>
-                    </div>
-                  </div>
-
-                  <div style={{ marginBottom: "14px" }}>
-                    <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                      Operating Restrictions (Shown to farmers &amp; booking staff)
-                    </label>
-                    <textarea
-                      rows="2"
-                      placeholder="e.g. Requires dry field conditions. Incline limit 15°. Flatbed hauler delivery mandatory."
-                      value={unitForm.operatingRestrictions}
-                      onChange={(e) => setUnitForm({ ...unitForm, operatingRestrictions: e.target.value })}
-                      style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem", fontFamily: "inherit" }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "700", color: "#334155", marginBottom: "5px" }}>
-                      Staff &amp; Internal Notes (Manager / Staff Only)
-                    </label>
-                    <textarea
-                      rows="2"
-                      placeholder="e.g. Operator manual kept in office cabinet 3. Insurance policy renews annually in December."
-                      value={unitForm.notes}
-                      onChange={(e) => setUnitForm({ ...unitForm, notes: e.target.value })}
-                      style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem", fontFamily: "inherit" }}
-                    />
-                  </div>
-                </div>
+                  </>
+                )}
               </div>
 
-              {/* Sticky Bottom Actions Footer */}
-              <div
-                style={{
-                  padding: "14px 24px",
-                  borderTop: "1px solid #e2e8f0",
-                  background: "#ffffff",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  flexShrink: 0,
-                  boxShadow: "0 -2px 8px rgba(0,0,0,0.03)",
-                }}
-              >
-                <div style={{ fontSize: "0.8rem", color: "#64748b" }}>
-                  <span style={{ color: "#e11d48", fontWeight: "700" }}>*</span> Required fields must be completed
+              {/* Footer */}
+              <div className="wz-booking-modal-footer">
+                <div style={{ fontSize: "0.78rem", color: unitSaveError ? "#e11d48" : "#64748b", fontWeight: unitSaveError ? 600 : 500 }}>
+                  {unitSaveError ? (
+                    unitSaveError
+                  ) : (
+                    <>
+                      <span style={{ color: "#e11d48", fontWeight: 700 }}>*</span> Required
+                    </>
+                  )}
                 </div>
 
-                <div style={{ display: "flex", gap: "10px" }}>
+                <div className="wz-modal-footer-actions">
                   <button
                     type="button"
+                    disabled={savingUnit}
                     onClick={() => setShowAddModal(false)}
-                    style={{
-                      padding: "9px 20px",
-                      background: "#f1f5f9",
-                      color: "#475569",
-                      border: "1px solid #cbd5e1",
-                      borderRadius: "8px",
-                      fontSize: "0.85rem",
-                      cursor: "pointer",
-                      fontWeight: "600",
-                    }}
+                    className="wz-modal-btn-close"
                   >
                     Cancel
                   </button>
 
                   <button
                     type="submit"
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      padding: "9px 26px",
-                      background: "var(--wz-primary-navy)",
-                      color: "#ffffff",
-                      border: "none",
-                      borderRadius: "8px",
-                      fontSize: "0.85rem",
-                      cursor: "pointer",
-                      fontWeight: "700",
-                      boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                    }}
+                    disabled={savingUnit}
+                    className="wz-modal-btn-save wz-unit-btn-save"
                   >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
-                    {editingUnit ? "Update Unit" : "Save Machinery Unit"}
+                    {savingUnit ? "Saving..." : editingUnit ? "Update Unit" : "Save Unit"}
                   </button>
                 </div>
               </div>
@@ -2153,281 +2419,313 @@ export default function Units() {
         </div>
       )}
 
-      {/* ================= 2. View Details Modal ================= */}
-      {viewingUnit && (
-        <div className="wz-modal-overlay" onClick={() => setViewingUnit(null)}>
-          <div className="wz-modal-content wz-modal-large" onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                <span className="wz-unit-code-badge" style={{ fontSize: "1rem" }}>{viewingUnit.unitId}</span>
-                <h3 style={{ margin: 0, fontSize: "1.3rem", fontWeight: "800", color: "#0f172a" }}>
-                  {viewingUnit.name}
-                </h3>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+      {/* ================= 2. View Details Modal (Minimalist) ================= */}
+      {viewingUnit && (() => {
+        const detailUnit = unitDetailsData?.data
+          ? { ...viewingUnit, ...unitDetailsData.data }
+          : viewingUnit;
+        const cond = detailUnit.operatingCondition || (
+          detailUnit.status === "Available" ? "Operational" :
+          ["Maintenance", "Repair"].includes(detailUnit.status) ? "Under Maintenance" : "Retired"
+        );
+        const condClass =
+          cond === "Operational"
+            ? "wz-cond-operational"
+            : cond === "Under Maintenance"
+            ? "wz-cond-maintenance"
+            : "wz-cond-retired";
+        const unitPhotos = Array.from(
+          new Set(
+            [detailUnit.imageUrl, ...(Array.isArray(detailUnit.photos) ? detailUnit.photos : [])]
+              .map((s) => String(s || "").trim())
+              .filter(Boolean)
+          )
+        ).slice(0, 5);
+        const activePhoto = unitPhotos[activeViewPhotoIndex] || unitPhotos[0] || "";
+        const brandModel = [detailUnit.brand, detailUnit.model].filter(Boolean).join(" ");
+        const billingShort =
+          detailUnit.pricingUnit === "Per Hectare"
+            ? "/ ha"
+            : detailUnit.pricingUnit === "Per Hour"
+            ? "/ hr"
+            : "/ day";
+        const memberRateVal = Number(detailUnit.memberRate ?? detailUnit.ratePerDay ?? 0);
+        const opFeeVal = Number(detailUnit.additionalOperatorFee || 0);
+        const operatorFeeSummary = detailUnit.operatorIncluded
+          ? "Included in rate"
+          : opFeeVal > 0
+          ? detailUnit.operatorFeeBasis === "per %"
+            ? `${opFeeVal}% of rate`
+            : `₱${opFeeVal.toLocaleString()} ${detailUnit.operatorFeeBasis || "per day"}`
+          : "None";
+        const trFeeVal = Number(detailUnit.additionalTransportFee || 0);
+        const transportSummary = detailUnit.transportIncluded
+          ? "Included in rate"
+          : trFeeVal > 0
+          ? `₱${trFeeVal.toLocaleString()} ${detailUnit.transportFeeBasis || "per trip"}`
+          : "Member pickup";
+
+        const infoItems = [];
+        if (detailUnit.brand) infoItems.push({ label: "Brand", val: detailUnit.brand });
+        if (detailUnit.model) infoItems.push({ label: "Model", val: detailUnit.model });
+        if (detailUnit.serialNumber) infoItems.push({ label: "Serial No.", val: detailUnit.serialNumber });
+        if (detailUnit.horsepower) infoItems.push({ label: "Power", val: `${detailUnit.horsepower} HP` });
+        if (detailUnit.capacity) infoItems.push({ label: "Capacity", val: detailUnit.capacity });
+        if (detailUnit.currentMeterReading > 0) {
+          infoItems.push({
+            label: "Meter Reading",
+            val: `${detailUnit.currentMeterReading} ${detailUnit.meterReadingUnit || "hrs"}`,
+          });
+        }
+        if (detailUnit.storageLocation) infoItems.push({ label: "Location", val: detailUnit.storageLocation });
+        if (detailUnit.lastServiceDate) infoItems.push({ label: "Last Service", val: detailUnit.lastServiceDate });
+        if (detailUnit.nextServiceDate) infoItems.push({ label: "Next Service", val: detailUnit.nextServiceDate });
+        if (Array.isArray(detailUnit.attachments) && detailUnit.attachments.length > 0) {
+          infoItems.push({ label: "Attachments", val: detailUnit.attachments.join(", ") });
+        }
+
+        const maintenanceLogs = unitDetailsData?.maintenanceHistory || [];
+
+        return (
+          <div className="wz-booking-modal-overlay" onClick={() => setViewingUnit(null)}>
+            <div
+              className="wz-booking-modal-container wz-unit-modal-container"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="wz-booking-modal-header">
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                    <span className="wz-unit-code-badge">{detailUnit.unitId}</span>
+                    <h3 className="wz-unit-modal-title">{detailUnit.name}</h3>
+                    <span className={`wz-cond-badge ${condClass}`}>{cond}</span>
+                  </div>
+                  <div style={{ fontSize: "0.78rem", color: "var(--wz-text-muted, #64748b)", marginTop: "3px" }}>
+                    {detailUnit.category}
+                    {brandModel ? ` · ${brandModel}` : ""}
+                  </div>
+                </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    const target = (unitDetailsData && unitDetailsData.data) ? { ...viewingUnit, ...unitDetailsData.data } : viewingUnit;
-                    setViewingUnit(null);
-                    openEditModal(target);
-                  }}
-                  title="Edit Unit"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    padding: "6px 14px",
-                    background: "#0284c7",
-                    color: "#ffffff",
-                    border: "none",
-                    borderRadius: "6px",
-                    fontWeight: "700",
-                    fontSize: "0.82rem",
-                    cursor: "pointer",
-                    boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
-                    transition: "background 0.15s ease"
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "#0369a1")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "#0284c7")}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                  </svg>
-                  <span>Edit Unit</span>
-                </button>
-                <button
+                  className="wz-unit-modal-close"
                   onClick={() => setViewingUnit(null)}
-                  style={{ background: "none", border: "none", fontSize: "1.4rem", cursor: "pointer", color: "#94a3b8" }}
                   title="Close"
                   aria-label="Close"
                 >
                   &times;
                 </button>
               </div>
-            </div>
 
-            {detailsLoading ? (
-              <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>Loading full unit history...</div>
-            ) : (
-              <div>
-                {/* Hero Summary Header */}
-                <div style={{ display: "flex", gap: "16px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "16px", marginBottom: "18px", flexWrap: "wrap" }}>
-                  <img
-                    src={viewingUnit.imageUrl || "https://images.unsplash.com/photo-1592982537447-7440770cbfc9?auto=format&fit=crop&w=700&q=80"}
-                    alt={viewingUnit.name}
-                    style={{ width: "130px", height: "95px", objectFit: "cover", borderRadius: "8px", border: "1px solid #cbd5e1" }}
-                  />
-                  <div style={{ flex: 1, minWidth: "200px" }}>
-                    <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "4px" }}>
-                      <span style={{ fontSize: "0.85rem", fontWeight: "700", color: "#0f172a" }}>
-                        {viewingUnit.brand} {viewingUnit.model}
-                      </span>
-                      <span style={{ fontSize: "0.78rem", color: "#64748b" }}>({viewingUnit.category})</span>
+              {/* Body */}
+              <div className="wz-unit-modal-body">
+                {/* Photo + Headline Rate */}
+                <div className="wz-view-hero">
+                  <div className="wz-view-photo-col">
+                    <div className="wz-view-photo-frame">
+                      {activePhoto ? (
+                        <img src={activePhoto} alt={detailUnit.name} />
+                      ) : (
+                        <>
+                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="3" />
+                            <circle cx="8.5" cy="8.5" r="1.5" />
+                            <polyline points="21 15 16 10 5 21" />
+                          </svg>
+                          <span>No photo</span>
+                        </>
+                      )}
                     </div>
+                    {unitPhotos.length > 1 && (
+                      <div className="wz-view-photo-thumbs">
+                        {unitPhotos.map((src, idx) => (
+                          <button
+                            key={`${src}-${idx}`}
+                            type="button"
+                            className={`wz-view-thumb-btn ${idx === activeViewPhotoIndex ? "active" : ""}`}
+                            onClick={() => setActiveViewPhotoIndex(idx)}
+                            aria-label={`View photo ${idx + 1}`}
+                          >
+                            <img src={src} alt="" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
-                    <div style={{ fontSize: "1.1rem", fontWeight: "800", color: "var(--wz-primary-red)", margin: "4px 0" }}>
-                      ₱{Number(viewingUnit.memberRate || viewingUnit.ratePerDay).toLocaleString()}
-                      <span style={{ fontSize: "0.8rem", color: "#64748b", fontWeight: "500" }}>
-                        {" "}{viewingUnit.pricingUnit || "Per Hectare"}
-                      </span>
+                  <div className="wz-view-hero-info">
+                    <div className="wz-view-hero-rate">
+                      ₱{memberRateVal.toLocaleString()}
+                      <span>{billingShort}</span>
                     </div>
-
-                    <div style={{ display: "flex", gap: "12px", fontSize: "0.8rem", color: "#475569", flexWrap: "wrap", marginTop: "6px" }}>
-                      <span>Meter: <strong>{viewingUnit.currentMeterReading || viewingUnit.operatingHours || 0} {viewingUnit.meterReadingUnit || "hrs"}</strong></span>
-                      <span>Fuel: <strong>{viewingUnit.fuelType || "Diesel"}</strong></span>
-                      {viewingUnit.horsepower && <span>Power: <strong>{viewingUnit.horsepower} HP</strong></span>}
-                      {viewingUnit.serialNumber && <span>S/N: <strong>{viewingUnit.serialNumber}</strong></span>}
+                    <div className="wz-view-hero-chips">
+                      <span className="wz-view-chip">{detailUnit.pricingUnit || "Per Hectare"}</span>
+                      <span className="wz-view-chip">
+                        {detailUnit.fuelIncluded ? "Fuel Included" : detailUnit.fuelType || "Diesel"}
+                      </span>
+                      {detailUnit.operatorRequired && (
+                        <span className="wz-view-chip">Operator Required</span>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                {/* Section 1: Brand & Model Details (Transferred to View Action) */}
-                <div className="wz-detail-section">
-                  <div className="wz-detail-sec-title">Brand &amp; Model Specifications</div>
-                  <div className="wz-detail-grid-2">
-                    <div className="wz-detail-item">
-                      <span className="wz-detail-label">Brand</span>
-                      <span className="wz-detail-value" style={{ fontWeight: "700", color: "#0f172a" }}>{viewingUnit.brand || "—"}</span>
+                {/* Pricing */}
+                <div className="wz-view-card">
+                  <div className="wz-view-card-head">
+                    <span className="wz-view-card-title">Pricing</span>
+                  </div>
+                  <div className="wz-view-kv-grid">
+                    <div className="wz-view-kv">
+                      <span className="wz-view-k">Member Rate</span>
+                      <span className="wz-view-v">
+                        ₱{memberRateVal.toLocaleString()} {billingShort}
+                      </span>
                     </div>
-                    <div className="wz-detail-item">
-                      <span className="wz-detail-label">Model</span>
-                      <span className="wz-detail-value" style={{ fontWeight: "700", color: "#0f172a" }}>{viewingUnit.model || "—"}</span>
+                    <div className="wz-view-kv">
+                      <span className="wz-view-k">Non-Member Rate</span>
+                      <span className="wz-view-v">
+                        {detailUnit.nonmemberRate > 0
+                          ? `₱${Number(detailUnit.nonmemberRate).toLocaleString()} ${billingShort}`
+                          : "—"}
+                      </span>
                     </div>
-                    <div className="wz-detail-item">
-                      <span className="wz-detail-label">Model Year</span>
-                      <span className="wz-detail-value">{viewingUnit.modelYear || "—"}</span>
+                    <div className="wz-view-kv">
+                      <span className="wz-view-k">Operator Fee</span>
+                      <span className="wz-view-v">{operatorFeeSummary}</span>
                     </div>
-                    <div className="wz-detail-item">
-                      <span className="wz-detail-label">Serial Number (S/N)</span>
-                      <span className="wz-detail-value">{viewingUnit.serialNumber || "—"}</span>
+                    <div className="wz-view-kv">
+                      <span className="wz-view-k">Transport</span>
+                      <span className="wz-view-v">{transportSummary}</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Section 2: Specifications & Pricing */}
-                <div className="wz-detail-section">
-                  <div className="wz-detail-sec-title">Rental &amp; Pricing Policies</div>
-                  <div className="wz-detail-grid-2">
-                    <div className="wz-detail-item">
-                      <span className="wz-detail-label">Member Rental Rate</span>
-                      <span className="wz-detail-value">₱{Number(viewingUnit.memberRate || viewingUnit.ratePerDay).toLocaleString()} / {viewingUnit.pricingUnit}</span>
-                    </div>
-                    <div className="wz-detail-item">
-                      <span className="wz-detail-label">Non-Member Rate</span>
-                      <span className="wz-detail-value">{viewingUnit.nonmemberRate ? `₱${Number(viewingUnit.nonmemberRate).toLocaleString()}` : "Not configured"}</span>
-                    </div>
-                    <div className="wz-detail-item">
-                      <span className="wz-detail-label">Operator Policy</span>
-                      <span className="wz-detail-value">
-                        {viewingUnit.operatorIncluded ? "Included in base rate" : viewingUnit.additionalOperatorFee ? `+₱${viewingUnit.additionalOperatorFee} (${viewingUnit.operatorFeeBasis || "per day"})` : "Self-operated"}
-                      </span>
-                    </div>
-                    <div className="wz-detail-item">
-                      <span className="wz-detail-label">Transport Delivery</span>
-                      <span className="wz-detail-value">
-                        {viewingUnit.transportIncluded ? "Included in base rate" : viewingUnit.additionalTransportFee ? `+₱${viewingUnit.additionalTransportFee} (${viewingUnit.transportFeeBasis || "per trip"})` : "Member pickup"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Section 3: Assigned Operator / Driver (Normal Black Styling) */}
-                <div className="wz-detail-section">
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                    <div className="wz-detail-sec-title" style={{ margin: 0 }}>Assigned Operator / Driver</div>
+                {/* Assigned Operator */}
+                <div className="wz-view-card">
+                  <div className="wz-view-card-head">
+                    <span className="wz-view-card-title">Operator</span>
                     <button
                       type="button"
+                      className="wz-view-btn-inline"
                       onClick={() => {
-                        const target = viewingUnit;
                         setViewingUnit(null);
-                        openChangeDriverModal(target);
-                      }}
-                      style={{
-                        padding: "5px 12px",
-                        background: "#0f172a",
-                        border: "1px solid #0f172a",
-                        borderRadius: "6px",
-                        color: "#ffffff",
-                        fontWeight: "700",
-                        fontSize: "0.78rem",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "5px"
+                        openChangeDriverModal(detailUnit);
                       }}
                     >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                      </svg>
-                      Change Driver
+                      {detailUnit.assignedDriver && detailUnit.assignedDriver !== "Unassigned"
+                        ? "Change"
+                        : "Assign"}
                     </button>
                   </div>
-                  <div className="wz-detail-grid-2">
-                    <div className="wz-detail-item">
-                      <span className="wz-detail-label">Designated Driver</span>
-                      <span className="wz-detail-value" style={{ fontWeight: "700", color: "#0f172a" }}>
-                        {viewingUnit.assignedDriver && viewingUnit.assignedDriver !== "Unassigned" ? (
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                            <span style={{ width: "20px", height: "20px", borderRadius: "50%", background: "#0f172a", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "0.7rem", fontWeight: "700" }}>
-                              {viewingUnit.assignedDriver.charAt(0).toUpperCase()}
-                            </span>
-                            {viewingUnit.assignedDriver}
-                          </span>
-                        ) : (
-                          <span style={{ color: "#64748b" }}>Unassigned (No Operator Assigned)</span>
-                        )}
+                  <div className="wz-view-kv-grid">
+                    <div className="wz-view-kv">
+                      <span className="wz-view-k">Assigned Operator</span>
+                      <span className="wz-view-v">
+                        {detailUnit.assignedDriver && detailUnit.assignedDriver !== "Unassigned"
+                          ? detailUnit.assignedDriver
+                          : "Unassigned"}
                       </span>
                     </div>
-                    <div className="wz-detail-item">
-                      <span className="wz-detail-label">Driver Contact Phone</span>
-                      <span className="wz-detail-value">{viewingUnit.driverPhone || "—"}</span>
+                    <div className="wz-view-kv">
+                      <span className="wz-view-k">Contact</span>
+                      <span className="wz-view-v">{detailUnit.driverPhone || "—"}</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Section 4 & 5: Maintenance & Location */}
-                <div className="wz-detail-section">
-                  <div className="wz-detail-sec-title">Condition &amp; Service Tracking</div>
-                  <div className="wz-detail-grid-2">
-                    <div className="wz-detail-item">
-                      <span className="wz-detail-label">Operating Condition</span>
-                      <span className="wz-detail-value">{viewingUnit.operatingCondition || viewingUnit.status}</span>
+                {/* Optional Unit Info & Notes (only shown if populated) */}
+                {(infoItems.length > 0 || detailUnit.notes || detailUnit.operatingRestrictions) && (
+                  <div className="wz-view-card">
+                    <div className="wz-view-card-head">
+                      <span className="wz-view-card-title">Details &amp; Service</span>
                     </div>
-                    <div className="wz-detail-item">
-                      <span className="wz-detail-label">Storage Location</span>
-                      <span className="wz-detail-value">{viewingUnit.storageLocation || "Main Co-op Depot"}</span>
-                    </div>
-                    <div className="wz-detail-item">
-                      <span className="wz-detail-label">Last Service Date</span>
-                      <span className="wz-detail-value">{viewingUnit.lastServiceDate || "None on record"}</span>
-                    </div>
-                    <div className="wz-detail-item">
-                      <span className="wz-detail-label">Next Service Due</span>
-                      <span className="wz-detail-value">{viewingUnit.nextServiceDate || "Routine"}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Related Maintenance Records */}
-                {unitDetailsData && unitDetailsData.maintenanceHistory && unitDetailsData.maintenanceHistory.length > 0 && (
-                  <div className="wz-detail-section">
-                    <div className="wz-detail-sec-title">Service &amp; Maintenance Logs ({unitDetailsData.maintenanceHistory.length})</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                      {unitDetailsData.maintenanceHistory.slice(0, 4).map((m) => (
-                        <div key={m._id} style={{ display: "flex", justifyContent: "space-between", background: "#fff", border: "1px solid #e2e8f0", padding: "8px 12px", borderRadius: "6px", fontSize: "0.82rem" }}>
-                          <div>
-                            <strong>{m.maintenanceType}</strong> — <span style={{ color: "#64748b" }}>{m.reason}</span>
+                    {infoItems.length > 0 && (
+                      <div className="wz-view-kv-grid">
+                        {infoItems.map((item) => (
+                          <div key={item.label} className="wz-view-kv">
+                            <span className="wz-view-k">{item.label}</span>
+                            <span className="wz-view-v">{item.val}</span>
                           </div>
-                          <span style={{ color: "#0284c7", fontWeight: "600" }}>{m.startDate} to {m.endDate}</span>
+                        ))}
+                      </div>
+                    )}
+                    {(detailUnit.operatingRestrictions || detailUnit.notes) && (
+                      <div style={{ marginTop: infoItems.length > 0 ? "10px" : 0, fontSize: "0.8rem", color: "var(--wz-text-muted, #475569)", display: "flex", flexDirection: "column", gap: "4px" }}>
+                        {detailUnit.operatingRestrictions && (
+                          <div><strong>Restrictions:</strong> {detailUnit.operatingRestrictions}</div>
+                        )}
+                        {detailUnit.notes && (
+                          <div><strong>Notes:</strong> {detailUnit.notes}</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Maintenance Logs */}
+                {!detailsLoading && maintenanceLogs.length > 0 && (
+                  <div className="wz-view-card">
+                    <div className="wz-view-card-head">
+                      <span className="wz-view-card-title">Service Logs ({maintenanceLogs.length})</span>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                      {maintenanceLogs.slice(0, 4).map((m) => (
+                        <div key={m._id} className="wz-view-log-row">
+                          <div>
+                            <strong>{m.maintenanceType}</strong>
+                            {m.reason ? <span style={{ color: "var(--wz-text-muted, #64748b)" }}> — {m.reason}</span> : null}
+                          </div>
+                          <span style={{ color: "#0284c7", fontWeight: "600", whiteSpace: "nowrap" }}>
+                            {m.startDate} to {m.endDate}
+                          </span>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
               </div>
-            )}
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "16px" }}>
-              <button
-                type="button"
-                onClick={() => {
-                  const target = (unitDetailsData && unitDetailsData.data) ? { ...viewingUnit, ...unitDetailsData.data } : viewingUnit;
-                  setViewingUnit(null);
-                  openEditModal(target);
-                }}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "8px 18px",
-                  background: "#0284c7",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "8px",
-                  fontWeight: "700",
-                  cursor: "pointer",
-                  fontSize: "0.85rem"
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                </svg>
-                Edit Unit
-              </button>
-              <button
-                onClick={() => setViewingUnit(null)}
-                style={{ padding: "8px 20px", background: "var(--wz-primary-navy)", color: "#fff", border: "none", borderRadius: "8px", fontWeight: "700", cursor: "pointer", fontSize: "0.85rem" }}
-              >
-                Close Details
-              </button>
+              {/* Footer */}
+              <div className="wz-booking-modal-footer">
+                <button
+                  type="button"
+                  className="wz-modal-btn-close"
+                  onClick={() => {
+                    setViewingUnit(null);
+                    openChangeStatusModal(detailUnit);
+                  }}
+                >
+                  Change Status
+                </button>
+
+                <div className="wz-modal-footer-actions">
+                  <button
+                    type="button"
+                    className="wz-modal-btn-close"
+                    onClick={() => setViewingUnit(null)}
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="button"
+                    className="wz-modal-btn-save wz-unit-btn-save"
+                    onClick={() => {
+                      setViewingUnit(null);
+                      openEditModal(detailUnit);
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                    Edit Unit
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ================= 3. Retire Confirmation & Blocker Modal ================= */}
       {retiringUnit && (
@@ -2439,7 +2737,7 @@ export default function Units() {
               </h3>
               <button
                 onClick={() => setRetiringUnit(null)}
-                style={{ background: "none", border: "none", fontSize: "1.4rem", cursor: "pointer", color: "#94a3b8" }}
+                style={{ background: "none", border: "none", fontSize: "1.4rem", cursor: "pointer", color: "var(--wz-text-muted, #94a3b8)" }}
               >
                 &times;
               </button>
@@ -2471,7 +2769,7 @@ export default function Units() {
               </div>
             ) : (
               <div>
-                <p style={{ margin: "0 0 14px 0", fontSize: "0.88rem", color: "#475569", lineHeight: "1.5" }}>
+                <p style={{ margin: "0 0 14px 0", fontSize: "0.88rem", color: "var(--wz-text-muted, #475569)", lineHeight: "1.5" }}>
                   Are you sure you want to retire <strong>{retiringUnit.unitId} ({retiringUnit.name})</strong>?
                   <br /><br />
                   Retiring marks the unit as decommissioned / out of service. All historical rental records and maintenance logs are safely preserved for co-op audits.
@@ -2504,17 +2802,17 @@ export default function Units() {
           <div className="wz-modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "540px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
               <div>
-                <h3 style={{ margin: "0 0 4px 0", fontSize: "1.2rem", fontWeight: "800", color: "#0f172a" }}>
+                <h3 style={{ margin: "0 0 4px 0", fontSize: "1.2rem", fontWeight: "800", color: "var(--wz-text-main, #0f172a)" }}>
                   Change Operating Status
                 </h3>
-                <div style={{ fontSize: "0.82rem", color: "#64748b" }}>
+                <div style={{ fontSize: "0.82rem", color: "var(--wz-text-muted, #64748b)" }}>
                   Unit: <span className="wz-unit-code-badge">{statusModalUnit.unitId}</span> &bull; <strong>{statusModalUnit.name}</strong>
                 </div>
               </div>
               <button
                 disabled={statusSubmitting}
                 onClick={() => setStatusModalUnit(null)}
-                style={{ background: "none", border: "none", fontSize: "1.4rem", cursor: "pointer", color: "#94a3b8" }}
+                style={{ background: "none", border: "none", fontSize: "1.4rem", cursor: "pointer", color: "var(--wz-text-muted, #94a3b8)" }}
               >
                 &times;
               </button>
@@ -2527,7 +2825,7 @@ export default function Units() {
             )}
 
             {/* Current Status banner */}
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 12px", background: "#f8fafc", borderRadius: "8px", marginBottom: "12px", fontSize: "0.8rem", color: "#475569" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 12px", background: "#f8fafc", borderRadius: "8px", marginBottom: "12px", fontSize: "0.8rem", color: "var(--wz-text-muted, #475569)" }}>
               <span>Current Operating Condition:</span>
               <strong>{statusModalUnit.operatingCondition || (statusModalUnit.status === "Available" ? "Operational" : statusModalUnit.status === "Maintenance" ? "Under Maintenance" : "Retired")}</strong>
             </div>
@@ -2594,14 +2892,14 @@ export default function Units() {
 
             {/* Note alert if taking unit out of service */}
             {(selectedStatus === "Under Maintenance" || selectedStatus === "Retired") && (
-              <div style={{ padding: "8px 12px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "0.78rem", color: "#475569", marginBottom: "14px", lineHeight: "1.4" }}>
+              <div style={{ padding: "8px 12px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "0.78rem", color: "var(--wz-text-muted, #475569)", marginBottom: "14px", lineHeight: "1.4" }}>
                 <strong>System Rule:</strong> Active approved member bookings will be checked before taking this unit out of service.
               </div>
             )}
 
             {/* Optional Status Notes */}
             <div style={{ marginBottom: "16px" }}>
-              <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "700", color: "#334155", marginBottom: "4px" }}>
+              <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "700", color: "var(--wz-text-main, #334155)", marginBottom: "4px" }}>
                 Status / Workshop Notes (Optional)
               </label>
               <textarea
@@ -2660,17 +2958,17 @@ export default function Units() {
           <div className="wz-modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "560px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
               <div>
-                <h3 style={{ margin: "0 0 4px 0", fontSize: "1.25rem", fontWeight: "800", color: "#0f172a" }}>
+                <h3 style={{ margin: "0 0 4px 0", fontSize: "1.25rem", fontWeight: "800", color: "var(--wz-text-main, #0f172a)" }}>
                   Assign Driver to Machinery
                 </h3>
-                <div style={{ fontSize: "0.82rem", color: "#64748b" }}>
+                <div style={{ fontSize: "0.82rem", color: "var(--wz-text-muted, #64748b)" }}>
                   Unit: <span className="wz-unit-code-badge">{driverModalUnit.unitId}</span> &bull; <strong>{driverModalUnit.name}</strong>
                 </div>
               </div>
               <button
                 disabled={driverSubmitting}
                 onClick={() => setDriverModalUnit(null)}
-                style={{ background: "none", border: "none", fontSize: "1.4rem", cursor: "pointer", color: "#94a3b8" }}
+                style={{ background: "none", border: "none", fontSize: "1.4rem", cursor: "pointer", color: "var(--wz-text-muted, #94a3b8)" }}
               >
                 &times;
               </button>
@@ -2683,16 +2981,16 @@ export default function Units() {
             )}
 
             {/* Current Assignment Callout */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "14px", fontSize: "0.84rem", color: "#475569" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "14px", fontSize: "0.84rem", color: "var(--wz-text-muted, #475569)" }}>
               <div>
-                <span style={{ color: "#64748b", fontSize: "0.78rem", display: "block" }}>Currently Assigned Driver:</span>
-                <strong style={{ color: "#0f172a", fontSize: "0.95rem" }}>
+                <span style={{ color: "var(--wz-text-muted, #64748b)", fontSize: "0.78rem", display: "block" }}>Currently Assigned Driver:</span>
+                <strong style={{ color: "var(--wz-text-main, #0f172a)", fontSize: "0.95rem" }}>
                   {driverModalUnit.assignedDriver && driverModalUnit.assignedDriver !== "Unassigned"
                     ? driverModalUnit.assignedDriver
                     : "No Driver Assigned (Unassigned)"}
                 </strong>
                 {driverModalUnit.driverPhone && (
-                  <span style={{ fontSize: "0.75rem", color: "#64748b", marginLeft: "6px" }}>
+                  <span style={{ fontSize: "0.75rem", color: "var(--wz-text-muted, #64748b)", marginLeft: "6px" }}>
                     &bull; {driverModalUnit.driverPhone}
                   </span>
                 )}
@@ -2762,7 +3060,7 @@ export default function Units() {
                     height: "36px",
                     borderRadius: "50%",
                     background: "#e2e8f0",
-                    color: "#64748b",
+                    color: "var(--wz-text-muted, #64748b)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -2772,8 +3070,8 @@ export default function Units() {
                     —
                   </div>
                   <div>
-                    <div style={{ fontWeight: "700", color: "#334155", fontSize: "0.88rem" }}>Unassigned</div>
-                    <div style={{ fontSize: "0.75rem", color: "#64748b" }}>Self-operated or no designated driver</div>
+                    <div style={{ fontWeight: "700", color: "var(--wz-text-main, #334155)", fontSize: "0.88rem" }}>Unassigned</div>
+                    <div style={{ fontSize: "0.75rem", color: "var(--wz-text-muted, #64748b)" }}>Self-operated or no designated driver</div>
                   </div>
                 </div>
                 {(!driverModalUnit.assignedDriver || driverModalUnit.assignedDriver === "Unassigned") && (
@@ -2845,7 +3143,7 @@ export default function Units() {
                         )}
                         <div>
                           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            <span style={{ fontWeight: "700", color: "#0f172a", fontSize: "0.88rem" }}>{driver.name}</span>
+                            <span style={{ fontWeight: "700", color: "var(--wz-text-main, #0f172a)", fontSize: "0.88rem" }}>{driver.name}</span>
                             <span style={{
                               fontSize: "0.7rem",
                               fontWeight: "600",
@@ -2857,7 +3155,7 @@ export default function Units() {
                               {driver.status || "Active"}
                             </span>
                           </div>
-                          <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                          <div style={{ fontSize: "0.75rem", color: "var(--wz-text-muted, #64748b)" }}>
                             {driver.phone || "No phone"} {driver.email ? `• ${driver.email}` : ""}
                           </div>
                         </div>
@@ -2871,7 +3169,7 @@ export default function Units() {
                             gap: "4px",
                             fontSize: "0.75rem",
                             fontWeight: "700",
-                            color: "#0f172a",
+                            color: "var(--wz-text-main, #0f172a)",
                             background: "#e2e8f0",
                             padding: "4px 9px",
                             borderRadius: "12px"
@@ -2905,7 +3203,7 @@ export default function Units() {
                 })}
 
               {drivers.length === 0 && (
-                <div style={{ padding: "20px", textAlign: "center", color: "#94a3b8", fontSize: "0.85rem" }}>
+                <div style={{ padding: "20px", textAlign: "center", color: "var(--wz-text-muted, #94a3b8)", fontSize: "0.85rem" }}>
                   {driversLoading ? "Loading drivers from registry..." : "No drivers registered yet."}
                 </div>
               )}

@@ -2,6 +2,8 @@ const cron = require("node-cron");
 const Account = require("../models/Account");
 const Application = require("../models/Application");
 const Notification = require("../models/Notification");
+const { sendMemberNotificationEmail } = require("../services/mailer");
+const oneSignalService = require("../services/oneSignalService");
 
 const dateInManila = (date) => new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Manila",
@@ -26,29 +28,63 @@ async function createBookingReminderNotifications() {
   if (applications.length === 0) return 0;
 
   const members = await Account.find({ email: { $in: applications.map((app) => app.memberEmail) } })
-    .select("email memberSettings")
+    .select("email fullName memberSettings")
     .lean();
-  const preferences = new Map(members.map((member) => [member.email, member.memberSettings?.notifications]));
+  const memberByEmail = new Map(members.map((member) => [member.email, member]));
+  const baseOrigin = (process.env.APP_BASE_URL || "http://localhost:3000").replace(/\/+$/, "");
 
   let created = 0;
   for (const application of applications) {
-    const settings = preferences.get(application.memberEmail);
-    if (settings?.inApp === false || settings?.bookingReminders === false) continue;
-    const result = await Notification.updateOne(
-      { dedupeKey: `booking-reminder:${application._id}` },
-      {
-        $setOnInsert: {
-          memberEmail: application.memberEmail,
-          title: "Rental reminder",
-          message: `Your ${application.equipment} rental starts tomorrow.`,
-          type: "reminder",
-          relatedApplicationId: application._id,
-          dedupeKey: `booking-reminder:${application._id}`,
+    const member = memberByEmail.get(application.memberEmail);
+    const settings = member?.memberSettings?.notifications;
+    if (settings?.bookingReminders === false) continue;
+
+    let shouldNotifyChannels = false;
+    if (settings?.inApp !== false) {
+      const result = await Notification.updateOne(
+        { dedupeKey: `booking-reminder:${application._id}` },
+        {
+          $setOnInsert: {
+            memberEmail: application.memberEmail,
+            title: "Rental reminder",
+            message: `Your ${application.equipment} rental starts tomorrow.`,
+            type: "reminder",
+            relatedApplicationId: application._id,
+            dedupeKey: `booking-reminder:${application._id}`,
+          },
         },
-      },
-      { upsert: true }
-    );
-    if (result.upsertedCount) created++;
+        { upsert: true }
+      );
+      if (result.upsertedCount) {
+        created++;
+        shouldNotifyChannels = true;
+      }
+    } else {
+      shouldNotifyChannels = true;
+    }
+
+    if (shouldNotifyChannels) {
+      const reminderTitle = "Rental Reminder";
+      const reminderMessage = `Your ${application.equipment} rental starts tomorrow (${application.startDate}).`;
+      if (settings?.push !== false) {
+        oneSignalService.sendPushNotification({
+          email: application.memberEmail,
+          title: reminderTitle,
+          message: reminderMessage,
+          url: `${baseOrigin}/member/bookings`,
+        }).catch(() => {});
+      }
+      if (settings?.email !== false) {
+        sendMemberNotificationEmail({
+          toEmail: application.memberEmail,
+          fullName: member?.fullName || "Member",
+          title: reminderTitle,
+          message: reminderMessage,
+          actionUrl: `${baseOrigin}/member/bookings`,
+          category: "Rental Reminder",
+        }).catch(() => {});
+      }
+    }
   }
   return created;
 }

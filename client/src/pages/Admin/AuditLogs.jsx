@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { api } from "../../services/api";
+import { api, getCachedApiData } from "../../services/api";
 import AdminSidebar from "../../components/AdminSidebar";
 import AdminTopbar from "../../components/AdminTopbar";
 import "../../styles/admin-kimpc.css";
 
 export default function AuditLogs() {
-  const [logs, setLogs] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [logs, setLogs] = useState(() => {
+    const cached = getCachedApiData("/admin/audit-logs?limit=500");
+    return cached?.logs || (Array.isArray(cached) ? cached : []);
+  });
+  const [loading, setLoading] = useState(() => !getCachedApiData("/admin/audit-logs?limit=500"));
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [filterModule, setFilterModule] = useState("all");
   const [filterResult, setFilterResult] = useState("all");
@@ -16,7 +19,7 @@ export default function AuditLogs() {
 
   const fetchLogs = async () => {
     setIsRefreshing(true);
-    const res = await api("/admin/audit-logs?limit=500");
+    const res = await api("/admin/audit-logs?limit=500", { skipCache: true });
     if (res.ok && res.data) {
       setLogs(res.data.logs || (Array.isArray(res.data) ? res.data : []));
     }
@@ -54,7 +57,7 @@ export default function AuditLogs() {
       // Module filter
       if (filterModule !== "all") {
         const mod = (log.module || "").toLowerCase();
-        if (!mod.includes(filterModule.toLowerCase().split(" ")[0])) return false;
+        if (mod !== filterModule.toLowerCase() && !mod.includes(filterModule.toLowerCase())) return false;
       }
 
       // Result / Status filter
@@ -80,7 +83,7 @@ export default function AuditLogs() {
         const actionMatch = (log.action || "").toLowerCase().includes(q);
         const moduleMatch = (log.module || "").toLowerCase().includes(q);
         const recordMatch = (log.affectedRecord || "").toLowerCase().includes(q);
-        const detailsMatch = (log.details || "").toLowerCase().includes(q);
+        const detailsMatch = String(log.details || "").toLowerCase().includes(q);
         if (!userMatch && !actionMatch && !moduleMatch && !recordMatch && !detailsMatch) return false;
       }
 
@@ -262,9 +265,11 @@ export default function AuditLogs() {
                 <option value="Authentication">Authentication</option>
                 <option value="Security Settings">Security Settings</option>
                 <option value="Financial Policies">Financial Policies</option>
+                <option value="Financial Reports">Financial Reports</option>
                 <option value="Database Backups">Database Backups</option>
                 <option value="Machinery Fleet">Machinery Fleet</option>
                 <option value="Member Messages">Member Messages</option>
+                <option value="System">System</option>
               </select>
 
               {/* Result Filter Select */}

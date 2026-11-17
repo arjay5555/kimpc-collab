@@ -25,7 +25,11 @@ const accountSchema = new mongoose.Schema(
     country: { type: String, default: "" },
     memberSettings: {
       theme: { type: String, enum: ["light", "dark"], default: "light" },
-      defaultFarmLocation: { type: String, default: "", maxlength: 240 },
+      defaultFarmLocation: { type: String, default: "", maxlength: 500 },
+      defaultFarmCoordinates: {
+        lat: { type: Number, default: null },
+        lng: { type: Number, default: null },
+      },
       notifications: {
         email: { type: Boolean, default: true },
         inApp: { type: Boolean, default: true },

@@ -906,6 +906,7 @@ router.get("/admin/audit-logs", async (req, res) => {
     const limit = Math.min(Number(req.query.limit) || 200, 1000);
 
     const query = { isArchived: { $ne: true } };
+    const andClauses = [];
 
     if (actionFilter && actionFilter !== "ALL" && actionFilter !== "all") {
       query.action = { $regex: new RegExp(actionFilter, "i") };
@@ -914,24 +915,32 @@ router.get("/admin/audit-logs", async (req, res) => {
       query.status = statusFilter;
     }
     if (moduleFilter && moduleFilter !== "ALL" && moduleFilter !== "all") {
-      query.$or = [
-        { module: moduleFilter },
-        { action: { $regex: new RegExp(moduleFilter.split(" ")[0], "i") } }
-      ];
+      andClauses.push({
+        $or: [
+          { module: moduleFilter },
+          { action: { $regex: new RegExp(moduleFilter.split(" ")[0], "i") } },
+        ],
+      });
     }
 
     if (search) {
       const searchRegex = { $regex: search, $options: "i" };
-      query.$or = [
-        { actorEmail: searchRegex },
-        { actorName: searchRegex },
-        { action: searchRegex },
-        { module: searchRegex },
-        { affectedRecord: searchRegex },
-        { targetEmail: searchRegex },
-        { targetName: searchRegex },
-        { details: searchRegex },
-      ];
+      andClauses.push({
+        $or: [
+          { actorEmail: searchRegex },
+          { actorName: searchRegex },
+          { action: searchRegex },
+          { module: searchRegex },
+          { affectedRecord: searchRegex },
+          { targetEmail: searchRegex },
+          { targetName: searchRegex },
+          { details: searchRegex },
+        ],
+      });
+    }
+
+    if (andClauses.length > 0) {
+      query.$and = andClauses;
     }
 
     const rawLogs = await AuditLog.find(query).sort({ createdAt: -1 }).limit(limit).lean();

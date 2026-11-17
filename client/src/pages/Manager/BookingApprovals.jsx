@@ -1,16 +1,138 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { api } from "../../services/api";
+import { api, getCachedApiData } from "../../services/api";
+import { computePaymentSummary } from "../../utils/paymentSummary";
 import ManagerSidebar from "../../components/ManagerSidebar";
 import ManagerSearchBar from "../../components/ManagerSearchBar";
 import ManagerTopbar from "../../components/ManagerTopbar";
+import FarmLocationPicker from "../../components/FarmLocationPicker";
+import GcashOcrBadge from "../../components/GcashOcrBadge";
 import "../../styles/admin-kimpc.css";
 
 const CURRENT_MOCK_YEAR = new Date().getFullYear();
 
 // Live MongoDB database bookings
 const INITIAL_MOCK_BOOKINGS = [];
+
+const EMPTY_ADD_BOOKING = {
+  machineryUnitId: "",
+  equipment: "",
+  memberPhone: "",
+  hectares: 1,
+  location: "",
+  formattedAddress: "",
+  farmCoordinates: null,
+  deliveryDistanceKm: null,
+  estimatedTravelMinutes: null,
+  startDate: "",
+  endDate: "",
+};
+
+function getAddUnitAvailability(unit) {
+  const condition = (unit?.operatingCondition || unit?.status || "").toLowerCase();
+  return ["operational", "available"].includes(condition) ? "Available" : "Unavailable";
+}
+
+function formatAddBookPrice(value) {
+  return new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: "PHP",
+    maximumFractionDigits: 0,
+  }).format(Number(value) || 0);
+}
+
+function formatAddDateKey(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function rangeAddDateKey(value) {
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : formatAddDateKey(date);
+}
+
+function formatAddDisplayDate(value) {
+  if (!value) return "—";
+  const date = new Date(value.includes("T") ? value : `${value}T00:00:00`);
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function isAddDateKeyBooked(dayKey, blockedRanges) {
+  if (!dayKey) return false;
+  return blockedRanges.some((range) => {
+    const startKey = rangeAddDateKey(range.startDate);
+    const endKey = rangeAddDateKey(range.endDate) || startKey;
+    return Boolean(startKey && endKey && startKey <= dayKey && endKey >= dayKey);
+  });
+}
+
+function hasAddBookedDatesInRange(startKey, endKey, blockedRanges) {
+  if (!startKey || !endKey) return false;
+  if (endKey < startKey) return true;
+  const cur = new Date(`${startKey}T00:00:00`);
+  const last = new Date(`${endKey}T00:00:00`);
+  while (cur <= last) {
+    if (isAddDateKeyBooked(formatAddDateKey(cur), blockedRanges)) return true;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return false;
+}
+
+function getMemberInitials(name, email) {
+  const source = String(name || email || "M").trim();
+  const parts = source.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  return source.slice(0, 2).toUpperCase();
+}
+
+const HISTORY_BOOKING_STATUSES = new Set([
+  "returned",
+  "completed",
+  "done",
+  "cancelled",
+  "canceled",
+  "rejected",
+  "voided",
+]);
+
+function isHistoryEligibleStatus(status) {
+  return HISTORY_BOOKING_STATUSES.has(String(status || "").trim().toLowerCase());
+}
+
+function getBookingHistoryReferenceDate(booking) {
+  const endDateCandidate = booking?.endDate
+    ? /^\d{4}-\d{2}-\d{2}$/.test(booking.endDate)
+      ? `${booking.endDate}T23:59:59`
+      : booking.endDate
+    : null;
+  const candidates = [
+    booking?.returnedAt,
+    booking?.cancelledAt,
+    booking?.bookingVoidedAt,
+    endDateCandidate,
+    booking?.updatedAt,
+    booking?.createdAt,
+  ];
+  for (const raw of candidates) {
+    if (!raw) continue;
+    const ts = new Date(raw).getTime();
+    if (Number.isFinite(ts)) return new Date(ts);
+  }
+  return null;
+}
+
+function isBookingOlderThanThreeMonths(booking, now = new Date()) {
+  if (!isHistoryEligibleStatus(booking?.status)) return false;
+  const txDate = getBookingHistoryReferenceDate(booking);
+  if (!txDate) return false;
+  const cutoff = new Date(now.getTime());
+  cutoff.setMonth(cutoff.getMonth() - 3);
+  return txDate.getTime() <= cutoff.getTime();
+}
 
 // Bidirectional Chart Data for the 12 months
 const MONTHLY_CHART_DATA = [
@@ -33,8 +155,11 @@ export default function BookingApprovals() {
   const navigate = useNavigate();
 
   // Bookings list state
-  const [liveBookings, setLiveBookings] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [liveBookings, setLiveBookings] = useState(() => {
+    const cached = getCachedApiData("/applications");
+    return Array.isArray(cached) ? cached : [];
+  });
+  const [loading, setLoading] = useState(() => !getCachedApiData("/applications"));
   const [feedback, setFeedback] = useState({ message: "", isError: false });
 
   // Filters & Search
@@ -42,7 +167,10 @@ export default function BookingApprovals() {
   const [filterType, setFilterType] = useState("All");
   const [filterStatus, setFilterStatus] = useState("All");
   const [sortBy, setSortBy] = useState("date_desc");
-  const [pageSize, setPageSize] = useState(8);
+  const [pageSize, setPageSize] = useState(() => {
+    const saved = localStorage.getItem("kimpc_manager_pageSize");
+    return saved ? Number(saved) : 8;
+  });
   const [currentPage, setCurrentPage] = useState(1);
   const [chartPeriod, setChartPeriod] = useState("This Year");
 
@@ -55,47 +183,16 @@ export default function BookingApprovals() {
   const [bookingOverrides, setBookingOverrides] = useState({});
   const [deletedIds, setDeletedIds] = useState([]);
   const [viewingBooking, setViewingBooking] = useState(null);
+  const [viewModalTab, setViewModalTab] = useState("overview"); // "overview" | "payment" | "history"
   const [previewGcashImage, setPreviewGcashImage] = useState(null);
   const [modalStatus, setModalStatus] = useState("");
   const [modalRejectionReason, setModalRejectionReason] = useState("");
   const [modalVoidReason, setModalVoidReason] = useState("");
   const [modalStartDate, setModalStartDate] = useState("2028-08-01");
   const [modalEndDate, setModalEndDate] = useState("2028-08-05");
-
-  // Manager action to verify and settle payment
-  const handleSettlePayment = async (booking) => {
-    if (!booking) return;
-    const currentRawId = booking.rawId;
-    const currentId = booking.id;
-    if (!window.confirm(`Confirm payment settlement for booking ${currentId}? This will verify the payment, issue receipt voucher, and notify the member.`)) {
-      return;
-    }
-    if (currentRawId) {
-      setFeedback({ message: `Settling payment for ${currentId}...`, isError: false });
-      try {
-        const res = await api(`/applications/${currentRawId}`, {
-          method: "PATCH",
-          body: { paymentStatus: "Paid" },
-        });
-        if (res.ok) {
-          setFeedback({ message: `Payment for booking ${currentId} marked as Paid!`, isError: false });
-          setViewingBooking((prev) => prev ? { ...prev, paymentStatus: "Paid" } : null);
-          fetchData();
-        } else {
-          setFeedback({ message: res.data?.error || "Failed to settle payment.", isError: true });
-        }
-      } catch (err) {
-        setFeedback({ message: "Network error settling payment.", isError: true });
-      }
-    } else {
-      setBookingOverrides((prev) => ({
-        ...prev,
-        [currentId]: { ...(prev[currentId] || {}), paymentStatus: "Paid" },
-      }));
-      setViewingBooking((prev) => prev ? { ...prev, paymentStatus: "Paid" } : null);
-      setFeedback({ message: `Payment for booking ${currentId} marked as Paid!`, isError: false });
-    }
-  };
+  const [mountNow] = useState(() => new Date());
+  const [isHistoryView, setIsHistoryView] = useState(false);
+  const [historyScope, setHistoryScope] = useState("archived"); // "archived" | "all_closed"
 
   // Helper to extract ISO date strings or fallback
   const getBookingDates = (booking) => {
@@ -122,6 +219,7 @@ export default function BookingApprovals() {
   const handleOpenViewModal = (booking) => {
     const dates = getBookingDates(booking);
     setViewingBooking(booking);
+    setViewModalTab("overview");
     setModalStatus(booking.status);
     setModalRejectionReason(booking.rejectionReason || "");
     setModalVoidReason(booking.voidReason || "");
@@ -133,11 +231,108 @@ export default function BookingApprovals() {
   const handleOpenRejectModal = (booking) => {
     const dates = getBookingDates(booking);
     setViewingBooking(booking);
+    setViewModalTab("overview");
     setModalStatus("Rejected");
     setModalRejectionReason(booking.rejectionReason || "Machinery Under Maintenance");
     setModalVoidReason(booking.voidReason || "");
     setModalStartDate(dates.s);
     setModalEndDate(dates.e);
+  };
+
+  // Build audit timeline events for modal Activity History
+  const getBookingTimelineEvents = (b) => {
+    if (!b) return [];
+    if (Array.isArray(b.timeline) && b.timeline.length > 0) {
+      return b.timeline.map((t) => ({
+        title: t.title || "Booking Milestone",
+        timestamp: t.timestamp,
+        actor: t.actor || "Member",
+        note: t.note || "",
+        status: t.event || "created",
+      }));
+    }
+
+    const events = [
+      {
+        title: "Booking Request Submitted",
+        timestamp: b.createdAt || b.bookingDate,
+        actor: `Member (${b.clientName})`,
+        note: `Rental requested for ${b.plan} on ${b.machineryModel}. Payment method: ${b.paymentMethod || "Cash"} (${b.paymentStatus}).`,
+        status: "created",
+      },
+    ];
+
+    if (b.approvedAt || ["Approved", "Ongoing", "Returned"].includes(b.status)) {
+      events.push({
+        title: "Booking Approved",
+        timestamp: b.approvedAt || b.bookingDate,
+        actor: "Manager",
+        note: `Approved for fleet assignment (${b.machineryUnitId || b.machineryModel}). Operator: ${b.hasDriver ? b.assignedDriver : "Self-Operated"}.`,
+        status: "approved",
+      });
+    }
+
+    if (b.dispatchedAt || ["Ongoing", "Returned"].includes(b.status)) {
+      events.push({
+        title: "Machinery Dispatched / In Operation",
+        timestamp: b.dispatchedAt || b.startDate,
+        actor: "Dispatch Office",
+        note: `Machinery released for scheduled operations at ${b.farmFormattedAddress || b.farmLocation || "Member Site"}.`,
+        status: "dispatched",
+      });
+    }
+
+    if (b.returnedAt || b.status === "Returned") {
+      events.push({
+        title: "Machinery Returned & Inspection Completed",
+        timestamp: b.returnedAt || b.endDate,
+        actor: "Fleet Inspector",
+        note: "Rental completed. Machinery safely returned to cooperative depot with post-operation inspection verified.",
+        status: "returned",
+      });
+    }
+
+    if (b.cancellationRequested) {
+      events.push({
+        title: "Cancellation Requested",
+        timestamp: b.cancellationRequestedAt || new Date(),
+        actor: "Member",
+        note: b.cancellationReason || "Member submitted a cancellation request via member portal.",
+        status: "cancellation_requested",
+      });
+    }
+
+    if (b.status === "Rejected") {
+      events.push({
+        title: "Booking Rejected",
+        timestamp: new Date(),
+        actor: "Manager",
+        note: modalRejectionReason || b.rejectionReason || "Booking request was rejected.",
+        status: "rejected",
+      });
+    }
+
+    if (b.status === "Voided") {
+      events.push({
+        title: "Booking Voided",
+        timestamp: new Date(),
+        actor: "Manager",
+        note: modalVoidReason || b.voidReason || "Booking was administratively voided.",
+        status: "voided",
+      });
+    }
+
+    if (b.status === "Rescheduled") {
+      events.push({
+        title: "Booking Rescheduled",
+        timestamp: new Date(),
+        actor: "Manager",
+        note: `Schedule adjusted to ${modalStartDate && modalEndDate ? `${modalStartDate} to ${modalEndDate}` : b.dateRange}.`,
+        status: "rescheduled",
+      });
+    }
+
+    return events;
   };
 
   // Open modal directly for Reschedule
@@ -187,7 +382,6 @@ export default function BookingApprovals() {
 
     if (targetStatus === "Voided") {
       updatedFields.voidReason = modalVoidReason || "Administrative Cancellation";
-      updatedFields.paymentStatus = "Voided";
     }
 
     if (targetStatus === "Rescheduled" && modalStartDate && modalEndDate) {
@@ -317,32 +511,70 @@ export default function BookingApprovals() {
     }
   };
 
-  // Add Booking Modal
+  // Add Booking Modal (matches Member Portal Book Now workflow)
   const [showAddModal, setShowAddModal] = useState(false);
-  const [machineryUnits, setMachineryUnits] = useState([]);
-  const [newBooking, setNewBooking] = useState({
-    farmerName: "",
-    farmerPhone: "",
-    equipment: "John Deere 5075E Utility Tractor",
-    startDate: new Date().toISOString().split("T")[0],
-    endDate: new Date(Date.now() + 86400000 * 2).toISOString().split("T")[0],
-    dailyRate: 2800,
-    hasDriver: true,
+  const [machineryUnits, setMachineryUnits] = useState(() => {
+    const cached = getCachedApiData("/machinery-units");
+    return Array.isArray(cached?.data) ? cached.data : (Array.isArray(cached) ? cached : []);
   });
+  const [memberAccounts, setMemberAccounts] = useState([]);
+  const [memberSearch, setMemberSearch] = useState("");
+  const [selectedMemberEmail, setSelectedMemberEmail] = useState("");
+  const [newBooking, setNewBooking] = useState(EMPTY_ADD_BOOKING);
+  const [addPaymentMethod, setAddPaymentMethod] = useState("Cash");
+  const [addCashTiming, setAddCashTiming] = useState("Upon Pickup");
+  const [addGcashProof, setAddGcashProof] = useState("");
+  const [addGcashPreview, setAddGcashPreview] = useState("");
+  const [addGcashOcr, setAddGcashOcr] = useState(null);
+  const [addGcashOcrScanning, setAddGcashOcrScanning] = useState(false);
+  const [addGcashOcrError, setAddGcashOcrError] = useState("");
+  const [viewingOcrScanning, setViewingOcrScanning] = useState(false);
+  const [viewingOcrError, setViewingOcrError] = useState("");
+  const [addCopiedGcash, setAddCopiedGcash] = useState(false);
+  const [addAvailability, setAddAvailability] = useState([]);
+  const [addCalendarMonth, setAddCalendarMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const [addDateError, setAddDateError] = useState("");
+  const [addFormError, setAddFormError] = useState("");
+  const [addSubmitting, setAddSubmitting] = useState(false);
 
-  // Fetch live applications and machinery units from backend
+  // Fetch live applications, machinery units, and registered member accounts from backend
   const fetchData = async () => {
     try {
-      const [appRes, machRes] = await Promise.all([
+      const [appRes, machRes, membersRes] = await Promise.all([
         api("/applications"),
         api("/machinery-units"),
+        api("/manager/members"),
       ]);
 
       if (appRes.ok && Array.isArray(appRes.data)) {
         setLiveBookings(appRes.data);
       }
-      if (machRes.ok && Array.isArray(machRes.data)) {
-        setMachineryUnits(machRes.data);
+      if (machRes.ok && machRes.data) {
+        const unitsList = Array.isArray(machRes.data?.data)
+          ? machRes.data.data
+          : Array.isArray(machRes.data)
+          ? machRes.data
+          : [];
+        setMachineryUnits(unitsList);
+        if (unitsList.length > 0) {
+          const defaultUnit =
+            unitsList.find((u) => getAddUnitAvailability(u) === "Available") || unitsList[0];
+          setNewBooking((prev) =>
+            prev.machineryUnitId || prev.equipment
+              ? prev
+              : {
+                  ...prev,
+                  machineryUnitId: defaultUnit.unitId || defaultUnit._id || "",
+                  equipment: defaultUnit.name || "",
+                }
+          );
+        }
+      }
+      if (membersRes.ok && Array.isArray(membersRes.data?.members)) {
+        setMemberAccounts(membersRes.data.members);
       }
     } catch (err) {
       console.error("Error loading bookings data:", err);
@@ -354,6 +586,144 @@ export default function BookingApprovals() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  const filteredMembers = useMemo(() => {
+    const q = memberSearch.trim().toLowerCase();
+    if (!q) return memberAccounts;
+    return memberAccounts.filter((m) =>
+      [m.fullName, m.email, m.cooperativeId, m.phone].some((field) =>
+        String(field || "").toLowerCase().includes(q)
+      )
+    );
+  }, [memberAccounts, memberSearch]);
+
+  const selectedMember = useMemo(
+    () =>
+      memberAccounts.find(
+        (m) => m.email?.toLowerCase() === selectedMemberEmail.toLowerCase()
+      ) || null,
+    [memberAccounts, selectedMemberEmail]
+  );
+
+  const selectedAddUnit = useMemo(() => {
+    if (machineryUnits.length === 0) return null;
+    return (
+      machineryUnits.find(
+        (u) =>
+          (newBooking.machineryUnitId &&
+            (u.unitId === newBooking.machineryUnitId || u._id === newBooking.machineryUnitId)) ||
+          (newBooking.equipment && u.name === newBooking.equipment)
+      ) ||
+      machineryUnits.find((u) => getAddUnitAvailability(u) === "Available") ||
+      machineryUnits[0]
+    );
+  }, [machineryUnits, newBooking.machineryUnitId, newBooking.equipment]);
+
+  useEffect(() => {
+    const targetId = selectedAddUnit?.unitId || selectedAddUnit?._id;
+    if (!showAddModal || !targetId) {
+      setAddAvailability([]);
+      return;
+    }
+    let ignore = false;
+    api(`/machinery-units/${encodeURIComponent(targetId)}/availability`).then((res) => {
+      if (ignore) return;
+      if (res.ok && Array.isArray(res.data?.data)) {
+        setAddAvailability(res.data.data);
+      } else {
+        setAddAvailability([]);
+      }
+    });
+    return () => {
+      ignore = true;
+    };
+  }, [showAddModal, selectedAddUnit]);
+
+  const addToday = new Date();
+  const addMinDate = formatAddDateKey(addToday);
+
+  const addBlockedRanges = useMemo(() => {
+    const unitBookings = addAvailability.filter((item) => item.type === "booking");
+    const unitMaintenance = addAvailability.filter((item) => item.type === "maintenance");
+    return [
+      ...unitBookings
+        .filter((item) => ["pending", "approved", "checked-out"].includes((item.status || "").toLowerCase()))
+        .map((item) => ({
+          startDate: item.startDate,
+          endDate: item.endDate,
+          label: (item.status || "").toLowerCase() === "pending" ? "Pending Approval" : "Reserved / Booked",
+        })),
+      ...unitMaintenance.map((item) => ({
+        startDate: item.startDate,
+        endDate: item.endDate,
+        label: "Maintenance",
+      })),
+    ].sort((a, b) => String(a.startDate).localeCompare(String(b.startDate)));
+  }, [addAvailability]);
+
+  const addMonthNameYear = useMemo(
+    () => addCalendarMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" }),
+    [addCalendarMonth]
+  );
+
+  const isAddPrevDisabled = useMemo(
+    () =>
+      addCalendarMonth.getFullYear() === addToday.getFullYear() &&
+      addCalendarMonth.getMonth() === addToday.getMonth(),
+    [addCalendarMonth, addToday]
+  );
+
+  const addCalendarGrid = useMemo(() => {
+    const year = addCalendarMonth.getFullYear();
+    const month = addCalendarMonth.getMonth();
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const items = [];
+    for (let i = 0; i < firstDay; i++) {
+      items.push({ isBlank: true, key: `blank-${i}` });
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      const key = formatAddDateKey(new Date(year, month, d));
+      items.push({
+        isBlank: false,
+        dayNum: d,
+        key,
+        isPast: key < addMinDate,
+        isBooked: isAddDateKeyBooked(key, addBlockedRanges),
+      });
+    }
+    return items;
+  }, [addCalendarMonth, addMinDate, addBlockedRanges]);
+
+  const addUnitRatePerHectare = Number(
+    selectedAddUnit?.ratePerHectare || selectedAddUnit?.memberRate || 2500
+  );
+  const addRequestedHectares = Math.max(0.1, Number(newBooking.hectares) || 1);
+  const addEstimatedCost = Math.round(addUnitRatePerHectare * addRequestedHectares);
+
+  const addScheduledDaysCount = useMemo(() => {
+    if (!newBooking.startDate || !newBooking.endDate || newBooking.endDate < newBooking.startDate) return 0;
+    const s = new Date(`${newBooking.startDate}T00:00:00`);
+    const e = new Date(`${newBooking.endDate}T00:00:00`);
+    if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return 0;
+    return Math.max(1, Math.round((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+  }, [newBooking.startDate, newBooking.endDate]);
+
+  const isAddStartBooked = isAddDateKeyBooked(newBooking.startDate, addBlockedRanges);
+  const isAddEndBooked = isAddDateKeyBooked(newBooking.endDate, addBlockedRanges);
+  const isAddRangeBlocked = hasAddBookedDatesInRange(
+    newBooking.startDate,
+    newBooking.endDate,
+    addBlockedRanges
+  );
+  const isAddDatesInvalid = Boolean(
+    !newBooking.startDate ||
+      !newBooking.endDate ||
+      newBooking.endDate < newBooking.startDate ||
+      isAddStartBooked ||
+      isAddEndBooked ||
+      isAddRangeBlocked
+  );
 
   // Format and merge live bookings with sample records
   const mergedBookings = useMemo(() => {
@@ -385,13 +755,28 @@ export default function BookingApprovals() {
       else if (eq.includes("hauler") || eq.includes("truck")) cat = "Transport";
 
       const dailyRate = item.financials?.dailyRate || item.ratePerHectare || 2800;
-      const totalAmount = item.totalAmount || item.financials?.totalPaid || dailyRate * days;
+      const totalAmount = item.totalAmount || (dailyRate * days) || item.financials?.totalPaid;
 
       const clientName = item.memberName || item.farmerName || item.memberEmail || "Member";
       const clientEmail = item.memberEmail || item.clientEmail || `${clientName.toLowerCase().replace(/\s+/g, ".")}@example.com`;
       const clientPhone = item.farmerPhone || item.memberPhone || item.clientPhone || item.phone || (idx % 2 === 0 ? "+63 917 123 4567" : "+63 928 234 5678");
       const clientAddress = item.memberAddress || item.clientAddress || "Kalilangan, Bukidnon";
-      const clientAvatar = item.clientAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(clientName)}&background=0284c7&color=fff&bold=true`;
+      const rawAvatar =
+        item.clientAvatar ||
+        item.avatar ||
+        (item.memberEmail ? localStorage.getItem(`kimpc-avatar-${item.memberEmail}`) : null);
+      let clientAvatar = "";
+      if (rawAvatar && typeof rawAvatar === "string" && rawAvatar.trim()) {
+        const trimmed = rawAvatar.trim();
+        if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("data:")) {
+          clientAvatar = trimmed;
+        } else {
+          clientAvatar = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+        }
+      }
+      if (!clientAvatar) {
+        clientAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(clientName)}&background=0284c7&color=fff&bold=true`;
+      }
       const coopId = item.coopId || `COOP-MB-${String(item._id || idx).slice(-4).toUpperCase()}`;
       const receiptNo = item.receiptNo || (item._id ? `REC-${new Date().getFullYear()}-${String(item._id).slice(-4).toUpperCase()}` : `REC-2028-0${10 + idx}`);
       const paymentMethod = item.paymentMethod || "Cash";
@@ -414,25 +799,58 @@ export default function BookingApprovals() {
         clientAvatar,
         coopId,
         receiptNo,
+        paymentReference: item.paymentReference || "",
+        paymentDateTime: item.paymentDateTime || "",
+        receivedBy: item.receivedBy || "",
         paymentMethod,
         cashPaymentOption,
         gcashProof,
+        gcashOcr: item.gcashOcr || null,
         hectares,
         dailyRate,
         daysCount: days,
         assignedDriver,
+        driverPhone: item.driverPhone || "",
+        machineryUnitId: item.machineryUnitId || "",
         machineryModel: item.equipment,
         category: cat,
         plan: item.hectares ? `${item.hectares} ha (${days}d)` : `${days} Day${days === 1 ? "" : "s"}`,
+        startDate: item.startDate || "",
+        endDate: item.endDate || "",
         dateRange: `${item.startDate} to ${item.endDate}`,
         hasDriver,
         paymentAmount: `₱${Number(totalAmount).toLocaleString()}`,
-        paymentStatus: item.paymentStatus || (item.financials?.isSettled ? "Paid" : "Pending"),
-        status: displayStatus,
+        ...(() => {
+          const fin = computePaymentSummary(item);
+          return {
+            totalAmountNum: fin.rentalCharge,
+            paidAmountNum: fin.grossPaid,
+            balanceAmountNum: fin.balanceDue,
+            refundedAmountNum: fin.totalRefunded,
+            paymentStatus: fin.paymentStatus,
+            status: fin.isVoidedBooking ? "Voided" : displayStatus,
+          };
+        })(),
         cancellationRequested: Boolean(item.cancellationRequested || s === "cancellation requested"),
         cancellationReason: item.cancellationReason || "",
         cancellationRequestedAt: item.cancellationRequestedAt || null,
         farmLocation: item.farmLocation || "",
+        farmFormattedAddress: item.farmFormattedAddress || item.farmLocation || "",
+        farmCoordinates: item.farmCoordinates || null,
+        deliveryDistanceKm: item.deliveryDistanceKm ?? null,
+        estimatedTravelMinutes: item.estimatedTravelMinutes ?? null,
+        bookingType: item.bookingType || "hectare",
+        managerRemarks: item.managerRemarks || "",
+        timeline: Array.isArray(item.timeline) ? item.timeline : [],
+        rescheduleHistory: Array.isArray(item.rescheduleHistory) ? item.rescheduleHistory : [],
+        approvedAt: item.approvedAt || null,
+        dispatchedAt: item.dispatchedAt || null,
+        returnedAt: item.returnedAt || null,
+        cancelledAt: item.cancelledAt || null,
+        bookingVoidedAt: item.bookingVoidedAt || null,
+        rescheduledAt: item.rescheduledAt || null,
+        createdAt: item.createdAt || null,
+        updatedAt: item.updatedAt || null,
         isLive: true,
       };
     });
@@ -443,23 +861,21 @@ export default function BookingApprovals() {
     return base
       .filter((b) => !deletedIds.includes(b.id))
       .map((b) => {
-        let paymentRecord = null;
-        try {
-          const stored = JSON.parse(localStorage.getItem("kimpc_booking_payments") || "{}");
-          paymentRecord = stored[b.id] || (b.rawId && stored[b.rawId]) || null;
-        } catch (e) {}
-
         const extra = bookingOverrides[b.id] || (b.rawId && bookingOverrides[b.rawId]) || {};
         const st = statusOverrides[b.id] || (b.rawId && statusOverrides[b.rawId]) || extra.status || b.status;
-        const paymentStatus = paymentRecord?.status || extra.paymentStatus || b.paymentStatus;
-        const paymentAmount = paymentRecord?.amount ? `₱${Number(paymentRecord.amount).toLocaleString()}` : (extra.paymentAmount || b.paymentAmount);
-        const paymentMethod = paymentRecord?.paymentMethod || extra.paymentMethod || b.paymentMethod;
-        const paymentType = paymentRecord?.paymentType || extra.paymentType || b.paymentType || "Full Rental Payment";
-        const dateReceived = paymentRecord?.dateReceived || extra.dateReceived || b.dateReceived || (paymentStatus === "Paid" ? b.bookingDate : "");
-        const receiptNo = paymentRecord?.receiptNo || extra.receiptNo || b.receiptNo || `REC-2026-${String(b.id).replace(/\D/g, "")}`;
-        const proofOfPayment = paymentRecord?.proofOfPayment || extra.proofOfPayment || b.proofOfPayment || b.gcashProof || null;
-        const notes = paymentRecord?.notes || extra.notes || b.notes || "";
-        const recordedBy = paymentRecord?.recordedBy || extra.recordedBy || b.recordedBy || user?.fullName || user?.email || "Manager";
+        const paymentStatus = extra.paymentStatus || b.paymentStatus;
+        const totalAmtNum = Number(b.totalAmountNum ?? 0) || 0;
+        const paidAmtNum = Number(b.paidAmountNum || 0) || 0;
+        const balanceAmtNum = b.balanceAmountNum !== undefined ? Number(b.balanceAmountNum) : Math.max(0, totalAmtNum - paidAmtNum);
+        const paymentAmount = totalAmtNum > 0 ? `₱${totalAmtNum.toLocaleString()}` : extra.paymentAmount || b.paymentAmount;
+        const paymentMethod = extra.paymentMethod || b.paymentMethod;
+        const paymentType = extra.paymentType || b.paymentType || "Full Rental Payment";
+        const dateReceived = extra.dateReceived || b.paymentDateTime || b.dateReceived || "";
+        const receiptNo = extra.receiptNo || b.receiptNo || `OR-${new Date().getFullYear()}-${String(b.id).replace(/\D/g, "")}`;
+        const referenceNumber = extra.referenceNumber || b.paymentReference || "";
+        const proofOfPayment = extra.proofOfPayment || b.proofOfPayment || b.gcashProof || null;
+        const notes = extra.notes || b.notes || "";
+        const recordedBy = extra.recordedBy || b.receivedBy || b.recordedBy || user?.fullName || user?.email || "Manager";
 
         return {
           ...b,
@@ -467,10 +883,13 @@ export default function BookingApprovals() {
           status: st,
           paymentStatus,
           paymentAmount,
+          paidAmountNum: paidAmtNum,
+          balanceAmountNum: balanceAmtNum,
           paymentMethod,
           paymentType,
           dateReceived,
           receiptNo,
+          referenceNumber,
           proofOfPayment,
           notes,
           recordedBy,
@@ -478,25 +897,53 @@ export default function BookingApprovals() {
       });
   }, [liveBookings, statusOverrides, bookingOverrides, deletedIds, user]);
 
-  // Filtered bookings based on search & dropdowns
+  const closedHistoryBookings = useMemo(() => {
+    return mergedBookings
+      .filter((b) => isHistoryEligibleStatus(b.status))
+      .sort((a, b) => {
+        const da = getBookingHistoryReferenceDate(a)?.getTime() || 0;
+        const db = getBookingHistoryReferenceDate(b)?.getTime() || 0;
+        return db - da;
+      });
+  }, [mergedBookings]);
+
+  const archivedHistoryBookings = useMemo(
+    () => closedHistoryBookings.filter((b) => isBookingOlderThanThreeMonths(b, mountNow)),
+    [closedHistoryBookings, mountNow]
+  );
+
+  // Filtered bookings based on active/history mode, search & dropdowns
   const filteredBookings = useMemo(() => {
-    let result = mergedBookings.filter((b) => {
+    const baseSource = isHistoryView
+      ? historyScope === "archived"
+        ? archivedHistoryBookings
+        : closedHistoryBookings
+      : mergedBookings.filter((b) => !isBookingOlderThanThreeMonths(b, mountNow));
+
+    const q = searchQuery.trim().toLowerCase();
+    const targetStatus = filterStatus.toLowerCase();
+
+    let result = baseSource.filter((b) => {
       // Search filter
       const matchesSearch =
-        !searchQuery.trim() ||
-        b.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (b.clientPhone && b.clientPhone.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        b.machineryModel.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        b.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        b.category.toLowerCase().includes(searchQuery.toLowerCase());
+        !q ||
+        b.clientName.toLowerCase().includes(q) ||
+        (b.clientPhone && b.clientPhone.toLowerCase().includes(q)) ||
+        b.machineryModel.toLowerCase().includes(q) ||
+        b.id.toLowerCase().includes(q) ||
+        b.category.toLowerCase().includes(q);
 
       // Category filter
       const matchesType =
         filterType === "All" || b.category.toLowerCase().includes(filterType.toLowerCase());
 
       // Status filter
+      const bStatus = String(b.status || "").trim().toLowerCase();
       const matchesStatus =
-        filterStatus === "All" || b.status.toLowerCase() === filterStatus.toLowerCase();
+        filterStatus === "All" ||
+        bStatus === targetStatus ||
+        (targetStatus === "cancelled" && bStatus === "canceled") ||
+        (targetStatus === "canceled" && bStatus === "cancelled");
 
       return matchesSearch && matchesType && matchesStatus;
     });
@@ -511,7 +958,18 @@ export default function BookingApprovals() {
     });
 
     return result;
-  }, [mergedBookings, searchQuery, filterType, filterStatus, sortBy]);
+  }, [
+    isHistoryView,
+    historyScope,
+    archivedHistoryBookings,
+    closedHistoryBookings,
+    mergedBookings,
+    mountNow,
+    searchQuery,
+    filterType,
+    filterStatus,
+    sortBy,
+  ]);
 
   const totalPages = Math.ceil(filteredBookings.length / pageSize) || 1;
   const paginatedBookings = useMemo(() => {
@@ -520,7 +978,7 @@ export default function BookingApprovals() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, filterType, filterStatus, sortBy]);
+  }, [searchQuery, filterType, filterStatus, sortBy, isHistoryView, historyScope]);
 
   // ================= Dynamic KPI Counts directly derived from Machinery Bookings =================
   // 1. Pending Bookings: Pending manager confirmation/review
@@ -618,7 +1076,7 @@ export default function BookingApprovals() {
       );
     }
     return (
-      <span className="wz-kpi-trend-plain" style={{ color: "#64748b" }}>
+      <span className="wz-kpi-trend-plain" style={{ color: "var(--wz-text-muted, #64748b)" }}>
         0%
       </span>
     );
@@ -873,47 +1331,315 @@ export default function BookingApprovals() {
     }
   };
 
-  // Handle Create Booking Submit
+  const handleOpenAddModal = () => {
+    const defaultUnit =
+      machineryUnits.find((u) => getAddUnitAvailability(u) === "Available") ||
+      machineryUnits[0] ||
+      null;
+    const now = new Date();
+    setSelectedMemberEmail("");
+    setMemberSearch("");
+    setNewBooking({
+      machineryUnitId: defaultUnit?.unitId || defaultUnit?._id || "",
+      equipment: defaultUnit?.name || "",
+      memberPhone: "",
+      hectares: 1,
+      location: "",
+      startDate: "",
+      endDate: "",
+    });
+    setAddPaymentMethod("Cash");
+    setAddCashTiming("Upon Pickup");
+    setAddGcashProof("");
+    setAddGcashPreview("");
+    setAddCopiedGcash(false);
+    setAddCalendarMonth(new Date(now.getFullYear(), now.getMonth(), 1));
+    setAddDateError("");
+    setAddFormError("");
+    setShowAddModal(true);
+  };
+
+  const handleSelectMemberAccount = (member) => {
+    setSelectedMemberEmail(member.email);
+    setAddFormError("");
+    setNewBooking((prev) => ({
+      ...prev,
+      memberPhone: member.phone || prev.memberPhone || "",
+      location:
+        prev.location && prev.location.trim()
+          ? prev.location
+          : member.memberSettings?.defaultFarmLocation || member.defaultFarmLocation || member.address || "",
+      farmCoordinates:
+        prev.farmCoordinates || member.memberSettings?.defaultFarmCoordinates || null,
+    }));
+  };
+
+  const handleSelectAddUnit = (unitKey) => {
+    const unit = machineryUnits.find(
+      (u) => (u.unitId || u._id || u.name) === unitKey
+    );
+    setAddDateError("");
+    setAddFormError("");
+    setNewBooking((prev) => ({
+      ...prev,
+      machineryUnitId: unit?.unitId || unit?._id || "",
+      equipment: unit?.name || "",
+      startDate: "",
+      endDate: "",
+    }));
+  };
+
+  const handleAddPrevMonth = () => {
+    setAddCalendarMonth((prev) => {
+      const target = new Date(prev.getFullYear(), prev.getMonth() - 1, 1);
+      const minMonth = new Date(addToday.getFullYear(), addToday.getMonth(), 1);
+      return target < minMonth ? minMonth : target;
+    });
+  };
+
+  const handleAddNextMonth = () => {
+    setAddCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+  };
+
+  const handleAddClearDates = () => {
+    setNewBooking((prev) => ({ ...prev, startDate: "", endDate: "" }));
+    setAddDateError("");
+    setAddFormError("");
+  };
+
+  const handleAddCalendarDayClick = (dayKey) => {
+    if (isAddDateKeyBooked(dayKey, addBlockedRanges)) return;
+    setAddDateError("");
+    setAddFormError("");
+    if (
+      !newBooking.startDate ||
+      (newBooking.startDate &&
+        newBooking.endDate &&
+        newBooking.startDate !== newBooking.endDate)
+    ) {
+      setNewBooking((prev) => ({ ...prev, startDate: dayKey, endDate: dayKey }));
+      return;
+    }
+    if (dayKey < newBooking.startDate) {
+      setNewBooking((prev) => ({ ...prev, startDate: dayKey, endDate: dayKey }));
+    } else if (dayKey === newBooking.startDate) {
+      setNewBooking((prev) => ({ ...prev, endDate: dayKey }));
+    } else {
+      if (hasAddBookedDatesInRange(newBooking.startDate, dayKey, addBlockedRanges)) {
+        setAddDateError(
+          "The period between selected dates contains reserved days. Please select an available continuous range."
+        );
+        setNewBooking((prev) => ({ ...prev, startDate: dayKey, endDate: dayKey }));
+        return;
+      }
+      setNewBooking((prev) => ({ ...prev, endDate: dayKey }));
+    }
+  };
+
+  const handleAddStartDateChange = (val) => {
+    setAddDateError("");
+    setAddFormError("");
+    if (!val) {
+      setNewBooking((prev) => ({ ...prev, startDate: "" }));
+      return;
+    }
+    const d = new Date(`${val}T00:00:00`);
+    if (!Number.isNaN(d.getTime())) {
+      setAddCalendarMonth(new Date(d.getFullYear(), d.getMonth(), 1));
+    }
+    if (isAddDateKeyBooked(val, addBlockedRanges)) {
+      setAddDateError(
+        `Selected start date (${val}) is already booked for this machinery. Please choose an available date.`
+      );
+      setNewBooking((prev) => ({ ...prev, startDate: "" }));
+      return;
+    }
+    setNewBooking((prev) => {
+      const nextEnd = prev.endDate && prev.endDate < val ? val : prev.endDate;
+      if (nextEnd && hasAddBookedDatesInRange(val, nextEnd, addBlockedRanges)) {
+        setAddDateError(
+          `The period from ${val} to ${nextEnd} contains booked dates. Choose an available date.`
+        );
+        return { ...prev, startDate: val, endDate: "" };
+      }
+      return { ...prev, startDate: val, endDate: nextEnd };
+    });
+  };
+
+  const handleAddEndDateChange = (val) => {
+    setAddDateError("");
+    setAddFormError("");
+    if (!val) {
+      setNewBooking((prev) => ({ ...prev, endDate: "" }));
+      return;
+    }
+    if (isAddDateKeyBooked(val, addBlockedRanges)) {
+      setAddDateError(
+        `Selected end date (${val}) is already booked for this machinery. Please choose an available date.`
+      );
+      setNewBooking((prev) => ({ ...prev, endDate: "" }));
+      return;
+    }
+    if (newBooking.startDate && val < newBooking.startDate) {
+      setAddDateError("End date must be on or after start date.");
+      return;
+    }
+    if (
+      newBooking.startDate &&
+      hasAddBookedDatesInRange(newBooking.startDate, val, addBlockedRanges)
+    ) {
+      setAddDateError(
+        `The period from ${newBooking.startDate} to ${val} contains dates that are already booked. Choose continuous available dates.`
+      );
+      return;
+    }
+    setNewBooking((prev) => ({ ...prev, endDate: val }));
+  };
+
+  const handleAddCopyGcash = () => {
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText("09264638983");
+      setAddCopiedGcash(true);
+      setTimeout(() => setAddCopiedGcash(false), 2000);
+    }
+  };
+
+  const scanAddGcashImage = async (dataUrl) => {
+    if (!dataUrl) return;
+    setAddGcashOcrScanning(true);
+    setAddGcashOcrError("");
+    const res = await api("/ocr/gcash", {
+      method: "POST",
+      body: {
+        imageDataUrl: dataUrl,
+        expectedAmount: addEstimatedCost,
+      },
+    });
+    setAddGcashOcrScanning(false);
+    if (res.ok && res.data?.extracted) {
+      setAddGcashOcr(res.data.extracted);
+    } else if (!res.data?.disabled) {
+      setAddGcashOcrError(res.data?.error || "Could not extract receipt details.");
+    }
+  };
+
+  const handleScanViewingGcash = async (booking) => {
+    const targetId = booking?.rawId || booking?.id;
+    if (!targetId) return;
+    setViewingOcrScanning(true);
+    setViewingOcrError("");
+    const res = await api(`/applications/${encodeURIComponent(targetId)}/scan-gcash`, {
+      method: "POST",
+    });
+    setViewingOcrScanning(false);
+    if (res.ok && res.data?.gcashOcr) {
+      const updatedOcr = res.data.gcashOcr;
+      setViewingBooking((prev) => (prev ? { ...prev, gcashOcr: updatedOcr } : prev));
+      fetchData();
+    } else {
+      setViewingOcrError(res.data?.error || "Failed to scan GCash receipt.");
+    }
+  };
+
+  const handleAddGCashFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setAddFormError("GCash screenshot file is too large (maximum 5MB).");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setAddGcashProof(reader.result);
+      setAddGcashPreview(reader.result);
+      setAddFormError("");
+      setAddGcashOcr(null);
+      setAddGcashOcrError("");
+      scanAddGcashImage(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Handle Create Booking Submit (identical fields to Member Portal Book Now)
   const handleCreateBooking = async (e) => {
     e.preventDefault();
-    if (!newBooking.farmerName.trim()) {
-      alert("Please enter client/farmer name.");
+    if (!selectedMember) {
+      setAddFormError("Please select a registered member account.");
+      return;
+    }
+    if (!selectedAddUnit || getAddUnitAvailability(selectedAddUnit) !== "Available") {
+      setAddFormError("Please select an available machinery unit.");
+      return;
+    }
+    const cleanPhone = (newBooking.memberPhone || selectedMember.phone || "").trim();
+    if (!cleanPhone || cleanPhone.length < 7) {
+      setAddFormError("Please provide a valid contact mobile number for this member.");
+      return;
+    }
+    if (!newBooking.location || !newBooking.location.trim()) {
+      setAddFormError("Please enter the farm location or address for machinery dispatch.");
+      return;
+    }
+    if (!newBooking.startDate || !newBooking.endDate || isAddDatesInvalid) {
+      setAddFormError("Please choose valid available booking dates.");
+      return;
+    }
+    if (addPaymentMethod === "GCash" && !addGcashProof) {
+      setAddFormError("Please upload the GCash payment screenshot proof before confirming.");
       return;
     }
 
+    setAddSubmitting(true);
+    setAddFormError("");
+    setAddDateError("");
+
     try {
-      const res = await api("/pos-booking", {
+      const res = await api("/applications", {
         method: "POST",
         body: {
-          farmerName: newBooking.farmerName.trim(),
-          farmerPhone: newBooking.farmerPhone.trim(),
-          equipment: newBooking.equipment,
+          memberEmail: selectedMember.email,
+          memberName: selectedMember.fullName,
+          equipment: selectedAddUnit.name,
+          machineryUnitId: selectedAddUnit.unitId,
           startDate: newBooking.startDate,
           endDate: newBooking.endDate,
-          rate: Number(newBooking.dailyRate) || 2800,
-          rentalType: "day",
-          paymentMethod: "Cash",
+          bookingType: "hectare",
+          hectares: addRequestedHectares,
+          ratePerHectare: addUnitRatePerHectare,
+          totalAmount: addEstimatedCost,
+          paymentMethod: addPaymentMethod,
+          cashPaymentOption: addPaymentMethod === "Cash" ? addCashTiming : "",
+          gcashProof: addPaymentMethod === "GCash" ? addGcashProof : "",
+          gcashOcr: addPaymentMethod === "GCash" && addGcashOcr ? addGcashOcr : undefined,
+          paymentStatus: "Pending",
+          farmerPhone: cleanPhone,
+          memberPhone: cleanPhone,
+          farmLocation: newBooking.location.trim(),
+          farmFormattedAddress: (newBooking.formattedAddress || newBooking.location || "").trim(),
+          farmCoordinates: newBooking.farmCoordinates || null,
+          deliveryDistanceKm: newBooking.deliveryDistanceKm ?? null,
+          estimatedTravelMinutes: newBooking.estimatedTravelMinutes ?? null,
         },
       });
 
       if (res.ok) {
         setShowAddModal(false);
-        setFeedback({ message: "New booking added successfully!", isError: false });
-        setNewBooking({
-          farmerName: "",
-          farmerPhone: "",
-          equipment: "John Deere 5075E Utility Tractor",
-          startDate: new Date().toISOString().split("T")[0],
-          endDate: new Date(Date.now() + 86400000 * 2).toISOString().split("T")[0],
-          dailyRate: 2800,
-          hasDriver: true,
-        });
+        setFeedback({ message: "New member booking added successfully!", isError: false });
+        setSelectedMemberEmail("");
+        setMemberSearch("");
+        setNewBooking(EMPTY_ADD_BOOKING);
+        setAddGcashProof("");
+        setAddGcashPreview("");
+        setAddGcashOcr(null);
+        setAddGcashOcrError("");
         fetchData();
       } else {
-        alert(res.data?.error || "Failed to create booking.");
+        setAddFormError(res.data?.error || "Could not submit the booking request.");
       }
     } catch (err) {
-      alert("Error submitting booking.");
+      setAddFormError("Could not submit the booking request.");
+    } finally {
+      setAddSubmitting(false);
     }
   };
 
@@ -1055,7 +1781,7 @@ export default function BookingApprovals() {
                 {/* Clicked year/month stat pill */}
                 {clickedItemIndex !== null && chartData[clickedItemIndex] && (
                   <div className="wz-overview-clicked-pill">
-                    <span style={{ color: "#475569", fontWeight: 600 }}>
+                    <span style={{ color: "var(--wz-text-muted, #475569)", fontWeight: 600 }}>
                       {chartPeriod === "This Year"
                         ? `${chartData[clickedItemIndex].label}: `
                         : `Year ${chartData[clickedItemIndex].label}: `}
@@ -1063,7 +1789,7 @@ export default function BookingApprovals() {
                     <span style={{ color: "var(--wz-primary-red)", fontWeight: 700 }}>
                       {chartData[clickedItemIndex].doneCount} done
                     </span>
-                    <span style={{ color: "#94a3b8", margin: "0 2px" }}>,</span>
+                    <span style={{ color: "var(--wz-text-muted, #94a3b8)", margin: "0 2px" }}>,</span>
                     <span style={{ color: "var(--wz-primary-navy)", fontWeight: 700 }}>
                       {chartData[clickedItemIndex].canceledCount} cancel
                     </span>
@@ -1120,7 +1846,7 @@ export default function BookingApprovals() {
                 <div className="wz-chart-baseline" />
 
                 {chartData.length === 0 ? (
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#94a3b8", fontSize: "0.8rem", gridColumn: "1 / -1" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--wz-text-muted, #94a3b8)", fontSize: "0.8rem", gridColumn: "1 / -1" }}>
                     No booking data for this period
                   </div>
                 ) : (
@@ -1178,97 +1904,304 @@ export default function BookingApprovals() {
           </div>
         </section>
 
-        {/* ================= Bottom Section: Machinery Bookings Table ================= */}
-        <section className="wz-table-card">
-          <div className="wz-table-toolbar" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "18px" }}>
-            <div className="wz-toolbar-left" style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-              <ManagerSearchBar
-                searchQuery={searchQuery}
-                onSearchChange={setSearchQuery}
-                placeholder="Search member, machinery, ID, phone..."
-                filters={[
-                  {
-                    id: "machineryType",
-                    label: "Machinery Type",
-                    value: filterType,
-                    defaultValue: "All",
-                    onChange: setFilterType,
-                    options: [
-                      { value: "All", label: "All Machinery Types" },
-                      { value: "Tractor", label: "Tractor" },
-                      { value: "Harvester", label: "Harvester" },
-                      { value: "Baler", label: "Baler" },
-                      { value: "Mower", label: "Mower / Rake" },
-                      { value: "Sprayer", label: "Sprayer" },
-                      { value: "Transport", label: "Transport" },
-                    ],
-                  },
-                  {
-                    id: "status",
-                    label: "Status",
-                    value: filterStatus,
-                    defaultValue: "All",
-                    onChange: setFilterStatus,
-                    options: [
-                      { value: "All", label: "All Statuses" },
-                      { value: "Pending", label: "Pending" },
-                      { value: "Approved", label: "Approved" },
-                      { value: "Ongoing", label: "Ongoing" },
-                      { value: "Returned", label: "Returned" },
-                      { value: "Rescheduled", label: "Rescheduled" },
-                      { value: "Rejected", label: "Rejected" },
-                      { value: "Voided", label: "Voided" },
-                      { value: "Cancelled", label: "Cancelled" },
-                    ],
-                  },
-                ]}
-                sort={{
-                  value: sortBy,
-                  defaultValue: "date_desc",
-                  onChange: setSortBy,
+        {/* ================= Bookings Toolbar & Action Bar (Outside Table Card, matching Units & Drivers) ================= */}
+        <div className="wz-units-toolbar" style={{ marginBottom: "14px" }}>
+          <div className="wz-units-left-filters">
+            <ManagerSearchBar
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              placeholder={
+                isHistoryView
+                  ? "Search history by member, machinery, ID, phone..."
+                  : "Search member, machinery, ID, phone..."
+              }
+              filters={[
+                {
+                  id: "machineryType",
+                  label: "Machinery Type",
+                  value: filterType,
+                  defaultValue: "All",
+                  onChange: setFilterType,
                   options: [
-                    { value: "date_desc", label: "Newest Date" },
-                    { value: "date_asc", label: "Oldest Date" },
-                    { value: "id_asc", label: "Booking ID" },
-                    { value: "client_asc", label: "Member (A-Z)" },
-                    { value: "client_desc", label: "Member (Z-A)" },
+                    { value: "All", label: "All Machinery Types" },
+                    { value: "Tractor", label: "Tractor" },
+                    { value: "Harvester", label: "Harvester" },
+                    { value: "Baler", label: "Baler" },
+                    { value: "Mower", label: "Mower / Rake" },
+                    { value: "Sprayer", label: "Sprayer" },
+                    { value: "Transport", label: "Transport" },
                   ],
-                }}
-              />
-            </div>
-
-            <div className="wz-toolbar-right" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              {/* Add Booking Action Button */}
-              <button
-                className="wz-btn-add-booking"
-                onClick={() => setShowAddModal(true)}
-              >
-                + Add Booking
-              </button>
-            </div>
+                },
+                {
+                  id: "status",
+                  label: "Status",
+                  value: filterStatus,
+                  defaultValue: "All",
+                  onChange: setFilterStatus,
+                  options: isHistoryView
+                    ? [
+                        { value: "All", label: "All History Statuses" },
+                        { value: "Returned", label: "Returned" },
+                        { value: "Completed", label: "Completed" },
+                        { value: "Done", label: "Done" },
+                        { value: "Cancelled", label: "Cancelled" },
+                        { value: "Rejected", label: "Rejected" },
+                        { value: "Voided", label: "Voided" },
+                      ]
+                    : [
+                        { value: "All", label: "All Statuses" },
+                        { value: "Pending", label: "Pending" },
+                        { value: "Approved", label: "Approved" },
+                        { value: "Ongoing", label: "Ongoing" },
+                        { value: "Returned", label: "Returned" },
+                        { value: "Rescheduled", label: "Rescheduled" },
+                        { value: "Rejected", label: "Rejected" },
+                        { value: "Voided", label: "Voided" },
+                        { value: "Cancelled", label: "Cancelled" },
+                      ],
+                },
+              ]}
+              sort={{
+                value: sortBy,
+                defaultValue: "date_desc",
+                onChange: setSortBy,
+                options: [
+                  { value: "date_desc", label: "Newest Date" },
+                  { value: "date_asc", label: "Oldest Date" },
+                  { value: "id_asc", label: "Booking ID" },
+                  { value: "client_asc", label: "Member (A-Z)" },
+                  { value: "client_desc", label: "Member (Z-A)" },
+                ],
+              }}
+            />
           </div>
+
+          <div className="wz-units-right-actions">
+            {/* Booking Transaction History Toggle Icon Button (3+ month Completed, Done, Canceled) */}
+            <button
+              type="button"
+              onClick={() => {
+                setIsHistoryView((prev) => {
+                  const next = !prev;
+                  if (next) setHistoryScope("archived");
+                  return next;
+                });
+                setFilterStatus("All");
+              }}
+              title={
+                isHistoryView
+                  ? "Return to Active Bookings"
+                  : "Booking History (Auto-archived after 3 months for Completed, Done & Canceled)"
+              }
+              aria-label={isHistoryView ? "Return to active bookings" : "Open booking transaction history"}
+              aria-pressed={isHistoryView}
+              style={{
+                position: "relative",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                height: "36px",
+                padding: "0 12px",
+                borderRadius: "9px",
+                border: isHistoryView ? "1px solid #0f172a" : "1px solid var(--wz-border)",
+                background: isHistoryView ? "#0f172a" : "#ffffff",
+                color: isHistoryView ? "#ffffff" : "#334155",
+                fontSize: "0.82rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+                <path d="M3 3v5h5" />
+                <path d="M12 7v5l3 2" />
+              </svg>
+              {archivedHistoryBookings.length > 0 && (
+                <span
+                  style={{
+                    background: isHistoryView ? "#ffffff" : "#0f172a",
+                    color: isHistoryView ? "#0f172a" : "#ffffff",
+                    borderRadius: "999px",
+                    padding: "1px 6px",
+                    fontSize: "0.7rem",
+                    fontWeight: 800,
+                    lineHeight: 1.3,
+                  }}
+                >
+                  {archivedHistoryBookings.length}
+                </span>
+              )}
+            </button>
+
+            {/* Add Booking Action Button */}
+            <button
+              className="wz-btn-add-unit"
+              onClick={handleOpenAddModal}
+            >
+              + Add Booking
+            </button>
+          </div>
+        </div>
+
+        {/* ================= Bottom Section: Machinery Bookings Table Card ================= */}
+        <section className="wz-table-card" style={{ padding: 0, overflow: "hidden" }}>
+          {isHistoryView && (
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: "12px",
+                padding: "14px 20px",
+                background: "#f8fafc",
+                borderBottom: "1px solid var(--wz-border)",
+              }}
+            >
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "0.95rem", fontWeight: 800, color: "var(--wz-text-main, #0f172a)" }}>
+                    Booking Transaction History
+                  </span>
+                  <span
+                    style={{
+                      background: "#e2e8f0",
+                      color: "var(--wz-text-main, #334155)",
+                      borderRadius: "999px",
+                      padding: "2px 8px",
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {historyScope === "archived"
+                      ? `${archivedHistoryBookings.length} Archived`
+                      : `${closedHistoryBookings.length} Closed`}
+                  </span>
+                </div>
+                <p style={{ margin: "3px 0 0", fontSize: "0.76rem", color: "var(--wz-text-muted, #64748b)" }}>
+                  Completed, Done (Returned), and Canceled bookings automatically move here after 3 months.
+                </p>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                <div style={{ display: "inline-flex", background: "#e2e8f0", padding: "3px", borderRadius: "9px", gap: "3px" }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHistoryScope("archived");
+                      setFilterStatus("All");
+                    }}
+                    style={{
+                      border: "none",
+                      borderRadius: "7px",
+                      padding: "5px 11px",
+                      fontSize: "0.76rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      background: historyScope === "archived" ? "#ffffff" : "transparent",
+                      color: historyScope === "archived" ? "#0f172a" : "#475569",
+                      boxShadow: historyScope === "archived" ? "0 1px 2px rgba(15, 23, 42, 0.08)" : "none",
+                    }}
+                  >
+                    Auto-Archived (3+ Months) ({archivedHistoryBookings.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHistoryScope("all_closed");
+                      setFilterStatus("All");
+                    }}
+                    style={{
+                      border: "none",
+                      borderRadius: "7px",
+                      padding: "5px 11px",
+                      fontSize: "0.76rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      background: historyScope === "all_closed" ? "#ffffff" : "transparent",
+                      color: historyScope === "all_closed" ? "#0f172a" : "#475569",
+                      boxShadow: historyScope === "all_closed" ? "0 1px 2px rgba(15, 23, 42, 0.08)" : "none",
+                    }}
+                  >
+                    All Completed &amp; Canceled ({closedHistoryBookings.length})
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsHistoryView(false);
+                    setFilterStatus("All");
+                  }}
+                  style={{
+                    border: "1px solid var(--wz-border)",
+                    borderRadius: "8px",
+                    padding: "6px 12px",
+                    fontSize: "0.78rem",
+                    fontWeight: 700,
+                    background: "#ffffff",
+                    color: "var(--wz-text-main, #0f172a)",
+                    cursor: "pointer",
+                  }}
+                >
+                  &larr; Active Bookings
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Table Container */}
           <div className="wz-table-responsive">
             <table className="wz-table wz-bookings-table">
               <thead>
                 <tr>
-                  <th>Status <span className="wz-sort-arrow">↕</span></th>
-                  <th>Booking ID <span className="wz-sort-arrow">↕</span></th>
-                  <th>Member <span className="wz-sort-arrow">↕</span></th>
-                  <th>Booking Date <span className="wz-sort-arrow">↕</span></th>
-                  <th>Phone Number <span className="wz-sort-arrow">↕</span></th>
-                  <th>Machinery Model <span className="wz-sort-arrow">↕</span></th>
-                  <th>Date <span className="wz-sort-arrow">↕</span></th>
-                  <th>Payment <span className="wz-sort-arrow">↕</span></th>
-                  <th style={{ textAlign: "center" }}>Action</th>
+                  <th style={{ width: "12%" }}>Status <span className="wz-sort-arrow">↕</span></th>
+                  <th style={{ width: "12%" }}>Booking ID <span className="wz-sort-arrow">↕</span></th>
+                  <th style={{ width: "22%" }}>Member <span className="wz-sort-arrow">↕</span></th>
+                  <th style={{ width: "16%" }}>Phone Number <span className="wz-sort-arrow">↕</span></th>
+                  <th style={{ width: "20%" }}>Machinery Model <span className="wz-sort-arrow">↕</span></th>
+                  <th style={{ width: "18%" }}>Date <span className="wz-sort-arrow">↕</span></th>
+                  <th style={{ width: "10%", textAlign: "center" }}>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredBookings.length === 0 ? (
                   <tr>
-                    <td colSpan="9" style={{ padding: "36px", textAlign: "center", color: "#64748b" }}>
-                      No machinery bookings found matching your search.
+                    <td colSpan="7" style={{ padding: "36px", textAlign: "center", color: "var(--wz-text-muted, #64748b)" }}>
+                      {isHistoryView && historyScope === "archived" ? (
+                        <div>
+                          <div style={{ fontWeight: 700, color: "var(--wz-text-main, #334155)", marginBottom: "4px" }}>
+                            No 3+ month archived booking transactions found.
+                          </div>
+                          <div style={{ fontSize: "0.8rem", marginBottom: closedHistoryBookings.length > 0 ? "12px" : 0 }}>
+                            Completed, Done (Returned), and Canceled bookings automatically move here after 3 months.
+                          </div>
+                          {closedHistoryBookings.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setHistoryScope("all_closed")}
+                              style={{
+                                background: "#0f172a",
+                                color: "#ffffff",
+                                border: "none",
+                                borderRadius: "8px",
+                                padding: "7px 14px",
+                                fontSize: "0.78rem",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                              }}
+                            >
+                              View All {closedHistoryBookings.length} Completed &amp; Canceled
+                            </button>
+                          )}
+                        </div>
+                      ) : isHistoryView ? (
+                        "No completed, done, or canceled booking transactions found matching your search."
+                      ) : (
+                        "No machinery bookings found matching your search."
+                      )}
                     </td>
                   </tr>
                 ) : (
@@ -1313,11 +2246,8 @@ export default function BookingApprovals() {
                         </div>
                       </td>
 
-                      {/* Booking Date */}
-                      <td style={{ color: "#64748b" }}>{b.bookingDate}</td>
-
                       {/* Client Phone Number */}
-                      <td style={{ fontSize: "0.78rem", color: "#334155", fontWeight: 600 }}>
+                      <td style={{ fontSize: "0.78rem", color: "var(--wz-text-main, #334155)", fontWeight: 600 }}>
                         {b.clientPhone && b.clientPhone !== "—" ? (
                           <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "#16a34a", flexShrink: 0 }}>
@@ -1326,7 +2256,7 @@ export default function BookingApprovals() {
                             <span>{b.clientPhone}</span>
                           </div>
                         ) : (
-                          <span style={{ color: "#94a3b8" }}>—</span>
+                          <span style={{ color: "var(--wz-text-muted, #94a3b8)" }}>—</span>
                         )}
                       </td>
 
@@ -1339,25 +2269,22 @@ export default function BookingApprovals() {
                       </td>
 
                       {/* Date Range */}
-                      <td style={{ fontSize: "0.82rem", color: "#64748b" }}>{b.dateRange}</td>
-
-                      {/* Payment */}
-                      <td>
-                        <div className="wz-payment-wrap">
-                          <span className="wz-payment-amount">{b.paymentAmount}</span>
-                          <span
-                            className={
-                              b.paymentStatus === "Paid"
-                                ? "wz-payment-badge-paid"
-                                : "wz-payment-badge-pending"
-                            }
+                      <td style={{ fontSize: "0.82rem", color: "var(--wz-text-muted, #64748b)" }}>
+                        <div>{b.dateRange}</div>
+                        {isHistoryView && (
+                          <div
+                            style={{
+                              fontSize: "0.7rem",
+                              fontWeight: 700,
+                              marginTop: "2px",
+                              color: isBookingOlderThanThreeMonths(b, mountNow) ? "#059669" : "#64748b",
+                            }}
                           >
-                            {b.paymentStatus}
-                          </span>
-                        </div>
-                        <div style={{ fontSize: "0.72rem", color: "#64748b", marginTop: "3px" }}>
-                          <span style={{ fontWeight: 600, color: "#334155" }}>{b.paymentMethod || "Cash"}</span>
-                        </div>
+                            {isBookingOlderThanThreeMonths(b, mountNow)
+                              ? "Auto-Archived (3+ mo)"
+                              : "Closed (< 3 mo)"}
+                          </div>
+                        )}
                       </td>
 
                       {/* Action: 1 action only -> View Details */}
@@ -1366,34 +2293,27 @@ export default function BookingApprovals() {
                           type="button"
                           onClick={() => handleOpenViewModal(b)}
                           style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            background: "#ffffff",
-                            color: "#0f172a",
-                            border: "1px solid #cbd5e1",
-                            borderRadius: "8px",
-                            padding: "6px 12px",
-                            fontSize: "0.75rem",
+                            background: "transparent",
+                            border: "none",
+                            padding: "4px 8px",
+                            color: "#059669",
+                            fontSize: "0.82rem",
                             fontWeight: "700",
                             cursor: "pointer",
-                            boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+                            display: "inline-block",
+                            textDecoration: "none",
                             transition: "all 0.15s ease",
                           }}
                           onMouseEnter={(e) => {
-                            e.currentTarget.style.background = "#f1f5f9";
-                            e.currentTarget.style.borderColor = "#94a3b8";
+                            e.currentTarget.style.color = "#047857";
+                            e.currentTarget.style.textDecoration = "underline";
                           }}
                           onMouseLeave={(e) => {
-                            e.currentTarget.style.background = "#ffffff";
-                            e.currentTarget.style.borderColor = "#cbd5e1";
+                            e.currentTarget.style.color = "#059669";
+                            e.currentTarget.style.textDecoration = "none";
                           }}
                           title="View Details"
                         >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                            <circle cx="12" cy="10" r="3" />
-                          </svg>
                           View Details
                         </button>
                       </td>
@@ -1403,222 +2323,841 @@ export default function BookingApprovals() {
               </tbody>
             </table>
           </div>
-
-          {/* Table Footer with Pagination Controls */}
-          <div className="wz-table-footer" style={{ marginTop: "24px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", color: "#64748b" }}>
-              <span>Results per page:</span>
-              <select
-                className="wz-dropdown-select"
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value));
-                  setCurrentPage(1);
-                }}
-              >
-                <option value="8">8</option>
-                <option value="16">16</option>
-                <option value="24">24</option>
-                <option value="50">50</option>
-              </select>
-              <span style={{ marginLeft: "12px" }}>
-                Showing {filteredBookings.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}–
-                {Math.min(currentPage * pageSize, filteredBookings.length)} of {filteredBookings.length} bookings
-              </span>
-            </div>
-
-            <div className="wz-pagination-btns">
-              <button
-                className="wz-page-btn"
-                disabled={currentPage <= 1}
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                title="Previous Page"
-              >
-                &lt;
-              </button>
-
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                <button
-                  key={p}
-                  className={`wz-page-btn ${p === currentPage ? "active" : ""}`}
-                  onClick={() => setCurrentPage(p)}
-                >
-                  {p}
-                </button>
-              ))}
-
-              <button
-                className="wz-page-btn"
-                disabled={currentPage >= totalPages}
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                title="Next Page"
-              >
-                &gt;
-              </button>
-            </div>
-          </div>
         </section>
+
+        {/* Table Footer with Pagination Controls */}
+        <div className="wz-table-footer" style={{ marginTop: "24px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", color: "var(--wz-text-muted, #64748b)" }}>
+            <span>Results per page:</span>
+            <select
+              className="wz-dropdown-select"
+              value={pageSize}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                setPageSize(val);
+                setCurrentPage(1);
+                localStorage.setItem("kimpc_manager_pageSize", String(val));
+              }}
+            >
+              <option value="8">8</option>
+              <option value="16">16</option>
+              <option value="24">24</option>
+              <option value="50">50</option>
+            </select>
+            <span style={{ marginLeft: "12px" }}>
+              Showing {filteredBookings.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}–
+              {Math.min(currentPage * pageSize, filteredBookings.length)} of {filteredBookings.length}{" "}
+              {isHistoryView ? "history transactions" : "bookings"}
+            </span>
+          </div>
+
+          <div className="wz-pagination-btns">
+            <button
+              className="wz-page-btn"
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              title="Previous Page"
+            >
+              &lt;
+            </button>
+
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+              <button
+                key={p}
+                className={`wz-page-btn ${p === currentPage ? "active" : ""}`}
+                onClick={() => setCurrentPage(p)}
+              >
+                {p}
+              </button>
+            ))}
+
+            <button
+              className="wz-page-btn"
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              title="Next Page"
+            >
+              &gt;
+            </button>
+          </div>
+        </div>
       </main>
 
-      {/* ================= Add Booking Modal ================= */}
+      {/* ================= Add Booking Modal (Minimalist Member-Parity Design) ================= */}
       {showAddModal && (
-        <div className="wz-modal-overlay" onClick={() => setShowAddModal(false)}>
-          <div className="wz-modal-content" onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: "800", color: "#0f172a" }}>
-                Add New Machinery Booking
-              </h3>
+        <div
+          className="wz-addbook-overlay"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setShowAddModal(false);
+          }}
+        >
+          <section
+            className="wz-addbook-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="wz-addbook-title"
+          >
+            <div className="wz-addbook-header">
+              {selectedAddUnit?.imageUrl ? (
+                <img
+                  className="wz-addbook-thumb"
+                  src={selectedAddUnit.imageUrl}
+                  alt={selectedAddUnit.name}
+                />
+              ) : (
+                <div className="wz-addbook-thumb-fallback" aria-hidden="true">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                    <line x1="16" y1="2" x2="16" y2="6" />
+                    <line x1="8" y1="2" x2="8" y2="6" />
+                    <line x1="3" y1="10" x2="21" y2="10" />
+                  </svg>
+                </div>
+              )}
+              <div className="wz-addbook-head-main">
+                <h3 id="wz-addbook-title" className="wz-addbook-title">
+                  Add New Machinery Booking
+                </h3>
+                <p className="wz-addbook-meta">
+                  {selectedAddUnit
+                    ? [selectedAddUnit.name, selectedAddUnit.category, selectedAddUnit.brand, selectedAddUnit.model]
+                        .filter(Boolean)
+                        .join(" · ")
+                    : "Select member account and machinery unit"}
+                </p>
+              </div>
+              {selectedAddUnit && (
+                <span className="wz-addbook-rate-pill">
+                  {formatAddBookPrice(addUnitRatePerHectare)} / ha
+                </span>
+              )}
               <button
+                type="button"
+                className="wz-addbook-close"
+                aria-label="Close booking dialog"
                 onClick={() => setShowAddModal(false)}
-                style={{ background: "none", border: "none", fontSize: "1.3rem", cursor: "pointer", color: "#94a3b8" }}
               >
-                &times;
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
               </button>
             </div>
 
-            <form onSubmit={handleCreateBooking}>
-              <div style={{ marginBottom: "12px" }}>
-                <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", color: "#475569", marginBottom: "5px" }}>
-                  Client / Farmer Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Juan Dela Cruz"
-                  value={newBooking.farmerName}
-                  onChange={(e) => setNewBooking({ ...newBooking, farmerName: e.target.value })}
-                  style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.86rem" }}
-                />
-              </div>
+            <form className="wz-addbook-form" onSubmit={handleCreateBooking}>
+              <div className="wz-addbook-body">
+                {/* Section 1: Member & Machinery */}
+                <div className="wz-addbook-section">
+                  <div className="wz-addbook-section-head">
+                    <h4 className="wz-addbook-section-title">Member & Machinery</h4>
+                    {selectedMember && (
+                      <button
+                        type="button"
+                        className="wz-addbook-link-btn"
+                        onClick={() => {
+                          setSelectedMemberEmail("");
+                          setMemberSearch("");
+                          setAddFormError("");
+                        }}
+                      >
+                        Change member
+                      </button>
+                    )}
+                  </div>
 
-              <div style={{ marginBottom: "12px" }}>
-                <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", color: "#475569", marginBottom: "5px" }}>
-                  Contact Phone
-                </label>
-                <input
-                  type="text"
-                  placeholder="+63 917 000 0000"
-                  value={newBooking.farmerPhone}
-                  onChange={(e) => setNewBooking({ ...newBooking, farmerPhone: e.target.value })}
-                  style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.86rem" }}
-                />
-              </div>
+                  <div className="wz-addbook-field">
+                    <label className="wz-addbook-label" htmlFor="addbook-member-search">
+                      <span>
+                        Members <span className="wz-addbook-label-req">*</span>
+                      </span>
+                      {!selectedMember && (
+                        <span className="wz-addbook-unit-tag">
+                          {memberAccounts.length} registered
+                        </span>
+                      )}
+                    </label>
 
-              <div style={{ marginBottom: "12px" }}>
-                <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", color: "#475569", marginBottom: "5px" }}>
-                  Machinery Equipment
-                </label>
-                <select
-                  value={newBooking.equipment}
-                  onChange={(e) => setNewBooking({ ...newBooking, equipment: e.target.value })}
-                  style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.86rem", background: "#fff" }}
-                >
-                  {machineryUnits.length > 0 ? (
-                    machineryUnits.map((u) => (
-                      <option key={u.unitId || u._id} value={u.name}>
-                        {u.name} ({u.category}) - ₱{u.ratePerDay}/day
-                      </option>
-                    ))
-                  ) : (
-                    <>
-                      <option value="John Deere 5075E Utility Tractor">John Deere 5075E Utility Tractor (₱2,800/day)</option>
-                      <option value="Kubota DC-70 Plus Combine Harvester">Kubota DC-70 Plus Combine Harvester (₱5,500/day)</option>
-                      <option value="New Holland Roll-Belt 450 Round Baler">New Holland Roll-Belt 450 Round Baler (₱3,200/day)</option>
-                      <option value="Case IH Farmall 90JX 4WD Tractor">Case IH Farmall 90JX 4WD Tractor (₱3,600/day)</option>
-                    </>
+                    {!selectedMember ? (
+                      <>
+                        <div className="wz-addbook-input-wrap">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <circle cx="11" cy="11" r="8" />
+                            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                          </svg>
+                          <input
+                            id="addbook-member-search"
+                            className="wz-addbook-input"
+                            type="search"
+                            placeholder="Search member by name, email, or Coop ID..."
+                            value={memberSearch}
+                            onChange={(e) => setMemberSearch(e.target.value)}
+                          />
+                        </div>
+
+                        <div className="wz-addbook-member-list" role="listbox" aria-label="Registered system members">
+                          {filteredMembers.length > 0 ? (
+                            filteredMembers.map((member) => (
+                              <button
+                                key={member.id || member.email}
+                                type="button"
+                                className="wz-addbook-member-option"
+                                onClick={() => handleSelectMemberAccount(member)}
+                              >
+                                {member.avatar ? (
+                                  <img
+                                    src={member.avatar}
+                                    alt={member.fullName}
+                                    className="wz-addbook-member-avatar"
+                                  />
+                                ) : (
+                                  <span className="wz-addbook-member-avatar">
+                                    {getMemberInitials(member.fullName, member.email)}
+                                  </span>
+                                )}
+                                <div className="wz-addbook-member-info">
+                                  <div className="wz-addbook-member-name">
+                                    <span>{member.fullName}</span>
+                                    {member.cooperativeId && (
+                                      <span className="wz-addbook-member-badge">
+                                        {member.cooperativeId}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="wz-addbook-member-sub">
+                                    {[member.email, member.phone || "No phone"].filter(Boolean).join(" · ")}
+                                  </div>
+                                </div>
+                              </button>
+                            ))
+                          ) : (
+                            <div className="wz-addbook-member-empty">
+                              {memberAccounts.length === 0
+                                ? "No active member accounts found in the system."
+                                : "No matching member account found."}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="wz-addbook-member-card">
+                        <div className="wz-addbook-member-card-left">
+                          {selectedMember.avatar ? (
+                            <img
+                              src={selectedMember.avatar}
+                              alt={selectedMember.fullName}
+                              className="wz-addbook-member-avatar"
+                            />
+                          ) : (
+                            <span className="wz-addbook-member-avatar">
+                              {getMemberInitials(selectedMember.fullName, selectedMember.email)}
+                            </span>
+                          )}
+                          <div className="wz-addbook-member-info">
+                            <div className="wz-addbook-member-name">
+                              <span>{selectedMember.fullName}</span>
+                              {selectedMember.cooperativeId && (
+                                <span className="wz-addbook-member-badge">
+                                  {selectedMember.cooperativeId}
+                                </span>
+                              )}
+                            </div>
+                            <div className="wz-addbook-member-sub">
+                              {selectedMember.email}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {selectedMember && (
+                    <div className="wz-addbook-field">
+                      <label className="wz-addbook-label" htmlFor="addbook-phone">
+                        <span>
+                          Mobile Number <span className="wz-addbook-label-req">*</span>
+                        </span>
+                      </label>
+                      <div className="wz-addbook-input-wrap">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+                          <line x1="12" y1="18" x2="12.01" y2="18" />
+                        </svg>
+                        <input
+                          id="addbook-phone"
+                          className="wz-addbook-input"
+                          type="tel"
+                          required
+                          placeholder="0917 123 4567"
+                          value={newBooking.memberPhone}
+                          onChange={(e) =>
+                            setNewBooking((prev) => ({ ...prev, memberPhone: e.target.value }))
+                          }
+                        />
+                      </div>
+                    </div>
                   )}
-                </select>
+
+                  <div className="wz-addbook-field">
+                    <label className="wz-addbook-label" htmlFor="addbook-machinery">
+                      <span>
+                        Machinery <span className="wz-addbook-label-req">*</span>
+                      </span>
+                    </label>
+                    <div className="wz-addbook-input-wrap">
+                      <select
+                        id="addbook-machinery"
+                        className="wz-addbook-select"
+                        required
+                        value={
+                          selectedAddUnit?.unitId ||
+                          selectedAddUnit?._id ||
+                          selectedAddUnit?.name ||
+                          ""
+                        }
+                        onChange={(e) => handleSelectAddUnit(e.target.value)}
+                      >
+                        {machineryUnits.length > 0 ? (
+                          machineryUnits.map((u) => {
+                            const avail = getAddUnitAvailability(u);
+                            const rate = Number(u.ratePerHectare || u.memberRate || 2500);
+                            return (
+                              <option
+                                key={u.unitId || u._id}
+                                value={u.unitId || u._id || u.name}
+                                disabled={avail !== "Available"}
+                              >
+                                {u.name} ({u.category || "Equipment"}) — {formatAddBookPrice(rate)} / ha
+                                {avail !== "Available" ? ` (${u.operatingCondition || avail})` : ""}
+                              </option>
+                            );
+                          })
+                        ) : (
+                          <option value="">No machinery units added yet</option>
+                        )}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 2: Farmland & Location (matches Member Portal Book Now) */}
+                <div className="wz-addbook-section">
+                  <div className="wz-addbook-section-head">
+                    <h4 className="wz-addbook-section-title">Farmland & Location</h4>
+                    <span className="wz-addbook-subtotal">
+                      {formatAddBookPrice(addUnitRatePerHectare)} × {addRequestedHectares} ha ={" "}
+                      {formatAddBookPrice(addEstimatedCost)}
+                    </span>
+                  </div>
+
+                  <div className="wz-addbook-field">
+                    <label className="wz-addbook-label" htmlFor="addbook-hectares">
+                      <span>
+                        Area <span className="wz-addbook-label-req">*</span>
+                      </span>
+                    </label>
+                    <div className="wz-addbook-input-wrap">
+                      <input
+                        id="addbook-hectares"
+                        className="wz-addbook-input"
+                        type="number"
+                        min="0.1"
+                        step="0.1"
+                        required
+                        placeholder="1.0"
+                        value={newBooking.hectares}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          setNewBooking((prev) => ({
+                            ...prev,
+                            hectares: isNaN(val) ? "" : Math.max(0.1, val),
+                          }));
+                        }}
+                      />
+                      <span className="wz-addbook-unit-tag">ha</span>
+                    </div>
+
+                    <div className="wz-addbook-presets">
+                      {[0.5, 1, 2, 3, 5, 10].map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => setNewBooking((prev) => ({ ...prev, hectares: preset }))}
+                          className={`wz-addbook-preset-btn${
+                            Number(newBooking.hectares) === preset ? " active" : ""
+                          }`}
+                        >
+                          {preset} ha
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="wz-addbook-field">
+                    <label className="wz-addbook-label" htmlFor="addbook-location">
+                      <span>
+                        Farm Location &amp; Map Pin (PSGC + OpenStreetMap) <span className="wz-addbook-label-req">*</span>
+                      </span>
+                    </label>
+                    <FarmLocationPicker
+                      height={190}
+                      placeholder="Barangay, Purok / Sitio, Landmark"
+                      value={{
+                        location: newBooking.location || "",
+                        formattedAddress: newBooking.formattedAddress || "",
+                        coordinates: newBooking.farmCoordinates || null,
+                        distanceKm: newBooking.deliveryDistanceKm ?? null,
+                        durationMinutes: newBooking.estimatedTravelMinutes ?? null,
+                      }}
+                      onChange={(geo) =>
+                        setNewBooking((prev) => ({
+                          ...prev,
+                          location: geo.location || "",
+                          formattedAddress: geo.formattedAddress || geo.location || "",
+                          farmCoordinates: geo.coordinates || null,
+                          deliveryDistanceKm: geo.distanceKm ?? null,
+                          estimatedTravelMinutes: geo.durationMinutes ?? null,
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+
+                {/* Section 3: Schedule (matches Member Portal Book Now) */}
+                <div className="wz-addbook-section">
+                  <div className="wz-addbook-section-head">
+                    <h4 className="wz-addbook-section-title">Schedule</h4>
+                    {newBooking.startDate && (
+                      <button
+                        type="button"
+                        className="wz-addbook-link-btn"
+                        onClick={handleAddClearDates}
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="wz-addbook-cal-box">
+                    <div className="wz-addbook-cal-head">
+                      <span className="wz-addbook-cal-month">{addMonthNameYear}</span>
+                      <div className="wz-addbook-cal-nav">
+                        <button
+                          type="button"
+                          className="wz-addbook-cal-nav-btn"
+                          onClick={handleAddPrevMonth}
+                          disabled={isAddPrevDisabled}
+                          aria-label="Previous month"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <polyline points="15 18 9 12 15 6" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          className="wz-addbook-cal-nav-btn"
+                          onClick={handleAddNextMonth}
+                          aria-label="Next month"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <polyline points="9 18 15 12 9 6" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="wz-addbook-cal-weekdays">
+                      {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((dayName) => (
+                        <div key={dayName}>{dayName}</div>
+                      ))}
+                    </div>
+
+                    <div className="wz-addbook-cal-grid">
+                      {addCalendarGrid.map((d) => {
+                        if (d.isBlank) {
+                          return <div key={d.key} className="wz-addbook-cal-day is-blank" />;
+                        }
+                        if (d.isPast) {
+                          return (
+                            <button
+                              key={d.key}
+                              type="button"
+                              disabled
+                              className="wz-addbook-cal-day is-past"
+                            >
+                              {d.dayNum}
+                            </button>
+                          );
+                        }
+                        if (d.isBooked) {
+                          return (
+                            <button
+                              key={d.key}
+                              type="button"
+                              disabled
+                              title="Reserved"
+                              className="wz-addbook-cal-day is-booked"
+                            >
+                              {d.dayNum}
+                            </button>
+                          );
+                        }
+
+                        const isSelectedPoint =
+                          newBooking.startDate === d.key || newBooking.endDate === d.key;
+                        const inRange = Boolean(
+                          newBooking.startDate &&
+                            newBooking.endDate &&
+                            d.key >= newBooking.startDate &&
+                            d.key <= newBooking.endDate
+                        );
+
+                        return (
+                          <button
+                            key={d.key}
+                            type="button"
+                            onClick={() => handleAddCalendarDayClick(d.key)}
+                            className={`wz-addbook-cal-day${
+                              isSelectedPoint ? " is-selected" : inRange ? " is-in-range" : ""
+                            }`}
+                          >
+                            {d.dayNum}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="wz-addbook-cal-legend">
+                      <span className="wz-addbook-cal-legend-item">
+                        <span className="wz-addbook-cal-dot" />
+                        Available
+                      </span>
+                      <span className="wz-addbook-cal-legend-item">
+                        <span className="wz-addbook-cal-dot selected" />
+                        Selected
+                      </span>
+                      <span className="wz-addbook-cal-legend-item">
+                        <span className="wz-addbook-cal-dot booked" />
+                        Booked
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="wz-addbook-date-row">
+                    <div className="wz-addbook-field">
+                      <label className="wz-addbook-label" htmlFor="addbook-start">
+                        Start Date
+                      </label>
+                      <div
+                        className="wz-addbook-input-wrap"
+                        style={isAddStartBooked ? { borderColor: "#dc2626" } : undefined}
+                      >
+                        <input
+                          id="addbook-start"
+                          className="wz-addbook-input"
+                          required
+                          type="date"
+                          min={addMinDate}
+                          value={newBooking.startDate}
+                          onChange={(e) => handleAddStartDateChange(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="wz-addbook-field">
+                      <label className="wz-addbook-label" htmlFor="addbook-end">
+                        End Date
+                      </label>
+                      <div
+                        className="wz-addbook-input-wrap"
+                        style={
+                          isAddEndBooked || isAddRangeBlocked
+                            ? { borderColor: "#dc2626" }
+                            : undefined
+                        }
+                      >
+                        <input
+                          id="addbook-end"
+                          className="wz-addbook-input"
+                          required
+                          type="date"
+                          min={newBooking.startDate || addMinDate}
+                          value={newBooking.endDate}
+                          onChange={(e) => handleAddEndDateChange(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {newBooking.startDate && newBooking.endDate && !isAddDatesInvalid ? (
+                    <div className="wz-addbook-status-pill">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      <span>
+                        {addScheduledDaysCount} day{addScheduledDaysCount > 1 ? "s" : ""} ·{" "}
+                        {formatAddDisplayDate(newBooking.startDate)} –{" "}
+                        {formatAddDisplayDate(newBooking.endDate)}
+                      </span>
+                    </div>
+                  ) : newBooking.startDate &&
+                    (!newBooking.endDate || newBooking.startDate === newBooking.endDate) ? (
+                    <div className="wz-addbook-status-pill">
+                      <span>
+                        Start: {formatAddDisplayDate(newBooking.startDate)} — tap an end date
+                      </span>
+                    </div>
+                  ) : null}
+
+                  {addDateError && (
+                    <div className="wz-addbook-status-pill is-warn">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="12" />
+                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                      </svg>
+                      <span>{addDateError}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Section 4: Payment (matches Member Portal Book Now) */}
+                <div className="wz-addbook-section">
+                  <div className="wz-addbook-section-head">
+                    <h4 className="wz-addbook-section-title">Payment</h4>
+                  </div>
+
+                  <div className="wz-addbook-pay-tabs">
+                    <button
+                      type="button"
+                      onClick={() => setAddPaymentMethod("Cash")}
+                      className={`wz-addbook-pay-tab${addPaymentMethod === "Cash" ? " active" : ""}`}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <rect x="2" y="6" width="20" height="12" rx="2" />
+                        <circle cx="12" cy="12" r="2" />
+                        <path d="M6 12h.01M18 12h.01" />
+                      </svg>
+                      <div>
+                        <span className="wz-addbook-pay-tab-title">Cash</span>
+                        <span className="wz-addbook-pay-tab-sub">Depot or field</span>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setAddPaymentMethod("GCash")}
+                      className={`wz-addbook-pay-tab${addPaymentMethod === "GCash" ? " active" : ""}`}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+                        <line x1="12" y1="18" x2="12.01" y2="18" />
+                      </svg>
+                      <div>
+                        <span className="wz-addbook-pay-tab-title">GCash</span>
+                        <span className="wz-addbook-pay-tab-sub">Upload receipt</span>
+                      </div>
+                    </button>
+                  </div>
+
+                  {addPaymentMethod === "Cash" && (
+                    <div className="wz-addbook-pay-subrow">
+                      <button
+                        type="button"
+                        onClick={() => setAddCashTiming("Upon Pickup")}
+                        className={`wz-addbook-pay-subbtn${
+                          addCashTiming === "Upon Pickup" ? " active" : ""
+                        }`}
+                      >
+                        Upon Pickup
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAddCashTiming("Upon Return")}
+                        className={`wz-addbook-pay-subbtn${
+                          addCashTiming === "Upon Return" ? " active" : ""
+                        }`}
+                      >
+                        Upon Return
+                      </button>
+                    </div>
+                  )}
+
+                  {addPaymentMethod === "GCash" && (
+                    <div className="wz-addbook-gcash-panel">
+                      <div className="wz-addbook-gcash-bar">
+                        <div>
+                          <div className="wz-addbook-gcash-num">0926 463 8983</div>
+                          <div className="wz-addbook-gcash-name">
+                            KIMPC · Kalilangan Irrigators MPC
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="wz-addbook-gcash-copy-btn"
+                          onClick={handleAddCopyGcash}
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                          </svg>
+                          <span>{addCopiedGcash ? "Copied" : "Copy"}</span>
+                        </button>
+                      </div>
+
+                      {!addGcashPreview ? (
+                        <label className="wz-addbook-gcash-upload">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <polyline points="16 16 12 12 8 16" />
+                            <line x1="12" y1="12" x2="12" y2="21" />
+                            <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
+                          </svg>
+                          <span>Upload GCash receipt (PNG/JPG, max 5MB)</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleAddGCashFileChange}
+                            style={{ display: "none" }}
+                          />
+                        </label>
+                      ) : (
+                        <div className="wz-addbook-gcash-preview">
+                          <div className="wz-addbook-gcash-preview-left">
+                            <img
+                              className="wz-addbook-gcash-preview-img"
+                              src={addGcashPreview}
+                              alt="GCash receipt"
+                            />
+                            <span className="wz-addbook-gcash-preview-name">
+                              Receipt attached
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            className="wz-addbook-link-btn"
+                            style={{ color: "#dc2626" }}
+                            onClick={() => {
+                              setAddGcashProof("");
+                              setAddGcashPreview("");
+                              setAddGcashOcr(null);
+                              setAddGcashOcrError("");
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      )}
+                      {addGcashPreview && (
+                        <GcashOcrBadge
+                          ocr={addGcashOcr}
+                          scanning={addGcashOcrScanning}
+                          error={addGcashOcrError}
+                          expectedAmount={addEstimatedCost}
+                          onScanClick={() => scanAddGcashImage(addGcashProof)}
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Section 5: Booking Summary (matches Member Portal Book Now) */}
+                <div className="wz-addbook-summary">
+                  <div className="wz-addbook-summary-row">
+                    <span>Member</span>
+                    <span className="wz-addbook-summary-val">
+                      {selectedMember ? selectedMember.fullName : "Not selected"}
+                    </span>
+                  </div>
+                  <div className="wz-addbook-summary-row">
+                    <span>
+                      Rate ({formatAddBookPrice(addUnitRatePerHectare)} × {addRequestedHectares} ha)
+                    </span>
+                    <span className="wz-addbook-summary-val">
+                      {formatAddBookPrice(addEstimatedCost)}
+                    </span>
+                  </div>
+                  <div className="wz-addbook-summary-row">
+                    <span>Operator</span>
+                    <span className="wz-addbook-summary-val">
+                      {selectedAddUnit?.operatorIncluded === false
+                        ? Number(selectedAddUnit?.additionalOperatorFee) > 0
+                          ? selectedAddUnit?.operatorFeeBasis === "per %"
+                            ? `${Number(selectedAddUnit.additionalOperatorFee)}% of rate`
+                            : `+${formatAddBookPrice(selectedAddUnit.additionalOperatorFee)} ${
+                                selectedAddUnit.operatorFeeBasis || "per day"
+                              }`
+                          : "Not included"
+                        : "Included"}
+                    </span>
+                  </div>
+                  <div className="wz-addbook-summary-row">
+                    <span>Payment</span>
+                    <span className="wz-addbook-summary-val">
+                      {addPaymentMethod === "Cash"
+                        ? `Cash (${addCashTiming})`
+                        : addGcashProof
+                        ? "GCash (Attached)"
+                        : "GCash (Receipt needed)"}
+                    </span>
+                  </div>
+                  <div className="wz-addbook-summary-total">
+                    <span>Total Estimate</span>
+                    <span className="wz-addbook-summary-amount">
+                      {formatAddBookPrice(addEstimatedCost)}
+                    </span>
+                  </div>
+                </div>
+
+                {addFormError && (
+                  <div className="wz-addbook-error">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    <span>{addFormError}</span>
+                  </div>
+                )}
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "12px" }}>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", color: "#475569", marginBottom: "5px" }}>
-                    Start Date
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={newBooking.startDate}
-                    onChange={(e) => setNewBooking({ ...newBooking, startDate: e.target.value })}
-                    style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.86rem" }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", color: "#475569", marginBottom: "5px" }}>
-                    End Date
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={newBooking.endDate}
-                    onChange={(e) => setNewBooking({ ...newBooking, endDate: e.target.value })}
-                    style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.86rem" }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "10px", marginBottom: "18px" }}>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", color: "#475569", marginBottom: "5px" }}>
-                    Daily Rate (₱ PHP)
-                  </label>
-                  <input
-                    type="number"
-                    value={newBooking.dailyRate}
-                    onChange={(e) => setNewBooking({ ...newBooking, dailyRate: Number(e.target.value) })}
-                    style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.86rem" }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", color: "#475569", marginBottom: "5px" }}>
-                    Assigned Operator
-                  </label>
-                  <select
-                    value={newBooking.hasDriver ? "yes" : "no"}
-                    onChange={(e) => setNewBooking({ ...newBooking, hasDriver: e.target.value === "yes" })}
-                    style={{ width: "100%", padding: "9px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.86rem", background: "#fff" }}
-                  >
-                    <option value="yes">With Driver</option>
-                    <option value="no">Self-Operated</option>
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              <div className="wz-addbook-footer">
                 <button
                   type="button"
+                  className="wz-addbook-btn-cancel"
                   onClick={() => setShowAddModal(false)}
-                  style={{
-                    padding: "9px 16px",
-                    borderRadius: "8px",
-                    border: "1px solid #cbd5e1",
-                    background: "#fff",
-                    color: "#475569",
-                    fontWeight: "600",
-                    cursor: "pointer",
-                  }}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  style={{
-                    padding: "9px 20px",
-                    borderRadius: "8px",
-                    border: "none",
-                    background: "var(--wz-primary-red)",
-                    color: "#fff",
-                    fontWeight: "700",
-                    cursor: "pointer",
-                  }}
+                  className="wz-addbook-btn-submit"
+                  disabled={
+                    addSubmitting ||
+                    !selectedMember ||
+                    !selectedAddUnit ||
+                    getAddUnitAvailability(selectedAddUnit) !== "Available" ||
+                    isAddDatesInvalid ||
+                    (addPaymentMethod === "GCash" && !addGcashProof)
+                  }
                 >
-                  Save Booking
+                  {addSubmitting
+                    ? "Submitting…"
+                    : !selectedMember
+                    ? "Select Member"
+                    : !selectedAddUnit
+                    ? "Select Machinery"
+                    : isAddDatesInvalid
+                    ? "Select Dates"
+                    : addPaymentMethod === "GCash" && !addGcashProof
+                    ? "Attach GCash Receipt"
+                    : `Confirm Booking · ${formatAddBookPrice(addEstimatedCost)}`}
                 </button>
               </div>
             </form>
-          </div>
+          </section>
         </div>
       )}
+
       {/* ================= MODAL: VIEW BOOKING, RECEIPT & PROFILE DETAILS ================= */}
       {viewingBooking && (
         <div
@@ -1630,26 +3169,37 @@ export default function BookingApprovals() {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="wz-booking-modal-header">
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <div>
-                  <span style={{ fontSize: "0.72rem", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                    Machinery Booking & Receipt Details
+            <div className="wz-booking-modal-header" style={{ padding: "16px 24px" }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: "800", color: "var(--wz-text-main, #0f172a)" }}>
+                    {viewingBooking.id}
+                  </h3>
+                  <span
+                    className={`wz-status-pill wz-status-${viewingBooking.status.toLowerCase().replace(/\s+/g, "-")}`}
+                    style={{ fontSize: "0.74rem" }}
+                  >
+                    {viewingBooking.status}
                   </span>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "2px" }}>
-                    <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: "800", color: "#0f172a" }}>
-                      {viewingBooking.id}
-                    </h3>
-                    <span
-                      className={`wz-status-pill wz-status-${viewingBooking.status.toLowerCase()}`}
-                      style={{ fontSize: "0.74rem" }}
-                    >
-                      {viewingBooking.status}
-                    </span>
-                  </div>
+                  <span
+                    className={
+                      viewingBooking.paymentStatus === "Paid"
+                        ? "wz-payment-badge-paid"
+                        : viewingBooking.paymentStatus === "Partially Paid" || viewingBooking.paymentStatus === "Partial"
+                        ? "wz-payment-badge-partial"
+                        : "wz-payment-badge-pending"
+                    }
+                    style={{ fontSize: "0.72rem", padding: "3px 8px" }}
+                  >
+                    {viewingBooking.paymentStatus}
+                  </span>
+                </div>
+                <div style={{ fontSize: "0.78rem", color: "var(--wz-text-muted, #64748b)", marginTop: "3px" }}>
+                  Booked on {viewingBooking.bookingDate} • {viewingBooking.machineryModel}
                 </div>
               </div>
               <button
+                type="button"
                 onClick={handleCloseViewModal}
                 style={{
                   background: "#f1f5f9",
@@ -1660,9 +3210,9 @@ export default function BookingApprovals() {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: "1rem",
+                  fontSize: "0.95rem",
                   cursor: "pointer",
-                  color: "#64748b",
+                  color: "var(--wz-text-muted, #64748b)",
                   transition: "all 0.15s ease",
                 }}
                 title="Close without saving"
@@ -1671,643 +3221,671 @@ export default function BookingApprovals() {
               </button>
             </div>
 
-            {/* Modal Body */}
-            <div className="wz-booking-modal-body">
-              {/* 1. Client Profile Card */}
-              <div className="wz-modal-client-card">
-                <img
-                  src={
-                    viewingBooking.clientAvatar ||
-                    `https://ui-avatars.com/api/?name=${encodeURIComponent(viewingBooking.clientName)}&background=0284c7&color=fff&bold=true`
-                  }
-                  alt={viewingBooking.clientName}
-                  className="wz-modal-client-avatar"
-                  onError={(e) => {
-                    e.currentTarget.onerror = null;
-                    e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(viewingBooking.clientName)}&background=0284c7&color=fff&bold=true`;
+            {/* Clean Segmented Tab Bar */}
+            <div className="wz-modal-tab-bar">
+              <button
+                type="button"
+                className={`wz-modal-tab-btn ${viewModalTab === "overview" ? "active" : ""}`}
+                onClick={() => setViewModalTab("overview")}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="7" height="7" />
+                  <rect x="14" y="3" width="7" height="7" />
+                  <rect x="14" y="14" width="7" height="7" />
+                  <rect x="3" y="14" width="7" height="7" />
+                </svg>
+                <span>Overview</span>
+              </button>
+
+              <button
+                type="button"
+                className={`wz-modal-tab-btn ${viewModalTab === "payment" ? "active" : ""}`}
+                onClick={() => setViewModalTab("payment")}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="5" width="20" height="14" rx="2" />
+                  <line x1="2" y1="10" x2="22" y2="10" />
+                </svg>
+                <span>Payment Summary</span>
+                <span
+                  style={{
+                    width: "7px",
+                    height: "7px",
+                    borderRadius: "50%",
+                    background: viewingBooking.paymentStatus === "Paid" ? "#059669" : "#d97706",
                   }}
                 />
-                <div className="wz-modal-client-meta">
-                  <div className="wz-modal-client-name-row">
-                    <h4 className="wz-modal-client-name">{viewingBooking.clientName}</h4>
-                    <span className="wz-modal-coop-badge">
-                      {viewingBooking.coopId || "COOP MEMBER"}
-                    </span>
-                  </div>
-                  <div className="wz-modal-contact-grid">
-                    <div className="wz-modal-contact-item" title={viewingBooking.clientEmail}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-                        <polyline points="22,6 12,13 2,6" />
-                      </svg>
-                      <span>{viewingBooking.clientEmail || "client@example.com"}</span>
-                    </div>
-                    <div className="wz-modal-contact-item" title={viewingBooking.clientPhone}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-                      </svg>
-                      <span>{viewingBooking.clientPhone || "+63 917 123 4567"}</span>
-                    </div>
-                    <div className="wz-modal-contact-item" style={{ gridColumn: "1 / -1" }} title={viewingBooking.clientAddress}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                        <circle cx="12" cy="10" r="3" />
-                      </svg>
-                      <span>{viewingBooking.clientAddress || "Malaybalay City, Bukidnon"}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              </button>
 
-              {/* Cancellation Requested Alert & Actions */}
-              {(viewingBooking.status === "Cancellation Requested" || viewingBooking.cancellationRequested) && (
-                <div
-                  style={{
-                    background: "#fff1f2",
-                    border: "1px solid #fecdd3",
-                    borderRadius: "10px",
-                    padding: "16px",
-                    marginBottom: "16px",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <span style={{ fontSize: "1.2rem" }}>⚠️</span>
-                      <strong style={{ color: "#9f1239", fontSize: "0.95rem" }}>
-                        Member Requested Booking Cancellation
-                      </strong>
+              <button
+                type="button"
+                className={`wz-modal-tab-btn ${viewModalTab === "history" ? "active" : ""}`}
+                onClick={() => setViewModalTab("history")}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+                <span>Activity History</span>
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="wz-booking-modal-body" style={{ padding: "18px 24px", gap: "16px" }}>
+              {viewModalTab === "overview" && (
+                <>
+                  {/* 1. Clean Booking Summary Strip */}
+                  <div className="wz-clean-summary-strip">
+                    <div>
+                      <span className="wz-clean-kv-label">Booking Placed</span>
+                      <span className="wz-clean-kv-value">{viewingBooking.bookingDate}</span>
                     </div>
-                    {viewingBooking.cancellationRequestedAt && (
-                      <span style={{ fontSize: "0.76rem", color: "#9f1239" }}>
-                        Requested {new Date(viewingBooking.cancellationRequestedAt).toLocaleDateString()}
-                      </span>
-                    )}
+                    <div>
+                      <span className="wz-clean-kv-label">Rental Schedule</span>
+                      <span className="wz-clean-kv-value">{viewingBooking.dateRange}</span>
+                    </div>
+                    <div>
+                      <span className="wz-clean-kv-label">Duration &amp; Scope</span>
+                      <span className="wz-clean-kv-value" style={{ color: "#059669" }}>{viewingBooking.plan}</span>
+                    </div>
+                    <div>
+                      <span className="wz-clean-kv-label">Total Payable</span>
+                      <span className="wz-clean-kv-value">{viewingBooking.paymentAmount || "₱0.00"}</span>
+                    </div>
                   </div>
-                  <p style={{ margin: "8px 0 14px", fontSize: "0.85rem", color: "#881337" }}>
-                    <strong>Reason given:</strong>{" "}
-                    {viewingBooking.cancellationReason || "Member requested cancellation through the member portal."}
-                  </p>
-                  <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                    <button
-                      type="button"
-                      onClick={() => handleGrantCancellation(viewingBooking.rawId || viewingBooking.id)}
+
+                  {/* Cancellation Requested Alert & Actions */}
+                  {(viewingBooking.status === "Cancellation Requested" || viewingBooking.cancellationRequested) && (
+                    <div
                       style={{
-                        padding: "8px 16px",
-                        borderRadius: "8px",
-                        border: "none",
-                        background: "#dc2626",
-                        color: "#ffffff",
-                        fontWeight: "600",
-                        fontSize: "0.84rem",
-                        cursor: "pointer",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "6px",
+                        background: "#fff1f2",
+                        border: "1px solid #fecdd3",
+                        borderRadius: "10px",
+                        padding: "14px 16px",
                       }}
                     >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                      Grant Cancellation
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeclineCancellation(viewingBooking.rawId || viewingBooking.id)}
-                      style={{
-                        padding: "8px 16px",
-                        borderRadius: "8px",
-                        border: "1px solid #cbd5e1",
-                        background: "#ffffff",
-                        color: "#334155",
-                        fontWeight: "600",
-                        fontSize: "0.84rem",
-                        cursor: "pointer",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "6px",
-                      }}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <line x1="18" y1="6" x2="6" y2="18" />
-                        <line x1="6" y1="6" x2="18" y2="18" />
-                      </svg>
-                      Decline Request (Keep Approved)
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* 2. Status Selector (No color, staging only until Save is clicked) */}
-              <div className="wz-status-changer-box">
-                <div className="wz-status-changer-header">
-                  <span className="wz-status-changer-title">Change Booking Status</span>
-                  <span style={{ fontSize: "0.78rem", color: "#64748b" }}>
-                    Selected: <strong style={{ color: "#0f172a" }}>{modalStatus}</strong>
-                    {modalStatus !== viewingBooking.status && (
-                      <span style={{ marginLeft: "6px", color: "#64748b", fontStyle: "italic", fontSize: "0.74rem" }}>
-                        (Unsaved)
-                      </span>
-                    )}
-                  </span>
-                </div>
-                <div className="wz-status-btn-group">
-                  {["Pending", "Approved", "Ongoing", "Returned", "Rescheduled", "Rejected", "Voided"].map((s) => {
-                    const isSelected = modalStatus.toLowerCase() === s.toLowerCase();
-                    return (
-                      <button
-                        key={s}
-                        type="button"
-                        className={`wz-status-switch-btn ${isSelected ? "active" : ""}`}
-                        onClick={() => setModalStatus(s)}
-                        title={`Select status ${s}`}
-                      >
-                        {isSelected && (
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.5">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="8" x2="12" y2="12" />
+                            <line x1="12" y1="16" x2="12.01" y2="16" />
+                          </svg>
+                          <strong style={{ color: "#9f1239", fontSize: "0.9rem" }}>
+                            Member Requested Booking Cancellation
+                          </strong>
+                        </div>
+                        {viewingBooking.cancellationRequestedAt && (
+                          <span style={{ fontSize: "0.75rem", color: "#9f1239" }}>
+                            Requested {new Date(viewingBooking.cancellationRequestedAt).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
+                      <p style={{ margin: "6px 0 12px", fontSize: "0.83rem", color: "#881337" }}>
+                        <strong>Reason given:</strong>{" "}
+                        {viewingBooking.cancellationReason || "Member requested cancellation through the member portal."}
+                      </p>
+                      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          onClick={() => handleGrantCancellation(viewingBooking.rawId || viewingBooking.id)}
+                          style={{
+                            padding: "6px 14px",
+                            borderRadius: "8px",
+                            border: "none",
+                            background: "#dc2626",
+                            color: "#ffffff",
+                            fontWeight: "600",
+                            fontSize: "0.8rem",
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                          }}
+                        >
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                             <polyline points="20 6 9 17 4 12" />
                           </svg>
-                        )}
-                        {s}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Subpanel: Reason for Rejection */}
-                {modalStatus === "Rejected" && (
-                  <div className="wz-modal-subpanel">
-                    <div className="wz-subpanel-title">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="10" />
-                        <line x1="12" y1="8" x2="12" y2="12" />
-                        <line x1="12" y1="16" x2="12.01" y2="16" />
-                      </svg>
-                      Specify Reason for Rejection:
-                    </div>
-
-                    <div className="wz-quick-preset-chips">
-                      {[
-                        "Machinery Under Maintenance",
-                        "Schedule Conflict / Unavailable",
-                        "Incomplete Documentation",
-                        "Operator Unavailable",
-                        "Adverse Weather Conditions",
-                        "Member Requested Cancellation",
-                      ].map((preset) => (
-                        <button
-                          key={preset}
-                          type="button"
-                          className={`wz-preset-chip ${modalRejectionReason === preset ? "active" : ""}`}
-                          onClick={() => setModalRejectionReason(preset)}
-                        >
-                          {preset}
+                          Grant Cancellation
                         </button>
-                      ))}
-                    </div>
-
-                    <textarea
-                      className="wz-modal-textarea"
-                      placeholder="Type or select a reason for rejecting this booking..."
-                      value={modalRejectionReason}
-                      onChange={(e) => setModalRejectionReason(e.target.value)}
-                      rows={2}
-                    />
-                  </div>
-                )}
-
-                {/* Subpanel: Reschedule Dates */}
-                {modalStatus === "Rescheduled" && (
-                  <div className="wz-modal-subpanel">
-                    <div className="wz-subpanel-title">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                        <line x1="16" y1="2" x2="16" y2="6" />
-                        <line x1="8" y1="2" x2="8" y2="6" />
-                        <line x1="3" y1="10" x2="21" y2="10" />
-                        <circle cx="12" cy="15" r="2" />
-                      </svg>
-                      Select New Booking Schedule Dates:
-                    </div>
-
-                    <div className="wz-modal-date-grid">
-                      <div className="wz-modal-date-field">
-                        <label className="wz-modal-date-label">New Start Date</label>
-                        <input
-                          type="date"
-                          className="wz-modal-date-input"
-                          value={modalStartDate}
-                          onChange={(e) => setModalStartDate(e.target.value)}
-                        />
-                      </div>
-                      <div className="wz-modal-date-field">
-                        <label className="wz-modal-date-label">New End Date</label>
-                        <input
-                          type="date"
-                          className="wz-modal-date-input"
-                          value={modalEndDate}
-                          min={modalStartDate}
-                          onChange={(e) => setModalEndDate(e.target.value)}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="wz-reschedule-calc-badge">
-                      <span>
-                        Updated Duration: <strong>{rescheduleDays} Day{rescheduleDays === 1 ? "" : "s"}</strong>
-                      </span>
-                      <span>
-                        Recalculated Total: <strong style={{ color: "var(--wz-primary-red)" }}>{rescheduleAmount}</strong>
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Subpanel: Void Booking */}
-                {modalStatus === "Voided" && (
-                  <div className="wz-modal-subpanel">
-                    <div className="wz-void-notice-banner">
-                      ⚠️ <strong>Void Warning:</strong> Voiding will permanently invalidate this machinery rental transaction, cancel driver assignments, and release the unit for other cooperative members.
-                    </div>
-
-                    <div className="wz-subpanel-title">
-                      Reason for Voiding:
-                    </div>
-
-                    <div className="wz-quick-preset-chips">
-                      {[
-                        "Administrative Cancellation",
-                        "Duplicate Billing Entry",
-                        "Member Clerical Error",
-                        "Equipment Decommissioned",
-                      ].map((preset) => (
                         <button
-                          key={preset}
                           type="button"
-                          className={`wz-preset-chip ${modalVoidReason === preset ? "active" : ""}`}
-                          onClick={() => setModalVoidReason(preset)}
-                        >
-                          {preset}
-                        </button>
-                      ))}
-                    </div>
-
-                    <textarea
-                      className="wz-modal-textarea"
-                      placeholder="Type or select reason for voiding..."
-                      value={modalVoidReason}
-                      onChange={(e) => setModalVoidReason(e.target.value)}
-                      rows={2}
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* 3. Machinery & Schedule Details */}
-              <div className="wz-modal-summary-grid">
-                <div className="wz-modal-summary-item">
-                  <div className="wz-modal-summary-label">Machinery Equipment</div>
-                  <div className="wz-modal-summary-value">{viewingBooking.machineryModel}</div>
-                  <span className="wz-machinery-badge" style={{ marginTop: "4px", display: "inline-block" }}>
-                    {viewingBooking.category}
-                  </span>
-                </div>
-                <div className="wz-modal-summary-item">
-                  <div className="wz-modal-summary-label">Rental Duration</div>
-                  <div className="wz-modal-summary-value">{viewingBooking.plan}</div>
-                  <div style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "2px" }}>
-                    {viewingBooking.dateRange}
-                  </div>
-                </div>
-                <div className="wz-modal-summary-item">
-                  <div className="wz-modal-summary-label">Assigned Operator / Driver</div>
-                  <div className="wz-modal-summary-value">
-                    {viewingBooking.hasDriver
-                      ? viewingBooking.assignedDriver || "Driver Assigned"
-                      : "Self-Operated (No Driver)"}
-                  </div>
-                </div>
-                <div className="wz-modal-summary-item">
-                  <div className="wz-modal-summary-label">Booking Placed Date</div>
-                  <div className="wz-modal-summary-value">{viewingBooking.bookingDate}</div>
-                </div>
-              </div>
-
-              {/* 4. Payment & Transaction Details Card */}
-              <div
-                style={{
-                  background: "#ffffff",
-                  border: `1px solid ${viewingBooking.paymentStatus === "Paid" ? "#bbf7d0" : "#e2e8f0"}`,
-                  borderRadius: "12px",
-                  padding: "18px 20px",
-                  marginBottom: "16px",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px", marginBottom: "14px", borderBottom: "1px solid #f1f5f9", paddingBottom: "10px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <span style={{ fontSize: "1.1rem" }}>💳</span>
-                    <div>
-                      <h5 style={{ margin: 0, fontSize: "0.96rem", fontWeight: 800, color: "#0f172a" }}>
-                        Payment &amp; Settlement Details
-                      </h5>
-                      <span style={{ fontSize: "0.74rem", color: "#64748b" }}>Official transaction audit record</span>
-                    </div>
-                  </div>
-
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <span
-                      className={viewingBooking.paymentStatus === "Paid" ? "wz-payment-badge-paid" : "wz-payment-badge-pending"}
-                      style={{ padding: "4px 10px", fontSize: "0.78rem" }}
-                    >
-                      Payment: {viewingBooking.paymentStatus}
-                    </span>
-
-                    {viewingBooking.paymentStatus !== "Paid" && (
-                      <button
-                        type="button"
-                        onClick={() => handleSettlePayment(viewingBooking)}
-                        style={{
-                          background: "#059669",
-                          color: "#ffffff",
-                          border: "none",
-                          borderRadius: "8px",
-                          padding: "6px 14px",
-                          fontSize: "0.78rem",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "5px",
-                          boxShadow: "0 2px 6px rgba(5, 150, 105, 0.25)",
-                        }}
-                        title="Verify payment and issue official receipt"
-                      >
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                        Confirm &amp; Settle Payment
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Grid of Key Payment Information */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px", marginBottom: "14px" }}>
-                  {/* Payment Amount */}
-                  <div style={{ background: "#f8fafc", padding: "10px 14px", borderRadius: "8px", border: "1px solid #f1f5f9" }}>
-                    <span style={{ fontSize: "0.70rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, display: "block", marginBottom: "2px" }}>
-                      Payment Amount
-                    </span>
-                    <strong style={{ fontSize: "1.15rem", color: "#0f172a", fontWeight: 900 }}>
-                      {viewingBooking.paymentAmount || "₱0.00"}
-                    </strong>
-                  </div>
-
-                  {/* Payment Type */}
-                  <div style={{ background: "#f8fafc", padding: "10px 14px", borderRadius: "8px", border: "1px solid #f1f5f9" }}>
-                    <span style={{ fontSize: "0.70rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, display: "block", marginBottom: "2px" }}>
-                      Payment Type
-                    </span>
-                    <strong style={{ fontSize: "0.85rem", color: "#334155" }}>
-                      {viewingBooking.paymentType || "Full Rental Payment"}
-                    </strong>
-                  </div>
-
-                  {/* Payment Method */}
-                  <div style={{ background: "#f8fafc", padding: "10px 14px", borderRadius: "8px", border: "1px solid #f1f5f9" }}>
-                    <span style={{ fontSize: "0.70rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, display: "block", marginBottom: "2px" }}>
-                      Payment Method
-                    </span>
-                    <strong style={{ fontSize: "0.85rem", color: "#0284c7" }}>
-                      {viewingBooking.paymentMethod || "Cash"}
-                    </strong>
-                    {viewingBooking.cashPaymentOption && (
-                      <span style={{ fontSize: "0.70rem", color: "#64748b", display: "block" }}>
-                        ({viewingBooking.cashPaymentOption})
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Date Received */}
-                  <div style={{ background: "#f8fafc", padding: "10px 14px", borderRadius: "8px", border: "1px solid #f1f5f9" }}>
-                    <span style={{ fontSize: "0.70rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, display: "block", marginBottom: "2px" }}>
-                      Date Received
-                    </span>
-                    <strong style={{ fontSize: "0.85rem", color: "#334155" }}>
-                      {viewingBooking.dateReceived || (viewingBooking.paymentStatus === "Paid" ? viewingBooking.bookingDate : "Pending Settlement")}
-                    </strong>
-                  </div>
-
-                  {/* Receipt or Reference Number */}
-                  <div style={{ background: "#f8fafc", padding: "10px 14px", borderRadius: "8px", border: "1px solid #f1f5f9" }}>
-                    <span style={{ fontSize: "0.70rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, display: "block", marginBottom: "2px" }}>
-                      Receipt / Reference No.
-                    </span>
-                    <strong style={{ fontSize: "0.85rem", color: "#0f172a", fontFamily: "monospace" }}>
-                      {viewingBooking.receiptNo || viewingBooking.referenceNumber || viewingBooking.id}
-                    </strong>
-                  </div>
-
-                  {/* Recorded By (Filled automatically from manager account) */}
-                  <div style={{ background: "#f8fafc", padding: "10px 14px", borderRadius: "8px", border: "1px solid #f1f5f9" }}>
-                    <span style={{ fontSize: "0.70rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, display: "block", marginBottom: "2px" }}>
-                      Recorded By
-                    </span>
-                    <span style={{ fontSize: "0.80rem", fontWeight: 700, color: "#166534", background: "#dcfce7", padding: "2px 8px", borderRadius: "6px", display: "inline-block" }}>
-                      👤 {viewingBooking.recordedBy || user?.fullName || user?.email || "Manager (KIMPC)"}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Proof of Payment & Notes */}
-                <div style={{ display: "grid", gridTemplateColumns: (viewingBooking.proofOfPayment || viewingBooking.gcashProof) ? "1.2fr 1fr" : "1fr", gap: "14px", borderTop: "1px dashed #e2e8f0", paddingTop: "12px" }}>
-                  {/* Notes */}
-                  <div>
-                    <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
-                      📝 Proof of Payment / Notes:
-                    </span>
-                    <div style={{ fontSize: "0.80rem", color: "#334155", background: "#f8fafc", padding: "8px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", minHeight: "44px" }}>
-                      {viewingBooking.notes || viewingBooking.remarks || "Standard payment record for KIMPC machinery rental."}
-                    </div>
-                  </div>
-
-                  {/* Proof of Payment View */}
-                  {(viewingBooking.proofOfPayment || viewingBooking.gcashProof) && (
-                    <div>
-                      <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
-                        📷 Attached Payment Proof:
-                      </span>
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                        <img
-                          src={viewingBooking.proofOfPayment || viewingBooking.gcashProof}
-                          alt="Proof of Payment"
-                          onClick={() => setPreviewGcashImage(viewingBooking.proofOfPayment || viewingBooking.gcashProof)}
+                          onClick={() => handleDeclineCancellation(viewingBooking.rawId || viewingBooking.id)}
                           style={{
-                            width: "50px",
-                            height: "50px",
-                            objectFit: "cover",
-                            borderRadius: "6px",
-                            border: "2px solid #059669",
+                            padding: "6px 14px",
+                            borderRadius: "8px",
+                            border: "1px solid #cbd5e1",
+                            background: "#ffffff",
+                            color: "var(--wz-text-main, #334155)",
+                            fontWeight: "600",
+                            fontSize: "0.8rem",
                             cursor: "pointer",
-                            boxShadow: "0 2px 4px rgba(0,0,0,0.08)",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
                           }}
-                          title="Click to view full image"
+                        >
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                          </svg>
+                          Decline Request
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 2 & 3. Two-Column Clean Grid: Member & Request | Unit & Operator */}
+                  <div className="wz-clean-two-col">
+                    {/* Left Card: Member & Rental Request */}
+                    <div className="wz-clean-card">
+                      <h5 className="wz-clean-card-title">
+                        <span>Member &amp; Farm Site</span>
+                        <span className="wz-modal-coop-badge" style={{ fontSize: "0.68rem", padding: "2px 8px" }}>
+                          {viewingBooking.coopId || "COOP MEMBER"}
+                        </span>
+                      </h5>
+
+                      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                        <img
+                          src={
+                            viewingBooking.clientAvatar ||
+                            `https://ui-avatars.com/api/?name=${encodeURIComponent(viewingBooking.clientName)}&background=0284c7&color=fff&bold=true`
+                          }
+                          alt={viewingBooking.clientName}
+                          style={{
+                            width: "44px",
+                            height: "44px",
+                            borderRadius: "50%",
+                            objectFit: "cover",
+                            border: "1px solid #e2e8f0",
+                            flexShrink: 0,
+                          }}
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(viewingBooking.clientName)}&background=0284c7&color=fff&bold=true`;
+                          }}
                         />
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--wz-text-main, #0f172a)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {viewingBooking.clientName}
+                          </div>
+                          <div style={{ fontSize: "0.78rem", color: "var(--wz-text-muted, #64748b)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {viewingBooking.clientPhone || "No phone"}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px", fontSize: "0.8rem", color: "var(--wz-text-muted, #475569)" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" style={{ flexShrink: 0 }}>
+                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                            <polyline points="22,6 12,13 2,6" />
+                          </svg>
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {viewingBooking.clientEmail || "client@example.com"}
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" style={{ flexShrink: 0 }}>
+                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                            <circle cx="12" cy="10" r="3" />
+                          </svg>
+                          <span>{viewingBooking.clientAddress || "Kalilangan, Bukidnon"}</span>
+                        </div>
+                      </div>
+
+                      <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: "10px", marginTop: "2px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                         <div>
-                          <div style={{ fontSize: "0.75rem", color: "#065f46", fontWeight: 600, marginBottom: "4px" }}>
-                            ✓ Proof attached
+                          <span className="wz-clean-kv-label">Service Area</span>
+                          <span className="wz-clean-kv-value" style={{ fontSize: "0.82rem" }}>
+                            {viewingBooking.hectares ? `${viewingBooking.hectares} Hectare${viewingBooking.hectares === 1 ? "" : "s"}` : viewingBooking.plan}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="wz-clean-kv-label">Farm Location</span>
+                          <span className="wz-clean-kv-value" style={{ fontSize: "0.82rem", display: "block" }}>
+                            {viewingBooking.farmFormattedAddress || viewingBooking.farmLocation || "Kalilangan, Bukidnon"}
+                          </span>
+                          {viewingBooking.deliveryDistanceKm != null && (
+                            <span style={{ fontSize: "0.74rem", color: "#15803d", fontWeight: 700, display: "inline-block", marginTop: "3px" }}>
+                              {viewingBooking.deliveryDistanceKm} km from Depot
+                              {viewingBooking.estimatedTravelMinutes ? ` • ~${viewingBooking.estimatedTravelMinutes} min drive` : ""}
+                            </span>
+                          )}
+                          {viewingBooking.farmCoordinates?.lat && viewingBooking.farmCoordinates?.lng && (
+                            <a
+                              href={`https://www.openstreetmap.org/?mlat=${viewingBooking.farmCoordinates.lat}&mlon=${viewingBooking.farmCoordinates.lng}#map=15/${viewingBooking.farmCoordinates.lat}/${viewingBooking.farmCoordinates.lng}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ fontSize: "0.72rem", color: "#0284c7", textDecoration: "none", fontWeight: 600, display: "inline-block", marginTop: "2px", marginLeft: viewingBooking.deliveryDistanceKm != null ? "8px" : 0 }}
+                            >
+                              Open Map ↗
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                      {viewingBooking.farmCoordinates?.lat && viewingBooking.farmCoordinates?.lng && (
+                        <div style={{ marginTop: "12px", borderTop: "1px solid #f1f5f9", paddingTop: "10px" }}>
+                          <span className="wz-clean-kv-label" style={{ display: "block", marginBottom: "6px" }}>
+                            Dispatch Route Preview (Depot → Farm)
+                          </span>
+                          <FarmLocationPicker
+                            readOnly
+                            height={180}
+                            value={{
+                              location: viewingBooking.farmLocation,
+                              formattedAddress: viewingBooking.farmFormattedAddress,
+                              coordinates: viewingBooking.farmCoordinates,
+                              distanceKm: viewingBooking.deliveryDistanceKm,
+                              durationMinutes: viewingBooking.estimatedTravelMinutes,
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right Card: Unit & Operator Assignment */}
+                    <div className="wz-clean-card">
+                      <h5 className="wz-clean-card-title">
+                        <span>Unit &amp; Operator</span>
+                        <span className="wz-machinery-badge" style={{ fontSize: "0.68rem" }}>
+                          {viewingBooking.category}
+                        </span>
+                      </h5>
+
+                      <div>
+                        <span className="wz-clean-kv-label">Machinery Model</span>
+                        <div style={{ fontSize: "0.94rem", fontWeight: 700, color: "var(--wz-text-main, #0f172a)" }}>
+                          {viewingBooking.machineryModel}
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "4px" }}>
+                          {viewingBooking.machineryUnitId && (
+                            <span style={{ fontSize: "0.72rem", color: "#0284c7", background: "#f0f9ff", padding: "2px 7px", borderRadius: "4px", fontWeight: 600, border: "1px solid #bae6fd" }}>
+                              Unit: {viewingBooking.machineryUnitId}
+                            </span>
+                          )}
+                          <span style={{ fontSize: "0.76rem", color: "var(--wz-text-muted, #64748b)" }}>
+                            Rate: <strong style={{ color: "var(--wz-text-main, #0f172a)" }}>₱{Number(viewingBooking.dailyRate || 2800).toLocaleString()}</strong>/day
+                          </span>
+                        </div>
+                      </div>
+
+                      <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: "10px", marginTop: "auto" }}>
+                        <span className="wz-clean-kv-label">Assigned Operator</span>
+                        <div style={{ fontSize: "0.9rem", fontWeight: 700, color: "var(--wz-text-main, #0f172a)" }}>
+                          {viewingBooking.hasDriver
+                            ? (viewingBooking.assignedDriver || "Coop Operator Assigned")
+                            : "Self-Operated by Member"}
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "6px", marginTop: "4px" }}>
+                          <span style={{ fontSize: "0.74rem", color: viewingBooking.hasDriver ? "#059669" : "#64748b", fontWeight: 600 }}>
+                            {viewingBooking.hasDriver ? "Coop Operator Included" : "Member Certified"}
+                          </span>
+                          <span style={{ fontSize: "0.76rem", color: "var(--wz-text-muted, #64748b)" }}>
+                            {viewingBooking.driverPhone || (viewingBooking.hasDriver ? "+63 917 123 4567" : viewingBooking.clientPhone || "N/A")}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Clean Status Switcher Toolbar */}
+                  <div className="wz-clean-card" style={{ background: "#f8fafc", padding: "14px 16px" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
+                      <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--wz-text-main, #334155)", textTransform: "uppercase", letterSpacing: "0.4px" }}>
+                        Update Booking Status
+                      </span>
+                      <span style={{ fontSize: "0.78rem", color: "var(--wz-text-muted, #64748b)" }}>
+                        Selected: <strong style={{ color: "var(--wz-text-main, #0f172a)" }}>{modalStatus}</strong>
+                        {modalStatus !== viewingBooking.status && (
+                          <span style={{ marginLeft: "6px", color: "#059669", fontWeight: 600, fontSize: "0.74rem" }}>
+                            (Unsaved change)
+                          </span>
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="wz-status-btn-group">
+                      {["Pending", "Approved", "Ongoing", "Returned", "Rescheduled", "Rejected", "Voided"].map((s) => {
+                        const isSelected = modalStatus.toLowerCase() === s.toLowerCase();
+                        return (
+                          <button
+                            key={s}
+                            type="button"
+                            className={`wz-status-switch-btn ${isSelected ? "active" : ""}`}
+                            onClick={() => setModalStatus(s)}
+                            title={`Select status ${s}`}
+                          >
+                            {isSelected && (
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            )}
+                            {s}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Subpanel: Reason for Rejection */}
+                    {modalStatus === "Rejected" && (
+                      <div className="wz-modal-subpanel">
+                        <div className="wz-subpanel-title">Specify Reason for Rejection:</div>
+                        <div className="wz-quick-preset-chips">
+                          {[
+                            "Machinery Under Maintenance",
+                            "Schedule Conflict / Unavailable",
+                            "Incomplete Documentation",
+                            "Operator Unavailable",
+                            "Adverse Weather Conditions",
+                            "Member Requested Cancellation",
+                          ].map((preset) => (
+                            <button
+                              key={preset}
+                              type="button"
+                              className={`wz-preset-chip ${modalRejectionReason === preset ? "active" : ""}`}
+                              onClick={() => setModalRejectionReason(preset)}
+                            >
+                              {preset}
+                            </button>
+                          ))}
+                        </div>
+                        <textarea
+                          className="wz-modal-textarea"
+                          placeholder="Type or select a reason for rejecting this booking..."
+                          value={modalRejectionReason}
+                          onChange={(e) => setModalRejectionReason(e.target.value)}
+                          rows={2}
+                        />
+                      </div>
+                    )}
+
+                    {/* Subpanel: Reschedule Dates */}
+                    {modalStatus === "Rescheduled" && (
+                      <div className="wz-modal-subpanel">
+                        <div className="wz-subpanel-title">Select New Booking Schedule Dates:</div>
+                        <div className="wz-modal-date-grid">
+                          <div className="wz-modal-date-field">
+                            <label className="wz-modal-date-label">New Start Date</label>
+                            <input
+                              type="date"
+                              className="wz-modal-date-input"
+                              value={modalStartDate}
+                              onChange={(e) => setModalStartDate(e.target.value)}
+                            />
+                          </div>
+                          <div className="wz-modal-date-field">
+                            <label className="wz-modal-date-label">New End Date</label>
+                            <input
+                              type="date"
+                              className="wz-modal-date-input"
+                              value={modalEndDate}
+                              min={modalStartDate}
+                              onChange={(e) => setModalEndDate(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                        <div className="wz-reschedule-calc-badge">
+                          <span>
+                            Updated Duration: <strong>{rescheduleDays} Day{rescheduleDays === 1 ? "" : "s"}</strong>
+                          </span>
+                          <span>
+                            Recalculated Total: <strong style={{ color: "var(--wz-primary-red)" }}>{rescheduleAmount}</strong>
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Subpanel: Void Booking */}
+                    {modalStatus === "Voided" && (
+                      <div className="wz-modal-subpanel">
+                        <div className="wz-void-notice-banner">
+                          <strong>Void Warning:</strong> Voiding will permanently invalidate this machinery rental transaction, cancel driver assignments, and release the unit.
+                        </div>
+                        <div className="wz-subpanel-title">Reason for Voiding:</div>
+                        <div className="wz-quick-preset-chips">
+                          {[
+                            "Administrative Cancellation",
+                            "Duplicate Billing Entry",
+                            "Member Clerical Error",
+                            "Equipment Decommissioned",
+                          ].map((preset) => (
+                            <button
+                              key={preset}
+                              type="button"
+                              className={`wz-preset-chip ${modalVoidReason === preset ? "active" : ""}`}
+                              onClick={() => setModalVoidReason(preset)}
+                            >
+                              {preset}
+                            </button>
+                          ))}
+                        </div>
+                        <textarea
+                          className="wz-modal-textarea"
+                          placeholder="Type or select reason for voiding..."
+                          value={modalVoidReason}
+                          onChange={(e) => setModalVoidReason(e.target.value)}
+                          rows={2}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {viewModalTab === "payment" && (
+                <>
+                  {/* 4. Clean Payment Summary Card */}
+                  <div className="wz-clean-card">
+                    <div className="wz-clean-card-title">
+                      <span>Payment Summary</span>
+                      <span
+                        className={
+                          viewingBooking.paymentStatus === "Paid"
+                            ? "wz-payment-badge-paid"
+                            : viewingBooking.paymentStatus === "Partially Paid" || viewingBooking.paymentStatus === "Partial"
+                            ? "wz-payment-badge-partial"
+                            : "wz-payment-badge-pending"
+                        }
+                        style={{ fontSize: "0.72rem", padding: "3px 9px" }}
+                      >
+                        {viewingBooking.paymentStatus}
+                      </span>
+                    </div>
+
+                    {/* Top Highlight Strip: Total Payable & Settlement Guidance */}
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px", background: "#f8fafc", padding: "12px 16px", borderRadius: "10px", border: "1px solid #f1f5f9" }}>
+                      <div>
+                        <span className="wz-clean-kv-label">Total Payable</span>
+                        <div style={{ fontSize: "1.4rem", fontWeight: 900, color: "var(--wz-text-main, #0f172a)", lineHeight: 1.15 }}>
+                          {viewingBooking.paymentAmount || "₱0.00"}
+                        </div>
+                        {(viewingBooking.paymentStatus === "Partially Paid" || viewingBooking.paymentStatus === "Partial") && (
+                          <div style={{ fontSize: "0.74rem", fontWeight: 600, color: "#b45309", marginTop: "3px" }}>
+                            Paid ₱{Number(viewingBooking.paidAmountNum || 0).toLocaleString()} · Balance ₱{Number(viewingBooking.balanceAmountNum || 0).toLocaleString()}
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={{ textAlign: "right" }}>
+                        <span className="wz-clean-kv-label">Settlement</span>
+                        {viewingBooking.paymentStatus === "Paid" ? (
+                          <div style={{ fontSize: "0.78rem", color: "#059669", fontWeight: 700 }}>
+                            Settled
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: "0.78rem", color: "var(--wz-text-muted, #64748b)", fontWeight: 500 }}>
+                            Manage in{" "}
+                            <Link
+                              to="/manager/financials/payments"
+                              onClick={handleCloseViewModal}
+                              style={{ color: "#0284c7", fontWeight: 600, textDecoration: "none" }}
+                            >
+                              Financials › Payments
+                            </Link>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Clean 4-column Metadata Grid */}
+                    <div className="wz-clean-summary-strip" style={{ background: "#ffffff", padding: "10px 14px" }}>
+                      <div>
+                        <span className="wz-clean-kv-label">Method</span>
+                        <span className="wz-clean-kv-value" style={{ fontSize: "0.84rem", color: "#0284c7" }}>
+                          {viewingBooking.paymentMethod || "Cash"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="wz-clean-kv-label">Date Received</span>
+                        <span className="wz-clean-kv-value" style={{ fontSize: "0.84rem" }}>
+                          {viewingBooking.dateReceived
+                            ? (String(viewingBooking.dateReceived).includes("T") && !isNaN(new Date(viewingBooking.dateReceived).getTime())
+                              ? new Date(viewingBooking.dateReceived).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })
+                              : viewingBooking.dateReceived)
+                            : (viewingBooking.paymentStatus === "Paid" ? viewingBooking.bookingDate : "Pending")}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="wz-clean-kv-label">OR / Ref No.</span>
+                        <span className="wz-clean-kv-value" style={{ fontSize: "0.82rem", fontFamily: "monospace" }}>
+                          {viewingBooking.receiptNo || viewingBooking.id}
+                          {viewingBooking.referenceNumber ? (
+                            <span style={{ display: "block", fontSize: "0.72rem", color: "#0284c7" }}>
+                              Ref: {viewingBooking.referenceNumber}
+                            </span>
+                          ) : null}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="wz-clean-kv-label">Received By</span>
+                        <span className="wz-clean-kv-value" style={{ fontSize: "0.82rem", color: "#059669" }}>
+                          {viewingBooking.recordedBy || user?.fullName || "Manager"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Attached Proof of Payment (GCash) if exists */}
+                    {(viewingBooking.proofOfPayment || viewingBooking.gcashProof) && (
+                      <div style={{ display: "grid", gap: "6px" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", padding: "10px 14px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                            <img
+                              src={viewingBooking.proofOfPayment || viewingBooking.gcashProof}
+                              alt="Proof of Payment"
+                              onClick={() => setPreviewGcashImage(viewingBooking.proofOfPayment || viewingBooking.gcashProof)}
+                              style={{
+                                width: "40px",
+                                height: "40px",
+                                objectFit: "cover",
+                                borderRadius: "6px",
+                                border: "1px solid #059669",
+                                cursor: "pointer",
+                              }}
+                            />
+                            <div>
+                              <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#166534" }}>GCash / Transfer Proof Attached</div>
+                              <div style={{ fontSize: "0.72rem", color: "var(--wz-text-muted, #475569)" }}>Click thumbnail to verify screenshot</div>
+                            </div>
                           </div>
                           <button
                             type="button"
                             onClick={() => setPreviewGcashImage(viewingBooking.proofOfPayment || viewingBooking.gcashProof)}
                             style={{
-                              background: "#0284c7",
-                              color: "#ffffff",
-                              border: "none",
+                              background: "#ffffff",
+                              color: "var(--wz-text-main, #0f172a)",
+                              border: "1px solid #cbd5e1",
                               borderRadius: "6px",
-                              padding: "4px 10px",
-                              fontSize: "0.74rem",
-                              fontWeight: 700,
+                              padding: "5px 12px",
+                              fontSize: "0.76rem",
+                              fontWeight: 600,
                               cursor: "pointer",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "4px",
                             }}
                           >
-                            🔍 View Proof
+                            View Proof
                           </button>
                         </div>
+                        <GcashOcrBadge
+                          ocr={viewingBooking.gcashOcr}
+                          scanning={viewingOcrScanning}
+                          error={viewingOcrError}
+                          expectedAmount={viewingBooking.totalAmountNum}
+                          onScanClick={() => handleScanViewingGcash(viewingBooking)}
+                        />
                       </div>
+                    )}
+                    {/* Compact Rate & Scope Breakdown */}
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px", paddingTop: "8px", borderTop: "1px solid #f1f5f9", fontSize: "0.8rem", color: "var(--wz-text-muted, #475569)" }}>
+                      <span>
+                        <strong>{viewingBooking.machineryModel}</strong> ({viewingBooking.plan})
+                      </span>
+                      <span>
+                        Daily Rate: <strong style={{ color: "var(--wz-text-main, #0f172a)" }}>₱{Number(viewingBooking.dailyRate || 2800).toLocaleString()} / day</strong>
+                      </span>
                     </div>
-                  )}
-                </div>
-              </div>
 
-              {/* 5. Official Machine Rental Receipt / Voucher */}
-              <div className="wz-receipt-voucher">
-                <div className="wz-receipt-header">
-                  <div>
-                    <h5 className="wz-receipt-coop-name">KALILANGAN IRRIGATORS MULTI-PURPOSE COOPERATIVE (KIMPC)</h5>
-                    <p className="wz-receipt-sub">Official Machinery Rental Billing Voucher &amp; Settlement</p>
+                    {/* Status Notice Banners */}
+                    {(viewingBooking.status === "Rejected" || modalStatus === "Rejected") && (
+                      <div style={{ padding: "8px 12px", background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: "8px", fontSize: "0.78rem", color: "#991b1b" }}>
+                        <strong>Rejected:</strong> {modalRejectionReason || viewingBooking.rejectionReason || "No reason specified"}
+                      </div>
+                    )}
+                    {(viewingBooking.status === "Voided" || modalStatus === "Voided") && (
+                      <div style={{ padding: "8px 12px", background: "#f1f5f9", border: "1px dashed #cbd5e1", borderRadius: "8px", fontSize: "0.78rem", color: "var(--wz-text-muted, #475569)" }}>
+                        <strong>Voided:</strong> {modalVoidReason || viewingBooking.voidReason || "Administrative Cancellation"}
+                      </div>
+                    )}
+                    {(viewingBooking.status === "Rescheduled" || modalStatus === "Rescheduled") && (
+                      <div style={{ padding: "8px 12px", background: "#f3e8ff", border: "1px solid #d8b4fe", borderRadius: "8px", fontSize: "0.78rem", color: "#6b21a8" }}>
+                        <strong>Rescheduled:</strong> {modalStartDate && modalEndDate ? `${modalStartDate} to ${modalEndDate}` : viewingBooking.dateRange} ({rescheduleDays} Days)
+                      </div>
+                    )}
                   </div>
-                  <div className="wz-receipt-num-box">
-                    <div className="wz-receipt-num-label">Receipt No.</div>
-                    <div className="wz-receipt-num">{viewingBooking.receiptNo || "REC-2028-0001"}</div>
-                  </div>
-                </div>
+                </>
+              )}
 
-                {/* Status Notice Banners on Receipt */}
-                {(viewingBooking.status === "Rejected" || modalStatus === "Rejected") && (
-                  <div style={{ marginBottom: "12px", padding: "8px 12px", background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: "8px", fontSize: "0.78rem", color: "#991b1b" }}>
-                    <strong>⛔ Reason for Rejection:</strong> {modalRejectionReason || viewingBooking.rejectionReason || "No reason specified"}
+              {viewModalTab === "history" && (
+                /* 5. Clean Activity History */
+                <div className="wz-clean-card">
+                  <div className="wz-clean-card-title">
+                    <span>Activity History</span>
+                    <span style={{ fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>Chronological audit trail</span>
                   </div>
-                )}
-                {(viewingBooking.status === "Voided" || modalStatus === "Voided") && (
-                  <div style={{ marginBottom: "12px", padding: "8px 12px", background: "#f1f5f9", border: "1px dashed #cbd5e1", borderRadius: "8px", fontSize: "0.78rem", color: "#475569" }}>
-                    <strong>🚫 Booking Voided:</strong> {modalVoidReason || viewingBooking.voidReason || "Administrative Cancellation"}
-                  </div>
-                )}
-                {(viewingBooking.status === "Rescheduled" || modalStatus === "Rescheduled") && (
-                  <div style={{ marginBottom: "12px", padding: "8px 12px", background: "#f3e8ff", border: "1px solid #d8b4fe", borderRadius: "8px", fontSize: "0.78rem", color: "#6b21a8" }}>
-                    <strong>🔄 Rescheduled Schedule:</strong> {modalStartDate && modalEndDate ? `${modalStartDate} to ${modalEndDate}` : viewingBooking.dateRange} ({rescheduleDays} Days)
-                  </div>
-                )}
 
-                <table className="wz-receipt-table">
-                  <thead>
-                    <tr>
-                      <th>Description</th>
-                      <th>Terms / Days</th>
-                      <th style={{ textAlign: "right" }}>Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td>
-                        <strong>{viewingBooking.machineryModel}</strong>
-                        <div style={{ fontSize: "0.72rem", color: "#64748b" }}>
-                          Daily Rate: ₱{Number(viewingBooking.dailyRate || 2800).toLocaleString()} / day
-                        </div>
-                      </td>
-                      <td>{viewingBooking.plan}</td>
-                      <td style={{ textAlign: "right", fontWeight: "600" }}>{viewingBooking.paymentAmount}</td>
-                    </tr>
-                    <tr>
-                      <td>
-                        Assigned Operator Service
-                        <div style={{ fontSize: "0.72rem", color: "#64748b" }}>
-                          {viewingBooking.hasDriver ? (viewingBooking.assignedDriver || "Coop Operator") : "Self-Operated by Member"}
-                        </div>
-                      </td>
-                      <td>{viewingBooking.hasDriver ? "Included" : "N/A"}</td>
-                      <td style={{ textAlign: "right", color: "#059669" }}>₱0.00</td>
-                    </tr>
-                    <tr>
-                      <td>Coop Maintenance & Insurance Guarantee</td>
-                      <td>Coop Benefit</td>
-                      <td style={{ textAlign: "right", color: "#059669" }}>₱0.00</td>
-                    </tr>
-                    <tr>
-                      <td>CDA RA 9520 Member Tax Exemption</td>
-                      <td>Tax Exempt</td>
-                      <td style={{ textAlign: "right", color: "#059669" }}>₱0.00</td>
-                    </tr>
-                  </tbody>
-                  <tfoot>
-                    <tr>
-                      <td colSpan="2">Total Amount Payable:</td>
-                      <td style={{ textAlign: "right", color: "var(--wz-primary-red)" }}>
-                        {viewingBooking.paymentAmount}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-
-                <div className="wz-receipt-footer-strip">
-                  <div>
-                    <span>Payment Method: </span>
-                    <strong style={{ color: "#0f172a" }}>{viewingBooking.paymentMethod || "Cash"}</strong>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    <span>Payment Status: </span>
-                    <span className={viewingBooking.paymentStatus === "Paid" ? "wz-payment-badge-paid" : "wz-payment-badge-pending"}>
-                      {viewingBooking.paymentStatus}
-                    </span>
-                  </div>
-                  <div style={{ width: "100%", fontSize: "0.7rem", color: "#94a3b8", textAlign: "right", marginTop: "4px" }}>
-                    ✓ Authorized by KIMPC Cooperative Fleet Dispatch • Digitally Verified
+                  <div className="app-timeline-container" style={{ marginTop: 0, padding: "12px 14px", background: "#f8fafc" }}>
+                    <ul className="app-timeline-list">
+                      {getBookingTimelineEvents(viewingBooking).map((ev, evIdx) => (
+                        <li key={evIdx} className="app-timeline-item">
+                          <div className={`app-timeline-node node-${ev.status || "created"}`}>
+                            {ev.status === "approved" || ev.status === "returned" ? "✓" : ev.status === "rejected" || ev.status === "voided" ? "✕" : "•"}
+                          </div>
+                          <div className="app-timeline-card">
+                            <div className="app-timeline-card-header">
+                              <span className="app-timeline-item-title">{ev.title}</span>
+                              <span className="app-timeline-item-time">
+                                {ev.timestamp ? (
+                                  typeof ev.timestamp === "string" && !ev.timestamp.includes("T") && !ev.timestamp.includes("-")
+                                    ? ev.timestamp
+                                    : new Date(ev.timestamp).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })
+                                ) : "—"}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: "0.72rem", color: "#059669", fontWeight: 700, marginBottom: "3px" }}>
+                              By: {ev.actor || "System"}
+                            </div>
+                            <p className="app-timeline-item-note">{ev.note}</p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Modal Footer: Save and Close */}
-            <div className="wz-booking-modal-footer">
-              <button
-                type="button"
-                onClick={() => window.print()}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "9px 16px",
-                  borderRadius: "8px",
-                  border: "1px solid #cbd5e1",
-                  background: "#ffffff",
-                  color: "#334155",
-                  fontWeight: "600",
-                  fontSize: "0.82rem",
-                  cursor: "pointer",
-                  transition: "background 0.15s ease",
-                }}
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="6 9 6 2 18 2 18 9" />
-                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                  <rect x="6" y="14" width="12" height="8" />
-                </svg>
-                Print Receipt
-              </button>
-
+            <div className="wz-booking-modal-footer" style={{ justifyContent: "flex-end" }}>
               <div className="wz-modal-footer-actions">
                 <button
                   type="button"
@@ -2388,7 +3966,7 @@ export default function BookingApprovals() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <span style={{ fontSize: "1.2rem" }}>📱</span>
-                <strong style={{ fontSize: "1rem", color: "#0f172a" }}>GCash Payment Proof Screenshot</strong>
+                <strong style={{ fontSize: "1rem", color: "var(--wz-text-main, #0f172a)" }}>GCash Payment Proof Screenshot</strong>
               </div>
               <button
                 type="button"
@@ -2401,7 +3979,7 @@ export default function BookingApprovals() {
                   height: "30px",
                   cursor: "pointer",
                   fontSize: "1rem",
-                  color: "#64748b",
+                  color: "var(--wz-text-muted, #64748b)",
                 }}
               >
                 ✕

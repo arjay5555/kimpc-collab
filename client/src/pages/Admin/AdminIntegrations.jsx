@@ -5,6 +5,115 @@ import AdminSidebar from "../../components/AdminSidebar";
 import AdminTopbar from "../../components/AdminTopbar";
 import "../../styles/admin-kimpc.css";
 
+function ApiSourceBadge({ isCustom }) {
+  return (
+    <span
+      title={isCustom ? "Currently using your saved Custom API credentials" : "Currently using system Default API credentials"}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "5px",
+        fontSize: "0.7rem",
+        fontWeight: 800,
+        padding: "2px 9px",
+        borderRadius: "999px",
+        border: `1px solid ${isCustom ? "#86efac" : "#cbd5e1"}`,
+        background: isCustom ? "#dcfce7" : "#f1f5f9",
+        color: isCustom ? "#15803d" : "#475569",
+        letterSpacing: "0.01em",
+        whiteSpace: "nowrap",
+      }}
+    >
+      <span
+        style={{
+          width: "6px",
+          height: "6px",
+          borderRadius: "50%",
+          background: isCustom ? "#16a34a" : "#64748b",
+        }}
+      />
+      {isCustom ? "Custom" : "Default"}
+    </span>
+  );
+}
+
+function formatExpected(expected) {
+  if (!Array.isArray(expected)) return String(expected);
+  const sorted = [...expected].sort((a, b) => a - b);
+  const min = sorted[0];
+  const max = sorted[sorted.length - 1];
+  if (sorted.length > 2 && max - min === sorted.length - 1) {
+    return `${min}–${max}`;
+  }
+  if (sorted.includes(120)) {
+    return "58–64 or 120";
+  }
+  if (sorted.length === 2 && sorted[1] - sorted[0] === 1) {
+    return `${sorted[0]}–${sorted[1]}`;
+  }
+  if (sorted.length === 2 && sorted[1] >= 100) {
+    return "48+";
+  }
+  return sorted.join(" or ");
+}
+
+function CharCountBadge({ current, expected, unit = "chars" }) {
+  const cleanVal = String(current || "").trim();
+  const len = cleanVal.length;
+  if (!len) return null;
+  const isMatch = Array.isArray(expected) ? expected.includes(len) : len === expected;
+  const label = formatExpected(expected);
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "flex-end",
+        alignItems: "center",
+        marginTop: "4px",
+      }}
+    >
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "5px",
+          padding: "2px 8px",
+          borderRadius: "9999px",
+          fontSize: "0.69rem",
+          fontWeight: 600,
+          fontVariantNumeric: "tabular-nums",
+          letterSpacing: "0.01em",
+          background: isMatch ? "#ecfdf5" : "#fef2f2",
+          color: isMatch ? "#047857" : "#b91c1c",
+          border: `1px solid ${isMatch ? "#a7f3d0" : "#fecaca"}`,
+          transition: "all 0.15s ease",
+        }}
+      >
+        {isMatch ? (
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        ) : (
+          <span
+            style={{
+              width: "6px",
+              height: "6px",
+              borderRadius: "50%",
+              backgroundColor: "#ef4444",
+              display: "inline-block",
+              flexShrink: 0,
+            }}
+          />
+        )}
+        <span>
+          {len} / {label} {unit}
+        </span>
+      </span>
+    </div>
+  );
+}
+
 export default function AdminIntegrations() {
   const { user } = useAuth();
   const [settings, setSettings] = useState({
@@ -16,6 +125,8 @@ export default function AdminIntegrations() {
     cloudinaryEnabled: true,
     emailResetEnabled: true,
     googleCalendarEnabled: true,
+    orsEnabled: true,
+    ocrSpaceEnabled: true,
   });
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState({ message: "", isError: false });
@@ -30,6 +141,8 @@ export default function AdminIntegrations() {
     cloudinary: { cloudName: "", apiKey: "", apiSecret: "", isCustom: false, source: "default" },
     email: { user: "", pass: "", from: "", isCustom: false, source: "default" },
     calendar: { clientId: "", clientSecret: "", redirectUri: "", isCustom: false, source: "default" },
+    ors: { apiKey: "", isCustom: false, source: "default" },
+    ocrSpace: { apiKey: "", isCustom: false, source: "default" },
   });
 
   // Key form inputs
@@ -42,6 +155,8 @@ export default function AdminIntegrations() {
     cloudinary: { cloudName: "", apiKey: "", apiSecret: "" },
     email: { user: "", pass: "", from: "" },
     calendar: { clientId: "", clientSecret: "", redirectUri: "" },
+    ors: { apiKey: "" },
+    ocrSpace: { apiKey: "" },
   });
 
   // Drawer expansion state (toggled via Edit icon)
@@ -54,6 +169,8 @@ export default function AdminIntegrations() {
     cloudinary: false,
     email: false,
     calendar: false,
+    ors: false,
+    ocrSpace: false,
   });
 
   // Reveal / Hide secrets toggle
@@ -66,6 +183,8 @@ export default function AdminIntegrations() {
     cloudinary: false,
     email: false,
     calendar: false,
+    ors: false,
+    ocrSpace: false,
   });
 
   // Individual saving state & feedback
@@ -115,6 +234,9 @@ export default function AdminIntegrations() {
   const [showDevOtpInput, setShowDevOtpInput] = useState(true);
   const [resendCooldown, setResendCooldown] = useState(0);
   const devPollTimerRef = useRef(null);
+  const devPollResolvedRef = useRef(false);
+  const devAuthCallbackRef = useRef(null);
+  const [devAuthChecking, setDevAuthChecking] = useState(false);
   const devOtpInputRefs = [
     useRef(null),
     useRef(null),
@@ -146,6 +268,8 @@ export default function AdminIntegrations() {
     if (devPollTimerRef.current) {
       clearInterval(devPollTimerRef.current);
     }
+    devPollResolvedRef.current = true;
+    devAuthCallbackRef.current = null;
     setPinModal({ open: false, actionDescription: "", onSuccess: null, isFirstPin: false });
     setDevAuthStep(false);
     setDevAuthStatus("PENDING");
@@ -154,7 +278,53 @@ export default function AdminIntegrations() {
     setPinLoading(false);
   };
 
+  const checkDeveloperAuthStatus = async (reqId) => {
+    if (!reqId || devPollResolvedRef.current) return;
+    try {
+      const statusRes = await api(`/admin/integrations/dev-auth/status/${reqId}`, { skipCache: true });
+      if (statusRes.ok && statusRes.data && !devPollResolvedRef.current) {
+        const st = statusRes.data.status;
+        if (st === "APPROVED") {
+          devPollResolvedRef.current = true;
+          if (devPollTimerRef.current) clearInterval(devPollTimerRef.current);
+          setDevAuthStatus("APPROVED");
+          const callback = devAuthCallbackRef.current;
+          setTimeout(() => {
+            setIsPinAuthorized(true);
+            setPinModal({ open: false, actionDescription: "", onSuccess: null, isFirstPin: false });
+            setDevAuthStep(false);
+            if (typeof callback === "function") {
+              callback();
+            }
+          }, 900);
+        } else if (st === "DENIED") {
+          devPollResolvedRef.current = true;
+          if (devPollTimerRef.current) clearInterval(devPollTimerRef.current);
+          setDevAuthStatus("DENIED");
+        } else if (st === "EXPIRED") {
+          devPollResolvedRef.current = true;
+          if (devPollTimerRef.current) clearInterval(devPollTimerRef.current);
+          setDevAuthStatus("EXPIRED");
+        }
+      }
+    } catch {
+      // ignore transient poll failure
+    }
+  };
+
+  // Re-check immediately if browser tab regains focus after clicking email link
+  useEffect(() => {
+    if (!devAuthStep || devAuthStatus !== "PENDING" || !devAuthRequestId) return;
+    const handleFocusCheck = () => {
+      checkDeveloperAuthStatus(devAuthRequestId);
+    };
+    window.addEventListener("focus", handleFocusCheck);
+    return () => window.removeEventListener("focus", handleFocusCheck);
+  }, [devAuthStep, devAuthStatus, devAuthRequestId]);
+
   const startDeveloperAuthorization = async (actionDesc, callback) => {
+    devPollResolvedRef.current = false;
+    devAuthCallbackRef.current = callback;
     setDevAuthStep(true);
     setDevAuthStatus("PENDING");
     setDevAuthOtpDigits(["", "", "", "", "", ""]);
@@ -183,41 +353,23 @@ export default function AdminIntegrations() {
       setDevAuthMaskedEmail(res.data.devEmailMasked || "ar••••••••••@gmail.com");
       setResendCooldown(60);
 
-      // Start polling developer approval status every 2 seconds
+      // Start uncached polling of developer approval status every 2 seconds
       if (devPollTimerRef.current) clearInterval(devPollTimerRef.current);
-      devPollTimerRef.current = setInterval(async () => {
-        try {
-          const statusRes = await api(`/admin/integrations/dev-auth/status/${reqId}`);
-          if (statusRes.ok && statusRes.data) {
-            const st = statusRes.data.status;
-            if (st === "APPROVED") {
-              clearInterval(devPollTimerRef.current);
-              setDevAuthStatus("APPROVED");
-              setTimeout(() => {
-                setIsPinAuthorized(true);
-                setPinModal({ open: false, actionDescription: "", onSuccess: null, isFirstPin: false });
-                setDevAuthStep(false);
-                if (typeof callback === "function") {
-                  callback();
-                }
-              }, 1200);
-            } else if (st === "DENIED") {
-              clearInterval(devPollTimerRef.current);
-              setDevAuthStatus("DENIED");
-            } else if (st === "EXPIRED") {
-              clearInterval(devPollTimerRef.current);
-              setDevAuthStatus("EXPIRED");
-            }
-          }
-        } catch (e) {
-          // ignore transient poll failure
-        }
+      devPollTimerRef.current = setInterval(() => {
+        checkDeveloperAuthStatus(reqId);
       }, 2000);
-    } catch (err) {
+    } catch {
       setPinError("Network error contacting developer authorization service.");
       setDevAuthStep(false);
       setPinLoading(false);
     }
+  };
+
+  const handleManualCheckDevAuth = async () => {
+    if (!devAuthRequestId || devAuthChecking) return;
+    setDevAuthChecking(true);
+    await checkDeveloperAuthStatus(devAuthRequestId);
+    setDevAuthChecking(false);
   };
 
   const handleVerifyDevOtp = async (eOrOtp) => {
@@ -331,7 +483,7 @@ export default function AdminIntegrations() {
   const checkPinStatus = async () => {
     try {
       const email = user?.email || JSON.parse(localStorage.getItem("kimpc_user") || "{}")?.email || "admin@kimpc.test";
-      const res = await api(`/admin/pin-status?email=${encodeURIComponent(email)}`);
+      const res = await api(`/admin/pin-status?email=${encodeURIComponent(email)}`, { skipCache: true });
       if (res.ok && res.data) {
         setAdminHasPin(Boolean(res.data.hasPin));
         return Boolean(res.data.hasPin);
@@ -364,7 +516,7 @@ export default function AdminIntegrations() {
     let hasPin = adminHasPin;
     try {
       const email = user?.email || JSON.parse(localStorage.getItem("kimpc_user") || "{}")?.email || "admin@kimpc.test";
-      const res = await api(`/admin/pin-status?email=${encodeURIComponent(email)}`);
+      const res = await api(`/admin/pin-status?email=${encodeURIComponent(email)}`, { skipCache: true });
       if (res.ok && res.data) {
         hasPin = Boolean(res.data.hasPin);
         setAdminHasPin(hasPin);
@@ -599,7 +751,7 @@ export default function AdminIntegrations() {
   const fetchSettingsAndKeys = async () => {
     setLoading(true);
     try {
-      const res = await api("/admin/settings");
+      const res = await api("/admin/settings", { skipCache: true });
       if (res.ok && res.data) {
         setSettings({
           googleLoginEnabled: res.data.googleLoginEnabled ?? true,
@@ -610,10 +762,12 @@ export default function AdminIntegrations() {
           cloudinaryEnabled: res.data.cloudinaryEnabled ?? true,
           emailResetEnabled: res.data.emailResetEnabled ?? true,
           googleCalendarEnabled: res.data.googleCalendarEnabled ?? true,
+          orsEnabled: res.data.orsEnabled ?? true,
+          ocrSpaceEnabled: res.data.ocrSpaceEnabled ?? true,
         });
       }
 
-      const keysRes = await api("/admin/integrations/keys");
+      const keysRes = await api("/admin/integrations/keys", { skipCache: true });
       if (keysRes.ok && keysRes.data?.data) {
         const d = keysRes.data?.data || keysRes.data || {};
         setApiKeys({
@@ -625,6 +779,8 @@ export default function AdminIntegrations() {
           cloudinary: d.cloudinary || {},
           email: d.email || {},
           calendar: d.calendar || {},
+          ors: d.ors || {},
+          ocrSpace: d.ocrSpace || {},
         });
 
         setKeyInputs({
@@ -661,6 +817,12 @@ export default function AdminIntegrations() {
             clientId: d.calendar?.isCustom ? (d.calendar?.customClientId || "") : (d.calendar?.defaultClientId || ""),
             clientSecret: d.calendar?.isCustom ? (d.calendar?.customClientSecret || "") : (d.calendar?.defaultClientSecret || ""),
             redirectUri: d.calendar?.isCustom ? (d.calendar?.customRedirectUri || "") : (d.calendar?.defaultRedirectUri || ""),
+          },
+          ors: {
+            apiKey: d.ors?.isCustom ? (d.ors?.customKey || "") : (d.ors?.defaultKey || ""),
+          },
+          ocrSpace: {
+            apiKey: d.ocrSpace?.isCustom ? (d.ocrSpace?.customKey || "") : (d.ocrSpace?.defaultKey || ""),
           },
         });
       }
@@ -737,6 +899,18 @@ export default function AdminIntegrations() {
     const nextState = !settings.weatherEnabled;
     requestPinAuthorization(`${nextState ? "enable" : "disable"} Kalilangan Weather Forecast API`, () => {
       updateSetting("/admin/settings/weather", "weatherEnabled", nextState, "Kalilangan Weather Forecast API");
+    });
+  };
+  const handleToggleOrs = () => {
+    const nextState = !settings.orsEnabled;
+    requestPinAuthorization(`${nextState ? "enable" : "disable"} OpenRouteService Maps & Routing`, () => {
+      updateSetting("/admin/settings/ors", "orsEnabled", nextState, "OpenRouteService Maps & Routing");
+    });
+  };
+  const handleToggleOcrSpace = () => {
+    const nextState = !settings.ocrSpaceEnabled;
+    requestPinAuthorization(`${nextState ? "enable" : "disable"} OCR.space GCash Receipt Scanner`, () => {
+      updateSetting("/admin/settings/ocr-space", "ocrSpaceEnabled", nextState, "OCR.space GCash Receipt Scanner");
     });
   };
   const handleToggleOneSignal = () => {
@@ -979,6 +1153,110 @@ export default function AdminIntegrations() {
       setKeyFeedback((p) => ({ ...p, weather: { isError: true, message: "Network error resetting Weather API key." } }));
     } finally {
       setKeySaving((p) => ({ ...p, weather: false }));
+    }
+  };
+
+  const handleSaveOrsKey = async () => {
+    setKeySaving((p) => ({ ...p, ors: true }));
+    setKeyFeedback((p) => ({ ...p, ors: null }));
+    try {
+      const res = await api("/admin/integrations/keys/ors", {
+        method: "POST",
+        body: {
+          apiKey: keyInputs.ors.apiKey.trim(),
+        },
+      });
+      if (!res.ok) {
+        setKeyFeedback((p) => ({ ...p, ors: { isError: true, message: res.data?.error || "Failed to update OpenRouteService API key." } }));
+      } else {
+        setKeyFeedback((p) => ({ ...p, ors: { isError: false, message: "OpenRouteService API key saved & written to server/.env successfully!" } }));
+        fetchSettingsAndKeys();
+        setTimeout(() => setKeyFeedback((p) => ({ ...p, ors: null })), 4000);
+      }
+    } catch {
+      setKeyFeedback((p) => ({ ...p, ors: { isError: true, message: "Network error saving OpenRouteService API key." } }));
+    } finally {
+      setKeySaving((p) => ({ ...p, ors: false }));
+    }
+  };
+
+  const handleResetOrsKey = async () => {
+    if (!window.confirm("Reset OpenRouteService API key to default system code key?")) return;
+    setKeySaving((p) => ({ ...p, ors: true }));
+    try {
+      const res = await api("/admin/integrations/keys/ors/reset", { method: "POST" });
+      if (res.ok) {
+        const defs = res.data?.defaultKeys || {
+          apiKey: apiKeys.ors?.defaultKey || "",
+        };
+        setKeyInputs((p) => ({
+          ...p,
+          ors: {
+            apiKey: defs.apiKey || "",
+          },
+        }));
+        setKeyFeedback((p) => ({ ...p, ors: { isError: false, message: "Reset to default system credentials." } }));
+        await fetchSettingsAndKeys();
+        setTimeout(() => setKeyFeedback((p) => ({ ...p, ors: null })), 4000);
+      } else {
+        setKeyFeedback((p) => ({ ...p, ors: { isError: true, message: res.data?.error || "Failed to reset OpenRouteService API key." } }));
+      }
+    } catch {
+      setKeyFeedback((p) => ({ ...p, ors: { isError: true, message: "Network error resetting OpenRouteService API key." } }));
+    } finally {
+      setKeySaving((p) => ({ ...p, ors: false }));
+    }
+  };
+
+  const handleSaveOcrSpaceKey = async () => {
+    setKeySaving((p) => ({ ...p, ocrSpace: true }));
+    setKeyFeedback((p) => ({ ...p, ocrSpace: null }));
+    try {
+      const res = await api("/admin/integrations/keys/ocr-space", {
+        method: "POST",
+        body: {
+          apiKey: keyInputs.ocrSpace.apiKey.trim(),
+        },
+      });
+      if (!res.ok) {
+        setKeyFeedback((p) => ({ ...p, ocrSpace: { isError: true, message: res.data?.error || "Failed to update OCR.space API key." } }));
+      } else {
+        setKeyFeedback((p) => ({ ...p, ocrSpace: { isError: false, message: "OCR.space API key saved & written to server/.env successfully!" } }));
+        fetchSettingsAndKeys();
+        setTimeout(() => setKeyFeedback((p) => ({ ...p, ocrSpace: null })), 4000);
+      }
+    } catch {
+      setKeyFeedback((p) => ({ ...p, ocrSpace: { isError: true, message: "Network error saving OCR.space API key." } }));
+    } finally {
+      setKeySaving((p) => ({ ...p, ocrSpace: false }));
+    }
+  };
+
+  const handleResetOcrSpaceKey = async () => {
+    if (!window.confirm("Reset OCR.space API key to default system code key?")) return;
+    setKeySaving((p) => ({ ...p, ocrSpace: true }));
+    try {
+      const res = await api("/admin/integrations/keys/ocr-space/reset", { method: "POST" });
+      if (res.ok) {
+        const defs = res.data?.defaultKeys || {
+          apiKey: apiKeys.ocrSpace?.defaultKey || "",
+        };
+        setKeyInputs((p) => ({
+          ...p,
+          ocrSpace: {
+            apiKey: defs.apiKey || "",
+          },
+        }));
+        setKeyFeedback((p) => ({ ...p, ocrSpace: { isError: false, message: "Reset to default system credentials." } }));
+        await fetchSettingsAndKeys();
+        setTimeout(() => setKeyFeedback((p) => ({ ...p, ocrSpace: null })), 4000);
+      } else {
+        setKeyFeedback((p) => ({ ...p, ocrSpace: { isError: true, message: res.data?.error || "Failed to reset OCR.space API key." } }));
+      }
+    } catch {
+      setKeyFeedback((p) => ({ ...p, ocrSpace: { isError: true, message: "Network error resetting OCR.space API key." } }));
+    } finally {
+      setKeySaving((p) => ({ ...p, ocrSpace: false }));
     }
   };
 
@@ -1331,7 +1609,10 @@ export default function AdminIntegrations() {
                     style={{ width: "100%", height: "100%", objectFit: "contain" }}
                   />
                 </div>
-                <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Google Sign-In</strong>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Google Sign-In</strong>
+                  <ApiSourceBadge isCustom={Boolean(apiKeys.google?.isCustom)} />
+                </div>
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -1426,7 +1707,7 @@ export default function AdminIntegrations() {
                       color: apiKeys.google?.isCustom ? "#15803d" : "#475569",
                     }}
                   >
-                    Active Source: {apiKeys.google?.isCustom ? "Custom .env Key" : "Default Hardcoded Code"}
+                    Active API: {apiKeys.google?.isCustom ? "Custom" : "Default"}
                   </span>
                 </div>
 
@@ -1452,6 +1733,7 @@ export default function AdminIntegrations() {
                       value={keyInputs.google.clientId}
                       onChange={(e) => setKeyInputs((p) => ({ ...p, google: { ...p.google, clientId: e.target.value } }))}
                     />
+                    <CharCountBadge current={keyInputs.google.clientId} expected={[70, 71, 72, 73, 74, 75]} unit="chars" />
                   </div>
                   <div>
                     <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
@@ -1507,6 +1789,7 @@ export default function AdminIntegrations() {
                         )}
                       </button>
                     </div>
+                    <CharCountBadge current={keyInputs.google.clientSecret} expected={35} unit="chars" />
                   </div>
                 </div>
 
@@ -1605,7 +1888,10 @@ export default function AdminIntegrations() {
                     style={{ width: "100%", height: "100%", objectFit: "contain" }}
                   />
                 </div>
-                <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Facebook Sign-In</strong>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Facebook Sign-In</strong>
+                  <ApiSourceBadge isCustom={Boolean(apiKeys.facebook?.isCustom)} />
+                </div>
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -1700,7 +1986,7 @@ export default function AdminIntegrations() {
                       color: apiKeys.facebook?.isCustom ? "#15803d" : "#475569",
                     }}
                   >
-                    Active Source: {apiKeys.facebook?.isCustom ? "Custom .env Key" : "Default Hardcoded Code"}
+                    Active API: {apiKeys.facebook?.isCustom ? "Custom" : "Default"}
                   </span>
                 </div>
 
@@ -1726,6 +2012,7 @@ export default function AdminIntegrations() {
                       value={keyInputs.facebook.appId}
                       onChange={(e) => setKeyInputs((p) => ({ ...p, facebook: { ...p.facebook, appId: e.target.value } }))}
                     />
+                    <CharCountBadge current={keyInputs.facebook.appId} expected={16} unit="digits" />
                   </div>
                   <div>
                     <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
@@ -1781,6 +2068,7 @@ export default function AdminIntegrations() {
                         )}
                       </button>
                     </div>
+                    <CharCountBadge current={keyInputs.facebook.appSecret} expected={32} unit="chars" />
                   </div>
                 </div>
 
@@ -1879,7 +2167,10 @@ export default function AdminIntegrations() {
                     style={{ width: "100%", height: "100%", objectFit: "contain" }}
                   />
                 </div>
-                <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Google reCAPTCHA v2</strong>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Google reCAPTCHA v2</strong>
+                  <ApiSourceBadge isCustom={Boolean(apiKeys.recaptcha?.isCustom)} />
+                </div>
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -1974,7 +2265,7 @@ export default function AdminIntegrations() {
                       color: apiKeys.recaptcha?.isCustom ? "#15803d" : "#475569",
                     }}
                   >
-                    Active Source: {apiKeys.recaptcha?.isCustom ? "Custom .env Key" : "Default Hardcoded Code"}
+                    Active API: {apiKeys.recaptcha?.isCustom ? "Custom" : "Default"}
                   </span>
                 </div>
 
@@ -2000,6 +2291,7 @@ export default function AdminIntegrations() {
                       value={keyInputs.recaptcha.siteKey}
                       onChange={(e) => setKeyInputs((p) => ({ ...p, recaptcha: { ...p.recaptcha, siteKey: e.target.value } }))}
                     />
+                    <CharCountBadge current={keyInputs.recaptcha.siteKey} expected={40} unit="chars" />
                   </div>
                   <div>
                     <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
@@ -2055,6 +2347,7 @@ export default function AdminIntegrations() {
                         )}
                       </button>
                     </div>
+                    <CharCountBadge current={keyInputs.recaptcha.secretKey} expected={40} unit="chars" />
                   </div>
                 </div>
 
@@ -2149,7 +2442,10 @@ export default function AdminIntegrations() {
                     <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
                   </svg>
                 </div>
-                <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Kalilangan Weather Forecast API</strong>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Kalilangan Weather Forecast API</strong>
+                  <ApiSourceBadge isCustom={Boolean(apiKeys.weather?.isCustom)} />
+                </div>
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -2244,7 +2540,7 @@ export default function AdminIntegrations() {
                       color: apiKeys.weather?.isCustom ? "#15803d" : "#475569",
                     }}
                   >
-                    Active Source: {apiKeys.weather?.isCustom ? "Custom .env Key" : "Default Hardcoded Code"}
+                    Active API: {apiKeys.weather?.isCustom ? "Custom" : "Default"}
                   </span>
                 </div>
 
@@ -2302,6 +2598,7 @@ export default function AdminIntegrations() {
                       )}
                     </button>
                   </div>
+                  <CharCountBadge current={keyInputs.weather.apiKey} expected={[30, 31]} unit="chars" />
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "14px", flexWrap: "wrap", gap: "10px" }}>
@@ -2399,7 +2696,10 @@ export default function AdminIntegrations() {
                     style={{ width: "100%", height: "100%", objectFit: "contain" }}
                   />
                 </div>
-                <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>OneSignal Web Push Notifications</strong>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>OneSignal Web Push Notifications</strong>
+                  <ApiSourceBadge isCustom={Boolean(apiKeys.oneSignal?.isCustom)} />
+                </div>
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -2494,7 +2794,7 @@ export default function AdminIntegrations() {
                       color: apiKeys.oneSignal?.isCustom ? "#15803d" : "#475569",
                     }}
                   >
-                    Active Source: {apiKeys.oneSignal?.isCustom ? "Custom .env Key" : "Default Hardcoded Code"}
+                    Active API: {apiKeys.oneSignal?.isCustom ? "Custom" : "Default"}
                   </span>
                 </div>
 
@@ -2520,6 +2820,7 @@ export default function AdminIntegrations() {
                       value={keyInputs.oneSignal.appId}
                       onChange={(e) => setKeyInputs((p) => ({ ...p, oneSignal: { ...p.oneSignal, appId: e.target.value } }))}
                     />
+                    <CharCountBadge current={keyInputs.oneSignal.appId} expected={36} unit="chars" />
                   </div>
                   <div>
                     <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
@@ -2575,6 +2876,7 @@ export default function AdminIntegrations() {
                         )}
                       </button>
                     </div>
+                    <CharCountBadge current={keyInputs.oneSignal.restApiKey} expected={[48, 113]} unit="chars" />
                   </div>
                 </div>
 
@@ -2673,7 +2975,10 @@ export default function AdminIntegrations() {
                     style={{ width: "100%", height: "100%", objectFit: "contain" }}
                   />
                 </div>
-                <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Cloudinary Cloud Media Storage</strong>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Cloudinary Cloud Media Storage</strong>
+                  <ApiSourceBadge isCustom={Boolean(apiKeys.cloudinary?.isCustom)} />
+                </div>
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -2768,7 +3073,7 @@ export default function AdminIntegrations() {
                       color: apiKeys.cloudinary?.isCustom ? "#15803d" : "#475569",
                     }}
                   >
-                    Active Source: {apiKeys.cloudinary?.isCustom ? "Custom .env Key" : "Default Hardcoded Code"}
+                    Active API: {apiKeys.cloudinary?.isCustom ? "Custom" : "Default"}
                   </span>
                 </div>
 
@@ -2816,6 +3121,7 @@ export default function AdminIntegrations() {
                       value={keyInputs.cloudinary.apiKey}
                       onChange={(e) => setKeyInputs((p) => ({ ...p, cloudinary: { ...p.cloudinary, apiKey: e.target.value } }))}
                     />
+                    <CharCountBadge current={keyInputs.cloudinary.apiKey} expected={15} unit="digits" />
                   </div>
                   <div>
                     <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
@@ -2871,6 +3177,7 @@ export default function AdminIntegrations() {
                         )}
                       </button>
                     </div>
+                    <CharCountBadge current={keyInputs.cloudinary.apiSecret} expected={27} unit="chars" />
                   </div>
                 </div>
 
@@ -2969,7 +3276,10 @@ export default function AdminIntegrations() {
                     style={{ width: "100%", height: "100%", objectFit: "contain" }}
                   />
                 </div>
-                <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Gmail SMTP Service (Password Reset & OTP)</strong>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Gmail SMTP Service (Password Reset &amp; OTP)</strong>
+                  <ApiSourceBadge isCustom={Boolean(apiKeys.email?.isCustom)} />
+                </div>
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -3064,7 +3374,7 @@ export default function AdminIntegrations() {
                       color: apiKeys.email?.isCustom ? "#15803d" : "#475569",
                     }}
                   >
-                    Active Source: {apiKeys.email?.isCustom ? "Custom .env Key" : "Default Hardcoded Code"}
+                    Active API: {apiKeys.email?.isCustom ? "Custom" : "Default"}
                   </span>
                 </div>
 
@@ -3145,6 +3455,7 @@ export default function AdminIntegrations() {
                         )}
                       </button>
                     </div>
+                    <CharCountBadge current={keyInputs.email.pass.replace(/\s+/g, "")} expected={16} unit="letters" />
                   </div>
                   <div>
                     <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
@@ -3265,7 +3576,10 @@ export default function AdminIntegrations() {
                     style={{ width: "100%", height: "100%", objectFit: "contain" }}
                   />
                 </div>
-                <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Google Calendar Integration</strong>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>Google Calendar Integration</strong>
+                  <ApiSourceBadge isCustom={Boolean(apiKeys.calendar?.isCustom)} />
+                </div>
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -3360,7 +3674,7 @@ export default function AdminIntegrations() {
                       color: apiKeys.calendar?.isCustom ? "#15803d" : "#475569",
                     }}
                   >
-                    Active Source: {apiKeys.calendar?.isCustom ? "Custom .env Key" : "Default Hardcoded Code"}
+                    Active API: {apiKeys.calendar?.isCustom ? "Custom" : "Default"}
                   </span>
                 </div>
 
@@ -3386,6 +3700,7 @@ export default function AdminIntegrations() {
                       value={keyInputs.calendar.clientId}
                       onChange={(e) => setKeyInputs((p) => ({ ...p, calendar: { ...p.calendar, clientId: e.target.value } }))}
                     />
+                    <CharCountBadge current={keyInputs.calendar.clientId} expected={[70, 71, 72, 73, 74, 75]} unit="chars" />
                   </div>
                   <div>
                     <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
@@ -3441,6 +3756,7 @@ export default function AdminIntegrations() {
                         )}
                       </button>
                     </div>
+                    <CharCountBadge current={keyInputs.calendar.clientSecret} expected={35} unit="chars" />
                   </div>
                 </div>
 
@@ -3526,6 +3842,507 @@ export default function AdminIntegrations() {
               </div>
             )}
           </div>
+
+          {/* ================= 9. OpenRouteService Maps & Routing ================= */}
+          <div style={{ borderTop: "1px solid #f1f5f9" }}>
+            <div
+              className="wz-integration-row"
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "16px 24px",
+                background: "#ffffff",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                <div
+                  style={{
+                    width: "42px",
+                    height: "42px",
+                    borderRadius: "10px",
+                    background: "#ecfdf5",
+                    border: "1px solid #d1fae5",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+                    flexShrink: 0,
+                  }}
+                >
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                    <circle cx="12" cy="10" r="3" />
+                  </svg>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>OpenRouteService + OSM + PSGC Routing</strong>
+                  <ApiSourceBadge isCustom={Boolean(apiKeys.ors?.isCustom)} />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                {/* Edit customizable credentials icon button */}
+                <button
+                  type="button"
+                  onClick={() => handleRequestEdit("ors", "OpenRouteService Maps & Routing")}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: "4px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    color: expandedKeys.ors
+                      ? "#166534"
+                      : apiKeys.ors?.isCustom
+                      ? "#15803d"
+                      : "#64748b",
+                    position: "relative",
+                    transition: "color 0.15s ease",
+                  }}
+                  title={
+                    apiKeys.ors?.isCustom
+                      ? "Custom OpenRouteService API key active (Click to edit)"
+                      : "Edit OpenRouteService API key"
+                  }
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                  {apiKeys.ors?.isCustom && (
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: "1px",
+                        right: "0px",
+                        width: "6px",
+                        height: "6px",
+                        borderRadius: "50%",
+                        background: "#16a34a",
+                        border: "1px solid #ffffff",
+                      }}
+                      title="Custom key active"
+                    />
+                  )}
+                </button>
+                <span
+                  style={{
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    color: settings.orsEnabled ? "#16a34a" : "#64748b",
+                    minWidth: "55px",
+                    textAlign: "right",
+                  }}
+                >
+                  {settings.orsEnabled ? "Enabled" : "Disabled"}
+                </span>
+                <label className="wz-switch-toggle">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(settings.orsEnabled)}
+                    onChange={handleToggleOrs}
+                  />
+                  <span className="wz-switch-slider" />
+                </label>
+              </div>
+            </div>
+
+            {/* Custom ORS Key Expandable Drawer */}
+            {expandedKeys.ors && (
+              <div
+                style={{
+                  background: "#f8fafc",
+                  padding: "18px 24px",
+                  borderTop: "1px solid #f1f5f9",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                  <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#334155" }}>
+                    Configure Custom OpenRouteService (HeiGIT) API Key (.env)
+                  </div>
+                  <span
+                    style={{
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      background: apiKeys.ors?.isCustom ? "#dcfce7" : "#e2e8f0",
+                      color: apiKeys.ors?.isCustom ? "#15803d" : "#475569",
+                    }}
+                  >
+                    Active API: {apiKeys.ors?.isCustom ? "Custom" : "Default"}
+                  </span>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
+                    ORS_API_KEY (HeiGIT OpenRouteService Token)
+                  </label>
+                  <div style={{ display: "flex", gap: "6px" }}>
+                    <input
+                      type={revealSecrets.ors ? "text" : "password"}
+                      name="kimpc_custom_ors_api_key"
+                      id="kimpc_custom_ors_api_key"
+                      autoComplete="new-password"
+                      autoCorrect="off"
+                      spellCheck="false"
+                      data-lpignore="true"
+                      data-1p-ignore="true"
+                      data-bwignore="true"
+                      data-form-type="other"
+                      className="wz-form-input"
+                      style={{ fontSize: "0.82rem", background: "#ffffff", flex: 1 }}
+                      placeholder={apiKeys.ors?.defaultKeyMasked ? `Example (Default): ${apiKeys.ors.defaultKeyMasked}` : "Paste OpenRouteService token..."}
+                      value={keyInputs.ors.apiKey}
+                      onChange={(e) => setKeyInputs((p) => ({ ...p, ors: { ...p.ors, apiKey: e.target.value } }))}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setRevealSecrets((p) => ({ ...p, ors: !p.ors }))}
+                      title={revealSecrets.ors ? "Hide secret" : "Reveal secret"}
+                      style={{
+                        width: "38px",
+                        height: "38px",
+                        background: "#ffffff",
+                        border: "1px solid #cbd5e1",
+                        borderRadius: "8px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: "pointer",
+                        color: revealSecrets.ors ? "#166534" : "#64748b",
+                        flexShrink: 0,
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      {revealSecrets.ors ? (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                          <line x1="1" y1="1" x2="23" y2="23" />
+                        </svg>
+                      ) : (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                          <circle cx="12" cy="12" r="3" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                  <CharCountBadge current={keyInputs.ors.apiKey} expected={[58, 59, 60, 61, 62, 63, 64, 120]} unit="chars" />
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "14px", flexWrap: "wrap", gap: "10px" }}>
+                  <span style={{ fontSize: "0.76rem", color: "#64748b" }}>
+                    Leave blank or click Reset to Default to revert back to system code keys.
+                  </span>
+                  <div style={{ display: "flex", gap: "10px" }}>
+                    {apiKeys.ors?.isCustom && (
+                      <button
+                        type="button"
+                        onClick={handleResetOrsKey}
+                        disabled={keySaving.ors}
+                        style={{
+                          padding: "7px 14px",
+                          background: "#fff1f2",
+                          color: "#be123c",
+                          border: "1px solid #fecdd3",
+                          borderRadius: "8px",
+                          fontSize: "0.8rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Reset to Default
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleSaveOrsKey}
+                      disabled={keySaving.ors}
+                      style={{
+                        padding: "7px 16px",
+                        background: "#0f172a",
+                        color: "#ffffff",
+                        border: "none",
+                        borderRadius: "8px",
+                        fontSize: "0.8rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {keySaving.ors ? "Saving to .env..." : "Save Credentials"}
+                    </button>
+                  </div>
+                </div>
+
+                {keyFeedback.ors && (
+                  <div
+                    style={{
+                      marginTop: "10px",
+                      fontSize: "0.8rem",
+                      color: keyFeedback.ors.isError ? "#b91c1c" : "#15803d",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {keyFeedback.ors.message}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ================= 10. OCR.space GCash Receipt Scanner ================= */}
+          <div style={{ borderTop: "1px solid #f1f5f9" }}>
+            <div
+              className="wz-integration-row"
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "16px 24px",
+                background: "#ffffff",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                <div
+                  style={{
+                    width: "42px",
+                    height: "42px",
+                    borderRadius: "10px",
+                    background: "#eff6ff",
+                    border: "1px solid #dbeafe",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+                    flexShrink: 0,
+                  }}
+                >
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="9" y1="15" x2="15" y2="15" />
+                  </svg>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <strong style={{ fontSize: "0.96rem", color: "#0f172a" }}>OCR.space GCash Receipt Scanner</strong>
+                  <ApiSourceBadge isCustom={Boolean(apiKeys.ocrSpace?.isCustom)} />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <button
+                  type="button"
+                  onClick={() => handleRequestEdit("ocrSpace", "OCR.space GCash Receipt Scanner")}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: "4px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    color: expandedKeys.ocrSpace
+                      ? "#166534"
+                      : apiKeys.ocrSpace?.isCustom
+                      ? "#15803d"
+                      : "#64748b",
+                    position: "relative",
+                    transition: "color 0.15s ease",
+                  }}
+                  title={
+                    apiKeys.ocrSpace?.isCustom
+                      ? "Custom OCR.space API key active (Click to edit)"
+                      : "Edit OCR.space API key"
+                  }
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                  {apiKeys.ocrSpace?.isCustom && (
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: "1px",
+                        right: "0px",
+                        width: "6px",
+                        height: "6px",
+                        borderRadius: "50%",
+                        background: "#16a34a",
+                        border: "1px solid #ffffff",
+                      }}
+                      title="Custom key active"
+                    />
+                  )}
+                </button>
+                <span
+                  style={{
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    color: settings.ocrSpaceEnabled ? "#16a34a" : "#64748b",
+                    minWidth: "55px",
+                    textAlign: "right",
+                  }}
+                >
+                  {settings.ocrSpaceEnabled ? "Enabled" : "Disabled"}
+                </span>
+                <label className="wz-switch-toggle">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(settings.ocrSpaceEnabled)}
+                    onChange={handleToggleOcrSpace}
+                  />
+                  <span className="wz-switch-slider" />
+                </label>
+              </div>
+            </div>
+
+            {expandedKeys.ocrSpace && (
+              <div
+                style={{
+                  background: "#f8fafc",
+                  padding: "18px 24px",
+                  borderTop: "1px solid #f1f5f9",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                  <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#334155" }}>
+                    Configure Custom OCR.space API Key (.env)
+                  </div>
+                  <span
+                    style={{
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      background: apiKeys.ocrSpace?.isCustom ? "#dcfce7" : "#e2e8f0",
+                      color: apiKeys.ocrSpace?.isCustom ? "#15803d" : "#475569",
+                    }}
+                  >
+                    Active API: {apiKeys.ocrSpace?.isCustom ? "Custom" : "Default"}
+                  </span>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
+                    OCR_SPACE_API_KEY (OCR.space Receipt Extraction Token)
+                  </label>
+                  <div style={{ display: "flex", gap: "6px" }}>
+                    <input
+                      type={revealSecrets.ocrSpace ? "text" : "password"}
+                      name="kimpc_custom_ocr_space_api_key"
+                      id="kimpc_custom_ocr_space_api_key"
+                      autoComplete="new-password"
+                      autoCorrect="off"
+                      spellCheck="false"
+                      data-lpignore="true"
+                      data-1p-ignore="true"
+                      data-bwignore="true"
+                      data-form-type="other"
+                      className="wz-form-input"
+                      style={{ fontSize: "0.82rem", background: "#ffffff", flex: 1 }}
+                      placeholder={apiKeys.ocrSpace?.defaultKeyMasked ? `Example (Default): ${apiKeys.ocrSpace.defaultKeyMasked}` : "Paste OCR.space API key..."}
+                      value={keyInputs.ocrSpace.apiKey}
+                      onChange={(e) => setKeyInputs((p) => ({ ...p, ocrSpace: { ...p.ocrSpace, apiKey: e.target.value } }))}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setRevealSecrets((p) => ({ ...p, ocrSpace: !p.ocrSpace }))}
+                      title={revealSecrets.ocrSpace ? "Hide secret" : "Reveal secret"}
+                      style={{
+                        width: "38px",
+                        height: "38px",
+                        background: "#ffffff",
+                        border: "1px solid #cbd5e1",
+                        borderRadius: "8px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: "pointer",
+                        color: revealSecrets.ocrSpace ? "#166534" : "#64748b",
+                        flexShrink: 0,
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      {revealSecrets.ocrSpace ? (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                          <line x1="1" y1="1" x2="23" y2="23" />
+                        </svg>
+                      ) : (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                          <circle cx="12" cy="12" r="3" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                  <CharCountBadge current={keyInputs.ocrSpace.apiKey} expected={20} unit="chars" />
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "14px", flexWrap: "wrap", gap: "10px" }}>
+                  <span style={{ fontSize: "0.76rem", color: "#64748b" }}>
+                    Leave blank or click Reset to Default to revert back to system code keys.
+                  </span>
+                  <div style={{ display: "flex", gap: "10px" }}>
+                    {apiKeys.ocrSpace?.isCustom && (
+                      <button
+                        type="button"
+                        onClick={handleResetOcrSpaceKey}
+                        disabled={keySaving.ocrSpace}
+                        style={{
+                          padding: "7px 14px",
+                          background: "#fff1f2",
+                          color: "#be123c",
+                          border: "1px solid #fecdd3",
+                          borderRadius: "8px",
+                          fontSize: "0.8rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Reset to Default
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleSaveOcrSpaceKey}
+                      disabled={keySaving.ocrSpace}
+                      style={{
+                        padding: "7px 16px",
+                        background: "#0f172a",
+                        color: "#ffffff",
+                        border: "none",
+                        borderRadius: "8px",
+                        fontSize: "0.8rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {keySaving.ocrSpace ? "Saving to .env..." : "Save Credentials"}
+                    </button>
+                  </div>
+                </div>
+
+                {keyFeedback.ocrSpace && (
+                  <div
+                    style={{
+                      marginTop: "10px",
+                      fontSize: "0.8rem",
+                      color: keyFeedback.ocrSpace.isError ? "#b91c1c" : "#15803d",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {keyFeedback.ocrSpace.message}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* ================= 6-DIGIT ADMIN PIN & DEVELOPER DUAL-CONTROL MODAL ================= */}
@@ -3560,6 +4377,26 @@ export default function AdminIntegrations() {
               {devAuthStep ? (
                 /* ================= STEP 2: SYSTEM DEVELOPER DUAL-CONTROL AUTHORIZATION ================= */
                 <div>
+                  <style>{`
+                    @keyframes devAuthPulse {
+                      0%, 100% { opacity: 1; transform: scale(1); }
+                      50% { opacity: 0.35; transform: scale(0.9); }
+                    }
+                    @keyframes devAuthRadar {
+                      0% { transform: scale(0.85); opacity: 0.8; }
+                      50% { transform: scale(1.35); opacity: 0.25; }
+                      100% { transform: scale(1.65); opacity: 0; }
+                    }
+                    @keyframes devAuthSpin {
+                      to { transform: rotate(360deg); }
+                    }
+                    @keyframes devAuthBar {
+                      0% { transform: translateX(-100%); }
+                      50% { transform: translateX(20%); }
+                      100% { transform: translateX(200%); }
+                    }
+                  `}</style>
+
                   {/* Modal Header */}
                   <div
                     style={{
@@ -3567,7 +4404,7 @@ export default function AdminIntegrations() {
                       borderBottom: "1px solid #f1f5f9",
                       background: "#f8fafc",
                       display: "flex",
-                      alignItems: "flex-start",
+                      alignItems: "center",
                       justifyContent: "space-between",
                       gap: "12px",
                     }}
@@ -3575,30 +4412,43 @@ export default function AdminIntegrations() {
                     <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                       <div
                         style={{
-                          width: "44px",
-                          height: "44px",
-                          borderRadius: "12px",
-                          background: devAuthStatus === "APPROVED" ? "#ecfdf5" : devAuthStatus === "DENIED" ? "#fef2f2" : "#fef3c7",
-                          border: `1px solid ${devAuthStatus === "APPROVED" ? "#a7f3d0" : devAuthStatus === "DENIED" ? "#fecaca" : "#fde68a"}`,
+                          width: "40px",
+                          height: "40px",
+                          borderRadius: "10px",
+                          background: devAuthStatus === "APPROVED" ? "#ecfdf5" : devAuthStatus === "DENIED" ? "#fef2f2" : "#f1f5f9",
+                          border: `1px solid ${devAuthStatus === "APPROVED" ? "#a7f3d0" : devAuthStatus === "DENIED" ? "#fecaca" : "#e2e8f0"}`,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          fontSize: "1.3rem",
+                          color: devAuthStatus === "APPROVED" ? "#166534" : devAuthStatus === "DENIED" ? "#dc2626" : "#0f172a",
                           flexShrink: 0,
                         }}
                       >
-                        {devAuthStatus === "APPROVED" ? "✓" : devAuthStatus === "DENIED" ? "✕" : "🛡️"}
+                        {devAuthStatus === "APPROVED" ? (
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        ) : devAuthStatus === "DENIED" ? (
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                          </svg>
+                        ) : (
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#166534" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                          </svg>
+                        )}
                       </div>
                       <div>
-                        <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800, color: "#0f172a" }}>
+                        <h3 style={{ margin: 0, fontSize: "1.02rem", fontWeight: 700, color: "#0f172a" }}>
                           {devAuthStatus === "APPROVED"
-                            ? "Developer Authorization Granted"
+                            ? "Authorization Approved"
                             : devAuthStatus === "DENIED"
                             ? "Authorization Denied"
-                            : "System Developer Authorization"}
+                            : "Developer Authorization"}
                         </h3>
-                        <p style={{ margin: "3px 0 0", fontSize: "0.78rem", color: "#64748b" }}>
-                          Step 2 of 2: Developer Sign-Off Required
+                        <p style={{ margin: "2px 0 0", fontSize: "0.76rem", color: "#64748b" }}>
+                          Dual-Control Security Protocol
                         </p>
                       </div>
                     </div>
@@ -3607,17 +4457,18 @@ export default function AdminIntegrations() {
                       type="button"
                       onClick={handleClosePinModal}
                       style={{
-                        background: "#f1f5f9",
-                        border: "none",
-                        borderRadius: "50%",
+                        background: "#ffffff",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "8px",
                         width: "30px",
                         height: "30px",
                         cursor: "pointer",
-                        fontSize: "0.95rem",
+                        fontSize: "0.85rem",
                         color: "#64748b",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
+                        transition: "all 0.15s ease",
                       }}
                     >
                       ✕
@@ -3627,12 +4478,14 @@ export default function AdminIntegrations() {
                   {/* Modal Body */}
                   <div style={{ padding: "22px 24px" }}>
                     {devAuthStatus === "APPROVED" ? (
-                      <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "12px", padding: "24px 20px", textAlign: "center" }}>
-                        <div style={{ width: "52px", height: "52px", borderRadius: "50%", background: "#dcfce7", color: "#166534", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.8rem", margin: "0 auto 12px", fontWeight: 900 }}>
-                          ✓
+                      <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "12px", padding: "28px 20px", textAlign: "center" }}>
+                        <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "#dcfce7", color: "#166534", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
+                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
                         </div>
-                        <h4 style={{ margin: "0 0 6px", color: "#166534", fontSize: "1.08rem", fontWeight: 800 }}>
-                          Authorized by System Developer!
+                        <h4 style={{ margin: "0 0 6px", color: "#166534", fontSize: "1.05rem", fontWeight: 700 }}>
+                          Authorization Approved
                         </h4>
                         <p style={{ margin: 0, color: "#15803d", fontSize: "0.82rem" }}>
                           Developer approval confirmed. Unlocking integration configuration...
@@ -3640,21 +4493,24 @@ export default function AdminIntegrations() {
                       </div>
                     ) : devAuthStatus === "DENIED" ? (
                       <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "12px", padding: "24px 20px", textAlign: "center" }}>
-                        <div style={{ width: "52px", height: "52px", borderRadius: "50%", background: "#fee2e2", color: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.8rem", margin: "0 auto 12px", fontWeight: 900 }}>
-                          ✕
+                        <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "#fee2e2", color: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
+                          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                          </svg>
                         </div>
-                        <h4 style={{ margin: "0 0 6px", color: "#991b1b", fontSize: "1.08rem", fontWeight: 800 }}>
-                          Authorization Request Denied
+                        <h4 style={{ margin: "0 0 6px", color: "#991b1b", fontSize: "1.05rem", fontWeight: 700 }}>
+                          Authorization Denied
                         </h4>
                         <p style={{ margin: "0 0 16px", color: "#7f1d1d", fontSize: "0.82rem" }}>
-                          The System Developer has blocked this modification request. Action aborted.
+                          The System Developer declined this modification request.
                         </p>
                         <button
                           type="button"
                           onClick={handleClosePinModal}
                           style={{
-                            padding: "8px 20px",
-                            borderRadius: "8px",
+                            padding: "8px 22px",
+                            borderRadius: "6px",
                             border: "1px solid #cbd5e1",
                             background: "#ffffff",
                             color: "#475569",
@@ -3668,118 +4524,233 @@ export default function AdminIntegrations() {
                       </div>
                     ) : devAuthStatus === "EXPIRED" ? (
                       <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "12px", padding: "24px 20px", textAlign: "center" }}>
-                        <div style={{ fontSize: "2rem", marginBottom: "8px" }}>⏱️</div>
-                        <h4 style={{ margin: "0 0 6px", color: "#92400e", fontSize: "1.05rem", fontWeight: 800 }}>
-                          Authorization Request Expired
+                        <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "#fef3c7", color: "#d97706", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
+                          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10" />
+                            <polyline points="12 6 12 12 16 14" />
+                          </svg>
+                        </div>
+                        <h4 style={{ margin: "0 0 6px", color: "#92400e", fontSize: "1.05rem", fontWeight: 700 }}>
+                          Request Expired
                         </h4>
                         <p style={{ margin: "0 0 16px", color: "#b45309", fontSize: "0.82rem" }}>
-                          The 15-minute authorization window elapsed before the developer responded.
+                          The 15-minute authorization window elapsed.
                         </p>
                         <button
                           type="button"
                           onClick={() => startDeveloperAuthorization(pinModal.actionDescription, pinModal.onSuccess)}
                           style={{
-                            padding: "8px 20px",
-                            borderRadius: "8px",
+                            padding: "8px 22px",
+                            borderRadius: "6px",
                             border: "none",
                             background: "#d97706",
                             color: "#ffffff",
                             fontSize: "0.82rem",
-                            fontWeight: 700,
+                            fontWeight: 600,
                             cursor: "pointer",
                           }}
                         >
-                          ↻ Send New Request
+                          Try Again
                         </button>
                       </div>
                     ) : (
                       <div>
-                        {/* Status info box */}
+                        {/* Authentic Animated Radar Loading Area */}
                         <div
                           style={{
-                            background: "#f0fdf4",
-                            border: "1px solid #bbf7d0",
-                            borderRadius: "10px",
-                            padding: "12px 14px",
-                            marginBottom: "16px",
-                            fontSize: "0.80rem",
-                            color: "#166534",
-                            lineHeight: 1.45,
-                          }}
-                        >
-                          <strong>✓ Admin PIN Verified!</strong> An authorization request has been dispatched to the System Developer:
-                          <div style={{ marginTop: "4px", fontFamily: "monospace", fontWeight: 700, color: "#0f172a", fontSize: "0.85rem" }}>
-                            📧 {devAuthMaskedEmail}
-                          </div>
-                        </div>
-
-                        {/* Animated pulsing spinner waiting card */}
-                        <div
-                          style={{
-                            background: "#f8fafc",
+                            background: "#ffffff",
                             border: "1px solid #e2e8f0",
                             borderRadius: "12px",
-                            padding: "20px 16px",
+                            padding: "24px 18px 20px",
                             textAlign: "center",
                             marginBottom: "16px",
                           }}
                         >
+                          {/* Animated Radar Pulse Center */}
                           <div
                             style={{
-                              display: "inline-block",
-                              width: "28px",
-                              height: "28px",
-                              border: "3px solid #cbd5e1",
-                              borderTopColor: "#166534",
-                              borderRadius: "50%",
-                              animation: "spin 1s linear infinite",
-                              marginBottom: "10px",
+                              position: "relative",
+                              width: "76px",
+                              height: "76px",
+                              margin: "0 auto 16px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
                             }}
-                          />
-                          <div style={{ fontSize: "0.90rem", fontWeight: 800, color: "#0f172a", marginBottom: "4px" }}>
-                            Waiting for Developer to Click Authorize in Email...
+                          >
+                            <div
+                              style={{
+                                position: "absolute",
+                                inset: "0px",
+                                borderRadius: "50%",
+                                border: "1.5px solid #166534",
+                                animation: "devAuthRadar 2.4s cubic-bezier(0.2, 0.8, 0.2, 1) infinite",
+                                pointerEvents: "none",
+                              }}
+                            />
+                            <div
+                              style={{
+                                position: "absolute",
+                                inset: "8px",
+                                borderRadius: "50%",
+                                border: "1.5px solid #10b981",
+                                animation: "devAuthRadar 2.4s cubic-bezier(0.2, 0.8, 0.2, 1) infinite 0.8s",
+                                pointerEvents: "none",
+                              }}
+                            />
+                            <div
+                              style={{
+                                position: "absolute",
+                                inset: "12px",
+                                borderRadius: "50%",
+                                border: "2px dashed #166534",
+                                animation: "devAuthSpin 10s linear infinite",
+                              }}
+                            />
+                            <div
+                              style={{
+                                width: "46px",
+                                height: "46px",
+                                borderRadius: "50%",
+                                background: "linear-gradient(135deg, #166534 0%, #14532d 100%)",
+                                color: "#ffffff",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                boxShadow: "0 4px 12px rgba(22, 101, 52, 0.3)",
+                                zIndex: 2,
+                              }}
+                            >
+                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                                <path d="m9 12 2 2 4-4" />
+                              </svg>
+                            </div>
                           </div>
-                          <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b", lineHeight: 1.45 }}>
-                            The System Developer can approve this request with a single click from their phone or computer. This window will automatically unlock.
-                          </p>
-                        </div>
 
-                        {/* Alternative Direct OTP Entry */}
-                        <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: "14px" }}>
+                          {/* Pulsing Status Pill */}
+                          <div style={{ display: "flex", justifyContent: "center", marginBottom: "8px" }}>
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "7px",
+                                padding: "4px 12px",
+                                background: "#ecfdf5",
+                                border: "1px solid #bbf7d0",
+                                borderRadius: "9999px",
+                                fontSize: "0.74rem",
+                                fontWeight: 700,
+                                color: "#166534",
+                                letterSpacing: "0.01em",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  width: "7px",
+                                  height: "7px",
+                                  borderRadius: "50%",
+                                  backgroundColor: "#16a34a",
+                                  display: "inline-block",
+                                  animation: "devAuthPulse 1.6s ease-in-out infinite",
+                                }}
+                              />
+                              Waiting for Developer Approval
+                            </span>
+                          </div>
+
+                          <p style={{ margin: "0 0 16px", fontSize: "0.78rem", color: "#64748b", lineHeight: 1.5 }}>
+                            An authorization request was dispatched to the System Developer. This screen automatically updates upon approval.
+                          </p>
+
+                          {/* Minimalist Recipient Row */}
                           <div
                             style={{
+                              background: "#f8fafc",
+                              border: "1px solid #e2e8f0",
+                              borderRadius: "8px",
+                              padding: "10px 14px",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "space-between",
-                              marginBottom: showDevOtpInput ? "10px" : "0",
+                              marginBottom: "14px",
                             }}
                           >
-                            <span style={{ fontSize: "0.80rem", fontWeight: 700, color: "#1e293b", display: "flex", alignItems: "center", gap: "6px" }}>
-                              <span>🔑</span>
-                              <span>Alternative: Enter 6-Digit Developer OTP</span>
-                            </span>
+                            <div style={{ textAlign: "left" }}>
+                              <div style={{ fontSize: "0.68rem", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>
+                                Recipient
+                              </div>
+                              <div style={{ fontFamily: "monospace", fontSize: "0.82rem", fontWeight: 700, color: "#0f172a", marginTop: "2px" }}>
+                                {devAuthMaskedEmail}
+                              </div>
+                            </div>
                             <button
                               type="button"
-                              onClick={() => setShowDevOtpInput(!showDevOtpInput)}
+                              onClick={handleManualCheckDevAuth}
+                              disabled={devAuthChecking}
                               style={{
-                                background: "none",
-                                border: "none",
-                                color: "#0284c7",
-                                fontSize: "0.75rem",
-                                fontWeight: 700,
-                                cursor: "pointer",
-                                padding: "2px 6px",
+                                padding: "6px 14px",
+                                borderRadius: "6px",
+                                border: "1px solid #cbd5e1",
+                                background: "#ffffff",
+                                color: "#0f172a",
+                                fontSize: "0.74rem",
+                                fontWeight: 600,
+                                cursor: devAuthChecking ? "not-allowed" : "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "5px",
+                                transition: "all 0.15s ease",
                               }}
                             >
-                              {showDevOtpInput ? "Hide ▲" : "Show ▼"}
+                              {devAuthChecking ? (
+                                <>
+                                  <span style={{ width: "10px", height: "10px", border: "2px solid #94a3b8", borderTopColor: "#0f172a", borderRadius: "50%", display: "inline-block", animation: "devAuthSpin 0.7s linear infinite" }} />
+                                  Checking...
+                                </>
+                              ) : (
+                                "Check Status"
+                              )}
                             </button>
                           </div>
 
+                          {/* Subtle Animated Progress Track */}
+                          <div style={{ width: "100%", height: "2.5px", background: "#f1f5f9", borderRadius: "2px", overflow: "hidden" }}>
+                            <div
+                              style={{
+                                width: "35%",
+                                height: "100%",
+                                background: "linear-gradient(90deg, #10b981, #166534)",
+                                borderRadius: "2px",
+                                animation: "devAuthBar 2s ease-in-out infinite",
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Direct Code Entry Collapsible */}
+                        <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: "12px", textAlign: "center" }}>
+                          <button
+                            type="button"
+                            onClick={() => setShowDevOtpInput(!showDevOtpInput)}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "#475569",
+                              fontSize: "0.75rem",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              padding: "4px 8px",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                            }}
+                          >
+                            <span>{showDevOtpInput ? "Hide Code" : "Have an authorization code? Enter Code"}</span>
+                          </button>
+
                           {showDevOtpInput && (
-                            <form onSubmit={handleVerifyDevOtp} style={{ marginTop: "14px", textAlign: "center" }}>
-                              <p style={{ margin: "0 0 10px", fontSize: "0.74rem", color: "#64748b" }}>
-                                If the developer provided the 6-digit OTP code directly:
-                              </p>
+                            <form onSubmit={handleVerifyDevOtp} style={{ marginTop: "12px", textAlign: "center" }}>
                               <div style={{ display: "flex", justifyContent: "center", gap: "8px", marginBottom: "10px" }} onPaste={handleDevOtpPaste}>
                                 {devAuthOtpDigits.map((digit, idx) => (
                                   <input
@@ -3801,7 +4772,7 @@ export default function AdminIntegrations() {
                                       fontSize: "1.3rem",
                                       fontWeight: 800,
                                       color: "#0f172a",
-                                      borderRadius: "10px",
+                                      borderRadius: "8px",
                                       border: digit ? "2px solid #166534" : "1.5px solid #cbd5e1",
                                       background: digit ? "#f0fdf4" : "#ffffff",
                                       outline: "none",
@@ -3820,24 +4791,24 @@ export default function AdminIntegrations() {
                                 type="submit"
                                 disabled={devAuthOtpLoading || devAuthOtpDigits.join("").length !== 6}
                                 style={{
-                                  padding: "8px 20px",
-                                  borderRadius: "8px",
+                                  padding: "8px 24px",
+                                  borderRadius: "6px",
                                   border: "none",
                                   background: devAuthOtpDigits.join("").length === 6 ? "#166534" : "#94a3b8",
                                   color: "#ffffff",
                                   fontSize: "0.80rem",
-                                  fontWeight: 700,
+                                  fontWeight: 600,
                                   cursor: devAuthOtpDigits.join("").length === 6 && !devAuthOtpLoading ? "pointer" : "not-allowed",
                                 }}
                               >
-                                {devAuthOtpLoading ? "Verifying OTP..." : "✓ Authorize with Developer OTP"}
+                                {devAuthOtpLoading ? "Authorizing..." : "Authorize"}
                               </button>
                             </form>
                           )}
                         </div>
 
                         {/* Modal Footer Controls */}
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "18px", paddingTop: "14px", borderTop: "1px solid #f1f5f9" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "16px", paddingTop: "14px", borderTop: "1px solid #f1f5f9" }}>
                           <button
                             type="button"
                             onClick={() => startDeveloperAuthorization(pinModal.actionDescription, pinModal.onSuccess)}
@@ -3852,15 +4823,15 @@ export default function AdminIntegrations() {
                               padding: 0,
                             }}
                           >
-                            {resendCooldown > 0 ? `Resend email in ${resendCooldown}s` : "↻ Resend Authorization Email"}
+                            {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend Email"}
                           </button>
 
                           <button
                             type="button"
                             onClick={handleClosePinModal}
                             style={{
-                              padding: "8px 16px",
-                              borderRadius: "8px",
+                              padding: "8px 18px",
+                              borderRadius: "6px",
                               border: "1px solid #cbd5e1",
                               background: "#ffffff",
                               color: "#475569",
@@ -3886,7 +4857,7 @@ export default function AdminIntegrations() {
                       borderBottom: "1px solid #f1f5f9",
                       background: "#f8fafc",
                       display: "flex",
-                      alignItems: "flex-start",
+                      alignItems: "center",
                       justifyContent: "space-between",
                       gap: "12px",
                     }}
@@ -3894,29 +4865,31 @@ export default function AdminIntegrations() {
                     <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                       <div
                         style={{
-                          width: "44px",
-                          height: "44px",
-                          borderRadius: "12px",
+                          width: "40px",
+                          height: "40px",
+                          borderRadius: "10px",
                           background: pinModal.isFirstPin ? "#eff6ff" : "#ecfdf5",
                           border: `1px solid ${pinModal.isFirstPin ? "#bfdbfe" : "#a7f3d0"}`,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          fontSize: "1.3rem",
                           color: pinModal.isFirstPin ? "#2563eb" : "#059669",
                           flexShrink: 0,
                         }}
                       >
-                        {pinModal.isFirstPin ? "🔑" : "🔒"}
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                        </svg>
                       </div>
                       <div>
-                        <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800, color: "#0f172a" }}>
-                          {pinModal.isFirstPin ? "Create 6-Digit Admin PIN" : "6-Digit Security PIN"}
+                        <h3 style={{ margin: 0, fontSize: "1.02rem", fontWeight: 700, color: "#0f172a" }}>
+                          {pinModal.isFirstPin ? "Create Security PIN" : "Security Verification"}
                         </h3>
-                        <p style={{ margin: "3px 0 0", fontSize: "0.78rem", color: "#64748b" }}>
+                        <p style={{ margin: "2px 0 0", fontSize: "0.76rem", color: "#64748b" }}>
                           {pinModal.isFirstPin
                             ? `First-time setup for ${user?.email || "administrator"}`
-                            : "Step 1 of 2: Administrator Authorization"}
+                            : "Enter your 6-digit PIN to continue"}
                         </p>
                       </div>
                     </div>
@@ -3926,17 +4899,18 @@ export default function AdminIntegrations() {
                       disabled={pinLoading}
                       onClick={handleClosePinModal}
                       style={{
-                        background: "#f1f5f9",
-                        border: "none",
-                        borderRadius: "50%",
+                        background: "#ffffff",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "8px",
                         width: "30px",
                         height: "30px",
                         cursor: "pointer",
-                        fontSize: "0.95rem",
+                        fontSize: "0.85rem",
                         color: "#64748b",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
+                        transition: "all 0.15s ease",
                       }}
                     >
                       ✕
@@ -3945,51 +4919,28 @@ export default function AdminIntegrations() {
 
                   {/* Modal Body */}
                   <form onSubmit={pinModal.isFirstPin ? handleSetInitialPin : handleVerifyPin} style={{ padding: "22px 24px" }}>
-                    {pinModal.isFirstPin ? (
-                      <div
-                        style={{
-                          background: "#eff6ff",
-                          border: "1px solid #bfdbfe",
-                          borderRadius: "10px",
-                          padding: "12px 14px",
-                          marginBottom: "18px",
-                          fontSize: "0.80rem",
-                          color: "#1e40af",
-                          lineHeight: 1.45,
-                        }}
-                      >
-                        <strong>First-Time Setup:</strong> This admin account does not have a security PIN yet. Please create and confirm your personal 6-digit PIN before you can{" "}
-                        <span style={{ fontWeight: 800, textDecoration: "underline" }}>
-                          {pinModal.actionDescription}
-                        </span>.
-                      </div>
-                    ) : (
-                      <div
-                        style={{
-                          background: "#eff6ff",
-                          border: "1px solid #bfdbfe",
-                          borderRadius: "10px",
-                          padding: "12px 14px",
-                          marginBottom: "18px",
-                          fontSize: "0.80rem",
-                          color: "#1e40af",
-                          lineHeight: 1.4,
-                        }}
-                      >
-                        <strong>Security Protection:</strong> Please enter your 6-digit PIN before you can{" "}
-                        <span style={{ fontWeight: 800, textDecoration: "underline" }}>
-                          {pinModal.actionDescription}
-                        </span>.
-                      </div>
-                    )}
+                    <div
+                      style={{
+                        background: "#f8fafc",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "8px",
+                        padding: "12px 14px",
+                        marginBottom: "18px",
+                        fontSize: "0.80rem",
+                        color: "#334155",
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      Authorizing modification for: <strong style={{ color: "#0f172a" }}>{pinModal.actionDescription}</strong>
+                    </div>
 
                     {/* 1st PIN Input Row */}
                     <div style={{ marginBottom: pinModal.isFirstPin ? "16px" : "14px" }}>
                       <label
                         style={{
                           display: "block",
-                          fontSize: "0.76rem",
-                          fontWeight: 700,
+                          fontSize: "0.74rem",
+                          fontWeight: 600,
                           color: "#475569",
                           marginBottom: "8px",
                           textAlign: "center",
@@ -3997,7 +4948,7 @@ export default function AdminIntegrations() {
                           letterSpacing: "0.5px",
                         }}
                       >
-                        {pinModal.isFirstPin ? "Step 1: Choose 6-Digit PIN" : "Enter 6-Digit Admin PIN"}
+                        {pinModal.isFirstPin ? "Choose 6-Digit PIN" : "Enter 6-Digit PIN"}
                       </label>
 
                       <div
@@ -4026,14 +4977,13 @@ export default function AdminIntegrations() {
                               height: "50px",
                               textAlign: "center",
                               fontSize: "1.35rem",
-                              fontWeight: "800",
+                              fontWeight: "700",
                               color: "#0f172a",
-                              borderRadius: "10px",
+                              borderRadius: "8px",
                               border: digit ? "2px solid #059669" : "1.5px solid #cbd5e1",
                               background: digit ? "#f0fdf4" : "#ffffff",
                               outline: "none",
                               transition: "all 0.15s ease",
-                              boxShadow: digit ? "0 2px 4px rgba(5, 150, 105, 0.15)" : "none",
                             }}
                           />
                         ))}
@@ -4046,8 +4996,8 @@ export default function AdminIntegrations() {
                         <label
                           style={{
                             display: "block",
-                            fontSize: "0.76rem",
-                            fontWeight: 700,
+                            fontSize: "0.74rem",
+                            fontWeight: 600,
                             color: "#475569",
                             marginBottom: "8px",
                             textAlign: "center",
@@ -4055,7 +5005,7 @@ export default function AdminIntegrations() {
                             letterSpacing: "0.5px",
                           }}
                         >
-                          Step 2: Confirm 6-Digit PIN
+                          Confirm 6-Digit PIN
                         </label>
 
                         <div
@@ -4083,14 +5033,13 @@ export default function AdminIntegrations() {
                                 height: "50px",
                                 textAlign: "center",
                                 fontSize: "1.35rem",
-                                fontWeight: "800",
+                                fontWeight: "700",
                                 color: "#0f172a",
-                                borderRadius: "10px",
+                                borderRadius: "8px",
                                 border: digit ? "2px solid #2563eb" : "1.5px solid #cbd5e1",
                                 background: digit ? "#eff6ff" : "#ffffff",
                                 outline: "none",
                                 transition: "all 0.15s ease",
-                                boxShadow: digit ? "0 2px 4px rgba(37, 99, 235, 0.15)" : "none",
                               }}
                             />
                           ))}
@@ -4098,7 +5047,7 @@ export default function AdminIntegrations() {
                       </div>
                     )}
 
-                    {/* Show / Hide PIN Toggle & Helper note */}
+                    {/* Show / Hide PIN Toggle & Clean Helper */}
                     <div
                       style={{
                         display: "flex",
@@ -4114,20 +5063,21 @@ export default function AdminIntegrations() {
                         style={{
                           background: "none",
                           border: "none",
-                          color: "#0284c7",
+                          color: "#475569",
                           fontSize: "0.76rem",
                           fontWeight: 600,
                           cursor: "pointer",
                           padding: 0,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
                         }}
                       >
-                        {showPin ? "🙈 Hide digits" : "👁️ Show digits"}
+                        {showPin ? "Hide digits" : "Show digits"}
                       </button>
 
-                      <span style={{ fontSize: "0.72rem", color: "#64748b" }}>
-                        {pinModal.isFirstPin ? "Must be exactly 6 digits" : (
-                          <span>Default PIN: <strong style={{ color: "#0f172a" }}>123456</strong></span>
-                        )}
+                      <span style={{ fontSize: "0.72rem", color: "#94a3b8" }}>
+                        6 numeric digits
                       </span>
                     </div>
 
@@ -4141,7 +5091,7 @@ export default function AdminIntegrations() {
                           fontSize: "0.78rem",
                           fontWeight: 600,
                           padding: "8px 12px",
-                          borderRadius: "8px",
+                          borderRadius: "6px",
                           marginBottom: "16px",
                           textAlign: "center",
                         }}
@@ -4157,8 +5107,8 @@ export default function AdminIntegrations() {
                         disabled={pinLoading}
                         onClick={handleClosePinModal}
                         style={{
-                          padding: "9px 16px",
-                          borderRadius: "8px",
+                          padding: "9px 18px",
+                          borderRadius: "6px",
                           border: "1px solid #cbd5e1",
                           background: "#ffffff",
                           color: "#475569",
@@ -4175,38 +5125,36 @@ export default function AdminIntegrations() {
                           type="submit"
                           disabled={pinLoading || pinDigits.join("").length !== 6 || confirmPinDigits.join("").length !== 6}
                           style={{
-                            padding: "9px 20px",
-                            borderRadius: "8px",
+                            padding: "9px 22px",
+                            borderRadius: "6px",
                             border: "none",
                             background: (pinDigits.join("").length === 6 && confirmPinDigits.join("").length === 6) ? "#2563eb" : "#94a3b8",
                             color: "#ffffff",
-                            fontWeight: 700,
+                            fontWeight: 600,
                             fontSize: "0.82rem",
                             cursor: (pinDigits.join("").length === 6 && confirmPinDigits.join("").length === 6) && !pinLoading ? "pointer" : "not-allowed",
-                            boxShadow: (pinDigits.join("").length === 6 && confirmPinDigits.join("").length === 6) ? "0 2px 6px rgba(37, 99, 235, 0.25)" : "none",
                             transition: "all 0.15s ease",
                           }}
                         >
-                          {pinLoading ? "Setting PIN..." : "✓ Set PIN & Continue"}
+                          {pinLoading ? "Saving..." : "Continue"}
                         </button>
                       ) : (
                         <button
                           type="submit"
                           disabled={pinLoading || pinDigits.join("").length !== 6}
                           style={{
-                            padding: "9px 20px",
-                            borderRadius: "8px",
+                            padding: "9px 22px",
+                            borderRadius: "6px",
                             border: "none",
                             background: pinDigits.join("").length === 6 ? "#059669" : "#94a3b8",
                             color: "#ffffff",
-                            fontWeight: 700,
+                            fontWeight: 600,
                             fontSize: "0.82rem",
                             cursor: pinDigits.join("").length === 6 && !pinLoading ? "pointer" : "not-allowed",
-                            boxShadow: pinDigits.join("").length === 6 ? "0 2px 6px rgba(5, 150, 105, 0.25)" : "none",
                             transition: "all 0.15s ease",
                           }}
                         >
-                          {pinLoading ? "Verifying PIN..." : "✓ Verify PIN & Request Dev Auth"}
+                          {pinLoading ? "Verifying..." : "Verify"}
                         </button>
                       )}
                     </div>

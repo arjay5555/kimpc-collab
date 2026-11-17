@@ -105,10 +105,10 @@ export default function ManagerMessages() {
         {/* Metrics Row */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px", marginBottom: "20px" }}>
           <div className="wz-card" style={{ padding: "18px 20px" }}>
-            <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+            <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--wz-text-muted, #64748b)", textTransform: "uppercase" }}>
               Total Inquiries
             </span>
-            <div style={{ fontSize: "1.8rem", fontWeight: 800, color: "#0f172a", marginTop: "4px" }}>
+            <div style={{ fontSize: "1.8rem", fontWeight: 800, color: "var(--wz-text-main, #0f172a)", marginTop: "4px" }}>
               {messages.length}
             </div>
           </div>
@@ -197,14 +197,14 @@ export default function ManagerMessages() {
 
         {/* Messages List */}
         {loading ? (
-          <div className="wz-card" style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>
+          <div className="wz-card" style={{ padding: "40px", textAlign: "center", color: "var(--wz-text-muted, #64748b)" }}>
             Loading member inquiries...
           </div>
         ) : filteredMessages.length === 0 ? (
           <div className="wz-card" style={{ padding: "40px", textAlign: "center" }}>
             <div style={{ fontSize: "2rem", marginBottom: "8px" }}>💬</div>
-            <strong style={{ fontSize: "1rem", color: "#0f172a" }}>No member messages found</strong>
-            <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: "0.84rem" }}>
+            <strong style={{ fontSize: "1rem", color: "var(--wz-text-main, #0f172a)" }}>No member messages found</strong>
+            <p style={{ margin: "4px 0 0", color: "var(--wz-text-muted, #64748b)", fontSize: "0.84rem" }}>
               {search ? "No inquiries matched your search keyword." : "When members ask questions, they will appear here."}
             </p>
           </div>
@@ -242,8 +242,8 @@ export default function ManagerMessages() {
                         {(msg.memberName || "M")[0].toUpperCase()}
                       </div>
                       <div>
-                        <strong style={{ fontSize: "0.95rem", color: "#0f172a" }}>{msg.memberName}</strong>
-                        <div style={{ fontSize: "0.78rem", color: "#64748b" }}>{msg.memberEmail}</div>
+                        <strong style={{ fontSize: "0.95rem", color: "var(--wz-text-main, #0f172a)" }}>{msg.memberName}</strong>
+                        <div style={{ fontSize: "0.78rem", color: "var(--wz-text-muted, #64748b)" }}>{msg.memberEmail}</div>
                       </div>
                     </div>
 
@@ -270,7 +270,7 @@ export default function ManagerMessages() {
                       >
                         {msg.status === "unread" ? "Unread Question" : msg.status === "replied" ? "Replied" : "Read"}
                       </span>
-                      <span style={{ fontSize: "0.76rem", color: "#94a3b8" }}>
+                      <span style={{ fontSize: "0.76rem", color: "var(--wz-text-muted, #94a3b8)" }}>
                         {msg.createdAt ? new Date(msg.createdAt).toLocaleString() : "Recently"}
                       </span>
                     </div>
@@ -278,7 +278,7 @@ export default function ManagerMessages() {
 
                   {/* Subject & Question Content */}
                   <div style={{ marginBottom: "16px" }}>
-                    <div style={{ fontSize: "1rem", fontWeight: 700, color: "#1e293b", marginBottom: "6px" }}>
+                    <div style={{ fontSize: "1rem", fontWeight: 700, color: "var(--wz-text-main, #1e293b)", marginBottom: "6px" }}>
                       {msg.subject}
                     </div>
                     <div
@@ -288,7 +288,7 @@ export default function ManagerMessages() {
                         borderRadius: "8px",
                         border: "1px solid #e2e8f0",
                         fontSize: "0.88rem",
-                        color: "#334155",
+                        color: "var(--wz-text-main, #334155)",
                         lineHeight: 1.5,
                         whiteSpace: "pre-wrap",
                       }}

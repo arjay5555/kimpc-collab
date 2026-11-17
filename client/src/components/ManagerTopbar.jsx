@@ -22,6 +22,7 @@ export default function ManagerTopbar({
   const [hasUnreadNotifs, setHasUnreadNotifs] = useState(true);
 
   const notifRef = useRef(null);
+  const equipmentNotificationIdsRef = useRef(new Set());
 
   // Manager live notifications
   const [notifications, setNotifications] = useState([
@@ -51,25 +52,36 @@ export default function ManagerTopbar({
     const fetchAlerts = async () => {
       try {
         const [appRes, msgRes] = await Promise.all([
-          api("/applications"),
+          api("/applications", { skipCache: true }),
           api("/manager/messages"),
         ]);
 
         const incomingNotifs = [];
+        const bookingNotifs = [];
 
         if (appRes.ok && Array.isArray(appRes.data)) {
           const pending = appRes.data.filter((a) => (a.status || "").toLowerCase() === "pending");
-          if (pending.length > 0) {
-            incomingNotifs.push({
-              id: "pending-apps",
-              type: "alert",
-              title: `${pending.length} Pending Booking Approval${pending.length > 1 ? "s" : ""}`,
-              desc: "New machinery rental requests waiting for manager review.",
-              time: "Action required",
-              link: "/booking-approvals",
-              read: false,
-            });
-          }
+          pending.forEach((application) => {
+            const applicationId = application.id || application._id;
+            if (applicationId) {
+              bookingNotifs.push({
+                id: `equipment-booking-${applicationId}`,
+                type: "alert",
+                title: "New equipment booking request",
+                desc: `${application.memberName || "A member"} requested ${application.equipment || "equipment"}.`,
+                time: "Action required",
+                link: "/manager",
+                read: false,
+              });
+            }
+          });
+          const newBookingNotifs = bookingNotifs.filter(
+            (notification) => !equipmentNotificationIdsRef.current.has(notification.id)
+          );
+          newBookingNotifs.forEach((notification) => {
+            equipmentNotificationIdsRef.current.add(notification.id);
+          });
+          incomingNotifs.push(...newBookingNotifs);
 
           const cancelReqs = appRes.data.filter(
             (a) => a.cancellationRequested || (a.status || "").toLowerCase() === "cancellation requested"
@@ -151,7 +163,7 @@ export default function ManagerTopbar({
         <div>
           <h1 className="wz-topbar-title">{title}</h1>
           {subtitle && (
-            <p style={{ margin: "2px 0 0", fontSize: "0.8rem", color: "#64748b" }}>
+            <p style={{ margin: "2px 0 0", fontSize: "0.8rem", color: "var(--wz-text-muted, #64748b)" }}>
               {subtitle}
             </p>
           )}
@@ -335,7 +347,7 @@ export default function ManagerTopbar({
                 <span className="wz-user-name">{user?.fullName || "Operations Manager"}</span>
                 <span className="wz-user-role" style={{ color: "#166534", fontWeight: 600 }}>Manager</span>
               </div>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginLeft: "4px", color: "#64748b" }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginLeft: "4px", color: "var(--wz-text-muted, #64748b)" }}>
                 <polyline points="6 9 12 15 18 9" />
               </svg>
             </div>

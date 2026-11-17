@@ -16,5 +16,9 @@
     "db:check": "npm --prefix server run db:check",
     "db:seed": "npm --prefix server run seed"
   },
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "client": "^0.0.1",
+    "server": "^1.0.42"
+  }
 }

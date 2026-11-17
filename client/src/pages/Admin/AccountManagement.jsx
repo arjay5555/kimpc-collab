@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { api } from "../../services/api";
+import { api, getCachedApiData } from "../../services/api";
 import AdminSidebar from "../../components/AdminSidebar";
 import AdminTopbar from "../../components/AdminTopbar";
 import "../../styles/admin-kimpc.css";
 
 export default function AccountManagement() {
   const { user: currentUser } = useAuth();
-  const [activeMainTab, setActiveMainTab] = useState("directory"); // "directory" | "permissions"
 
   // Accounts state
-  const [accounts, setAccounts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [accounts, setAccounts] = useState(() => {
+    const cached = getCachedApiData("/accounts");
+    return Array.isArray(cached) ? cached : [];
+  });
+  const [loading, setLoading] = useState(() => !getCachedApiData("/accounts"));
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all"); // "all" | "pending" | "active" | "deactivated" | "declined" | "staff"
   const [feedback, setFeedback] = useState({ message: "", isError: false });
@@ -50,13 +52,10 @@ export default function AccountManagement() {
   const [createdAccountResult, setCreatedAccountResult] = useState(null);
   const [copiedCredentials, setCopiedCredentials] = useState(false);
 
-  // Role permissions state
-  const [permissions, setPermissions] = useState(null);
-  const [permissionsLoading, setPermissionsLoading] = useState(false);
-  const [permissionsSaving, setPermissionsSaving] = useState(false);
-
   const fetchAccounts = async () => {
-    setLoading(true);
+    if (!getCachedApiData("/accounts")) {
+      setLoading(true);
+    }
     const res = await api("/accounts");
     if (res.ok && Array.isArray(res.data)) {
       setAccounts(res.data);
@@ -64,18 +63,8 @@ export default function AccountManagement() {
     setLoading(false);
   };
 
-  const fetchPermissions = async () => {
-    setPermissionsLoading(true);
-    const res = await api("/admin/permissions");
-    if (res.ok && res.data) {
-      setPermissions(res.data);
-    }
-    setPermissionsLoading(false);
-  };
-
   useEffect(() => {
     fetchAccounts();
-    fetchPermissions();
   }, []);
 
   // Account Action 1: Activate / Verify
@@ -181,36 +170,6 @@ export default function AccountManagement() {
     });
     setFeedback({ message: `One-Time Password generated for ${account.fullName || account.email}`, isError: false });
     fetchAccounts();
-  };
-
-  // Save Role Permissions
-  const handleSavePermissions = async () => {
-    if (!permissions) return;
-    setPermissionsSaving(true);
-    setFeedback({ message: "Saving role permissions matrix...", isError: false });
-
-    const res = await api("/admin/permissions", {
-      method: "POST",
-      body: { permissions },
-    });
-
-    setPermissionsSaving(false);
-    if (!res.ok) {
-      setFeedback({ message: res.data?.error || "Failed to save permissions.", isError: true });
-    } else {
-      setFeedback({ message: "Role-based permissions matrix saved and enforced successfully!", isError: false });
-      setTimeout(() => setFeedback({ message: "", isError: false }), 4000);
-    }
-  };
-
-  const handleTogglePermission = (role, permKey) => {
-    setPermissions((prev) => ({
-      ...prev,
-      [role]: {
-        ...prev[role],
-        [permKey]: !prev[role][permKey],
-      },
-    }));
   };
 
   // Helper to generate a random 10-character alphanumeric password
@@ -453,7 +412,7 @@ export default function AccountManagement() {
       <main className="wz-content-wrapper">
         <AdminTopbar
           title="Account &amp; Role Management"
-          subtitle="Verify new registrations, manage active/deactivated status, and configure role-based permissions."
+          subtitle="Verify new registrations and manage active/deactivated status."
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           searchPlaceholder="Search by name, email, or Coop ID..."
@@ -548,66 +507,7 @@ export default function AccountManagement() {
           </div>
         </div>
 
-        {/* Tab Switcher: Accounts Directory vs Role Permissions */}
-        <div style={{ display: "flex", gap: "8px", marginBottom: "16px", borderBottom: "1px solid var(--wz-border, #e2e8f0)", paddingBottom: "10px" }}>
-          <button
-            type="button"
-            onClick={() => setActiveMainTab("directory")}
-            style={{
-              padding: "8px 16px",
-              borderRadius: "8px",
-              border: "none",
-              background: activeMainTab === "directory" ? "#166534" : "transparent",
-              color: activeMainTab === "directory" ? "#ffffff" : "var(--wz-text, #475569)",
-              fontWeight: 700,
-              fontSize: "0.86rem",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              transition: "all 0.15s ease",
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-            </svg>
-            <span>Accounts Directory &amp; Verification</span>
-            {pendingCount > 0 && (
-              <span style={{ padding: "1px 6px", borderRadius: "10px", background: activeMainTab === "directory" ? "#ffffff" : "#fee2e2", color: activeMainTab === "directory" ? "#166534" : "#dc2626", fontSize: "0.72rem", fontWeight: 800 }}>
-                {pendingCount}
-              </span>
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveMainTab("permissions")}
-            style={{
-              padding: "8px 16px",
-              borderRadius: "8px",
-              border: "none",
-              background: activeMainTab === "permissions" ? "#166534" : "transparent",
-              color: activeMainTab === "permissions" ? "#ffffff" : "var(--wz-text, #475569)",
-              fontWeight: 700,
-              fontSize: "0.86rem",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              transition: "all 0.15s ease",
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-            </svg>
-            <span>Role Permissions Management</span>
-          </button>
-        </div>
-
-        {/* ================= TAB 1: ACCOUNTS DIRECTORY & VERIFICATION ================= */}
-        {activeMainTab === "directory" && (
-          <div className="wz-table-card">
+        <div className="wz-table-card">
             <div className="wz-table-toolbar">
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                 <h3 className="wz-table-title" style={{ margin: 0 }}>Registered Cooperative Accounts</h3>
@@ -1011,126 +911,6 @@ export default function AccountManagement() {
               </table>
             </div>
           </div>
-        )}
-
-        {/* ================= TAB 2: ROLE PERMISSIONS MANAGEMENT ================= */}
-        {activeMainTab === "permissions" && (
-          <div className="wz-card" style={{ padding: "24px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
-              <div>
-                <h3 className="wz-card-title" style={{ fontSize: "1.15rem", margin: 0 }}>
-                  Role-Based Access Control (RBAC) Permissions Matrix
-                </h3>
-                <p style={{ margin: "2px 0 0", fontSize: "0.78rem", color: "#64748b" }}>
-                  Configure granular capabilities for Members, Managers, and Administrators across cooperative modules.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                className="wz-btn-submit"
-                onClick={handleSavePermissions}
-                disabled={permissionsSaving || !permissions}
-              >
-                {permissionsSaving ? "Saving Matrix..." : "Save Role Permissions"}
-              </button>
-            </div>
-
-            {permissionsLoading || !permissions ? (
-              <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>
-                Loading role permissions matrix...
-              </div>
-            ) : (
-              <div className="wz-table-responsive" style={{ minHeight: "380px" }}>
-                <table className="wz-table">
-                  <thead>
-                    <tr>
-                      <th style={{ width: "40%" }}>Capability / Permission</th>
-                      <th style={{ width: "20%", textAlign: "center" }}>Member</th>
-                      <th style={{ width: "20%", textAlign: "center" }}>Manager</th>
-                      <th style={{ width: "20%", textAlign: "center" }}>Administrator</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[
-                      {
-                        key: "canViewCatalog",
-                        label: "Browse Machinery Catalog & Availability",
-                        desc: "View specifications, rates, and availability of all fleet units",
-                      },
-                      {
-                        key: "canBookEquipment",
-                        label: "Submit Machinery Rental Applications",
-                        desc: "Apply for equipment rentals and choose operators/dates",
-                      },
-                      {
-                        key: "canViewOwnApplications",
-                        label: "View Own Bookings & Transaction Invoices",
-                        desc: "Access historical rental contracts, receipts, and invoices",
-                      },
-                      {
-                        key: "canCancelPendingBookings",
-                        label: "Cancel Pending Booking Reservations",
-                        desc: "Cancel booking applications before manager approval dispatch",
-                      },
-                      {
-                        key: "canManageFleet",
-                        label: "Manage Fleet Units & Maintenance Logs",
-                        desc: "Add machinery, log service meters, update operating status",
-                      },
-                      {
-                        key: "canApproveBookings",
-                        label: "Review, Approve & Dispatch Rental Bookings",
-                        desc: "Validate farmer requirements, inspect machinery, approve rentals",
-                      },
-                      {
-                        key: "canManageAccounts",
-                        label: "Verify & Deactivate Cooperative Accounts",
-                        desc: "Review new registrations, activate/deactivate accounts, issue OTPs",
-                      },
-                      {
-                        key: "canViewFinancialReports",
-                        label: "View & Export Financial & Rental Reports",
-                        desc: "Access revenue totals, equipment utilization, and ledger metrics",
-                      },
-                      {
-                        key: "canManagePolicies",
-                        label: "Configure Deposits, Cancellation & Payment Gateways",
-                        desc: "Define cooperative deposit %, cancellation rules, accepted payments",
-                      },
-                      {
-                        key: "canManageBackups",
-                        label: "Database Backups & Test Restore Verification",
-                        desc: "Create snapshots and verify data restore in sandbox environment",
-                      },
-                    ].map((row) => (
-                      <tr key={row.key}>
-                        <td>
-                          <div style={{ fontWeight: 700, color: "var(--wz-text, #0f172a)", fontSize: "0.85rem" }}>
-                            {row.label}
-                          </div>
-                          <div style={{ fontSize: "0.72rem", color: "#64748b" }}>{row.desc}</div>
-                        </td>
-                        {["member", "manager", "admin"].map((role) => (
-                          <td key={role} style={{ textAlign: "center" }}>
-                            <label className="wz-switch-toggle" style={{ margin: "0 auto" }}>
-                              <input
-                                type="checkbox"
-                                checked={!!permissions[role]?.[row.key]}
-                                onChange={() => handleTogglePermission(role, row.key)}
-                              />
-                              <span className="wz-switch-slider" />
-                            </label>
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
       </main>
 
       {/* Decline Account Modal Dialog */}

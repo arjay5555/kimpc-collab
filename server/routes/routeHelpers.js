@@ -30,8 +30,9 @@ async function setSystemSetting(key, value, description = "", updatedBy = "syste
   );
 }
 
-function generateUserToken(account, extra = {}) {
+function generateUserToken(account, extra = {}, options = {}) {
   const accObj = account.toObject ? account.toObject() : account;
+  const expiresIn = options.expiresIn || "8h";
   return jwt.sign(
     {
       id: String(accObj._id || accObj.id),
@@ -42,7 +43,7 @@ function generateUserToken(account, extra = {}) {
       ...extra,
     },
     JWT_SECRET,
-    { expiresIn: "8h" }
+    { expiresIn }
   );
 }
 

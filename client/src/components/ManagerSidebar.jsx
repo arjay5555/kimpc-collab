@@ -69,7 +69,7 @@ export default function ManagerSidebar() {
   }, []);
 
   return (
-    <aside className="wz-sidebar">
+    <aside className="wz-sidebar wz-manager-sidebar">
       {/* Brand Header */}
       <Link to="/manager" className="wz-brand" style={{ display: "flex", alignItems: "center", gap: "8px", textDecoration: "none" }}>
         <img
@@ -78,8 +78,8 @@ export default function ManagerSidebar() {
           style={{ width: "28px", height: "28px", objectFit: "contain", borderRadius: "6px" }}
         />
         <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
-          <span style={{ fontSize: "0.98rem", fontWeight: 800, color: "#0f172a", letterSpacing: "0.02em" }}>KIMPC</span>
-          <span style={{ fontSize: "0.62rem", fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>Cooperative</span>
+          <span style={{ fontSize: "0.98rem", fontWeight: 800, color: "var(--wz-text-main, #0f172a)", letterSpacing: "0.02em" }}>KIMPC</span>
+          <span style={{ fontSize: "0.62rem", fontWeight: 600, color: "var(--wz-text-muted, #64748b)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Cooperative</span>
         </div>
       </Link>
 

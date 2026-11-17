@@ -7,6 +7,7 @@ const router = express.Router();
 const Account = require("../models/Account");
 const Application = require("../models/Application");
 const AuditLog = require("../models/AuditLog");
+const { getSystemSetting, setSystemSetting } = require("../models/SystemSetting");
 
 const { sendDeleteOtpEmail, sendDeveloperIntegrationAuthEmail } = require("../services/mailer");
 const { logAudit, logSystemEvent } = require("../services/auditLogger");
@@ -576,10 +577,43 @@ router.post("/admin/verify-pin", async (req, res) => {
 
 // ---------- SYSTEM DEVELOPER DUAL-CONTROL INTEGRATION AUTHORIZATION ----------
 
-// In-memory store for System Developer dual-control authorization
+// Dual-control authorization store (in-memory cache + MongoDB SystemSetting persistence)
 // requestId -> { requestId, token, otpCode, adminEmail, adminName, actionDescription, devEmail, status, expiresAt, createdAt }
 const developerAuthStore = new Map();
 const developerTokenIndex = new Map();
+
+async function saveDevAuthRecord(record) {
+  developerAuthStore.set(record.requestId, record);
+  if (record.token) {
+    developerTokenIndex.set(record.token, record.requestId);
+  }
+  await Promise.all([
+    setSystemSetting(`dev_auth_req:${record.requestId}`, record, "Developer dual-control auth request", record.adminEmail),
+    record.token
+      ? setSystemSetting(`dev_auth_tok:${record.token}`, record.requestId, "Developer dual-control auth token index", record.adminEmail)
+      : Promise.resolve(),
+  ]);
+}
+
+async function getDevAuthRecordByRequestId(requestId) {
+  const fromDb = await getSystemSetting(`dev_auth_req:${requestId}`, null);
+  if (fromDb && typeof fromDb === "object") {
+    developerAuthStore.set(requestId, fromDb);
+    if (fromDb.token) developerTokenIndex.set(fromDb.token, requestId);
+    return fromDb;
+  }
+  return developerAuthStore.get(requestId) || null;
+}
+
+async function getDevAuthRecordByToken(token) {
+  if (!token) return null;
+  let requestId = developerTokenIndex.get(token);
+  if (!requestId) {
+    requestId = await getSystemSetting(`dev_auth_tok:${token}`, null);
+  }
+  if (!requestId) return null;
+  return await getDevAuthRecordByRequestId(requestId);
+}
 
 function maskDevEmail(email) {
   if (!email || !email.includes("@")) return "dev••••@••••.com";
@@ -652,12 +686,11 @@ router.post("/admin/integrations/dev-auth/request", async (req, res) => {
       createdAt: Date.now(),
     };
 
-    developerAuthStore.set(requestId, record);
-    developerTokenIndex.set(token, requestId);
+    await saveDevAuthRecord(record);
 
     // Build authorize & deny URLs using the current host
     const host = req.get("host");
-    const protocol = req.protocol;
+    const protocol = (req.headers["x-forwarded-proto"] || req.protocol || "http").split(",")[0].trim();
     const serverBaseUrl = `${protocol}://${host}`;
     const authorizeUrl = `${serverBaseUrl}/api/admin/integrations/dev-auth/authorize?token=${token}`;
     const denyUrl = `${serverBaseUrl}/api/admin/integrations/dev-auth/deny?token=${token}`;
@@ -697,14 +730,19 @@ router.post("/admin/integrations/dev-auth/request", async (req, res) => {
 
 // 2. Poll Status of Developer Authorization Request
 router.get("/admin/integrations/dev-auth/status/:requestId", async (req, res) => {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.set("Pragma", "no-cache");
+  res.set("Expires", "0");
+
   const { requestId } = req.params;
-  const record = developerAuthStore.get(requestId);
+  const record = await getDevAuthRecordByRequestId(requestId);
   if (!record) {
     return res.json({ ok: false, status: "NOT_FOUND", error: "Request not found or expired." });
   }
 
   if (Date.now() > record.expiresAt && record.status === "PENDING") {
     record.status = "EXPIRED";
+    await saveDevAuthRecord(record);
   }
 
   res.json({
@@ -726,13 +764,14 @@ router.post("/admin/integrations/dev-auth/verify-otp", async (req, res) => {
       return fail(res, 400, "Request ID and 6-digit developer OTP are required.");
     }
 
-    const record = developerAuthStore.get(requestId);
+    const record = await getDevAuthRecordByRequestId(requestId);
     if (!record) {
       return fail(res, 404, "Authorization request expired or not found. Please initiate a new request.");
     }
 
     if (Date.now() > record.expiresAt) {
       record.status = "EXPIRED";
+      await saveDevAuthRecord(record);
       return fail(res, 410, "Developer authorization request has expired. Please initiate a new request.");
     }
 
@@ -745,6 +784,7 @@ router.post("/admin/integrations/dev-auth/verify-otp", async (req, res) => {
     }
 
     record.status = "APPROVED";
+    await saveDevAuthRecord(record);
 
     await logAudit({
       action: "DEV_AUTH_APPROVED",
@@ -769,8 +809,7 @@ router.post("/admin/integrations/dev-auth/verify-otp", async (req, res) => {
 // 4. Developer Single-Click Authorize Link (From Email)
 router.get("/admin/integrations/dev-auth/authorize", async (req, res) => {
   const token = String(req.query.token || "").trim();
-  const requestId = developerTokenIndex.get(token);
-  const record = requestId ? developerAuthStore.get(requestId) : null;
+  const record = await getDevAuthRecordByToken(token);
 
   if (!record || Date.now() > record.expiresAt) {
     return res.status(410).send(renderDevAuthResultPage({
@@ -781,6 +820,7 @@ router.get("/admin/integrations/dev-auth/authorize", async (req, res) => {
   }
 
   record.status = "APPROVED";
+  await saveDevAuthRecord(record);
 
   await logAudit({
     action: "DEV_AUTH_APPROVED",
@@ -801,8 +841,7 @@ router.get("/admin/integrations/dev-auth/authorize", async (req, res) => {
 // 5. Developer Single-Click Deny Link (From Email)
 router.get("/admin/integrations/dev-auth/deny", async (req, res) => {
   const token = String(req.query.token || "").trim();
-  const requestId = developerTokenIndex.get(token);
-  const record = requestId ? developerAuthStore.get(requestId) : null;
+  const record = await getDevAuthRecordByToken(token);
 
   if (!record) {
     return res.status(410).send(renderDevAuthResultPage({
@@ -813,6 +852,7 @@ router.get("/admin/integrations/dev-auth/deny", async (req, res) => {
   }
 
   record.status = "DENIED";
+  await saveDevAuthRecord(record);
 
   await logAudit({
     action: "DEV_AUTH_DENIED",
@@ -1120,6 +1160,21 @@ router.post("/accounts/:email/profile-update", async (req, res) => {
     account.pendingUpdate = pending;
     account.markModified("pendingUpdate");
     await account.save();
+
+    await logAudit({
+      action: "PROFILE_UPDATE_REQUESTED",
+      module: "Accounts & Roles",
+      actorEmail: account.email,
+      actorName: account.fullName || "",
+      actorRole: account.role || "member",
+      actorId: account._id,
+      targetEmail: account.email,
+      targetName: pending.fullName || account.fullName,
+      details: { pendingEmail: pending.email, fullName: pending.fullName },
+      status: "Success",
+      req,
+    });
+
     res.json(account);
   } catch (error) {
     console.error("Error staging profile update:", error);

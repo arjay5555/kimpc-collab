@@ -25,10 +25,20 @@ const handlePosBooking = async (req, res) => {
     const endDate = clean(req.body.endDate);
     const rentalType = clean(req.body.rentalType) || "day";
     const rate = Number(req.body.rate) || Number(req.body.dailyRate) || 120;
-    const rentalDays = Math.max(Number(req.body.rentalDays) || 1, 1);
+    let computedDays = Number(req.body.rentalDays);
+    if (!Number.isFinite(computedDays) || computedDays <= 0) {
+      const startMs = new Date(`${startDate}T00:00:00`).getTime();
+      const endMs = new Date(`${endDate}T00:00:00`).getTime();
+      const diff = Number.isFinite(startMs) && Number.isFinite(endMs)
+        ? Math.round((endMs - startMs) / 86400000) + 1
+        : 1;
+      computedDays = diff > 0 ? diff : 1;
+    }
+    const rentalDays = Math.max(computedDays, 1);
     const rentalHours = Math.max(Number(req.body.rentalHours) || 1, 1);
     const paymentMethod = clean(req.body.paymentMethod) || "Cash";
     const managerEmail = cleanEmail(req.body.managerEmail || req.user?.email || "manager@coop.local");
+    const isPaidNow = req.body.isPaid === true && Boolean(req.user);
 
     if (!farmerName || !equipment || !startDate || !endDate) {
       return fail(res, 400, "Farmer name, machinery, and valid dates are required.");
@@ -81,13 +91,29 @@ const handlePosBooking = async (req, res) => {
     }
 
     const rentalFee = rentalType === "hour" ? (rate * rentalHours) : (rate * rentalDays);
-    const totalPaid = rentalFee;
+    const totalPaid = isPaidNow ? rentalFee : 0;
+    const txId = isPaidNow ? `TX-${Date.now().toString().slice(-6)}` : "";
+    const posReceiver = clean(req.user?.fullName || req.user?.email || managerEmail) || "Manager";
+    const initialHistory = isPaidNow
+      ? [
+          {
+            receiptNo: txId,
+            amount: totalPaid,
+            paymentMethod,
+            paymentType: "Walk-In POS Full Payment",
+            referenceNumber: clean(req.body.referenceNumber),
+            dateTime: new Date().toISOString(),
+            receivedBy: posReceiver,
+            recordedAt: new Date(),
+          },
+        ]
+      : [];
 
     const durationLabel = rentalType === "hour"
       ? `${rentalHours} hr${rentalHours === 1 ? "" : "s"} @ ₱${rate}/hr`
       : `${rentalDays} day${rentalDays === 1 ? "" : "s"} @ ₱${rate}/day`;
 
-    // Create walk-in application
+    // Create walk-in application (unpaid/Pending unless explicitly marked paid by manager)
     const app = await Application.create({
       memberEmail: `walkin.${Date.now()}@coop.local`,
       memberName: `${farmerName} (${coopId})`,
@@ -95,6 +121,15 @@ const handlePosBooking = async (req, res) => {
       machineryUnitId,
       startDate,
       endDate,
+      totalAmount: rentalFee,
+      ratePerHectare: rentalType === "day" ? rate : 0,
+      paymentStatus: isPaidNow ? "Paid" : "Pending",
+      paymentAmount: totalPaid,
+      paymentMethod,
+      receiptNo: txId,
+      receivedBy: isPaidNow ? posReceiver : "",
+      paymentDateTime: isPaidNow ? new Date().toISOString() : "",
+      paymentHistory: initialHistory,
       status: "Approved",
       isWalkIn: true,
       farmerPhone,
@@ -103,22 +138,23 @@ const handlePosBooking = async (req, res) => {
         deposit: 0,
         totalPaid,
         paymentMethod,
-        isSettled: true,
+        isSettled: isPaidNow,
       },
     });
 
-    // Create financial transaction ledger entry
-    const txId = `TX-${Date.now().toString().slice(-6)}`;
-    await Transaction.create({
-      txId,
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      farmer: farmerName,
-      equipment,
-      type: "Rental Fee",
-      amount: totalPaid,
-      paymentMethod,
-      notes: `Walk-in Rental (${durationLabel}) - Zero Security Deposit`,
-    });
+    // Only log cash ledger revenue immediately when payment is collected upfront
+    if (isPaidNow) {
+      await Transaction.create({
+        txId,
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        farmer: farmerName,
+        equipment,
+        type: "Rental Fee",
+        amount: totalPaid,
+        paymentMethod,
+        notes: `Walk-in Rental (${durationLabel}) - Zero Security Deposit`,
+      });
+    }
 
     await logAudit({
       action: "POS_WALKIN_BOOKING_CREATED",
@@ -143,7 +179,9 @@ const handlePosBooking = async (req, res) => {
       application: app,
       txId,
       totalCollected: totalPaid,
-      message: `Walk-in rental booking registered. Receipt #${txId} generated.`,
+      message: isPaidNow
+        ? `Walk-in rental booking registered. Receipt #${txId} generated.`
+        : `Walk-in rental booking registered. Payment status is Pending.`,
     });
   } catch (error) {
     console.error("Error creating POS booking:", error);
@@ -151,10 +189,8 @@ const handlePosBooking = async (req, res) => {
   }
 };
 
-// POST /api/pos-booking - Create a point-of-sale walk-in rental booking.
-router.post("/pos-booking", handlePosBooking);
-// POST /api/manager/pos-booking - Manager-prefixed alias for walk-in rental booking.
-router.post("/manager/pos-booking", handlePosBooking);
+router.post("/pos-booking", authManager, handlePosBooking);
+router.post("/manager/pos-booking", authManager, handlePosBooking);
 
 /**
  * POST /api/manager/pos-settlement
@@ -203,7 +239,7 @@ router.post("/manager/pos-settlement", authManager, async (req, res) => {
       });
     }
 
-    // Update application record if valid ObjectId
+    // Update application record if valid ObjectId (do not override payment settlement status on return)
     if (mongoose.isValidObjectId(rentalId)) {
       await Application.findByIdAndUpdate(rentalId, {
         status: "Returned",
@@ -211,7 +247,6 @@ router.post("/manager/pos-settlement", authManager, async (req, res) => {
         "financials.repairDeduction": repairCost,
         "financials.fuelCharge": fuelCharge,
         "financials.refundAmount": isRefund ? netRefundOrDue : 0,
-        "financials.isSettled": true,
       });
     }
 

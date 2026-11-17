@@ -206,7 +206,7 @@ export default function SettingsModal({
         {/* Modal Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 24px", borderBottom: "1px solid var(--wz-border, #e2e8f0)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <div style={{ width: "34px", height: "34px", borderRadius: "8px", background: "#f0fdf4", color: "#166534", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ width: "34px", height: "34px", borderRadius: "8px", background: "#f0fdf4", color: "var(--wz-text-muted, #166534)", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="12" cy="12" r="3" />
                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
@@ -216,7 +216,7 @@ export default function SettingsModal({
               <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 800, color: "var(--wz-text, #0f172a)" }}>
                 Cooperative Settings
               </h3>
-              <p style={{ margin: 0, fontSize: "0.75rem", color: "#64748b" }}>
+              <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--wz-text-muted, #64748b)" }}>
                 KIMPC Portal Account &amp; Preferences
               </p>
             </div>
@@ -228,7 +228,7 @@ export default function SettingsModal({
               background: "none",
               border: "none",
               fontSize: "1.2rem",
-              color: "#94a3b8",
+              color: "var(--wz-text-muted, #94a3b8)",
               cursor: "pointer",
               padding: "4px 8px",
               borderRadius: "6px",
@@ -284,7 +284,7 @@ export default function SettingsModal({
                     <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 800, color: "var(--wz-text, #0f172a)" }}>
                       Edit Own Profile
                     </h4>
-                    <p style={{ margin: "2px 0 0", fontSize: "0.75rem", color: "#64748b" }}>
+                    <p style={{ margin: "2px 0 0", fontSize: "0.75rem", color: "var(--wz-text-muted, #64748b)" }}>
                       Update your cooperative display name and contact phone.
                     </p>
                   </div>
@@ -369,7 +369,7 @@ export default function SettingsModal({
                   <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 800, color: "var(--wz-text, #0f172a)" }}>
                     Change Password
                   </h4>
-                  <p style={{ margin: "2px 0 0", fontSize: "0.75rem", color: "#64748b" }}>
+                  <p style={{ margin: "2px 0 0", fontSize: "0.75rem", color: "var(--wz-text-muted, #64748b)" }}>
                     Ensure your account is using a long, random password to stay secure.
                   </p>
                 </div>
@@ -429,7 +429,7 @@ export default function SettingsModal({
                   </div>
 
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "4px", marginBottom: "16px" }}>
-                    <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.78rem", color: "#64748b", cursor: "pointer" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.78rem", color: "var(--wz-text-muted, #64748b)", cursor: "pointer" }}>
                       <input
                         type="checkbox"
                         checked={showPasswords}
@@ -474,7 +474,7 @@ export default function SettingsModal({
                             {adminHasPin ? "● PIN Configured" : "● Using Default (123456)"}
                           </span>
                         </div>
-                        <p style={{ margin: "2px 0 0", fontSize: "0.75rem", color: "#64748b" }}>
+                        <p style={{ margin: "2px 0 0", fontSize: "0.75rem", color: "var(--wz-text-muted, #64748b)" }}>
                           Manage the 6-digit PIN required to authorize sensitive administrator actions (integrations, account management).
                         </p>
                       </div>
@@ -546,7 +546,7 @@ export default function SettingsModal({
                       </div>
 
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "4px", marginBottom: "16px" }}>
-                        <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.78rem", color: "#64748b", cursor: "pointer" }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.78rem", color: "var(--wz-text-muted, #64748b)", cursor: "pointer" }}>
                           <input
                             type="checkbox"
                             checked={showPinForm}
@@ -577,7 +577,7 @@ export default function SettingsModal({
                 <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 800, color: "var(--wz-text, #0f172a)" }}>
                   Theme Appearance
                 </h4>
-                <p style={{ margin: "2px 0 0", fontSize: "0.75rem", color: "#64748b" }}>
+                <p style={{ margin: "2px 0 0", fontSize: "0.75rem", color: "var(--wz-text-muted, #64748b)" }}>
                   Select how KIMPC displays across your workspace.
                 </p>
               </div>
@@ -624,10 +624,10 @@ export default function SettingsModal({
               </div>
 
               <div style={{ marginTop: "24px", padding: "14px 16px", background: "#f8fafc", borderRadius: "10px", border: "1px solid var(--wz-border, #e2e8f0)" }}>
-                <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#475569", marginBottom: "4px" }}>
-                  Active Mode: <span style={{ color: "#166534", textTransform: "capitalize" }}>{currentTheme}</span>
+                <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--wz-text-muted, #475569)", marginBottom: "4px" }}>
+                  Active Mode: <span style={{ color: "var(--wz-text-muted, #166534)", textTransform: "capitalize" }}>{currentTheme}</span>
                 </div>
-                <p style={{ margin: 0, fontSize: "0.74rem", color: "#64748b", lineHeight: 1.4 }}>
+                <p style={{ margin: 0, fontSize: "0.74rem", color: "var(--wz-text-muted, #64748b)", lineHeight: 1.4 }}>
                   Theme preference is stored persistently and seamlessly applies across your entire session.
                 </p>
               </div>
@@ -643,7 +643,7 @@ export default function SettingsModal({
             style={{
               padding: "8px 18px",
               background: "#0f172a",
-              color: "#ffffff",
+              color: "var(--wz-text-muted, #ffffff)",
               border: "none",
               borderRadius: "8px",
               fontSize: "0.82rem",

@@ -107,6 +107,14 @@ const DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET =
 const DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI =
   (process.env.DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI || process.env.GOOGLE_REDIRECT_URI || "http://localhost:3000/api/calendar/callback").trim();
 
+// 9. OpenRouteService (HeiGIT Maps & Routing) Key
+const DEFAULT_ORS_API_KEY =
+  (process.env.DEFAULT_ORS_API_KEY || process.env.ORS_API_KEY || "").trim();
+
+// 10. OCR.space GCash Receipt Scanner Key
+const DEFAULT_OCR_SPACE_API_KEY =
+  (process.env.DEFAULT_OCR_SPACE_API_KEY || process.env.OCR_SPACE_API_KEY || "").trim();
+
 /**
  * Initializes process.env with effective keys (custom value takes precedence over default)
  * so legacy library references and external integrations function seamlessly without
@@ -131,6 +139,8 @@ function initEffectiveEnv() {
   process.env.GOOGLE_CALENDAR_CLIENT_ID = (process.env.CUSTOM_GOOGLE_CALENDAR_CLIENT_ID || process.env.DEFAULT_GOOGLE_CALENDAR_CLIENT_ID || DEFAULT_GOOGLE_CALENDAR_CLIENT_ID || "").trim();
   process.env.GOOGLE_CALENDAR_CLIENT_SECRET = (process.env.CUSTOM_GOOGLE_CALENDAR_CLIENT_SECRET || process.env.DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET || DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET || "").trim();
   process.env.GOOGLE_CALENDAR_REDIRECT_URI = (process.env.CUSTOM_GOOGLE_CALENDAR_REDIRECT_URI || process.env.DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI || DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI || "").trim();
+  process.env.ORS_API_KEY = (process.env.CUSTOM_ORS_API_KEY || process.env.DEFAULT_ORS_API_KEY || DEFAULT_ORS_API_KEY || "").trim();
+  process.env.OCR_SPACE_API_KEY = (process.env.CUSTOM_OCR_SPACE_API_KEY || process.env.DEFAULT_OCR_SPACE_API_KEY || DEFAULT_OCR_SPACE_API_KEY || "").trim();
 }
 
 // Auto-run on module load
@@ -264,6 +274,52 @@ async function getEffectiveWeatherKey() {
   const isCustom = Boolean(customKey);
 
   return { key, isCustom, customKey };
+}
+
+/**
+ * OpenRouteService (HeiGIT Maps & Routing) Effective Key
+ */
+async function getEffectiveOrsKey() {
+  let customKey = "";
+  try {
+    const doc = await SystemSetting.findOne({ key: "customOrsApiKey" });
+    customKey = typeof doc?.value === "string" ? doc.value.trim() : "";
+  } catch (err) {
+    console.warn("[apiKeyManager] Error reading customOrsApiKey:", err.message);
+  }
+
+  if (!customKey && process.env.CUSTOM_ORS_API_KEY) {
+    customKey = process.env.CUSTOM_ORS_API_KEY.trim();
+  }
+
+  const defaultKey = (process.env.DEFAULT_ORS_API_KEY || process.env.ORS_API_KEY || DEFAULT_ORS_API_KEY).trim();
+  const key = customKey || defaultKey;
+  const isCustom = Boolean(customKey);
+
+  return { key, isCustom, customKey, defaultKey };
+}
+
+/**
+ * OCR.space GCash Receipt Scanner Effective Key
+ */
+async function getEffectiveOcrSpaceKey() {
+  let customKey = "";
+  try {
+    const doc = await SystemSetting.findOne({ key: "customOcrSpaceApiKey" });
+    customKey = typeof doc?.value === "string" ? doc.value.trim() : "";
+  } catch (err) {
+    console.warn("[apiKeyManager] Error reading customOcrSpaceApiKey:", err.message);
+  }
+
+  if (!customKey && process.env.CUSTOM_OCR_SPACE_API_KEY) {
+    customKey = process.env.CUSTOM_OCR_SPACE_API_KEY.trim();
+  }
+
+  const defaultKey = (process.env.DEFAULT_OCR_SPACE_API_KEY || process.env.OCR_SPACE_API_KEY || DEFAULT_OCR_SPACE_API_KEY).trim();
+  const key = customKey || defaultKey;
+  const isCustom = Boolean(customKey);
+
+  return { key, isCustom, customKey, defaultKey };
 }
 
 /**
@@ -414,6 +470,8 @@ async function getAdminApiKeysSummary() {
   const facebook = await getEffectiveFacebookKeys();
   const recaptcha = await getEffectiveRecaptchaKeys();
   const weather = await getEffectiveWeatherKey();
+  const ors = await getEffectiveOrsKey();
+  const ocrSpace = await getEffectiveOcrSpaceKey();
   const oneSignal = await getEffectiveOneSignalKeys();
   const cloudinary = await getEffectiveCloudinaryKeys();
   const email = await getEffectiveEmailKeys();
@@ -429,6 +487,7 @@ async function getAdminApiKeysSummary() {
   const defRecaptchaSecretKey = (process.env.DEFAULT_RECAPTCHA_SECRET_KEY || process.env.RECAPTCHA_SECRET_KEY || DEFAULT_RECAPTCHA_SECRET_KEY || "").trim();
 
   const defWeatherKey = (process.env.DEFAULT_WEATHER_API_KEY || process.env.WEATHER_API_KEY || DEFAULT_WEATHER_API_KEY || "").trim();
+  const defOrsKey = (process.env.DEFAULT_ORS_API_KEY || process.env.ORS_API_KEY || DEFAULT_ORS_API_KEY || "").trim();
 
   const defOneSignalAppId = (process.env.DEFAULT_ONESIGNAL_APP_ID || process.env.ONESIGNAL_APP_ID || DEFAULT_ONESIGNAL_APP_ID || "").trim();
   const defOneSignalRestKey = (process.env.DEFAULT_ONESIGNAL_REST_KEY || process.env.DEFAULT_ONESIGNAL_REST_API_KEY || process.env.ONESIGNAL_REST_KEY || DEFAULT_ONESIGNAL_REST_KEY || "").trim();
@@ -478,6 +537,18 @@ async function getAdminApiKeysSummary() {
       customKey: weather.isCustom ? weather.key : "",
       defaultKey: defWeatherKey,
       defaultKeyMasked: maskValue(defWeatherKey),
+    },
+    ors: {
+      isCustom: ors.isCustom,
+      customKey: ors.isCustom ? ors.key : "",
+      defaultKey: defOrsKey,
+      defaultKeyMasked: maskValue(defOrsKey),
+    },
+    ocrSpace: {
+      isCustom: ocrSpace.isCustom,
+      customKey: ocrSpace.isCustom ? ocrSpace.key : "",
+      defaultKey: ocrSpace.defaultKey,
+      defaultKeyMasked: maskValue(ocrSpace.defaultKey),
     },
     oneSignal: {
       isCustom: oneSignal.isCustom,
@@ -544,11 +615,15 @@ module.exports = {
   DEFAULT_GOOGLE_CALENDAR_CLIENT_ID,
   DEFAULT_GOOGLE_CALENDAR_CLIENT_SECRET,
   DEFAULT_GOOGLE_CALENDAR_REDIRECT_URI,
+  DEFAULT_ORS_API_KEY,
+  DEFAULT_OCR_SPACE_API_KEY,
   maskValue,
   getEffectiveGoogleKeys,
   getEffectiveFacebookKeys,
   getEffectiveRecaptchaKeys,
   getEffectiveWeatherKey,
+  getEffectiveOrsKey,
+  getEffectiveOcrSpaceKey,
   getEffectiveOneSignalKeys,
   getEffectiveCloudinaryKeys,
   getEffectiveEmailKeys,

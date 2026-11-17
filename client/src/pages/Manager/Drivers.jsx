@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { api } from "../../services/api";
+import { api, getCachedApiData } from "../../services/api";
 import ManagerSidebar from "../../components/ManagerSidebar";
 import ManagerSearchBar from "../../components/ManagerSearchBar";
 import ManagerTopbar from "../../components/ManagerTopbar";
@@ -411,11 +411,17 @@ export default function Drivers() {
   const navigate = useNavigate();
 
   // Drivers list state
-  const [drivers, setDrivers] = useState([]);
+  const [drivers, setDrivers] = useState(() => {
+    const cached = getCachedApiData("/drivers");
+    return Array.isArray(cached) ? cached : (cached?.data || []);
+  });
   // Selected driver detail panel (Default: null until selected/clicked)
   const [selectedDriver, setSelectedDriver] = useState(null);
   // Live applications / bookings
-  const [liveBookings, setLiveBookings] = useState([]);
+  const [liveBookings, setLiveBookings] = useState(() => {
+    const cached = getCachedApiData("/applications");
+    return Array.isArray(cached) ? cached : [];
+  });
 
   // Dynamic calendar navigation state for the driver's schedule
   const [calDate, setCalDate] = useState(() => {
@@ -585,7 +591,10 @@ export default function Drivers() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
   const [sortBy, setSortBy] = useState("name_asc");
-  const [pageSize, setPageSize] = useState(8);
+  const [pageSize, setPageSize] = useState(() => {
+    const saved = localStorage.getItem("kimpc_manager_pageSize");
+    return saved ? Number(saved) : 8;
+  });
   const [currentPage, setCurrentPage] = useState(1);
   const [financialsOpen, setFinancialsOpen] = useState(false);
 
@@ -890,10 +899,10 @@ export default function Drivers() {
                         </td>
 
                         {/* Email */}
-                        <td style={{ color: "#64748b" }}>{d.email}</td>
+                        <td style={{ color: "var(--wz-text-muted, #64748b)" }}>{d.email}</td>
 
                         {/* Phone */}
-                        <td style={{ color: "#64748b" }}>{d.phone}</td>
+                        <td style={{ color: "var(--wz-text-muted, #64748b)" }}>{d.phone}</td>
 
                         {/* Status */}
                         <td>
@@ -919,14 +928,16 @@ export default function Drivers() {
 
             {/* Pagination Footer */}
             <div className="wz-table-footer" style={{ padding: "14px 18px", borderTop: "1px solid var(--wz-border)", background: "#ffffff" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", color: "#64748b" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", color: "var(--wz-text-muted, #64748b)" }}>
                 <span>Results per page:</span>
                 <select
                   className="wz-dropdown-select"
                   value={pageSize}
                   onChange={(e) => {
-                    setPageSize(Number(e.target.value));
+                    const val = Number(e.target.value);
+                    setPageSize(val);
                     setCurrentPage(1);
+                    localStorage.setItem("kimpc_manager_pageSize", String(val));
                   }}
                 >
                   <option value="8">8</option>
@@ -1237,7 +1248,7 @@ export default function Drivers() {
         >
           <div className="wz-modal-content" onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: "800", color: "#0f172a" }}>
+              <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: "800", color: "var(--wz-text-main, #0f172a)" }}>
                 {editingDriver ? "Edit Driver Profile" : "Add New Driver"}
               </h3>
               <button
@@ -1245,7 +1256,7 @@ export default function Drivers() {
                   setShowAddModal(false);
                   setEditingDriver(null);
                 }}
-                style={{ background: "none", border: "none", fontSize: "1.3rem", cursor: "pointer", color: "#94a3b8" }}
+                style={{ background: "none", border: "none", fontSize: "1.3rem", cursor: "pointer", color: "var(--wz-text-muted, #94a3b8)" }}
               >
                 &times;
               </button>
@@ -1351,7 +1362,7 @@ export default function Drivers() {
                     >
                       {uploadingAvatar ? "Uploading..." : driverForm.avatar ? "Change Photo" : "Upload Photo"}
                     </button>
-                    <span style={{ fontSize: "0.72rem", color: "#64748b" }}>JPG, PNG, WebP (Max 5MB)</span>
+                    <span style={{ fontSize: "0.72rem", color: "var(--wz-text-muted, #64748b)" }}>JPG, PNG, WebP (Max 5MB)</span>
                   </div>
                   <input
                     type="text"
@@ -1370,7 +1381,7 @@ export default function Drivers() {
               </div>
 
               <div style={{ marginBottom: "12px" }}>
-                <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", color: "#475569", marginBottom: "5px" }}>
+                <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", color: "var(--wz-text-muted, #475569)", marginBottom: "5px" }}>
                   Driver Full Name
                 </label>
                 <input
@@ -1385,7 +1396,7 @@ export default function Drivers() {
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "12px" }}>
                 <div>
-                  <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", color: "#475569", marginBottom: "5px" }}>
+                  <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", color: "var(--wz-text-muted, #475569)", marginBottom: "5px" }}>
                     Email Address
                   </label>
                   <input
@@ -1398,7 +1409,7 @@ export default function Drivers() {
                   />
                 </div>
                 <div>
-                  <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", color: "#475569", marginBottom: "5px" }}>
+                  <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", color: "var(--wz-text-muted, #475569)", marginBottom: "5px" }}>
                     Phone Number
                   </label>
                   <input
@@ -1413,7 +1424,7 @@ export default function Drivers() {
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "16px" }}>
                 <div>
-                  <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", color: "#475569", marginBottom: "5px" }}>
+                  <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", color: "var(--wz-text-muted, #475569)", marginBottom: "5px" }}>
                     Duty Status
                   </label>
                   <select
@@ -1427,7 +1438,7 @@ export default function Drivers() {
                   </select>
                 </div>
                 <div>
-                  <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", color: "#475569", marginBottom: "5px" }}>
+                  <label style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", color: "var(--wz-text-muted, #475569)", marginBottom: "5px" }}>
                     Address
                   </label>
                   <input
@@ -1452,7 +1463,7 @@ export default function Drivers() {
                     borderRadius: "8px",
                     border: "1px solid #cbd5e1",
                     background: "#fff",
-                    color: "#475569",
+                    color: "var(--wz-text-muted, #475569)",
                     fontWeight: "600",
                     cursor: "pointer",
                   }}
