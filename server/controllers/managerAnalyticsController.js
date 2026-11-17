@@ -39,6 +39,21 @@ async function getDashboardMetrics(req, res) {
   const monthStartString = utcDateString(monthStart);
   const monthEndString = utcDateString(new Date(nextMonthStart.getTime() - 86400000));
   const dayCount = (nextMonthStart - monthStart) / 86400000;
+  const current7DaysStart = new Date(dayStart);
+  current7DaysStart.setUTCDate(current7DaysStart.getUTCDate() - 6);
+  const previous7DaysStart = new Date(current7DaysStart);
+  previous7DaysStart.setUTCDate(previous7DaysStart.getUTCDate() - 7);
+  const currentYearStart = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
+  const recent8MonthsStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 7, 1));
+  const revenueChartStart = currentYearStart < recent8MonthsStart ? currentYearStart : recent8MonthsStart;
+  const bookingChartStart = new Date(Date.UTC(now.getUTCFullYear() - 1, 0, 1));
+  const weekStart = new Date(dayStart);
+  weekStart.setUTCDate(weekStart.getUTCDate() - ((weekStart.getUTCDay() + 6) % 7));
+  const nextWeekStart = new Date(weekStart);
+  nextWeekStart.setUTCDate(nextWeekStart.getUTCDate() + 7);
+  const weekStartString = utcDateString(weekStart);
+  const nextWeekStartString = utcDateString(nextWeekStart);
+  const nextMonthStartString = utcDateString(nextMonthStart);
 
   const [
     units,
@@ -49,7 +64,9 @@ async function getDashboardMetrics(req, res) {
     monthlyRevenue,
     maintenanceCount,
     overdueRentals,
-    scheduledBookings
+    scheduledBookings,
+    transactionDashboardData,
+    bookingDashboardData
   ] = await Promise.all([
     MachineryUnit.find({ isArchived: { $ne: true } }).select("unitId name category status").lean(),
     MachineryUsage.aggregate([
@@ -78,8 +95,83 @@ async function getDashboardMetrics(req, res) {
       status: { $in: ["Approved", "Checked-Out"] },
       startDate: { $lte: monthEndString },
       endDate: { $gte: monthStartString }
-    }).select("equipment machineryUnitId startDate endDate").lean()
+    }).select("equipment machineryUnitId startDate endDate").lean(),
+    Transaction.aggregate([
+      { $match: { status: "Completed" } },
+      {
+        $facet: {
+          allTime: [{ $group: { _id: null, total: { $sum: "$amount" } } }],
+          byMonth: [
+            { $match: { createdAt: { $gte: revenueChartStart, $lt: nextMonthStart } } },
+            {
+              $group: {
+                _id: { year: { $year: "$createdAt" }, month: { $month: "$createdAt" } },
+                total: { $sum: "$amount" }
+              }
+            },
+            { $sort: { "_id.year": 1, "_id.month": 1 } }
+          ],
+          sevenDayComparison: [
+            { $match: { createdAt: { $gte: previous7DaysStart, $lt: tomorrow } } },
+            {
+              $group: {
+                _id: { $cond: [{ $gte: ["$createdAt", current7DaysStart] }, "current", "previous"] },
+                total: { $sum: "$amount" }
+              }
+            }
+          ]
+        }
+      }
+    ]),
+    Application.aggregate([
+      {
+        $facet: {
+          byMonth: [
+            { $match: { createdAt: { $gte: bookingChartStart, $lt: nextMonthStart } } },
+            {
+              $group: {
+                _id: { year: { $year: "$createdAt" }, month: { $month: "$createdAt" } },
+                count: { $sum: 1 }
+              }
+            },
+            { $sort: { "_id.year": 1, "_id.month": 1 } }
+          ],
+          thisMonth: [
+            { $match: { createdAt: { $gte: monthStart, $lt: nextMonthStart } } },
+            { $count: "count" }
+          ],
+          sevenDayComparison: [
+            { $match: { createdAt: { $gte: previous7DaysStart, $lt: tomorrow } } },
+            {
+              $group: {
+                _id: { $cond: [{ $gte: ["$createdAt", current7DaysStart] }, "current", "previous"] },
+                count: { $sum: 1 }
+              }
+            }
+          ],
+          statusThisWeek: [
+            { $match: { startDate: { $gte: weekStartString, $lt: nextWeekStartString } } },
+            { $group: { _id: "$status", count: { $sum: 1 } } }
+          ],
+          statusThisMonth: [
+            { $match: { startDate: { $gte: monthStartString, $lt: nextMonthStartString } } },
+            { $group: { _id: "$status", count: { $sum: 1 } } }
+          ]
+        }
+      }
+    ])
   ]);
+
+  const transactionMetrics = transactionDashboardData[0] || {};
+  const bookingMetrics = bookingDashboardData[0] || {};
+  const transactionTrend = Object.fromEntries(
+    (transactionMetrics.sevenDayComparison || []).map((entry) => [entry._id, entry.total])
+  );
+  const bookingTrend = Object.fromEntries(
+    (bookingMetrics.sevenDayComparison || []).map((entry) => [entry._id, entry.count])
+  );
+  const statusCounts = (entries) =>
+    Object.fromEntries((entries || []).map((entry) => [entry._id, entry.count]));
 
   const runtimeByUnit = new Map(usageTotals.map((entry) => [entry._id, entry.runtimeHours]));
   const availableUnits = units.filter((unit) => !["Dispose", "Repair", "Maintenance"].includes(unit.status));
@@ -102,11 +194,38 @@ async function getDashboardMetrics(req, res) {
     pendingApprovalCount: pendingBookings,
     revenue: {
       daily: round(dailyRevenue[0]?.total || 0),
-      monthly: round(monthlyRevenue[0]?.total || 0)
+      monthly: round(monthlyRevenue[0]?.total || 0),
+      allTime: round(transactionMetrics.allTime?.[0]?.total || 0),
+      byMonth: (transactionMetrics.byMonth || []).map((entry) => ({
+        year: entry._id.year,
+        month: entry._id.month,
+        total: round(entry.total)
+      })),
+      sevenDayComparison: {
+        current: round(transactionTrend.current || 0),
+        previous: round(transactionTrend.previous || 0)
+      }
+    },
+    bookings: {
+      thisMonth: bookingMetrics.thisMonth?.[0]?.count || 0,
+      byMonth: (bookingMetrics.byMonth || []).map((entry) => ({
+        year: entry._id.year,
+        month: entry._id.month,
+        count: entry.count
+      })),
+      sevenDayComparison: {
+        current: bookingTrend.current || 0,
+        previous: bookingTrend.previous || 0
+      },
+      statusByStartDate: {
+        week: statusCounts(bookingMetrics.statusThisWeek),
+        month: statusCounts(bookingMetrics.statusThisMonth)
+      }
     },
     fleetStatus: {
       total: units.length,
       activeRentals,
+      rented: units.filter((unit) => ["rented", "in use", "checked-out"].includes(String(unit.status || "").toLowerCase())).length,
       available: units.filter((unit) => unit.status === "Available").length,
       maintenance: units.filter((unit) => unit.status === "Maintenance").length,
       repair: units.filter((unit) => unit.status === "Repair").length,
