@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { api, getAuthToken, getSignedInEmail, getCachedApiData } from "../../services/api";
+import { api, getCachedApiData } from "../../services/api";
 import ManagerSidebar from "../../components/ManagerSidebar";
 import ManagerTopbar from "../../components/ManagerTopbar";
 import "../../styles/admin-kimpc.css";
@@ -237,15 +237,14 @@ export default function ManagerCalendar() {
     return map;
   }, [weatherData]);
 
-  const handleConnectCalendar = () => {
-    const token = getAuthToken();
-    const email = getSignedInEmail();
-    const params = new URLSearchParams();
-    if (token) params.set("token", token);
-    if (email) params.set("email", email);
-    params.set("returnUrl", window.location.origin);
-    const qs = params.toString();
-    window.location.href = qs ? `/api/calendar/connect?${qs}` : "/api/calendar/connect";
+  const handleConnectCalendar = async () => {
+    const params = new URLSearchParams({ json: "true", returnUrl: window.location.origin });
+    const res = await api(`/calendar/connect?${params.toString()}`, { skipCache: true });
+    if (res.ok && res.data?.url) {
+      window.location.href = res.data.url;
+    } else {
+      window.alert(res.data?.error || "Could not start Google Calendar connection. Please sign in again.");
+    }
   };
 
   const handleDisconnectCalendar = async () => {

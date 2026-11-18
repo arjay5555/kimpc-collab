@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const authenticate = require("../middleware/authenticate");
 
 // Pre-indexed geographic coordinates for Kalilangan & Bukidnon cooperative farm regions
 const BUKIDNON_FARM_LOCALITIES = [
@@ -27,8 +28,8 @@ const BUKIDNON_FARM_LOCALITIES = [
  * Primary: Google Geocoding API using GOOGLE_GEOCODING_API_KEY / GOOGLE_MAPS_API_KEY.
  * Graceful fallback: OpenStreetMap Nominatim or Kalilangan local database.
  */
-router.get("/geocode", async (req, res) => {
-  const query = (req.query.query || req.query.address || "").trim();
+router.get("/geocode", authenticate, async (req, res) => {
+  const query = String(req.query.query || req.query.address || "").trim().slice(0, 300);
   if (!query) {
     return res.status(400).json({ ok: false, error: "Address query is required." });
   }
@@ -118,7 +119,7 @@ router.get("/geocode", async (req, res) => {
  * GET /api/geocode/reverse?lat=...&lng=...
  * Reverse-geocodes latitude and longitude into a readable address.
  */
-router.get("/geocode/reverse", async (req, res) => {
+router.get("/geocode/reverse", authenticate, async (req, res) => {
   const lat = parseFloat(req.query.lat);
   const lng = parseFloat(req.query.lng);
 

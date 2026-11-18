@@ -6,6 +6,7 @@ const authManager = require("../middleware/authManager");
 const authenticate = require("../middleware/authenticate");
 const { clean, fail } = require("./routeHelpers");
 const { logAudit } = require("../services/auditLogger");
+const { assertVersion, saveVersioned, rethrowConcurrency } = require("../utils/concurrency");
 
 const INITIAL_SEEDED_DRIVERS = [
   {
@@ -143,7 +144,7 @@ const INITIAL_SEEDED_DRIVERS = [
 ];
 
 // GET /drivers - Fetch all registered drivers (seeds default drivers if collection empty)
-router.get("/drivers", async (req, res) => {
+router.get("/drivers", authManager, async (req, res) => {
   try {
     let drivers = await Driver.find().sort({ name: 1 });
     if (!drivers || drivers.length === 0) {
@@ -204,6 +205,7 @@ router.put("/drivers/:id", authManager, async (req, res) => {
       driver = await Driver.findOne({ name: clean(id) });
     }
     if (!driver) return fail(res, 404, "Driver not found.");
+    assertVersion(driver, req.body.version);
 
     if (req.body.name) driver.name = clean(req.body.name);
     if (req.body.email !== undefined) driver.email = clean(req.body.email);
@@ -216,7 +218,7 @@ router.put("/drivers/:id", authManager, async (req, res) => {
     if (req.body.performanceLabel !== undefined) driver.performanceLabel = clean(req.body.performanceLabel);
     if (req.body.avatar !== undefined) driver.avatar = clean(req.body.avatar);
 
-    await driver.save();
+    await saveVersioned(driver);
 
     await logAudit({
       action: "DRIVER_UPDATED",
@@ -232,6 +234,7 @@ router.put("/drivers/:id", authManager, async (req, res) => {
 
     return res.json({ ok: true, data: driver });
   } catch (error) {
+    rethrowConcurrency(error);
     console.error("Error updating driver:", error);
     return res.status(500).json({ ok: false, error: "Failed to update driver." });
   }

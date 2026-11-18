@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { api, getCachedApiData } from "../../services/api";
+import { api, getCachedApiData, onReloadLatest } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { computePaymentSummary } from "../../utils/paymentSummary";
 import ManagerSidebar from "../../components/ManagerSidebar";
@@ -184,6 +184,12 @@ export default function Payments() {
       return next;
     });
   };
+
+  // Version of the booking as last loaded; sent with every financial write for optimistic concurrency.
+  const versionOf = (rawId) => liveApplications.find((a) => String(a._id || a.id || "") === String(rawId))?.version;
+
+  // "Reload latest" after a 409: replace the booking with the server copy; open modals keep their input.
+  useEffect(() => onReloadLatest(({ current }) => replaceApplicationInState(current)), []);
 
   // Canonical summary row per booking (single source of truth)
   const allBookings = useMemo(() => {
@@ -648,6 +654,7 @@ export default function Payments() {
             referenceNumber: paymentForm.referenceNumber.trim(),
             reason: paymentForm.notes.trim(),
             idempotencyKey: paymentRequestKey,
+            version: versionOf(target.rawId),
           },
         });
 
@@ -694,6 +701,7 @@ export default function Payments() {
           dateTime: paymentForm.dateReceived,
           notes: paymentForm.notes.trim(),
           idempotencyKey: paymentRequestKey,
+          version: versionOf(target.rawId),
         },
       });
 
@@ -773,6 +781,7 @@ export default function Payments() {
           refundReviewed: hasLinkedRefunds ? voidRefundReviewed : false,
           refundReviewNote: hasLinkedRefunds ? voidRefundReviewNote.trim() : "",
           idempotencyKey: voidRequestKey,
+          version: versionOf(voidModalTarget.rawId),
         },
       });
 
@@ -813,6 +822,7 @@ export default function Payments() {
           outcome: "confirmed_received",
           note: "Confirmed funds actually received by KIMPC management.",
           idempotencyKey: makeRequestKey("rev"),
+          version: versionOf(booking.rawId),
         },
       });
       if (!res.ok) {

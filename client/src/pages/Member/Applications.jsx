@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { api, getCachedApiData } from "../../services/api";
+import { api, getCachedApiData, onReloadLatest } from "../../services/api";
 import { getApplicationsUrl, unwrapListResponse } from "../../services/memberPortal";
 import MemberTopbar from "../../components/MemberTopbar";
 
@@ -527,6 +527,19 @@ export default function Applications() {
     return () => window.clearInterval(interval);
   }, [fetchApplications]);
 
+  // "Reload latest" after a 409: show the server copy of this booking; the edit form keeps the member's input.
+  useEffect(
+    () =>
+      onReloadLatest(({ current }) => {
+        const id = String(current?.id || current?._id || "");
+        if (!id) return;
+        const same = (item) => item && String(item._id || item.id) === id;
+        setSelected((prev) => (same(prev) ? current : prev));
+        setApplications((prev) => prev.map((item) => (same(item) ? current : item)));
+      }),
+    []
+  );
+
   const visibleApplications = useMemo(() => {
     return applications.filter((application) => {
       const status = (application.status || "Pending").toLowerCase();
@@ -643,6 +656,7 @@ export default function Applications() {
         hectares: Number(editForm.hectares) || 1,
         bookingType: "hectare",
         rescheduleReason: editForm.rescheduleReason.trim() || "Member rescheduled rental dates",
+        version: selected.version,
       },
     });
 
@@ -685,7 +699,7 @@ export default function Applications() {
       setActionSuccess("");
       const response = await api(`/applications/${encodeURIComponent(id)}`, {
         method: "DELETE",
-        body: { reason: finalReason },
+        body: { reason: finalReason, version: selected.version },
       });
       setCancellingId("");
       if (!response.ok) {
@@ -701,7 +715,7 @@ export default function Applications() {
       setActionSuccess("");
       const response = await api(`/applications/${encodeURIComponent(id)}/request-cancellation`, {
         method: "POST",
-        body: { reason: finalReason },
+        body: { reason: finalReason, version: selected.version },
       });
       setIsSubmittingCancellation(false);
       if (!response.ok) {

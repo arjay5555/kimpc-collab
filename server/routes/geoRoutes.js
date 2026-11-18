@@ -1,5 +1,9 @@
 const express = require("express");
 const router = express.Router();
+const authenticate = require("../middleware/authenticate");
+
+// All geo endpoints are used from signed-in pages only and spend third-party API quota.
+router.use(authenticate);
 const geoService = require("../services/geoService");
 const { getSystemSetting } = require("../models/SystemSetting");
 

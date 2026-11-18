@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { api, getCachedApiData } from "../../services/api";
+import { api, getCachedApiData, onReloadLatest } from "../../services/api";
 import ManagerSidebar from "../../components/ManagerSidebar";
 import ManagerSearchBar from "../../components/ManagerSearchBar";
 import ManagerTopbar from "../../components/ManagerTopbar";
@@ -292,6 +292,23 @@ export default function Units() {
     fetchDrivers();
   }, []);
 
+  // "Reload latest" after a 409: refresh the list and adopt the server version in any open modal (inputs are kept).
+  useEffect(
+    () =>
+      onReloadLatest(({ current }) => {
+        fetchUnits();
+        const id = String(current?._id || current?.id || "");
+        if (!id) return;
+        const merge = (u) => (u && String(u._id || u.id) === id ? { ...u, ...current } : u);
+        setEditingUnit(merge);
+        setStatusModalUnit(merge);
+        setDriverModalUnit(merge);
+        setRetiringUnit(merge);
+        setViewingUnit(merge);
+      }),
+    []
+  );
+
   // Quick Change Driver modal handlers
   const openChangeDriverModal = (unit) => {
     setDriverModalUnit(unit);
@@ -310,6 +327,7 @@ export default function Units() {
         body: {
           assignedDriver: driverName,
           driverPhone: driverPhone,
+          version: driverModalUnit.version,
         },
       });
 
@@ -321,6 +339,7 @@ export default function Units() {
               : u
           )
         );
+        fetchUnits(); // picks up the new version
         if (viewingUnit && (viewingUnit._id === driverModalUnit._id || viewingUnit.unitId === driverModalUnit.unitId)) {
           setViewingUnit((prev) => ({ ...prev, assignedDriver: driverName, driverPhone: driverPhone }));
         }
@@ -659,6 +678,7 @@ export default function Units() {
     try {
       const res = await api(`/machinery-units/${retiringUnit._id || retiringUnit.id || retiringUnit.unitId}/retire`, {
         method: "PATCH",
+        body: { version: retiringUnit.version },
       });
 
       if (res.ok) {
@@ -700,6 +720,7 @@ export default function Units() {
         body: {
           operatingCondition: selectedStatus,
           conditionNotes: statusNotes,
+          version: statusModalUnit.version,
         },
       });
 
@@ -1117,7 +1138,7 @@ export default function Units() {
       if (editingUnit) {
         const res = await api(`/machinery-units/${editingUnit._id || editingUnit.id || editingUnit.unitId}`, {
           method: "PUT",
-          body: payload,
+          body: { ...payload, version: editingUnit.version },
         });
 
         if (res.ok) {

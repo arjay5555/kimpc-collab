@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { api, getCachedApiData } from "../../services/api";
+import { api, getCachedApiData, onReloadLatest } from "../../services/api";
 import ManagerSidebar from "../../components/ManagerSidebar";
 import ManagerSearchBar from "../../components/ManagerSearchBar";
 import ManagerTopbar from "../../components/ManagerTopbar";
@@ -468,6 +468,20 @@ export default function Drivers() {
     fetchData();
   }, []);
 
+  // "Reload latest" after a 409: swap in the server copy (and its version); the open form keeps the user's input.
+  useEffect(
+    () =>
+      onReloadLatest(({ current }) => {
+        const id = String(current?._id || current?.id || "");
+        if (!id) return;
+        const merge = (d) => (d && String(d._id || d.id) === id ? { ...d, ...current, id: d.id, _id: d._id } : d);
+        setDrivers((prev) => prev.map(merge));
+        setEditingDriver(merge);
+        setSelectedDriver(merge);
+      }),
+    []
+  );
+
   // Merge live applications with default mock machinery bookings
   const allBookings = useMemo(() => {
     const formattedLive = liveBookings.map((item, idx) => {
@@ -703,6 +717,7 @@ export default function Drivers() {
             status: driverForm.status,
             address: driverForm.address.trim(),
             avatar: driverForm.avatar.trim() || editingDriver.avatar || "",
+            version: editingDriver.version,
           },
         });
         const saved = res && res.ok ? (res.data?.data || res.data) : null;
@@ -719,7 +734,8 @@ export default function Drivers() {
           setSelectedDriver(normalizedSaved);
           setEditingDriver(null);
           setShowAddModal(false);
-        } else {
+        } else if (!res?.conflict) {
+          // 409 conflicts are shown by the global VersionConflictBanner; keep the form open with the user's input.
           alert(res?.data?.error || "Failed to update driver in database.");
         }
       } catch (err) {

@@ -531,7 +531,14 @@ async function handleCalendarWebhook(headers) {
           const oldRange = `${booking.startDate} to ${booking.endDate}`;
           booking.startDate = newStartDate;
           booking.endDate = newEndDate;
-          await booking.save();
+          try {
+            await booking.save();
+          } catch (err) {
+            // A manager edited this booking concurrently; their change wins, the next sync re-applies Google's dates.
+            if (err.name !== "VersionError") throw err;
+            console.warn(`[GoogleCalendar Webhook] Skipped booking ${booking._id}: modified concurrently.`);
+            continue;
+          }
           updatedCount++;
           console.log(`[GoogleCalendar Webhook] Updated booking ${booking._id} dates from Google: ${oldRange} → ${newStartDate} to ${newEndDate}`);
         }

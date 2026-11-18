@@ -29,8 +29,6 @@ export default function Settings() {
     cooperativeId: "",
   });
   const [passwords, setPasswords] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
-  const [language, setLanguage] = useState(localStorage.getItem("member-language") || "en");
-  const [timezone, setTimezone] = useState(localStorage.getItem("member-timezone") || "Asia/Manila");
   const [supportContact, setSupportContact] = useState({ email: "", phone: "" });
   const [supportRequest, setSupportRequest] = useState({ subject: "", message: "" });
   const [myMessages, setMyMessages] = useState([]);
@@ -419,12 +417,6 @@ export default function Settings() {
     } finally {
       setIsTestingPush(false);
     }
-  };
-
-  const saveLocale = () => {
-    localStorage.setItem("member-language", language);
-    localStorage.setItem("member-timezone", timezone);
-    setFeedback("Language preference saved on this device.");
   };
 
   const handleLogout = () => {
@@ -986,7 +978,7 @@ export default function Settings() {
           />
         </div>
 
-        {/* Theme Appearance & Language Grid */}
+        {/* Theme Appearance */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "16px", marginTop: "16px" }}>
           {/* Theme */}
           <div style={{ padding: "16px 18px", background: "#f8fafc", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
@@ -1035,48 +1027,6 @@ export default function Settings() {
                 }}
               >
                 <span>🌙 Dark</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Language Selection */}
-          <div style={{ padding: "16px 18px", background: "#f8fafc", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
-            <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, color: "#0f172a", marginBottom: "8px" }}>
-              Language Preference
-            </label>
-            <div style={{ display: "flex", gap: "8px" }}>
-              <select
-                aria-label="Language"
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-                style={{
-                  flex: 1,
-                  padding: "9px 12px",
-                  borderRadius: "8px",
-                  border: "1px solid #cbd5e1",
-                  fontSize: "0.84rem",
-                  background: "#ffffff",
-                  color: "#0f172a",
-                }}
-              >
-                <option value="en">English (Official)</option>
-                <option value="fil">Filipino / Tagalog</option>
-              </select>
-              <button
-                type="button"
-                onClick={saveLocale}
-                style={{
-                  background: "#ffffff",
-                  border: "1px solid #cbd5e1",
-                  borderRadius: "8px",
-                  padding: "9px 14px",
-                  fontSize: "0.8rem",
-                  fontWeight: 700,
-                  color: "#334155",
-                  cursor: "pointer",
-                }}
-              >
-                Apply
               </button>
             </div>
           </div>

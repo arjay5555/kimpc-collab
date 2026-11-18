@@ -36,10 +36,49 @@ function isConfigured() {
  * @param {Object} options - Upload options (folder, filename, tags, etc.)
  * @returns {Promise<{ ok: boolean, url: string, publicId?: string, provider: string, error?: string }>}
  */
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+
+// Detect image type from magic bytes. Returns a safe extension or null.
+function detectImageType(buf) {
+  if (!Buffer.isBuffer(buf) || buf.length < 12) return null;
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "jpg";
+  if (buf.slice(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "png";
+  if (buf.slice(0, 6).toString("ascii") === "GIF87a" || buf.slice(0, 6).toString("ascii") === "GIF89a") return "gif";
+  if (buf.slice(0, 4).toString("ascii") === "RIFF" && buf.slice(8, 12).toString("ascii") === "WEBP") return "webp";
+  return null;
+}
+
+// Validate and normalize an upload input (Buffer, data URI, raw base64, or https URL).
+function normalizeImageInput(input) {
+  if (typeof input === "string" && /^https?:\/\//i.test(input)) {
+    return input;
+  }
+  let buf;
+  if (Buffer.isBuffer(input)) {
+    buf = input;
+  } else if (typeof input === "string") {
+    const m = input.match(/^data:([^;,]+);base64,(.+)$/s);
+    if (m && !/^image\/(jpeg|jpg|png|gif|webp)$/i.test(m[1])) {
+      throw new Error("Only JPEG, PNG, GIF or WEBP images are allowed.");
+    }
+    buf = Buffer.from(m ? m[2] : input, "base64");
+  } else {
+    throw new Error("Invalid image data.");
+  }
+  if (buf.length > MAX_IMAGE_BYTES) throw new Error("Image is too large (max 10 MB).");
+  const type = detectImageType(buf);
+  if (!type) throw new Error("Only JPEG, PNG, GIF or WEBP images are allowed.");
+  const mime = type === "jpg" ? "jpeg" : type;
+  return `data:image/${mime};base64,${buf.toString("base64")}`;
+}
+
 async function uploadImage(imageInput, options = {}) {
   if (!imageInput) {
     throw new Error("No image data provided for upload.");
   }
+
+  // Only accept real raster images (prevents storing HTML/SVG/JS that would be served from our origin).
+  imageInput = normalizeImageInput(imageInput);
 
   // Check system setting toggle
   let cloudinaryEnabled = true;
@@ -103,20 +142,15 @@ async function uploadImage(imageInput, options = {}) {
       fs.mkdirSync(uploadsDir, { recursive: true });
     }
 
-    let buffer;
-    let ext = "jpg";
-
-    if (Buffer.isBuffer(imageInput)) {
-      buffer = imageInput;
-    } else if (typeof imageInput === "string") {
-      const match = imageInput.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
-      if (match) {
-        ext = match[1] === "jpeg" ? "jpg" : match[1];
-        buffer = Buffer.from(match[2], "base64");
-      } else {
-        buffer = Buffer.from(imageInput, "base64");
-      }
+    if (typeof imageInput === "string" && imageInput.startsWith("http")) {
+      // Remote URLs can't be stored locally; keep the original reference.
+      return { ok: true, url: imageInput, provider: "remote" };
     }
+    const buffer = Buffer.isBuffer(imageInput)
+      ? imageInput
+      : Buffer.from(String(imageInput).replace(/^data:image\/[a-z]+;base64,/i, ""), "base64");
+    const ext = detectImageType(buffer);
+    if (!ext) throw new Error("Unsupported image format.");
 
     const safeFilename = `${folder.replace(/[^a-zA-Z0-9]/g, "-")}-${Date.now()}-${Math.floor(Math.random() * 10000)}.${ext}`;
     const targetPath = path.join(uploadsDir, safeFilename);

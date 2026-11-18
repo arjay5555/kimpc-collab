@@ -4,6 +4,7 @@ const MachineryMaintenance = require("../models/MachineryMaintenance");
 const MachineryUnit = require("../models/MachineryUnit");
 const MachineryUsage = require("../models/MachineryUsage");
 const { logAudit } = require("../services/auditLogger");
+const { assertVersion, saveVersioned } = require("../utils/concurrency");
 
 const MAINTENANCE_TYPES = [
   "Routine Servicing",
@@ -82,6 +83,7 @@ async function createMachinery(req, res) {
 async function updateMachineryPricing(req, res) {
   const unit = await findMachinery(req.params.id);
   if (!unit || unit.isArchived) return res.status(404).json({ error: "Active machinery unit not found." });
+  assertVersion(unit, req.body?.version);
 
   const fields = ["ratePerDay", "ratePerHour", "depositRequired", "lateFeePerDay"];
   const providedFields = fields.filter((field) => req.body?.[field] !== undefined);
@@ -96,7 +98,7 @@ async function updateMachineryPricing(req, res) {
     previous[field] = unit[field];
     unit[field] = parsed.value;
   }
-  await unit.save();
+  await saveVersioned(unit);
 
   await logAudit({
     action: "MACHINERY_PRICING_UPDATED",
@@ -116,6 +118,7 @@ async function updateMachineryPricing(req, res) {
 async function archiveMachinery(req, res) {
   const unit = await findMachinery(req.params.id);
   if (!unit || unit.isArchived) return res.status(404).json({ error: "Active machinery unit not found." });
+  assertVersion(unit, req.body?.version);
 
   const today = new Date().toISOString().slice(0, 10);
   const activeBooking = await Application.findOne({
@@ -145,7 +148,7 @@ async function archiveMachinery(req, res) {
   unit.isArchived = true;
   unit.archivedAt = new Date();
   unit.status = "Dispose";
-  await unit.save();
+  await saveVersioned(unit);
   await logAudit({
     action: "MACHINERY_UNIT_ARCHIVED",
     actorEmail: req.user.email,
@@ -299,20 +302,24 @@ async function createUsageLog(req, res) {
     applicationId = application._id;
   }
 
-  const usage = await MachineryUsage.create({
-    unitId: unit.unitId,
-    equipmentName: unit.name,
-    applicationId,
-    operator,
-    startAt,
-    endAt,
-    runtimeHours: runtime.value,
-    idleHours: idle.value,
-    notes: clean(req.body?.notes),
-    loggedBy: req.user.email
+  // Usage record + operating hours must land together; saveVersioned rejects a concurrent hours update.
+  let usage;
+  await mongoose.connection.transaction(async (session) => {
+    [usage] = await MachineryUsage.create([{
+      unitId: unit.unitId,
+      equipmentName: unit.name,
+      applicationId,
+      operator,
+      startAt,
+      endAt,
+      runtimeHours: runtime.value,
+      idleHours: idle.value,
+      notes: clean(req.body?.notes),
+      loggedBy: req.user.email
+    }], { session });
+    unit.operatingHours += runtime.value;
+    await saveVersioned(unit, { session });
   });
-  unit.operatingHours += runtime.value;
-  await unit.save();
   await logAudit({
     action: "MACHINERY_USAGE_LOGGED",
     actorEmail: req.user.email,

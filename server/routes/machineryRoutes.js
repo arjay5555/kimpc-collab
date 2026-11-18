@@ -17,8 +17,9 @@ const { syncMaintenanceToGoogleCalendar } = require("../services/googleCalendarS
 const cloudinaryService = require("../services/cloudinaryService");
 const { getMachineryUtilization } = require("../controllers/managerAnalyticsController");
 const { clean, fail, isSameMachineryMatch } = require("./routeHelpers");
+const { assertVersion, saveVersioned, rethrowConcurrency } = require("../utils/concurrency");
 
-const JWT_SECRET = process.env.JWT_SECRET || "minders-secret-jwt-key-cooperative-2026";
+const JWT_SECRET = require("../config/jwtSecret");
 
 /**
  * Optional authentication helper: identifies user role if Bearer token present.
@@ -625,8 +626,8 @@ router.get("/machinery-units", optionalAuth, async (req, res) => {
     const filter = { isArchived: { $ne: true } };
 
     // Search by asset code (unitId), name, brand, model, or serial number
-    if (search && search.trim()) {
-      const q = search.trim();
+    if (search && String(search).trim()) {
+      const q = escapeRegExp(String(search).trim().slice(0, 100));
       filter.$or = [
         { unitId: { $regex: q, $options: "i" } },
         { name: { $regex: q, $options: "i" } },
@@ -730,6 +731,7 @@ router.get("/machinery-units", optionalAuth, async (req, res) => {
       limit: limitNum,
     });
   } catch (err) {
+    rethrowConcurrency(err);
     console.error("Error fetching machinery units:", err);
     res.status(500).json({ ok: false, error: "Failed to fetch machinery units" });
   }
@@ -845,6 +847,7 @@ router.get("/machinery-units/:id", optionalAuth, async (req, res) => {
       bookings
     });
   } catch (err) {
+    rethrowConcurrency(err);
     console.error("Error fetching machinery unit details:", err);
     res.status(500).json({ ok: false, error: "Error fetching unit details" });
   }
@@ -1106,6 +1109,7 @@ router.post("/machinery-units", authManager, async (req, res) => {
       message: `Machinery unit ${unitId} successfully registered.`,
     });
   } catch (err) {
+    rethrowConcurrency(err);
     console.error("Error creating machinery unit:", err);
     res.status(500).json({ ok: false, error: err.message || "Failed to create machinery unit." });
   }
@@ -1127,6 +1131,7 @@ router.put("/machinery-units/:id", authManager, async (req, res) => {
       unit = await MachineryUnit.findOne({ unitId: clean(id) });
     }
     if (!unit) return res.status(404).json({ ok: false, error: "Machinery unit not found." });
+    assertVersion(unit, req.body?.version);
 
     const body = req.body || {};
     const oldCondition = unit.operatingCondition || (unit.status === "Available" ? "Operational" : "Under Maintenance");
@@ -1282,7 +1287,7 @@ router.put("/machinery-units/:id", authManager, async (req, res) => {
     if (body.assignedDriver !== undefined) unit.assignedDriver = clean(body.assignedDriver) || "Unassigned";
     if (body.driverPhone !== undefined) unit.driverPhone = clean(body.driverPhone) || "";
 
-    await unit.save();
+    await saveVersioned(unit);
 
     const managerEmail = req.user?.email || "manager";
     await logAudit({
@@ -1300,6 +1305,7 @@ router.put("/machinery-units/:id", authManager, async (req, res) => {
       message: `Machinery unit ${unit.unitId} successfully updated.`,
     });
   } catch (err) {
+    rethrowConcurrency(err);
     console.error("Error updating machinery unit:", err);
     res.status(500).json({ ok: false, error: err.message || "Failed to update machinery unit." });
   }
@@ -1321,6 +1327,7 @@ router.patch("/machinery-units/:id/status", authManager, async (req, res) => {
       unit = await MachineryUnit.findOne({ unitId: clean(id) });
     }
     if (!unit) return res.status(404).json({ ok: false, error: "Machinery unit not found." });
+    assertVersion(unit, req.body?.version);
 
     const newCondition = clean(req.body.operatingCondition);
     if (!["Operational", "Under Maintenance", "Retired"].includes(newCondition)) {
@@ -1354,7 +1361,7 @@ router.patch("/machinery-units/:id/status", authManager, async (req, res) => {
     if (req.body.conditionNotes !== undefined) {
       unit.conditionNotes = clean(req.body.conditionNotes);
     }
-    await unit.save();
+    await saveVersioned(unit);
 
     const managerEmail = req.user?.email || "manager";
     await logAudit({
@@ -1372,6 +1379,7 @@ router.patch("/machinery-units/:id/status", authManager, async (req, res) => {
       message: `Unit ${unit.unitId} condition updated to ${newCondition}.`,
     });
   } catch (err) {
+    rethrowConcurrency(err);
     console.error("Error updating unit condition:", err);
     res.status(500).json({ ok: false, error: "Failed to update machinery condition." });
   }
@@ -1393,6 +1401,7 @@ router.patch("/machinery-units/:id/driver", authManager, async (req, res) => {
       unit = await MachineryUnit.findOne({ unitId: clean(id) });
     }
     if (!unit) return res.status(404).json({ ok: false, error: "Machinery unit not found." });
+    assertVersion(unit, req.body?.version);
 
     const body = req.body || {};
     const oldDriver = unit.assignedDriver || "Unassigned";
@@ -1402,7 +1411,7 @@ router.patch("/machinery-units/:id/driver", authManager, async (req, res) => {
     unit.assignedDriver = newDriver;
     unit.driverPhone = newPhone;
 
-    await unit.save();
+    await saveVersioned(unit);
 
     const managerEmail = req.user?.email || "manager";
     await logAudit({
@@ -1420,6 +1429,7 @@ router.patch("/machinery-units/:id/driver", authManager, async (req, res) => {
       message: `Assigned driver for ${unit.unitId} updated to "${newDriver}".`,
     });
   } catch (err) {
+    rethrowConcurrency(err);
     console.error("Error updating unit driver:", err);
     res.status(500).json({ ok: false, error: err.message || "Failed to update assigned driver." });
   }
@@ -1441,6 +1451,7 @@ router.patch("/machinery-units/:id/retire", authManager, async (req, res) => {
       unit = await MachineryUnit.findOne({ unitId: clean(id) });
     }
     if (!unit) return res.status(404).json({ ok: false, error: "Machinery unit not found." });
+    assertVersion(unit, req.body?.version);
 
     // Check active bookings
     const todayIso = new Date().toISOString().split("T")[0];
@@ -1462,7 +1473,7 @@ router.patch("/machinery-units/:id/retire", authManager, async (req, res) => {
 
     unit.operatingCondition = "Retired";
     unit.status = "Dispose";
-    await unit.save();
+    await saveVersioned(unit);
 
     const managerEmail = req.user?.email || "manager";
     await logAudit({
@@ -1480,6 +1491,7 @@ router.patch("/machinery-units/:id/retire", authManager, async (req, res) => {
       message: `Machinery unit ${unit.unitId} retired successfully.`,
     });
   } catch (err) {
+    rethrowConcurrency(err);
     console.error("Error retiring machinery unit:", err);
     res.status(500).json({ ok: false, error: "Failed to retire machinery unit." });
   }
@@ -1501,6 +1513,7 @@ router.delete("/machinery-units/:id", authManager, async (req, res) => {
       unit = await MachineryUnit.findOne({ unitId: clean(id) });
     }
     if (!unit) return res.status(404).json({ ok: false, error: "Machinery unit not found." });
+    assertVersion(unit, req.body?.version);
 
     // Check if unit has ANY booking history in Application collection
     const bookingCount = await Application.countDocuments({
@@ -1529,6 +1542,7 @@ router.delete("/machinery-units/:id", authManager, async (req, res) => {
 
     res.json({ ok: true, message: `Machinery unit ${unit.unitId} removed from fleet.` });
   } catch (err) {
+    rethrowConcurrency(err);
     console.error("Error deleting unit:", err);
     res.status(500).json({ ok: false, error: "Failed to delete unit." });
   }
@@ -1567,6 +1581,8 @@ const handleMachineryAvailability = async (req, res) => {
 
     let bookedUnits = [];
     let maintenanceUnits = [];
+    // Member names are personal data: only staff see who booked a unit.
+    const showMemberNames = ["manager", "admin"].includes(String(req.user?.role || "").toLowerCase());
 
     if (startDate && endDate) {
       bookedUnits = activeBookings
@@ -1576,7 +1592,7 @@ const handleMachineryAvailability = async (req, res) => {
           unitId: b.machineryUnitId,
           startDate: b.startDate,
           endDate: b.endDate,
-          memberName: b.memberName,
+          memberName: showMemberNames ? b.memberName : undefined,
           status: b.status,
         }));
 
@@ -1605,7 +1621,7 @@ const handleMachineryAvailability = async (req, res) => {
         unitId: b.machineryUnitId,
         startDate: b.startDate,
         endDate: b.endDate,
-        memberName: b.memberName,
+        memberName: showMemberNames ? b.memberName : undefined,
         status: b.status,
       })),
       allActiveMaintenance: activeMaintenances.map((m) => ({
@@ -1624,7 +1640,7 @@ const handleMachineryAvailability = async (req, res) => {
 };
 
 // GET /api/machinery-availability - Return booking and maintenance availability for machinery.
-router.get("/machinery-availability", handleMachineryAvailability);
+router.get("/machinery-availability", optionalAuth, handleMachineryAvailability);
 // GET /api/manager/machinery-availability - Manager-prefixed alias for machinery availability.
 router.get("/manager/machinery-availability", handleMachineryAvailability);
 
@@ -1637,6 +1653,7 @@ router.get("/manager/machinery-maintenance", async (req, res) => {
     const records = await MachineryMaintenance.find({}).sort({ startDate: -1 });
     res.json(records);
   } catch (error) {
+    rethrowConcurrency(error);
     console.error("Error fetching maintenance records:", error);
     res.status(500).json({ error: "Failed to fetch maintenance records." });
   }
@@ -1670,23 +1687,28 @@ router.post("/manager/machinery-maintenance", authManager, async (req, res) => {
       endDate: { $gte: startDate },
     });
 
-    const record = await MachineryMaintenance.create({
-      equipmentUnitId,
-      equipmentName,
-      startDate,
-      endDate,
-      status: "Out of Service",
-      maintenanceType,
-      reason,
-      assignedMechanic: clean(req.body.assignedMechanic) || "In-house Co-op Technician",
-      loggedByManager: managerEmail,
-    });
+    // Maintenance record and unit condition must change together.
+    let record;
+    await mongoose.connection.transaction(async (session) => {
+      [record] = await MachineryMaintenance.create([{
+        equipmentUnitId,
+        equipmentName,
+        startDate,
+        endDate,
+        status: "Out of Service",
+        maintenanceType,
+        reason,
+        assignedMechanic: clean(req.body.assignedMechanic) || "In-house Co-op Technician",
+        loggedByManager: managerEmail,
+      }], { session });
 
-    // Also update the unit's operatingCondition to "Under Maintenance"
-    await MachineryUnit.updateOne(
-      { unitId: equipmentUnitId },
-      { $set: { operatingCondition: "Under Maintenance", status: "Maintenance" } }
-    );
+      // Also update the unit's operatingCondition to "Under Maintenance"
+      await MachineryUnit.updateOne(
+        { unitId: equipmentUnitId },
+        { $set: { operatingCondition: "Under Maintenance", status: "Maintenance" }, $inc: { version: 1 } },
+        { session }
+      );
+    });
 
     syncMaintenanceToGoogleCalendar(record, req.user).catch((err) => {
       console.warn("[GoogleCalendar] Background maintenance sync note:", err.message);
@@ -1715,6 +1737,7 @@ router.post("/manager/machinery-maintenance", authManager, async (req, res) => {
       message: `Unit ${equipmentUnitId} (${equipmentName}) set to Out of Service.`,
     });
   } catch (error) {
+    rethrowConcurrency(error);
     console.error("Error creating maintenance record:", error);
     res.status(500).json({ error: "Failed to schedule maintenance." });
   }
@@ -1727,21 +1750,27 @@ router.post("/manager/machinery-maintenance", authManager, async (req, res) => {
 router.delete("/manager/machinery-maintenance/:id", authManager, async (req, res) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 400, "Invalid maintenance record id.");
-    const record = await MachineryMaintenance.findByIdAndDelete(req.params.id);
-    if (!record) return fail(res, 404, "Maintenance record not found.");
+    // Record removal and unit back-in-service flip must change together.
+    const record = await mongoose.connection.transaction(async (session) => {
+      const deleted = await MachineryMaintenance.findByIdAndDelete(req.params.id, { session });
+      if (!deleted) return null;
 
-    // Check if there are other active maintenance schedules for this unit
-    const remainingMaint = await MachineryMaintenance.countDocuments({
-      equipmentUnitId: record.equipmentUnitId,
-      status: { $in: ["Out of Service", "In Repair", "Scheduled Maintenance"] }
+      // Check if there are other active maintenance schedules for this unit
+      const remainingMaint = await MachineryMaintenance.countDocuments({
+        equipmentUnitId: deleted.equipmentUnitId,
+        status: { $in: ["Out of Service", "In Repair", "Scheduled Maintenance"] }
+      }).session(session);
+
+      if (remainingMaint === 0) {
+        await MachineryUnit.updateOne(
+          { unitId: deleted.equipmentUnitId },
+          { $set: { operatingCondition: "Operational", status: "Available" }, $inc: { version: 1 } },
+          { session }
+        );
+      }
+      return deleted;
     });
-
-    if (remainingMaint === 0) {
-      await MachineryUnit.updateOne(
-        { unitId: record.equipmentUnitId },
-        { $set: { operatingCondition: "Operational", status: "Available" } }
-      );
-    }
+    if (!record) return fail(res, 404, "Maintenance record not found.");
 
     await logAudit({
       action: "EQUIPMENT_RETURNED_TO_SERVICE",
@@ -1754,6 +1783,7 @@ router.delete("/manager/machinery-maintenance/:id", authManager, async (req, res
 
     res.json({ ok: true, message: "Maintenance completed. Equipment back in operational service." });
   } catch (error) {
+    rethrowConcurrency(error);
     console.error("Error deleting maintenance record:", error);
     res.status(500).json({ error: "Failed to remove maintenance record." });
   }

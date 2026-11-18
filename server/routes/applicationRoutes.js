@@ -34,6 +34,7 @@ const {
   applyCancellationFinancialEffects,
   findLinkedRefundsForPayment,
 } = require("../utils/paymentSummary");
+const { assertVersion, saveVersioned, rethrowConcurrency } = require("../utils/concurrency");
 
 function serializeApplication(appDoc) {
   const obj = appDoc && typeof appDoc.toObject === "function" ? appDoc.toObject() : { ...(appDoc || {}) };
@@ -79,10 +80,6 @@ function checkManagerUser(req, res) {
   return true;
 }
 
-function optionalAuthentication(req, res, next) {
-  if (!(req.headers.authorization || "").startsWith("Bearer ")) return next();
-  return authenticate(req, res, next);
-}
 
 function bookingTimestamp(value, endOfDate = false) {
   const raw = clean(value);
@@ -96,9 +93,10 @@ function bookingTimestamp(value, endOfDate = false) {
 // ---------- Equipment applications ----------
 
 // ?memberEmail=... returns one member's requests; without it, everything (manager/admin queue).
-router.get("/applications", optionalAuthentication, async (req, res) => {
+router.get("/applications", authenticate, async (req, res) => {
   try {
-    const memberEmail = req.user?.role === "member" ? req.user.email : cleanEmail(req.query.memberEmail);
+    const isStaff = ["manager", "admin"].includes(req.user.role);
+    const memberEmail = isStaff ? cleanEmail(req.query.memberEmail) : cleanEmail(req.user.email);
     const filter = memberEmail ? { memberEmail } : {};
     const applications = await Application.find(filter).sort({ createdAt: -1 }).lean();
 
@@ -152,14 +150,16 @@ router.get("/applications", optionalAuthentication, async (req, res) => {
 
     res.json(applications.map(serializeApplication));
   } catch (error) {
+    rethrowConcurrency(error);
     console.error("Error fetching applications:", error);
     res.status(500).json({ error: "Failed to fetch applications." });
   }
 });
 
-router.post("/applications", optionalAuthentication, async (req, res) => {
+router.post("/applications", authenticate, async (req, res) => {
   try {
-    const memberEmail = req.user?.role === "member" ? req.user.email : cleanEmail(req.body.memberEmail);
+    const isStaff = ["manager", "admin"].includes(req.user.role);
+    const memberEmail = isStaff ? cleanEmail(req.body.memberEmail || req.user.email) : cleanEmail(req.user.email);
     const equipment = clean(req.body.equipment);
     const machineryUnitId = clean(req.body.machineryUnitId);
     const startDate = clean(req.body.startDate);
@@ -277,7 +277,8 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
       );
     }
 
-    const ratePerHectare = Number(req.body.ratePerHectare) || Number(targetUnit?.memberRate) || Number(targetUnit?.ratePerHectare) || 2500;
+    // Price always comes from the machinery unit; only staff may override it.
+    const ratePerHectare = (isStaff && Number(req.body.ratePerHectare) > 0 ? Number(req.body.ratePerHectare) : 0) || Number(targetUnit?.memberRate) || Number(targetUnit?.ratePerHectare) || 2500;
     const totalAmount = Math.round(ratePerHectare * hectares);
     const unitBrandModel = [targetUnit?.brand, targetUnit?.model].map((s) => clean(s)).filter(Boolean).join(" ");
     const machineryModel = clean(unitBrandModel || req.body.machineryModel || targetUnit?.name || "Standard Model");
@@ -312,7 +313,7 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
 
     let gcashOcr = undefined;
     if (paymentMethod === "GCash" && gcashProof) {
-      if (req.body.gcashOcr && (req.body.gcashOcr.referenceNumber || req.body.gcashOcr.rawText)) {
+      if (isStaff && req.body.gcashOcr && (req.body.gcashOcr.referenceNumber || req.body.gcashOcr.rawText)) {
         const o = req.body.gcashOcr;
         const cleanRef = clean(o.referenceNumber || "");
         const dup = await ocrService.checkDuplicateReference(cleanRef).catch(() => false);
@@ -457,26 +458,19 @@ router.post("/applications", optionalAuthentication, async (req, res) => {
 
     res.status(201).json(application);
   } catch (error) {
+    rethrowConcurrency(error);
     console.error("Error creating application:", error);
     res.status(500).json({ error: "Failed to create application." });
   }
 });
 
-router.get("/applications/:id", optionalAuthentication, async (req, res) => {
+router.get("/applications/:id", authenticate, async (req, res) => {
   try {
-    let app = null;
-    if (mongoose.isValidObjectId(req.params.id)) {
-      app = await Application.findById(req.params.id);
-    }
-    if (!app) {
-      app = await Application.findOne({
-        $or: [
-          { displayId: req.params.id },
-          { displayId: req.params.id.toUpperCase() },
-        ],
-      });
-    }
+    const app = await findApplicationByAnyId(req.params.id);
     if (!app) return fail(res, 404, "Application not found.");
+    if (!["manager", "admin"].includes(req.user.role) && cleanEmail(app.memberEmail) !== cleanEmail(req.user.email)) {
+      return fail(res, 404, "Application not found.");
+    }
     const appObj = app.toObject ? app.toObject() : app;
     if (!appObj.imageUrl && (appObj.machineryUnitId || appObj.equipment)) {
       const u = await MachineryUnit.findOne({
@@ -505,6 +499,7 @@ router.get("/applications/:id", optionalAuthentication, async (req, res) => {
     }
     res.json(serializeApplication(appObj));
   } catch (error) {
+    rethrowConcurrency(error);
     console.error("Error fetching application:", error);
     res.status(500).json({ error: "Failed to fetch application." });
   }
@@ -518,17 +513,13 @@ async function findApplicationByAnyId(rawIdInput) {
     existing = await Application.findById(rawId);
   }
   if (!existing) {
-    existing = await Application.findOne({
-      $or: [
-        { displayId: rawId },
-        { displayId: rawId.toUpperCase() },
-      ],
-    });
-  }
-  if (!existing) {
+    // displayId is virtual (APP-<last 6 hex of _id>), so match on the ObjectId suffix in the DB.
     const suffix = rawId.replace(/^APP-/i, "").toLowerCase();
-    const apps = await Application.find().sort({ createdAt: -1 }).limit(200);
-    existing = apps.find((a) => String(a._id).slice(-6).toLowerCase() === suffix || String(a._id) === rawId) || null;
+    if (/^[0-9a-f]{6}$/.test(suffix)) {
+      existing = await Application.findOne({
+        $expr: { $eq: [{ $substrCP: [{ $toString: "$_id" }, 18, 6] }, suffix] },
+      }).sort({ createdAt: -1 });
+    }
   }
   return existing;
 }
@@ -550,6 +541,7 @@ async function recordApplicationPayment(existing, req) {
     const existingSummary = computePaymentSummary(existing);
     return { ok: true, deduplicated: true, summary: existingSummary, paymentEntry: null };
   }
+  assertVersion(existing, req.body?.version);
 
   const preSummary = computePaymentSummary(existing);
   const payableCap = round2(preSummary.maxPayableAmount ?? preSummary.balanceDue);
@@ -644,7 +636,7 @@ async function recordApplicationPayment(existing, req) {
     note: `${paymentType} of ₱${appliedAmount.toLocaleString()} (${paymentMethod}). Total Paid: ₱${postSummary.grossPaid.toLocaleString()} / ₱${effectiveTarget.toLocaleString()} · Balance Due: ₱${postSummary.balanceDue.toLocaleString()}. OR No: ${receiptNo}${referenceNumber ? ` · Ref: ${referenceNumber}` : ""}.`,
   });
 
-  await existing.save();
+  await saveVersioned(existing);
 
   const createdEntry = existing.paymentHistory[existing.paymentHistory.length - 1];
 
@@ -698,6 +690,7 @@ const handleApplicationUpdate = async (req, res) => {
     }
     const existing = await findApplicationByAnyId(req.params.id);
     if (!existing) return fail(res, 404, "Application not found.");
+    assertVersion(existing, req.body?.version);
 
     const actorEmail = cleanEmail(req.user.email);
     const actorRole = clean(req.user.role).toLowerCase();
@@ -770,9 +763,20 @@ const handleApplicationUpdate = async (req, res) => {
       const previousDates = `${existing.startDate} – ${existing.endDate}`;
       const previousLocation = existing.farmLocation;
 
+      const isEquipmentChanged = newEquipment.toLowerCase() !== String(existing.equipment || "").trim().toLowerCase();
+      let newUnit = null;
+      if (isEquipmentChanged) {
+        newUnit = await MachineryUnit.findOne({ name: newEquipment });
+        if (!newUnit) return fail(res, 404, `Machinery "${newEquipment}" was not found.`);
+        const newUnitCond = newUnit.operatingCondition || newUnit.status;
+        if (["Under Maintenance", "Maintenance", "Repair", "Retired", "Dispose"].includes(newUnitCond)) {
+          return fail(res, 400, `Cannot book "${newEquipment}": unit is currently ${newUnitCond}.`);
+        }
+      }
+
       const isDatesChanged = newStartDate !== existing.startDate || newEndDate !== existing.endDate;
-      if (isDatesChanged) {
-        // Enforce conflict checking when rescheduling
+      if (isDatesChanged || isEquipmentChanged) {
+        // Enforce conflict checking when rescheduling or switching machinery
         const overlappingBookings = await Application.find({
           _id: { $ne: existing._id },
           status: { $in: ["Pending", "Approved", "Checked-Out"] },
@@ -780,13 +784,13 @@ const handleApplicationUpdate = async (req, res) => {
           endDate: { $gte: newStartDate },
         });
         const conflict = overlappingBookings.find((b) =>
-          isSameMachineryMatch(b.machineryUnitId, b.equipment, existing.machineryUnitId, existing.equipment)
+          isSameMachineryMatch(b.machineryUnitId, b.equipment, newUnit ? newUnit.unitId : existing.machineryUnitId, newEquipment)
         );
         if (conflict) {
           return fail(
             res,
             409,
-            `Cannot reschedule to these dates: Machinery "${existing.equipment}" is already booked by another reservation from ${conflict.startDate} to ${conflict.endDate}. Please choose different dates.`
+            `Cannot reschedule to these dates: Machinery "${newEquipment}" is already booked by another reservation from ${conflict.startDate} to ${conflict.endDate}. Please choose different dates.`
           );
         }
 
@@ -812,6 +816,15 @@ const handleApplicationUpdate = async (req, res) => {
       }
 
       existing.equipment = newEquipment;
+      if (newUnit) {
+        existing.machineryUnitId = newUnit.unitId;
+        const newRate = Number(newUnit.memberRate) || Number(newUnit.ratePerHectare) || 2500;
+        existing.ratePerHectare = newRate;
+        existing.totalAmount = Math.round(newRate * (existing.hectares || 1));
+        if (!existing.financials) existing.financials = {};
+        existing.financials.ratePerHectare = newRate;
+        syncApplicationFinancials(existing);
+      }
       existing.startDate = newStartDate;
       existing.endDate = newEndDate;
       if (req.body.farmLocation !== undefined) {
@@ -848,7 +861,7 @@ const handleApplicationUpdate = async (req, res) => {
         existing.financials.ratePerHectare = rate;
         syncApplicationFinancials(existing);
       }
-      await existing.save();
+      await saveVersioned(existing);
 
       await logAudit({
         action: "BOOKING_UPDATED",
@@ -1000,7 +1013,7 @@ const handleApplicationUpdate = async (req, res) => {
         nowTs,
       });
     }
-    await existing.save();
+    await saveVersioned(existing);
 
     // Push approved bookings to Google Calendar (try/catch safe)
     if (newStatus === "Approved") {
@@ -1068,6 +1081,7 @@ const handleApplicationUpdate = async (req, res) => {
 
     res.json(existing);
   } catch (error) {
+    rethrowConcurrency(error);
     console.error("Error updating application:", error);
     res.status(500).json({ error: "Failed to update application." });
   }
@@ -1082,6 +1096,7 @@ router.delete("/applications/:id", authenticate, async (req, res) => {
     if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 400, "Invalid application id.");
     const existing = await Application.findById(req.params.id);
     if (!existing) return fail(res, 404, "Application not found.");
+    assertVersion(existing, req.body?.version);
 
     const actorEmail = cleanEmail(req.user.email);
     const actorRole = clean(req.user.role).toLowerCase();
@@ -1112,7 +1127,7 @@ router.delete("/applications/:id", authenticate, async (req, res) => {
         actorName: clean(req.user?.fullName || actorEmail) || "Member",
         nowTs,
       });
-      await existing.save();
+      await saveVersioned(existing);
 
       await logAudit({
         action: "BOOKING_CANCELLED",
@@ -1150,7 +1165,7 @@ router.delete("/applications/:id", authenticate, async (req, res) => {
         actor: "Member",
         note: `Reason: ${existing.cancellationReason}`,
       });
-      await existing.save();
+      await saveVersioned(existing);
 
       // Notify managers
       const managers = await Account.find({ role: "manager" }).select("email").lean();
@@ -1193,6 +1208,7 @@ router.delete("/applications/:id", authenticate, async (req, res) => {
 
     return fail(res, 400, `Cannot cancel booking with current status "${existing.status}".`);
   } catch (error) {
+    rethrowConcurrency(error);
     console.error("Error cancelling application:", error);
     res.status(500).json({ error: "Failed to cancel application." });
   }
@@ -1204,6 +1220,7 @@ router.post("/applications/:id/request-cancellation", authenticate, async (req, 
     if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 400, "Invalid application id.");
     const existing = await Application.findById(req.params.id);
     if (!existing) return fail(res, 404, "Application not found.");
+    assertVersion(existing, req.body?.version);
 
     const actorEmail = cleanEmail(req.user.email);
     if (req.user.role === "member" && actorEmail !== cleanEmail(existing.memberEmail)) {
@@ -1231,7 +1248,7 @@ router.post("/applications/:id/request-cancellation", authenticate, async (req, 
         actorName: clean(req.user?.fullName || actorEmail) || "Member",
         nowTs,
       });
-      await existing.save();
+      await saveVersioned(existing);
 
       await logAudit({
         action: "BOOKING_CANCELLED",
@@ -1273,7 +1290,7 @@ router.post("/applications/:id/request-cancellation", authenticate, async (req, 
       actor: "Member",
       note: `Reason: ${existing.cancellationReason}`,
     });
-    await existing.save();
+    await saveVersioned(existing);
 
     await logAudit({
       action: "BOOKING_CANCELLATION_REQUESTED",
@@ -1317,6 +1334,7 @@ router.post("/applications/:id/request-cancellation", authenticate, async (req, 
       application: existing,
     });
   } catch (err) {
+    rethrowConcurrency(err);
     console.error("Error requesting cancellation:", err);
     res.status(500).json({ error: "Failed to request cancellation." });
   }
@@ -1328,6 +1346,7 @@ router.post("/applications/:id/grant-cancellation", authManager, async (req, res
     if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 400, "Invalid application id.");
     const existing = await Application.findById(req.params.id);
     if (!existing) return fail(res, 404, "Application not found.");
+    assertVersion(existing, req.body?.version);
 
     existing.status = "Cancelled";
     existing.cancellationRequested = false;
@@ -1348,7 +1367,7 @@ router.post("/applications/:id/grant-cancellation", authManager, async (req, res
       actorName: clean(req.user?.fullName || req.user?.email) || "Manager",
       nowTs,
     });
-    await existing.save();
+    await saveVersioned(existing);
 
     // Remove from Google Calendar if scheduled
     deleteBookingFromGoogleCalendar(existing, req.user).catch((err) => {
@@ -1381,6 +1400,7 @@ router.post("/applications/:id/grant-cancellation", authManager, async (req, res
 
     res.json({ ok: true, message: "Booking cancellation granted successfully.", application: existing });
   } catch (err) {
+    rethrowConcurrency(err);
     console.error("Error granting cancellation:", err);
     res.status(500).json({ error: "Failed to grant cancellation." });
   }
@@ -1392,6 +1412,7 @@ router.post("/applications/:id/decline-cancellation", authManager, async (req, r
     if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 400, "Invalid application id.");
     const existing = await Application.findById(req.params.id);
     if (!existing) return fail(res, 404, "Application not found.");
+    assertVersion(existing, req.body?.version);
 
     const reason = clean(req.body.reason) || "Booking schedule must proceed as confirmed.";
     existing.status = "Approved";
@@ -1406,7 +1427,7 @@ router.post("/applications/:id/decline-cancellation", authManager, async (req, r
       actor: "Manager",
       note: `Declined: ${reason}`,
     });
-    await existing.save();
+    await saveVersioned(existing);
 
     // Notify member
     await Notification.create({
@@ -1434,6 +1455,7 @@ router.post("/applications/:id/decline-cancellation", authManager, async (req, r
 
     res.json({ ok: true, message: "Cancellation request declined.", application: existing });
   } catch (err) {
+    rethrowConcurrency(err);
     console.error("Error declining cancellation:", err);
     res.status(500).json({ error: "Failed to decline cancellation." });
   }
@@ -1453,6 +1475,7 @@ router.patch("/applications/:id/inspection", authManager, async (req, res) => {
 
     const application = await Application.findById(req.params.id);
     if (!application) return fail(res, 404, "Application not found.");
+    assertVersion(application, req.body?.version);
 
     const inspectionData = {
       odometerHours: Number(odometerHours) || 0,
@@ -1488,7 +1511,7 @@ router.patch("/applications/:id/inspection", authManager, async (req, res) => {
       });
     }
 
-    await application.save();
+    await saveVersioned(application);
 
     await logAudit({
       action: isCheckout ? "RENTAL_HANDOVER_CHECKOUT" : "RENTAL_RETURN_CHECKIN",
@@ -1511,6 +1534,7 @@ router.patch("/applications/:id/inspection", authManager, async (req, res) => {
 
     res.json({ ok: true, application, message: isCheckout ? "Check-out inspection recorded." : "Check-in return completed." });
   } catch (error) {
+    rethrowConcurrency(error);
     console.error("Error updating inspection:", error);
     res.status(500).json({ error: "Failed to record inspection." });
   }
@@ -1537,6 +1561,7 @@ router.post("/applications/:id/payments", authManager, async (req, res) => {
       application: existing,
     });
   } catch (error) {
+    rethrowConcurrency(error);
     console.error("Error recording booking payment:", error);
     return res.status(500).json({ error: "Failed to record payment transaction." });
   }
@@ -1561,6 +1586,7 @@ router.post("/applications/:id/void-payment", authManager, async (req, res) => {
         application: existing,
       });
     }
+    assertVersion(existing, req.body?.version);
 
     const reason = clean(req.body.reason);
     if (!reason) {
@@ -1667,7 +1693,7 @@ router.post("/applications/:id/void-payment", authManager, async (req, res) => {
       note: `Voided ₱${voidedAmount.toLocaleString()} (${voidedReceiptNo || "OR"}). Reason: ${reason}${refundReviewNote ? ` · Linked Refund Review: ${refundReviewNote}` : ""}. Total Paid: ₱${postSummary.grossPaid.toLocaleString()} · Balance Due: ₱${postSummary.balanceDue.toLocaleString()}.`,
     });
 
-    await existing.save();
+    await saveVersioned(existing);
 
     await logAudit({
       action: "PAYMENT_VOIDED",
@@ -1708,6 +1734,7 @@ router.post("/applications/:id/void-payment", authManager, async (req, res) => {
       application: existing,
     });
   } catch (error) {
+    rethrowConcurrency(error);
     console.error("Error voiding payment transaction:", error);
     return res.status(500).json({ error: "Failed to void payment transaction." });
   }
@@ -1729,6 +1756,7 @@ router.post("/applications/:id/refund-determination", authManager, async (req, r
         application: existing,
       });
     }
+    assertVersion(existing, req.body?.version);
 
     const summary = computePaymentSummary(existing);
     if (!summary.isClosedBooking) {
@@ -1779,7 +1807,7 @@ router.post("/applications/:id/refund-determination", authManager, async (req, r
       note: `${decision === "refund_due" ? `Refund Pending: ₱${postSummary.refundDueRemaining.toLocaleString()}` : "No refund due for this cancellation"}${existing.cancellationFee > 0 ? ` · Cancellation Fee: ₱${existing.cancellationFee.toLocaleString()}` : ""}${note ? ` · ${note}` : ""}.`,
     });
 
-    await existing.save();
+    await saveVersioned(existing);
 
     await logAudit({
       action: "REFUND_DETERMINATION_UPDATED",
@@ -1823,6 +1851,7 @@ router.post("/applications/:id/refund-determination", authManager, async (req, r
       application: existing,
     });
   } catch (error) {
+    rethrowConcurrency(error);
     console.error("Error updating refund determination:", error);
     return res.status(500).json({ error: "Failed to update refund determination." });
   }
@@ -1849,6 +1878,7 @@ router.post("/applications/:id/refunds", authManager, async (req, res) => {
         application: existing,
       });
     }
+    assertVersion(existing, req.body?.version);
 
     const preSummary = computePaymentSummary(existing);
     if (preSummary.grossPaid <= 0) {
@@ -1956,7 +1986,7 @@ router.post("/applications/:id/refunds", authManager, async (req, res) => {
       note: `Refunded ₱${requestedAmount.toLocaleString()} against ${linkedPayment.receiptNo || "original payment"} (${paymentMethod}). Ref: ${referenceNumber} · Reason: ${reason}. Total Refunded: ₱${postSummary.totalRefunded.toLocaleString()} of ₱${postSummary.grossPaid.toLocaleString()}.`,
     });
 
-    await existing.save();
+    await saveVersioned(existing);
     const createdRefund = existing.refunds[existing.refunds.length - 1];
 
     await logAudit({
@@ -2002,6 +2032,7 @@ router.post("/applications/:id/refunds", authManager, async (req, res) => {
       application: existing,
     });
   } catch (error) {
+    rethrowConcurrency(error);
     console.error("Error recording refund:", error);
     return res.status(500).json({ error: "Failed to record refund." });
   }
@@ -2024,6 +2055,7 @@ router.post("/applications/:id/review-flagged-payment", authManager, async (req,
         application: existing,
       });
     }
+    assertVersion(existing, req.body?.version);
 
     const outcome = clean(req.body.outcome);
     if (!["confirmed_received", "not_received_void"].includes(outcome)) {
@@ -2076,7 +2108,7 @@ router.post("/applications/:id/review-flagged-payment", authManager, async (req,
         note: `Confirmed ₱${Number(target.amount || 0).toLocaleString()} (${target.receiptNo || "OR"}) was received.${note ? ` Note: ${note}` : ""} Payment Status: ${postSummary.paymentStatus}.`,
       });
 
-      await existing.save();
+      await saveVersioned(existing);
 
       await logAudit({
         action: "FLAGGED_PAYMENT_CONFIRMED",
@@ -2141,7 +2173,7 @@ router.post("/applications/:id/review-flagged-payment", authManager, async (req,
       note: `Voided ₱${Number(target.amount || 0).toLocaleString()} (${target.receiptNo || "OR"}) on voided booking. Reason: ${note}. Balance Due: ₱${postSummary.balanceDue.toLocaleString()}.`,
     });
 
-    await existing.save();
+    await saveVersioned(existing);
 
     await logAudit({
       action: "FLAGGED_PAYMENT_VOIDED",
@@ -2166,6 +2198,7 @@ router.post("/applications/:id/review-flagged-payment", authManager, async (req,
       application: existing,
     });
   } catch (error) {
+    rethrowConcurrency(error);
     console.error("Error reviewing flagged payment:", error);
     return res.status(500).json({ error: "Failed to review flagged payment." });
   }
@@ -2182,10 +2215,25 @@ router.post("/applications/:id/scan-gcash", authManager, async (req, res) => {
 
     const existing = await Application.findById(id);
     if (!existing) return fail(res, 404, "Booking not found.");
+    assertVersion(existing, req.body?.version);
     if (!existing.gcashProof) return fail(res, 400, "No GCash proof screenshot is attached to this booking.");
 
+    // Receipts saved by the local-upload fallback are stored as "/uploads/<file>"; read them from disk.
+    let localDataUrl = "";
+    const localMatch = String(existing.gcashProof).match(/^\/uploads\/([A-Za-z0-9._-]+\.(jpe?g|png|gif|webp))$/i);
+    if (localMatch) {
+      const filePath = require("path").join(__dirname, "..", "uploads", localMatch[1]);
+      try {
+        const buf = await require("fs").promises.readFile(filePath);
+        const mime = /jpe?g/i.test(localMatch[2]) ? "jpeg" : localMatch[2].toLowerCase();
+        localDataUrl = `data:image/${mime};base64,${buf.toString("base64")}`;
+      } catch {
+        return fail(res, 404, "The stored GCash receipt file could not be found on the server.");
+      }
+    }
+
     const result = await ocrService.scanGcashReceipt({
-      imageDataUrl: existing.gcashProof.startsWith("data:image/") ? existing.gcashProof : "",
+      imageDataUrl: localDataUrl || (existing.gcashProof.startsWith("data:image/") ? existing.gcashProof : ""),
       imageUrl: existing.gcashProof.startsWith("http") ? existing.gcashProof : "",
       expectedAmount: existing.totalAmount || null,
       excludeApplicationId: existing._id,
@@ -2199,7 +2247,7 @@ router.post("/applications/:id/scan-gcash", authManager, async (req, res) => {
       ...result.extracted,
       scannedAt: new Date(),
     };
-    await existing.save();
+    await saveVersioned(existing);
 
     return res.json({
       ok: true,
@@ -2207,6 +2255,7 @@ router.post("/applications/:id/scan-gcash", authManager, async (req, res) => {
       application: existing,
     });
   } catch (err) {
+    rethrowConcurrency(err);
     console.error("Error scanning application GCash proof:", err);
     return res.status(500).json({ ok: false, error: "Failed to scan GCash receipt." });
   }

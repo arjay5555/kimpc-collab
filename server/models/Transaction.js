@@ -15,7 +15,7 @@ const transactionSchema = new mongoose.Schema(
     amount: { type: Number, required: true },
     paymentMethod: { 
       type: String, 
-      enum: ["Cash", "Bank Transfer", "Co-op Credit"],
+      enum: ["Cash", "GCash", "Bank Transfer", "Co-op Credit"],
       default: "Cash" 
     },
     status: { type: String, default: "Completed" },

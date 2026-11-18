@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { api } from "../services/api";
 
 export default function ManagerSidebar() {
   const location = useLocation();
@@ -40,33 +39,6 @@ export default function ManagerSidebar() {
   const isReportsActive =
     currentPath === "/manager/reports" ||
     currentPath.startsWith("/manager/reports");
-  const isMessagesActive =
-    currentPath === "/manager/messages" ||
-    currentPath === "/messages" ||
-    currentPath.startsWith("/manager/messages");
-
-  const [unreadCount, setUnreadCount] = useState(0);
-
-  useEffect(() => {
-    let isMounted = true;
-    const fetchUnread = async () => {
-      try {
-        const res = await api("/manager/messages");
-        if (isMounted && res.ok && res.data) {
-          const count = (res.data.messages || []).filter((m) => m.status === "unread").length;
-          setUnreadCount(count);
-        }
-      } catch (err) {
-        // ignore
-      }
-    };
-    fetchUnread();
-    const timer = setInterval(fetchUnread, 15000);
-    return () => {
-      isMounted = false;
-      clearInterval(timer);
-    };
-  }, []);
 
   return (
     <aside className="wz-sidebar">
@@ -265,26 +237,6 @@ export default function ManagerSidebar() {
           <span>Reports</span>
         </Link>
 
-        {/* Messages */}
-        <Link
-          to="/manager/messages"
-          className={`wz-nav-item ${isMessagesActive ? "active" : ""}`}
-        >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-          </svg>
-          <span>Messages</span>
-          {unreadCount > 0 && <span className="wz-nav-badge">{unreadCount}</span>}
-        </Link>
       </nav>
     </aside>
   );

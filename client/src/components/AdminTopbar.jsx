@@ -447,7 +447,7 @@ export default function AdminTopbar({
             <div
               className="wz-user-pill"
               onClick={() => setProfileOpen((p) => !p)}
-              title="Click to view personal profile, change password, and log out"
+              title="Click to view your profile and settings"
               style={{ cursor: "pointer" }}
             >
               <div
@@ -478,7 +478,6 @@ export default function AdminTopbar({
               isOpen={profileOpen}
               onClose={() => setProfileOpen(false)}
               onOpenSettings={() => handleOpenSettings("account")}
-              onOpenChangePassword={() => handleOpenSettings("account")}
             />
           </div>
         </div>

@@ -52,6 +52,7 @@ router.all(["/admin/accounts/:email/activate", "/accounts/:email/activate"], asy
         isSuspended: false,
         verifiedAt: new Date(),
         suspensionReason: "",
+        $inc: { version: 1 },
       },
       { new: true }
     );
@@ -94,6 +95,7 @@ router.all(["/admin/accounts/:email/deactivate", "/accounts/:email/deactivate"],
         isSuspended: true,
         suspendedAt: new Date(),
         suspensionReason: reason,
+        $inc: { version: 1 },
       },
       { new: true }
     );
@@ -132,6 +134,7 @@ router.all(["/admin/accounts/:email/verify", "/accounts/:email/verify"], async (
         isSuspended: false,
         verifiedAt: new Date(),
         suspensionReason: "",
+        $inc: { version: 1 },
       },
       { new: true }
     );
@@ -170,6 +173,7 @@ router.all(["/admin/accounts/:email/decline", "/accounts/:email/decline"], async
         verificationStatus: "declined",
         isSuspended: true,
         suspensionReason: reason,
+        $inc: { version: 1 },
       },
       { new: true }
     );
@@ -218,6 +222,7 @@ router.all(["/admin/accounts/:email/toggle-active", "/accounts/:email/toggle-act
         suspendedAt: newSuspendedState ? new Date() : null,
         suspensionReason: newSuspendedState ? reason : "",
         ...(newSuspendedState ? {} : { verificationStatus: "verified", emailVerified: true }),
+        $inc: { version: 1 },
       },
       { new: true }
     );
@@ -243,342 +248,6 @@ router.all(["/admin/accounts/:email/toggle-active", "/accounts/:email/toggle-act
   } catch (error) {
     console.error("Toggle active error:", error);
     res.status(500).json({ error: error.message || "Failed to update account status." });
-  }
-});
-
-// ============================================================================
-// 2. ROLE PERMISSIONS MANAGEMENT
-// ============================================================================
-
-const DEFAULT_PERMISSIONS = {
-  member: {
-    canViewCatalog: true,
-    canBookEquipment: true,
-    canViewOwnApplications: true,
-    canCancelPendingBookings: true,
-    canManageFleet: false,
-    canApproveBookings: false,
-    canManageAccounts: false,
-    canViewFinancialReports: false,
-    canManagePolicies: false,
-    canManageBackups: false,
-  },
-  manager: {
-    canViewCatalog: true,
-    canBookEquipment: true,
-    canViewOwnApplications: true,
-    canCancelPendingBookings: true,
-    canManageFleet: true,
-    canApproveBookings: true,
-    canManageAccounts: false,
-    canViewFinancialReports: true,
-    canManagePolicies: false,
-    canManageBackups: false,
-  },
-  admin: {
-    canViewCatalog: true,
-    canBookEquipment: true,
-    canViewOwnApplications: true,
-    canCancelPendingBookings: true,
-    canManageFleet: true,
-    canApproveBookings: true,
-    canManageAccounts: true,
-    canViewFinancialReports: true,
-    canManagePolicies: true,
-    canManageBackups: true,
-  },
-};
-
-// Get current role permissions matrix
-router.get("/admin/permissions", async (req, res) => {
-  try {
-    const setting = await SystemSetting.findOne({ key: "role_permissions" });
-    res.json(setting ? setting.value : DEFAULT_PERMISSIONS);
-  } catch (error) {
-    console.error("Fetch permissions error:", error);
-    res.status(500).json({ error: "Failed to fetch role permissions." });
-  }
-});
-
-// Update role permissions matrix
-router.post("/admin/permissions", async (req, res) => {
-  try {
-    const newPermissions = req.body.permissions;
-    if (!newPermissions || typeof newPermissions !== "object") {
-      return fail(res, 400, "Valid permissions object is required.");
-    }
-
-    await SystemSetting.findOneAndUpdate(
-      { key: "role_permissions" },
-      {
-        key: "role_permissions",
-        value: newPermissions,
-        description: "Role-based access control permissions matrix",
-        updatedBy: getAdminEmail(req),
-      },
-      { upsert: true, new: true }
-    );
-
-    await logAudit({
-      action: "ROLE_PERMISSIONS_UPDATED",
-      actorEmail: getAdminEmail(req),
-      actorRole: "admin",
-      details: "Administrator updated role-based access control (RBAC) permissions matrix for Member, Manager, and Admin roles.",
-      req,
-    });
-
-    res.json({ ok: true, permissions: newPermissions, message: "Role permissions saved successfully." });
-  } catch (error) {
-    console.error("Save permissions error:", error);
-    res.status(500).json({ error: "Failed to save role permissions." });
-  }
-});
-
-// ============================================================================
-// 3. DEPOSIT REQUIREMENTS & CANCELLATION POLICIES
-// ============================================================================
-
-const DEFAULT_DEPOSIT_POLICIES = {
-  depositRequirementType: "percentage", // "percentage" | "flat"
-  depositPercentage: 20,
-  depositFlatAmount: 1000,
-  depositPaymentWindowHours: 24,
-  depositRefundWindowDays: 3,
-  freeCancellationHours: 48,
-  lateCancellationFeePercent: 15,
-  sameDayCancellationFeePercent: 50,
-  allowWeatherEmergencyCancellation: true,
-  inspectionCheckRequiredForDepositRefund: true,
-  policyNotes: "Security deposits are held until equipment return inspection verifies operational condition without damage.",
-};
-
-// Get deposit and cancellation policies
-router.get("/admin/deposit-cancellation-policies", async (req, res) => {
-  try {
-    const setting = await SystemSetting.findOne({ key: "deposit_cancellation_policies" });
-    res.json(setting ? setting.value : DEFAULT_DEPOSIT_POLICIES);
-  } catch (error) {
-    console.error("Fetch policies error:", error);
-    res.status(500).json({ error: "Failed to fetch deposit and cancellation policies." });
-  }
-});
-
-// Update deposit and cancellation policies
-router.post("/admin/deposit-cancellation-policies", async (req, res) => {
-  try {
-    const policies = req.body.policies;
-    if (!policies || typeof policies !== "object") {
-      return fail(res, 400, "Valid policies object is required.");
-    }
-
-    await SystemSetting.findOneAndUpdate(
-      { key: "deposit_cancellation_policies" },
-      {
-        key: "deposit_cancellation_policies",
-        value: policies,
-        description: "Cooperative machinery deposit requirements and booking cancellation rules",
-        updatedBy: getAdminEmail(req),
-      },
-      { upsert: true, new: true }
-    );
-
-    await logAudit({
-      action: "DEPOSIT_CANCELLATION_POLICY_UPDATED",
-      module: "Financial Policies",
-      affectedRecord: "Deposit and Cancellation Policies",
-      actorEmail: getAdminEmail(req),
-      actorRole: "admin",
-      details: `Administrator updated deposit requirements (${policies.depositPercentage}%) and cancellation policies (${policies.freeCancellationHours}h notice).`,
-      req,
-    });
-
-    res.json({ ok: true, policies, message: "Deposit requirements and cancellation policies updated." });
-  } catch (error) {
-    console.error("Save policies error:", error);
-    res.status(500).json({ error: "Failed to update deposit and cancellation policies." });
-  }
-});
-
-// ============================================================================
-// 4. ACCEPTED PAYMENT METHODS & PAYMENT INSTRUCTIONS
-// ============================================================================
-
-const DEFAULT_PAYMENT_METHODS = {
-  methods: [
-    {
-      id: "gcash",
-      name: "GCash",
-      enabled: true,
-      accountName: "KIMPC Operations",
-      accountNumber: "0917-889-1234",
-      qrCodeUrl: "",
-      instructions: "Send payment via GCash Express Send. Take a screenshot of the receipt and submit reference number.",
-    },
-    {
-      id: "maya",
-      name: "Maya",
-      enabled: true,
-      accountName: "KIMPC Official",
-      accountNumber: "0918-990-5678",
-      qrCodeUrl: "",
-      instructions: "Transfer to Maya Wallet. Keep the confirmation SMS or reference ID for verification.",
-    },
-    {
-      id: "bank_bdo",
-      name: "BDO Bank Transfer",
-      enabled: true,
-      accountName: "Kalilangan Irrigators Multi-Purpose Cooperative",
-      accountNumber: "0012-3456-7890",
-      branch: "Malaybalay Branch",
-      instructions: "Perform bank transfer or cash deposit. Upload transaction slip with your Cooperative ID.",
-    },
-    {
-      id: "bank_landbank",
-      name: "Landbank of the Philippines",
-      enabled: true,
-      accountName: "Kalilangan Irrigators MPC",
-      accountNumber: "0871-2345-67",
-      branch: "Kalilangan Field Branch",
-      instructions: "Direct deposit or Landbank iAccess transfer. Mention member ID in transaction remarks.",
-    },
-    {
-      id: "cash_office",
-      name: "Cash / Over-The-Counter (Coop Office)",
-      enabled: true,
-      accountName: "Cooperative Treasury Office",
-      accountNumber: "Front Desk Cashier",
-      instructions: "Pay in person at the KIMPC Main Office, Kalilangan, Bukidnon (Mon-Fri 8:00 AM - 5:00 PM).",
-    },
-  ],
-  generalInstructions: "All equipment rental deposits and final rental fees must be cleared prior to dispatch. Reference numbers must match the amount specified on the official booking invoice.",
-};
-
-// Get accepted payment methods and instructions
-router.get("/admin/payment-methods", async (req, res) => {
-  try {
-    const setting = await SystemSetting.findOne({ key: "payment_methods_instructions" });
-    res.json(setting ? setting.value : DEFAULT_PAYMENT_METHODS);
-  } catch (error) {
-    console.error("Fetch payment methods error:", error);
-    res.status(500).json({ error: "Failed to fetch payment methods." });
-  }
-});
-
-// Update accepted payment methods and instructions
-router.post("/admin/payment-methods", async (req, res) => {
-  try {
-    const data = req.body.paymentData;
-    if (!data || !Array.isArray(data.methods)) {
-      return fail(res, 400, "Valid payment data with methods array is required.");
-    }
-
-    await SystemSetting.findOneAndUpdate(
-      { key: "payment_methods_instructions" },
-      {
-        key: "payment_methods_instructions",
-        value: data,
-        description: "Accepted payment channels, accounts, and member checkout instructions",
-        updatedBy: getAdminEmail(req),
-      },
-      { upsert: true, new: true }
-    );
-
-    await logAudit({
-      action: "PAYMENT_METHODS_UPDATED",
-      actorEmail: getAdminEmail(req),
-      actorRole: "admin",
-      details: "Administrator updated accepted payment methods and payment instructions.",
-      req,
-    });
-
-    res.json({ ok: true, paymentData: data, message: "Payment methods and instructions saved successfully." });
-  } catch (error) {
-    console.error("Save payment methods error:", error);
-    res.status(500).json({ error: "Failed to save payment methods." });
-  }
-});
-
-// ============================================================================
-// 5. REFUNDS REVIEW & AUTHORIZED PAYMENT CORRECTIONS
-// ============================================================================
-
-// Get list of refunds and authorized payment corrections
-router.get("/admin/refunds", async (req, res) => {
-  try {
-    // Fetch transactions that are refunds or corrections
-    const refundTransactions = await Transaction.find({
-      type: { $in: ["Deposit Refund", "Refund", "Credit Adjustment", "Payment Correction", "Fee Waiver"] },
-    })
-      .sort({ createdAt: -1 })
-      .lean();
-
-    // Fetch applications with pending cancellation or refund requested
-    const applicationsWithRefunds = await Application.find({
-      status: { $in: ["Cancelled", "Rejected"] },
-    })
-      .sort({ updatedAt: -1 })
-      .limit(30)
-      .lean();
-
-    res.json({
-      transactions: refundTransactions,
-      cancellations: applicationsWithRefunds,
-    });
-  } catch (error) {
-    console.error("Fetch refunds error:", error);
-    res.status(500).json({ error: "Failed to fetch refunds." });
-  }
-});
-
-// Record an authorized payment correction or manual refund with a mandatory reason
-router.post("/admin/payment-corrections", async (req, res) => {
-  try {
-    const farmer = clean(req.body.farmer);
-    const equipment = clean(req.body.equipment || "Cooperative Account");
-    const amount = Number(req.body.amount);
-    const type = clean(req.body.type || "Payment Correction");
-    const paymentMethod = clean(req.body.paymentMethod || "Bank Transfer");
-    const reason = clean(req.body.reason);
-
-    if (!farmer) return fail(res, 400, "Member name or account is required.");
-    if (isNaN(amount) || amount <= 0) return fail(res, 400, "A valid positive correction amount is required.");
-    if (!reason || reason.trim().length < 5) {
-      return fail(res, 400, "A detailed authorized reason is required for all payment corrections.");
-    }
-
-    const txId = `CORR-${Date.now().toString().slice(-6)}`;
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
-    const newTx = await Transaction.create({
-      txId,
-      time: timeStr,
-      farmer,
-      equipment,
-      type,
-      amount,
-      paymentMethod,
-      status: "Completed",
-      notes: `Authorized by ${getAdminEmail(req)}. Reason: ${reason}`,
-    });
-
-    await logAudit({
-      action: "PAYMENT_CORRECTION_RECORDED",
-      actorEmail: getAdminEmail(req),
-      actorRole: "admin",
-      targetName: farmer,
-      details: `Administrator recorded authorized ${type} of ₱${amount.toLocaleString()} for ${farmer}. Reason: ${reason} (TxID: ${txId})`,
-      req,
-    });
-
-    res.status(201).json({
-      ok: true,
-      transaction: newTx,
-      message: `Authorized ${type} of ₱${amount.toLocaleString()} recorded successfully.`,
-    });
-  } catch (error) {
-    console.error("Record payment correction error:", error);
-    res.status(500).json({ error: "Failed to record payment correction." });
   }
 });
 
@@ -793,6 +462,9 @@ router.get("/admin/reports", async (req, res) => {
     let dateFilter = {};
     const now = new Date();
 
+    if ((startDate && Number.isNaN(new Date(startDate).getTime())) || (endDate && Number.isNaN(new Date(endDate).getTime()))) {
+      return res.status(400).json({ error: "Invalid startDate or endDate." });
+    }
     if (startDate && endDate) {
       dateFilter = {
         createdAt: {
@@ -909,7 +581,7 @@ router.get("/admin/audit-logs", async (req, res) => {
     const andClauses = [];
 
     if (actionFilter && actionFilter !== "ALL" && actionFilter !== "all") {
-      query.action = { $regex: new RegExp(actionFilter, "i") };
+      query.action = { $regex: new RegExp(String(actionFilter).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") };
     }
     if (statusFilter && statusFilter !== "ALL" && statusFilter !== "all") {
       query.status = statusFilter;
@@ -918,13 +590,13 @@ router.get("/admin/audit-logs", async (req, res) => {
       andClauses.push({
         $or: [
           { module: moduleFilter },
-          { action: { $regex: new RegExp(moduleFilter.split(" ")[0], "i") } },
+          { action: { $regex: new RegExp(String(moduleFilter).split(" ")[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") } },
         ],
       });
     }
 
     if (search) {
-      const searchRegex = { $regex: search, $options: "i" };
+      const searchRegex = { $regex: String(search).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" };
       andClauses.push({
         $or: [
           { actorEmail: searchRegex },

@@ -2,6 +2,7 @@ const path = require("path");
 const fs = require("fs");
 const express = require("express");
 const compression = require("compression");
+const { rateLimit } = require("express-rate-limit");
 
 // Middleware imports
 const authManager = require("./middleware/authManager");
@@ -17,6 +18,62 @@ const geoRoutes = require("./routes/geoRoutes");
 const ocrRoutes = require("./routes/ocrRoutes");
 
 const app = express();
+
+// Only trust X-Forwarded-* when actually deployed behind a proxy (otherwise clients can spoof their IP
+// to dodge rate limits and falsify audit logs). Set TRUST_PROXY=1 behind Render/Nginx/Cloudflare etc.
+if (process.env.TRUST_PROXY) {
+  app.set("trust proxy", Number.isNaN(Number(process.env.TRUST_PROXY)) ? process.env.TRUST_PROXY : Number(process.env.TRUST_PROXY));
+}
+app.disable("x-powered-by");
+
+// Baseline security headers (helmet-equivalent essentials, no extra dependency).
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+  if (req.secure) res.setHeader("Strict-Transport-Security", "max-age=15552000; includeSubDomains");
+  next();
+});
+
+// Rate limiting: a generous global API cap, and strict caps on credential / OTP / PIN endpoints.
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 1500,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "Too many requests. Please slow down and try again shortly." },
+});
+const credentialLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "Too many attempts. Please wait 15 minutes and try again." },
+});
+const CREDENTIAL_PATHS = [
+  "/api/login",
+  "/api/register",
+  "/api/verify",
+  "/api/auth/google",
+  "/api/auth/facebook",
+  "/api/auth/forgot-password",
+  "/api/forgot-password",
+  "/api/auth/forgot-password-request",
+  "/api/auth/reset-password",
+  "/api/reset-password",
+  "/api/auth/change-password",
+  "/api/admin/verify-pin",
+  "/api/admin/verify-password",
+  "/api/admin/change-pin",
+  "/api/admin/set-initial-pin",
+  "/api/admin/request-delete-otp",
+  "/api/admin/verify-delete-otp",
+  "/api/admin/integrations/dev-auth/verify-otp",
+  "/api/admin/integrations/dev-auth/request",
+];
+app.use("/api", apiLimiter);
+app.post(CREDENTIAL_PATHS, credentialLimiter);
 
 // 1. Enable Gzip / Deflate compression for all responses (>1KB) to speed up transfer
 app.use(compression({
@@ -41,8 +98,15 @@ if (!fs.existsSync(uploadsDir)) {
 }
 app.use("/uploads", express.static(uploadsDir, {
   maxAge: "7d",
+  fallthrough: false,
   setHeaders: (res, filePath) => {
     res.setHeader("Cache-Control", "public, max-age=604800, stale-while-revalidate=86400");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    // Even if a non-image ever lands here, the browser won't run scripts from it.
+    res.setHeader("Content-Security-Policy", "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox");
+    if (!/\.(jpe?g|png|gif|webp)$/i.test(filePath)) {
+      res.setHeader("Content-Disposition", "attachment");
+    }
   },
 }));
 
@@ -64,6 +128,7 @@ app.use("/api/calendar", calendarRoutes);
 app.use("/api/manager", authManager);
 app.use("/api/manager", managerRoutes);
 app.use("/api", apiRoutes);
+app.use("/api", (req, res) => res.status(404).json({ error: "API endpoint not found." }));
 
 // 6. Serve Frontend Application (Vite React SPA) with optimized caching
 const clientDist = fs.existsSync(path.join(__dirname, "..", "client", "dist"))

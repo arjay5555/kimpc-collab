@@ -1,12 +1,13 @@
 const express = require("express");
 const router = express.Router();
 const ocrService = require("../services/ocrService");
+const authenticate = require("../middleware/authenticate");
 
 /**
  * POST /api/ocr/gcash
  * Extracts GCash reference number, amount, date, and duplicate check from an uploaded receipt image.
  */
-router.post("/gcash", async (req, res) => {
+router.post("/gcash", authenticate, async (req, res) => {
   try {
     const { imageDataUrl, imageUrl, expectedAmount, excludeApplicationId } = req.body || {};
     const result = await ocrService.scanGcashReceipt({

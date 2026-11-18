@@ -12,6 +12,15 @@ function updateEnvFile(keyValueMap) {
   try {
     if (!fs.existsSync(ENV_PATH)) return false;
 
+    // Reject values that could break out of their line and inject new env vars
+    // (e.g. "x\nJWT_SECRET=attacker"), and keys that aren't plain identifiers.
+    for (const [key, val] of Object.entries(keyValueMap)) {
+      if (!/^[A-Za-z0-9_]+$/.test(key) || /[\r\n"\\]/.test(String(val ?? ""))) {
+        console.error(`[apiKeyManager] Refusing unsafe .env value for ${key}.`);
+        return false;
+      }
+    }
+
     let content = fs.readFileSync(ENV_PATH, "utf8");
     const lines = content.split(/\r?\n/);
     const pending = { ...keyValueMap };

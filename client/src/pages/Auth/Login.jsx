@@ -253,10 +253,7 @@ export default function Login() {
 
               const { ok, data } = await api("/auth/google", {
                 method: "POST",
-                body: {
-                  email: profile.email,
-                  fullName: profile.name || profile.given_name || "Google Member",
-                },
+                body: { accessToken: tokenResponse.access_token },
               });
 
               if (!ok) {
@@ -531,13 +528,6 @@ export default function Login() {
             </div>
           </a>
         </div>
-
-        <nav className="coop-nav-links" aria-label="Main Navigation">
-          <a className="coop-nav-link" href="#machinery">Available Fleet</a>
-          <a className="coop-nav-link" href="#how-it-works">How It Works</a>
-          <a className="coop-nav-link" href="#cooperative">Cooperative Benefits</a>
-          <a className="coop-nav-link" href="#contact">Contact</a>
-        </nav>
       </header>
 
       {/* Main Hero Stage Layout */}
@@ -1092,17 +1082,8 @@ export default function Login() {
         </div>
       </main>
 
-      {/* Mobile-Friendly Navigation & Copyright Footer */}
+      {/* Mobile Copyright Footer */}
       <footer className="coop-mobile-footer">
-        <div className="coop-mobile-links">
-          <a href="#machinery" className="coop-mobile-link">Fleet</a>
-          <span className="coop-dot-sep">•</span>
-          <a href="#how-it-works" className="coop-mobile-link">How It Works</a>
-          <span className="coop-dot-sep">•</span>
-          <a href="#cooperative" className="coop-mobile-link">Benefits</a>
-          <span className="coop-dot-sep">•</span>
-          <a href="#contact" className="coop-mobile-link">Contact</a>
-        </div>
         <p className="coop-mobile-copy">
           © {new Date().getFullYear()} KIMPC Cooperative Machinery Rental • All rights reserved
         </p>

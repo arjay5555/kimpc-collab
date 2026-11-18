@@ -2,7 +2,7 @@ const jwt = require("jsonwebtoken");
 const Account = require("../models/Account");
 const SystemSetting = require("../models/SystemSetting");
 
-const JWT_SECRET = process.env.JWT_SECRET || "minders-secret-jwt-key-cooperative-2026";
+const JWT_SECRET = require("../config/jwtSecret");
 const ROLES = ["member", "manager", "admin"];
 const PROFILE_FIELDS = ["fullName", "email", "phone", "avatar", "address", "address2", "city", "region", "postalCode", "country"];
 const STATUSES = ["Pending", "Approved", "Checked-Out", "Returned", "Rejected", "Cancelled", "Cancellation Requested"];
@@ -47,35 +47,19 @@ function generateUserToken(account, extra = {}, options = {}) {
   );
 }
 
-async function requireAdmin(req, res, next) {
-  try {
-    let adminUser = req.user && req.user.role === "admin" ? req.user : null;
-
-    if (!adminUser) {
-      const authHeader = req.headers.authorization;
-      if (authHeader && authHeader.startsWith("Bearer ")) {
-        const token = authHeader.split(" ")[1];
-        try {
-          const decoded = jwt.verify(token, JWT_SECRET);
-          if (decoded && (decoded.role === "admin" || decoded.id || decoded.email)) {
-            adminUser = (await Account.findById(decoded.id)) || (await Account.findOne({ email: decoded.email }));
-          }
-        } catch (err) {
-          // Token invalid or expired
-        }
-      }
-    }
-
-    if (!adminUser || adminUser.role !== "admin" || adminUser.isSuspended || adminUser.isArchived) {
+function requireAdmin(req, res, next) {
+  const authenticate = require("../middleware/authenticate");
+  const finish = () => {
+    const user = req.user;
+    if (!user || user.role !== "admin" || user.isSuspended || user.isArchived) {
       return fail(res, 403, "Access denied. Valid administrator credentials required.");
     }
-
-    req.admin = adminUser;
-    req.user = adminUser;
-    next();
-  } catch (err) {
-    return fail(res, 500, "Authentication error.");
-  }
+    req.admin = user;
+    return next();
+  };
+  // Re-use an already-authenticated user; otherwise run full JWT + tokenVersion verification.
+  if (req.user) return finish();
+  return authenticate(req, res, (err) => (err ? next(err) : finish()));
 }
 
 async function verifyRecaptcha(token) {
@@ -83,7 +67,7 @@ async function verifyRecaptcha(token) {
   const recaptchaEnabled = await getSystemSetting("recaptchaEnabled", true);
   if (!recaptchaEnabled) return true;
   if (!token) return false;
-  if (process.env.NODE_ENV !== "production" && (token === "test" || token === "bypass")) return true;
+  if (process.env.RECAPTCHA_ALLOW_TEST_TOKENS === "true" && (token === "test" || token === "bypass")) return true;
 
   const { getEffectiveRecaptchaKeys } = require("../services/apiKeyManager");
   const { secretKey: secret } = await getEffectiveRecaptchaKeys();

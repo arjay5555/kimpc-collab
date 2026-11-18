@@ -4,6 +4,7 @@ import { useAuth } from "./context/AuthContext";
 import { getDashboardForRole } from "./services/api";
 import ProtectedRoute from "./components/ProtectedRoute";
 import MemberLayout from "./components/MemberLayout";
+import VersionConflictBanner from "./components/VersionConflictBanner";
 
 // Auth
 import Login from "./pages/Auth/Login";
@@ -28,12 +29,10 @@ import Drivers from "./pages/Manager/Drivers";
 import Payments from "./pages/Manager/Payments";
 import Expenses from "./pages/Manager/Expenses";
 import ManagerReports from "./pages/Manager/ManagerReports";
-import ManagerMessages from "./pages/Manager/ManagerMessages";
 
 // Admin
 import AdminDashboard from "./pages/Admin/AdminDashboard";
 import AccountManagement from "./pages/Admin/AccountManagement";
-import AdminFinancialPolicies from "./pages/Admin/AdminFinancialPolicies";
 import AdminReports from "./pages/Admin/AdminReports";
 import AdminBackups from "./pages/Admin/AdminBackups";
 import AuditLogs from "./pages/Admin/AuditLogs";
@@ -49,6 +48,8 @@ function RootRedirect() {
 
 export default function App() {
   return (
+    <>
+    <VersionConflictBanner />
     <Routes>
       <Route path="/" element={<RootRedirect />} />
       <Route path="/login" element={<Login />} />
@@ -302,22 +303,6 @@ export default function App() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/manager/messages"
-        element={
-          <ProtectedRoute allowedRoles={["manager", "admin"]}>
-            <ManagerMessages />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/messages"
-        element={
-          <ProtectedRoute allowedRoles={["manager", "admin"]}>
-            <ManagerMessages />
-          </ProtectedRoute>
-        }
-      />
 
       {/* Admin Routes */}
       <Route
@@ -333,14 +318,6 @@ export default function App() {
         element={
           <ProtectedRoute allowedRoles={["admin"]}>
             <AccountManagement />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin/financial-policies"
-        element={
-          <ProtectedRoute allowedRoles={["admin"]}>
-            <AdminFinancialPolicies />
           </ProtectedRoute>
         }
       />
@@ -380,5 +357,6 @@ export default function App() {
       {/* Catch-all */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   );
 }

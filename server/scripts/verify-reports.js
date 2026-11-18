@@ -8,7 +8,7 @@ const MachineryUnit = require("../models/MachineryUnit");
 const Application = require("../models/Application");
 const reportService = require("../services/reportService");
 
-const JWT_SECRET = process.env.JWT_SECRET || "minders-secret-jwt-key-cooperative-2026";
+const JWT_SECRET = require("../config/jwtSecret");
 
 async function run() {
   console.log("=== Verifying KIMPC Manager Reports ===");

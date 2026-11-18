@@ -2,7 +2,7 @@ const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const Account = require("../models/Account");
 
-const JWT_SECRET = process.env.JWT_SECRET || "minders-secret-jwt-key-cooperative-2026";
+const JWT_SECRET = require("../config/jwtSecret");
 
 /**
  * Middleware to authenticate requests via Bearer JWT token.
@@ -13,8 +13,6 @@ async function authenticate(req, res, next) {
   const authorization = req.headers.authorization || "";
   if (authorization.startsWith("Bearer ")) {
     token = authorization.slice("Bearer ".length).trim();
-  } else if (req.query && req.query.token) {
-    token = String(req.query.token).trim();
   }
 
   if (!token) {
@@ -51,15 +49,15 @@ async function authenticate(req, res, next) {
       return res.status(403).json({ error: "Your account is archived. Contact administrator." });
     }
 
-    if (
-      typeof payload.tokenVersion === "number" &&
-      typeof account.tokenVersion === "number" &&
-      payload.tokenVersion !== account.tokenVersion
-    ) {
+    if ((Number(payload.tokenVersion) || 0) !== (Number(account.tokenVersion) || 0)) {
       return res.status(401).json({ error: "Your session has expired due to a security update. Please sign in again." });
     }
 
     req.user = account;
+    req.auth = {
+      isImpersonated: Boolean(payload.isImpersonated),
+      impersonatedBy: payload.impersonatedBy || "",
+    };
     return next();
   } catch (error) {
     if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {

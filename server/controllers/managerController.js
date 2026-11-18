@@ -4,6 +4,7 @@ const MachineryMaintenance = require("../models/MachineryMaintenance");
 const MachineryUnit = require("../models/MachineryUnit");
 const Account = require("../models/Account");
 const { logAudit } = require("../services/auditLogger");
+const { VersionConflictError, assertVersion, saveVersioned, conflictOrNotFound } = require("../utils/concurrency");
 const { syncBookingToGoogleCalendar } = require("../services/googleCalendarService");
 
 const ACTIVE_BOOKING_STATUSES = ["Pending", "Approved", "Checked-Out"];
@@ -175,6 +176,7 @@ async function approveBooking(req, res) {
 
   const booking = await Application.findById(req.params.id);
   if (!booking) return res.status(404).json({ error: "Booking request not found." });
+  assertVersion(booking, req.body?.version);
   if (booking.status !== "Pending") {
     return res.status(409).json({ error: `Only pending requests can be approved (current status: ${booking.status}).` });
   }
@@ -234,13 +236,11 @@ async function approveBooking(req, res) {
 
   const managerRemarks = clean(req.body?.remarks);
   const approved = await Application.findOneAndUpdate(
-    { _id: booking._id, status: "Pending" },
-    { $set: { status: "Approved", managerRemarks } },
+    { _id: booking._id, status: "Pending", version: booking.version },
+    { $set: { status: "Approved", managerRemarks }, $inc: { version: 1 } },
     { new: true, runValidators: true }
   );
-  if (!approved) {
-    return res.status(409).json({ error: "This booking request was updated by another manager. Refresh and try again." });
-  }
+  if (!approved) throw await conflictOrNotFound(Application, booking._id);
 
   // Two-way sync: Push approved booking event to Manager Google Calendar
   syncBookingToGoogleCalendar(approved, req.user).catch((err) => {
@@ -274,14 +274,19 @@ async function rejectBooking(req, res) {
 
   const managerRemarks = clean(req.body?.remarks);
   const rejected = await Application.findOneAndUpdate(
-    { _id: req.params.id, status: "Pending" },
-    { $set: { status: "Rejected", managerRemarks } },
+    {
+      _id: req.params.id,
+      status: "Pending",
+      ...(req.body?.version != null && req.body.version !== "" ? { version: Number(req.body.version) } : {})
+    },
+    { $set: { status: "Rejected", managerRemarks }, $inc: { version: 1 } },
     { new: true, runValidators: true }
   );
 
   if (!rejected) {
-    const existing = await Application.findById(req.params.id).select("_id status");
+    const existing = await Application.findById(req.params.id);
     if (!existing) return res.status(404).json({ error: "Booking request not found." });
+    if (existing.status === "Pending") throw new VersionConflictError(existing);
     return res.status(409).json({ error: `Only pending requests can be rejected (current status: ${existing.status}).` });
   }
 
@@ -311,6 +316,7 @@ async function resolveBookingConflict(req, res) {
   }
   const booking = await Application.findById(req.params.id);
   if (!booking) return res.status(404).json({ error: "Booking request not found." });
+  assertVersion(booking, req.body?.version);
   if (!["Pending", "Approved"].includes(booking.status)) {
     return res.status(409).json({ error: "Only pending or approved bookings can be rescheduled or reassigned." });
   }
@@ -384,7 +390,7 @@ async function resolveBookingConflict(req, res) {
   booking.startDate = startDate;
   booking.endDate = endDate;
   booking.managerRemarks = clean(req.body.remarks) || booking.managerRemarks;
-  await booking.save();
+  await saveVersioned(booking);
 
   await logAudit({
     action: "BOOKING_SCHEDULE_RESOLVED",
@@ -416,6 +422,7 @@ async function extendBooking(req, res) {
 
   const booking = await Application.findById(req.params.id);
   if (!booking) return res.status(404).json({ error: "Booking request not found." });
+  assertVersion(booking, req.body?.version);
   if (booking.status !== "Checked-Out") {
     return res.status(409).json({ error: "Only an active checked-out rental can be extended." });
   }
@@ -458,7 +465,7 @@ async function extendBooking(req, res) {
   const previousEndDate = booking.endDate;
   booking.endDate = newEndDate;
   booking.managerRemarks = clean(req.body.remarks) || booking.managerRemarks;
-  await booking.save();
+  await saveVersioned(booking);
   await logAudit({
     action: "BOOKING_EXTENDED",
     actorEmail: req.user.email,

@@ -59,7 +59,7 @@ function parsePHTBoundaries(startDateStr, endDateStr) {
  * Validate and sanitize report filters
  */
 function validateFilters(query = {}) {
-  let rawType = (query.reportType || "booking").trim();
+  let rawType = String(query.reportType || "booking").trim();
   let reportType = "booking";
   if (rawType === "machinery" || rawType === "machinery_usage") {
     reportType = "machinery_usage";
@@ -86,9 +86,9 @@ function validateFilters(query = {}) {
     endDate = temp;
   }
 
-  const unitId = (query.unitId || "all").trim();
-  const status = (query.status || "all").trim();
-  const paymentMethod = (query.paymentMethod || "all").trim();
+  const unitId = String(query.unitId || "all").trim();
+  const status = String(query.status || "all").trim();
+  const paymentMethod = String(query.paymentMethod || "all").trim();
 
   return {
     reportType,
@@ -140,7 +140,7 @@ async function getReportData(rawQuery = {}) {
       const uName = selectedUnitDoc ? selectedUnitDoc.name : unitId;
       appQuery.$or = [
         { machineryUnitId: unitId },
-        { equipment: new RegExp(unitId, "i") },
+        { equipment: new RegExp(String(unitId).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") },
         { equipment: uName },
         { machineryModel: uName },
       ];
@@ -388,7 +388,7 @@ async function getReportData(rawQuery = {}) {
       const uName = selectedUnitDoc ? selectedUnitDoc.name : unitId;
       appPaidQuery.$or = [
         { machineryUnitId: unitId },
-        { equipment: new RegExp(unitId, "i") },
+        { equipment: new RegExp(String(unitId).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") },
         { equipment: uName },
         { machineryModel: uName },
       ];
@@ -452,7 +452,7 @@ async function getReportData(rawQuery = {}) {
       const uName = selectedUnitDoc ? selectedUnitDoc.name : unitId;
       appRefundQuery.$or = [
         { machineryUnitId: unitId },
-        { equipment: new RegExp(unitId, "i") },
+        { equipment: new RegExp(String(unitId).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") },
       ];
     }
     const appRefunds = await Application.find(appRefundQuery).lean();
@@ -532,7 +532,7 @@ async function getReportData(rawQuery = {}) {
       const uName = selectedUnitDoc ? selectedUnitDoc.name : unitId;
       outstandingQuery.$or = [
         { machineryUnitId: unitId },
-        { equipment: new RegExp(unitId, "i") },
+        { equipment: new RegExp(String(unitId).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") },
         { equipment: uName },
         { machineryModel: uName },
       ];

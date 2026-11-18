@@ -1,5 +1,4 @@
 const express = require("express");
-const jwt = require("jsonwebtoken");
 const Account = require("../models/Account");
 const Application = require("../models/Application");
 const MachineryMaintenance = require("../models/MachineryMaintenance");
@@ -17,68 +16,59 @@ const { getSystemSetting } = require("../models/SystemSetting");
 const { logAudit } = require("../services/auditLogger");
 
 const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET || "minders-secret-jwt-key-cooperative-2026";
+const JWT_SECRET = require("../config/jwtSecret");
 
-/**
- * Middleware to resolve the Manager user from Authorization header, ?token query,
- * x-admin-email header, or active manager fallback.
- */
-async function resolveManager(req, res, next) {
-  let token = "";
-  const authHeader = req.headers.authorization || "";
-  if (authHeader.startsWith("Bearer ")) {
-    token = authHeader.slice("Bearer ".length).trim();
-  } else if (req.query.token) {
-    token = String(req.query.token).trim();
+const crypto = require("crypto");
+const authManager = require("../middleware/authManager");
+
+// Calendar endpoints act on the authenticated manager/admin only.
+const resolveManager = authManager;
+
+const STATE_TTL_MS = 15 * 60 * 1000;
+
+// OAuth state is HMAC-signed so the callback can trust managerId / returnBaseUrl.
+function signState(payload) {
+  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const sig = crypto.createHmac("sha256", JWT_SECRET).update(body).digest("base64url");
+  return `${body}.${sig}`;
+}
+
+function verifyState(state) {
+  const [body, sig] = String(state || "").split(".");
+  if (!body || !sig) return null;
+  const expected = crypto.createHmac("sha256", JWT_SECRET).update(body).digest("base64url");
+  const a = Buffer.from(sig);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  try {
+    const decoded = JSON.parse(Buffer.from(body, "base64url").toString());
+    if (!decoded.ts || Date.now() - decoded.ts > STATE_TTL_MS) return null;
+    return decoded;
+  } catch {
+    return null;
   }
+}
 
-  // 1. Try resolving via JWT token
-  if (token) {
-    try {
-      const payload = jwt.verify(token, JWT_SECRET);
-      const accId = payload?.id || payload?._id || payload?.userId;
-      if (accId) {
-        const account = await Account.findById(accId);
-        if (account && !account.isSuspended && !account.isArchived && ["manager", "admin"].includes(account.role)) {
-          req.user = account;
-          return next();
-        }
-      }
-    } catch (_) {
-      // Ignore token failure and fall through
-    }
-  }
-
-  // 2. Try resolving via email header or query
-  const email = (req.headers["x-admin-email"] || req.query.email || "").toString().trim().toLowerCase();
-  if (email) {
-    const account = await Account.findOne({ email, isSuspended: { $ne: true }, isArchived: { $ne: true } });
-    if (account && ["manager", "admin"].includes(account.role)) {
-      req.user = account;
-      return next();
-    }
-  }
-
-  // 3. Fallback: Lookup primary active manager or admin in the cooperative
-  const managerAccount = await Account.findOne({
-    role: { $in: ["manager", "admin"] },
-    isSuspended: { $ne: true },
-    isArchived: { $ne: true }
-  }).sort({ role: 1, createdAt: 1 });
-
-  if (managerAccount) {
-    req.user = managerAccount;
-    return next();
-  }
-
-  return res.status(401).json({ error: "Manager account not found or unavailable." });
+// Only redirect back to known front-end origins (prevents open redirect).
+function safeReturnBase(candidate, req) {
+  const toOrigin = (u) => {
+    try { return new URL(u).origin; } catch { return null; }
+  };
+  const allowed = new Set(
+    [process.env.APP_BASE_URL, "http://localhost:5173", "http://127.0.0.1:5173", `${req.protocol}://${req.get("host")}`]
+      .map(toOrigin)
+      .filter(Boolean)
+  );
+  const origin = toOrigin(candidate);
+  if (origin && allowed.has(origin)) return origin;
+  return (process.env.APP_BASE_URL || "").replace(/\/+$/, "");
 }
 
 /**
  * GET /api/calendar/connect
  * Generates the Google OAuth consent URL with offline access and calendar.events scope.
  */
-router.get("/connect", async (req, res) => {
+router.get("/connect", authManager, async (req, res) => {
   try {
     const calendarEnabled = await getSystemSetting("googleCalendarEnabled", true);
     if (calendarEnabled === false) {
@@ -88,64 +78,19 @@ router.get("/connect", async (req, res) => {
       });
     }
 
-    let managerId = "";
-    let managerEmail = "";
-
-    // Try resolving manager from token in header or query parameter
-    let token = "";
-    const authHeader = req.headers.authorization || "";
-    if (authHeader.startsWith("Bearer ")) {
-      token = authHeader.slice("Bearer ".length).trim();
-    } else if (req.query.token) {
-      token = String(req.query.token).trim();
-    }
-
-    if (token) {
-      try {
-        const payload = jwt.verify(token, JWT_SECRET);
-        const accId = payload?.id || payload?._id || payload?.userId;
-        if (accId) {
-          managerId = String(accId);
-          const acct = await Account.findById(managerId);
-          if (acct?.email) managerEmail = acct.email;
-        }
-      } catch {
-        // Fall back to first available manager if token invalid
-      }
-    }
-
-    if (!managerId) {
-      const emailQuery = (req.query.email || req.headers["x-admin-email"] || "").trim().toLowerCase();
-      if (emailQuery) {
-        const acct = await Account.findOne({ email: emailQuery, role: { $in: ["manager", "admin"] } });
-        if (acct) {
-          managerId = String(acct._id);
-          managerEmail = acct.email;
-        }
-      }
-    }
-
-    if (!managerId) {
-      const defaultManager = await Account.findOne({ role: "manager" });
-      if (defaultManager) {
-        managerId = String(defaultManager._id);
-        managerEmail = defaultManager.email || "";
-      }
-    }
+    const managerId = String(req.user._id);
+    const managerEmail = req.user.email || "";
 
     // Determine return frontend URL so manager returns to their origin (e.g. http://localhost:5173)
-    const returnBaseUrl = (
-      req.query.returnUrl ||
-      req.get("referer") ||
-      req.get("origin") ||
-      process.env.APP_BASE_URL ||
-      ""
-    ).trim().replace(/\/+$/, "");
+    const returnBaseUrl = safeReturnBase(req.query.returnUrl || req.get("origin") || "", req);
 
-    // Embed manager ID, timestamp, and return origin into state parameter
-    const statePayload = Buffer.from(
-      JSON.stringify({ managerId, ts: Date.now(), returnBaseUrl })
-    ).toString("base64url");
+    // Signed state: manager ID, timestamp, nonce and validated return origin
+    const statePayload = signState({
+      managerId,
+      ts: Date.now(),
+      nonce: crypto.randomBytes(12).toString("hex"),
+      returnBaseUrl,
+    });
 
     // Dynamic redirect URI fallback (honors GOOGLE_CALENDAR_REDIRECT_URI from .env if defined)
     const host = req.get("host") || "localhost:3000";
@@ -181,14 +126,12 @@ router.get("/callback", async (req, res) => {
 
   let returnBaseUrl = "";
   let managerId = "";
-  if (state) {
-    try {
-      const decoded = JSON.parse(Buffer.from(String(state), "base64url").toString());
-      managerId = decoded.managerId;
-      returnBaseUrl = decoded.returnBaseUrl;
-    } catch (e) {
-      console.warn("[GoogleCalendar /callback] Could not decode state:", e.message);
-    }
+  const decodedState = verifyState(state);
+  if (decodedState) {
+    managerId = String(decodedState.managerId || "");
+    returnBaseUrl = String(decodedState.returnBaseUrl || "");
+  } else if (state) {
+    console.warn("[GoogleCalendar /callback] Rejected invalid or expired OAuth state.");
   }
 
   const clientOrigin = (returnBaseUrl || process.env.APP_BASE_URL || "").replace(/\/+$/, "");
@@ -207,12 +150,11 @@ router.get("/callback", async (req, res) => {
 
   try {
     if (!managerId) {
-      const fallbackManager = await Account.findOne({ role: "manager" });
-      if (fallbackManager) managerId = String(fallbackManager._id);
+      return res.status(400).send("Invalid or expired authorization request. Please start the Google Calendar connection again.");
     }
-
-    if (!managerId) {
-      return res.status(400).send("No matching manager found to link Google Calendar.");
+    const linkingAccount = await Account.findById(managerId).select("role isSuspended isArchived");
+    if (!linkingAccount || !["manager", "admin"].includes(linkingAccount.role) || linkingAccount.isSuspended || linkingAccount.isArchived) {
+      return res.status(403).send("This account is not allowed to link Google Calendar.");
     }
 
     const host = req.get("host") || "localhost:3000";

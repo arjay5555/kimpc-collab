@@ -8,20 +8,89 @@ import "../../styles/admin-kimpc.css";
 
 const INITIAL_TRANSACTIONS = [];
 
-const MONTHS_DATA = [
-  { month: "Jan", income: 14000, expense: 9500 },
-  { month: "Feb", income: 15500, expense: 11000 },
-  { month: "Mar", income: 17200, expense: 10200 },
-  { month: "Apr", income: 19800, expense: 12800 },
-  { month: "May", income: 18450, expense: 14200 }, // Highlighted in reference
-  { month: "Jun", income: 20500, expense: 11500 },
-  { month: "Jul", income: 21800, expense: 12100 },
-  { month: "Aug", income: 23400, expense: 13900 },
-  { month: "Sep", income: 19500, expense: 10800 },
-  { month: "Oct", income: 20800, expense: 12400 },
-  { month: "Nov", income: 18200, expense: 11100 },
-  { month: "Dec", income: 22100, expense: 13500 },
-];
+const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+const CATEGORY_COLORS = {
+  "Machinery Maintenance": "#ff3b5c",
+  "Staff Salaries": "#182538",
+  Fuel: "#38bdf8",
+  Insurance: "#93c5fd",
+  "Office Supplies": "#94a3b8",
+  Marketing: "#cbd5e1",
+};
+const OTHER_COLOR = "#e2e8f0";
+const DONUT_CIRCUMFERENCE = 2 * Math.PI * 38;
+
+// Parse "YYYY-MM-DD" as a local date (not UTC) and anything else via Date.
+function parseWhen(value) {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  const m = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function formatPeso(amount) {
+  const n = Math.round(Number(amount) || 0);
+  return `${n < 0 ? "-" : ""}₱${Math.abs(n).toLocaleString()}`;
+}
+
+function formatAxis(val) {
+  if (val === 0) return "₱0";
+  if (val >= 1000) return `₱${Number((val / 1000).toFixed(1))}K`;
+  return `₱${val}`;
+}
+
+// Round a chart maximum up to a "nice" number so the axis labels are readable.
+function niceCeil(value) {
+  if (value <= 0) return 1000;
+  const pow = Math.pow(10, Math.floor(Math.log10(value)));
+  const steps = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
+  const unit = steps.find((s) => s * pow >= value) || 10;
+  return unit * pow;
+}
+
+// Income = real booking payments recorded by managers (voided payments excluded), minus refunds.
+function buildIncomeEvents(apps) {
+  const events = [];
+  for (const a of Array.isArray(apps) ? apps : []) {
+    const history = Array.isArray(a.paymentHistory) ? a.paymentHistory : [];
+    if (history.length > 0) {
+      for (const p of history) {
+        if (p?.isVoided) continue;
+        const amount = Number(p?.amount) || 0;
+        const when = parseWhen(p?.dateTime) || parseWhen(p?.recordedAt);
+        if (amount > 0 && when) events.push({ date: when, amount });
+      }
+    } else {
+      // Older bookings settled before itemised payment history existed
+      const legacyPaid = Number(a.financialSummary?.grossPaid) || 0;
+      const when = parseWhen(a.updatedAt) || parseWhen(a.createdAt);
+      if (legacyPaid > 0 && when) events.push({ date: when, amount: legacyPaid });
+    }
+    for (const r of Array.isArray(a.refunds) ? a.refunds : []) {
+      const amount = Number(r?.amount) || 0;
+      const when = parseWhen(r?.refundDate) || parseWhen(r?.recordedAt);
+      if (amount > 0 && when) events.push({ date: when, amount: -amount });
+    }
+  }
+  return events;
+}
+
+// Month-over-month change for a KPI card. "upIsGood" flips colors for expenses.
+function monthTrend(current, previous, upIsGood = true) {
+  if (!previous) {
+    if (!current) return { label: "0%", color: "#94a3b8" };
+    return { label: "↑ New", color: upIsGood ? "#16a34a" : "#dc2626" };
+  }
+  const pct = ((current - previous) / Math.abs(previous)) * 100;
+  if (Math.abs(pct) < 0.005) return { label: "0%", color: "#94a3b8" };
+  const up = pct > 0;
+  return {
+    label: `${up ? "↑ +" : "↓ "}${pct.toFixed(2)}%`,
+    color: up === upIsGood ? "#16a34a" : "#dc2626",
+  };
+}
 
 export default function Expenses() {
   const navigate = useNavigate();
@@ -45,43 +114,23 @@ export default function Expenses() {
     } catch (e) {}
   }, [transactions]);
 
-  // Live financial metrics from database bookings & transactions
-  const [liveIncome, setLiveIncome] = useState(0);
+  // Income events from real booking payments in the database
+  const [incomeEvents, setIncomeEvents] = useState([]);
 
   useEffect(() => {
     let isMounted = true;
-    const fetchFinancials = async () => {
+    const fetchIncome = async () => {
       try {
-        const [appsRes, txRes] = await Promise.all([
-          api("/applications").catch(() => ({ ok: false })),
-          api("/transactions").catch(() => ({ ok: false })),
-        ]);
-
-        let incomeTotal = 0;
-        if (appsRes.ok && Array.isArray(appsRes.data)) {
-          const appPaid = appsRes.data
-            .filter((a) => a.paymentStatus === "Paid" || a.financials?.isSettled)
-            .reduce((sum, a) => sum + (Number(a.totalAmount) || Number(a.financials?.totalPaid) || 0), 0);
-          incomeTotal += appPaid;
-        }
-
-        if (txRes.ok) {
-          const txList = Array.isArray(txRes.data)
-            ? txRes.data
-            : (Array.isArray(txRes.data?.transactions) ? txRes.data.transactions : []);
-          const txTotal = txList.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
-          incomeTotal += txTotal;
-        }
-
-        if (isMounted) {
-          setLiveIncome(incomeTotal);
+        const appsRes = await api("/applications");
+        if (isMounted && appsRes.ok && Array.isArray(appsRes.data)) {
+          setIncomeEvents(buildIncomeEvents(appsRes.data));
         }
       } catch (err) {
         console.error("Error loading income metrics:", err);
       }
     };
 
-    fetchFinancials();
+    fetchIncome();
     return () => {
       isMounted = false;
     };
@@ -91,9 +140,92 @@ export default function Expenses() {
     return transactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
   }, [transactions]);
 
-  const displayIncome = liveIncome > 0 ? liveIncome : 25700;
-  const displayExpense = totalExpenseSum > 0 ? totalExpenseSum : 14575;
-  const displayBalance = displayIncome - displayExpense > 0 ? displayIncome - displayExpense : 155820;
+  // Expense events from the expenses entered on this page
+  const expenseEvents = useMemo(
+    () =>
+      transactions
+        .map((t) => ({ date: parseWhen(t.date), amount: Number(t.amount) || 0, category: t.category || "Other" }))
+        .filter((e) => e.date),
+    [transactions]
+  );
+
+  const displayIncome = useMemo(() => incomeEvents.reduce((sum, e) => sum + e.amount, 0), [incomeEvents]);
+  const displayExpense = totalExpenseSum;
+  const displayBalance = displayIncome - displayExpense;
+
+  // KPI trends: this calendar month vs last calendar month
+  const kpiTrends = useMemo(() => {
+    const now = new Date();
+    const thisKey = now.getFullYear() * 12 + now.getMonth();
+    const sumFor = (events, key) =>
+      events.reduce((s, e) => (e.date.getFullYear() * 12 + e.date.getMonth() === key ? s + e.amount : s), 0);
+    const incNow = sumFor(incomeEvents, thisKey);
+    const incPrev = sumFor(incomeEvents, thisKey - 1);
+    const expNow = sumFor(expenseEvents, thisKey);
+    const expPrev = sumFor(expenseEvents, thisKey - 1);
+    return {
+      balance: monthTrend(incNow - expNow, incPrev - expPrev, true),
+      income: monthTrend(incNow, incPrev, true),
+      expense: monthTrend(expNow, expPrev, false),
+    };
+  }, [incomeEvents, expenseEvents]);
+
+  // Cashflow chart: per-month totals for the selected year
+  const [chartYearMode, setChartYearMode] = useState("This Year");
+  const chartYear = new Date().getFullYear() - (chartYearMode === "Last Year" ? 1 : 0);
+  const monthlyData = useMemo(() => {
+    const rows = MONTH_LABELS.map((month) => ({ month, income: 0, expense: 0 }));
+    incomeEvents.forEach((e) => {
+      if (e.date.getFullYear() === chartYear) rows[e.date.getMonth()].income += e.amount;
+    });
+    expenseEvents.forEach((e) => {
+      if (e.date.getFullYear() === chartYear) rows[e.date.getMonth()].expense += e.amount;
+    });
+    return rows.map((r) => ({ ...r, income: Math.max(0, Math.round(r.income)), expense: Math.round(r.expense) }));
+  }, [incomeEvents, expenseEvents, chartYear]);
+  const chartMax = niceCeil(Math.max(0, ...monthlyData.map((d) => Math.max(d.income, d.expense))));
+  const yTicks = [1, 0.75, 0.5, 0.25, 0].map((f) => Math.round(chartMax * f));
+
+  // Expense breakdown donut: totals per category for the selected range
+  const [breakdownRange, setBreakdownRange] = useState("This Month");
+  const breakdown = useMemo(() => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const inRange = (d) => {
+      if (breakdownRange === "This Week") {
+        const weekStart = new Date(startOfToday);
+        weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7)); // Monday
+        return d >= weekStart;
+      }
+      if (breakdownRange === "This Month") return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+      return d.getFullYear() === now.getFullYear();
+    };
+    const totals = new Map();
+    expenseEvents.forEach((e) => {
+      if (inRange(e.date)) totals.set(e.category, (totals.get(e.category) || 0) + e.amount);
+    });
+    const total = [...totals.values()].reduce((s, v) => s + v, 0);
+    const rows = [...totals.entries()]
+      .filter(([, amount]) => amount > 0)
+      .sort((a, b) => b[1] - a[1])
+      .reduce((acc, [category, amount]) => {
+        const len = total > 0 ? (amount / total) * DONUT_CIRCUMFERENCE : 0;
+        const prev = acc[acc.length - 1];
+        const offset = prev ? prev.offset + prev.len : 0;
+        return [
+          ...acc,
+          {
+            category,
+            amount,
+            pct: total > 0 ? Math.round((amount / total) * 100) : 0,
+            color: CATEGORY_COLORS[category] || OTHER_COLOR,
+            len,
+            offset,
+          },
+        ];
+      }, []);
+    return { total, rows };
+  }, [expenseEvents, breakdownRange]);
 
   const [selectedIds, setSelectedIds] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -107,7 +239,7 @@ export default function Expenses() {
   const [currentPage, setCurrentPage] = useState(1);
 
   // Chart hover month
-  const [hoveredMonthIndex, setHoveredMonthIndex] = useState(4); // Default May (index 4)
+  const [hoveredMonthIndex, setHoveredMonthIndex] = useState(() => new Date().getMonth());
 
   // Add / Edit Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -259,28 +391,32 @@ export default function Expenses() {
   };
 
   // Tooltip details for hover point
-  const currentHovered = MONTHS_DATA[hoveredMonthIndex] || MONTHS_DATA[4];
+  const currentHovered = monthlyData[hoveredMonthIndex] || monthlyData[0];
 
   // SVG dimensions for cashflow chart
   const svgWidth = 650;
   const svgHeight = 155;
-  const maxVal = 24000;
+  const maxVal = chartMax;
 
-  const pointsIncome = MONTHS_DATA.map((d, i) => {
-    const x = 50 + i * ((svgWidth - 70) / (MONTHS_DATA.length - 1));
+  const pointsIncome = monthlyData.map((d, i) => {
+    const x = 50 + i * ((svgWidth - 70) / (monthlyData.length - 1));
     const y = svgHeight - 26 - (d.income / maxVal) * (svgHeight - 48);
     return { x, y, ...d };
   });
 
-  const pointsExpense = MONTHS_DATA.map((d, i) => {
-    const x = 50 + i * ((svgWidth - 70) / (MONTHS_DATA.length - 1));
+  const pointsExpense = monthlyData.map((d, i) => {
+    const x = 50 + i * ((svgWidth - 70) / (monthlyData.length - 1));
     const y = svgHeight - 26 - (d.expense / maxVal) * (svgHeight - 48);
     return { x, y, ...d };
   });
 
   // Build SVG path
+  // Smooth curve that never overshoots: each segment's control points are clamped between
+  // that segment's two data points, so flat ₱0 months stay on the baseline (no dip below ₱0)
+  // and peaks never bulge above their real value.
   const buildSmoothPath = (pts) => {
     if (pts.length === 0) return "";
+    const clamp = (v, a, b) => Math.min(Math.max(v, Math.min(a, b)), Math.max(a, b));
     let path = `M ${pts[0].x} ${pts[0].y}`;
     for (let i = 0; i < pts.length - 1; i++) {
       const p0 = pts[i === 0 ? 0 : i - 1];
@@ -288,9 +424,9 @@ export default function Expenses() {
       const p2 = pts[i + 1];
       const p3 = pts[i + 2] || p2;
       const cp1x = p1.x + (p2.x - p0.x) / 6;
-      const cp1y = p1.y + (p2.y - p0.y) / 6;
+      const cp1y = clamp(p1.y + (p2.y - p0.y) / 6, p1.y, p2.y);
       const cp2x = p2.x - (p3.x - p1.x) / 6;
-      const cp2y = p2.y - (p3.y - p1.y) / 6;
+      const cp2y = clamp(p2.y - (p3.y - p1.y) / 6, p1.y, p2.y);
       path += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
     }
     return path;
@@ -332,14 +468,14 @@ export default function Expenses() {
                     </div>
                     <div className="wz-kpi-meta">
                       <span className="wz-kpi-label">Balance</span>
-                      <span className="wz-kpi-value">₱{displayBalance.toLocaleString()}</span>
+                      <span className="wz-kpi-value">{formatPeso(displayBalance)}</span>
                     </div>
                   </div>
                   <div className="wz-kpi-right">
-                    <span className="wz-kpi-trend-plain" style={{ color: "#16a34a" }}>
-                      ↑ +4.82%
+                    <span className="wz-kpi-trend-plain" style={{ color: kpiTrends.balance.color }}>
+                      {kpiTrends.balance.label}
                     </span>
-                    <span className="wz-kpi-subtext">from last week</span>
+                    <span className="wz-kpi-subtext">vs last month</span>
                   </div>
                 </div>
 
@@ -354,14 +490,14 @@ export default function Expenses() {
                     </div>
                     <div className="wz-kpi-meta">
                       <span className="wz-kpi-label">Income</span>
-                      <span className="wz-kpi-value">₱{displayIncome.toLocaleString()}</span>
+                      <span className="wz-kpi-value">{formatPeso(displayIncome)}</span>
                     </div>
                   </div>
                   <div className="wz-kpi-right">
-                    <span className="wz-kpi-trend-plain" style={{ color: "#16a34a" }}>
-                      ↑ +2.73%
+                    <span className="wz-kpi-trend-plain" style={{ color: kpiTrends.income.color }}>
+                      {kpiTrends.income.label}
                     </span>
-                    <span className="wz-kpi-subtext">from last week</span>
+                    <span className="wz-kpi-subtext">vs last month</span>
                   </div>
                 </div>
 
@@ -376,14 +512,14 @@ export default function Expenses() {
                     </div>
                     <div className="wz-kpi-meta">
                       <span className="wz-kpi-label">Expenses</span>
-                      <span className="wz-kpi-value">₱{displayExpense.toLocaleString()}</span>
+                      <span className="wz-kpi-value">{formatPeso(displayExpense)}</span>
                     </div>
                   </div>
                   <div className="wz-kpi-right">
-                    <span className="wz-kpi-trend-plain" style={{ color: "#dc2626" }}>
-                      ↓ -5.70%
+                    <span className="wz-kpi-trend-plain" style={{ color: kpiTrends.expense.color }}>
+                      {kpiTrends.expense.label}
                     </span>
-                    <span className="wz-kpi-subtext">from last week</span>
+                    <span className="wz-kpi-subtext">vs last month</span>
                   </div>
                 </div>
               </div>
@@ -400,6 +536,9 @@ export default function Expenses() {
                   </div>
 
                   <select
+                    aria-label="Cashflow year"
+                    value={chartYearMode}
+                    onChange={(e) => setChartYearMode(e.target.value)}
                     style={{
                       background: "#f8fafc",
                       border: "1px solid #e2e8f0",
@@ -431,7 +570,7 @@ export default function Expenses() {
                     </defs>
 
                     {/* Y-axis grid lines & labels */}
-                    {[24000, 18000, 12000, 6000, 0].map((val) => {
+                    {yTicks.map((val) => {
                       const y = svgHeight - 26 - (val / maxVal) * (svgHeight - 48);
                       return (
                         <g key={val}>
@@ -452,15 +591,15 @@ export default function Expenses() {
                             fontSize="9"
                             fontWeight="500"
                           >
-                            ₱{val === 0 ? "0" : `${val / 1000}K`}
+                            {formatAxis(val)}
                           </text>
                         </g>
                       );
                     })}
 
                     {/* X-axis Month Labels */}
-                    {MONTHS_DATA.map((d, i) => {
-                      const x = 50 + i * ((svgWidth - 70) / (MONTHS_DATA.length - 1));
+                    {monthlyData.map((d, i) => {
+                      const x = 50 + i * ((svgWidth - 70) / (monthlyData.length - 1));
                       return (
                         <text
                           key={d.month}
@@ -530,7 +669,7 @@ export default function Expenses() {
                       </g>
                     ))}
 
-                    {/* May 2028 Callout Tooltip */}
+                    {/* Hovered month tooltip */}
                     {activeIncomePt && (
                       <g
                         transform={`translate(${Math.min(
@@ -548,7 +687,7 @@ export default function Expenses() {
                           filter="drop-shadow(0 4px 6px rgba(0,0,0,0.06))"
                         />
                         <text x="12" y="18" fill="#64748b" fontSize="10" fontWeight="700">
-                          {currentHovered.month} 2028
+                          {currentHovered.month} {chartYear}
                         </text>
                         {/* Income row */}
                         <circle cx="16" cy="30" r="3" fill="#182538" />
@@ -556,7 +695,7 @@ export default function Expenses() {
                           Income:
                         </text>
                         <text x="118" y="33" textAnchor="end" fill="#0f172a" fontSize="9.5" fontWeight="800">
-                          ₱{currentHovered.income.toLocaleString()}
+                          {formatPeso(currentHovered.income)}
                         </text>
                         {/* Expense row */}
                         <circle cx="16" cy="44" r="3" fill="#ff3b5c" />
@@ -564,7 +703,7 @@ export default function Expenses() {
                           Expense:
                         </text>
                         <text x="118" y="47" textAnchor="end" fill="#ff3b5c" fontSize="9.5" fontWeight="800">
-                          ₱{currentHovered.expense.toLocaleString()}
+                          {formatPeso(currentHovered.expense)}
                         </text>
                       </g>
                     )}
@@ -586,6 +725,9 @@ export default function Expenses() {
 
               <div style={{ display: "flex", justifyContent: "flex-end" }}>
                 <select
+                  aria-label="Expense breakdown range"
+                  value={breakdownRange}
+                  onChange={(e) => setBreakdownRange(e.target.value)}
                   style={{
                     background: "#f8fafc",
                     border: "1px solid #e2e8f0",
@@ -607,132 +749,55 @@ export default function Expenses() {
               {/* SVG Donut Chart */}
               <div className="wz-donut-container">
                 <svg viewBox="0 0 100 100" style={{ width: "100%", height: "100%", transform: "rotate(-90deg)" }}>
-                  {/* Total circle circum = 2 * PI * 38 ≈ 238.76 */}
-                  {/* Segments: 
-                      Machinery Maint: 30% -> 71.6
-                      Staff Salaries: 25% -> 59.7
-                      Fuel: 20% -> 47.8
-                      Insurance: 15% -> 35.8
-                      Office Supplies: 5% -> 11.9
-                      Marketing: 5% -> 11.9
-                  */}
-                  <circle
-                    cx="50"
-                    cy="50"
-                    r="38"
-                    fill="none"
-                    stroke="#ff3b5c"
-                    strokeWidth="15"
-                    strokeDasharray="71.6 167.2"
-                    strokeDashoffset="0"
-                  />
-                  <circle
-                    cx="50"
-                    cy="50"
-                    r="38"
-                    fill="none"
-                    stroke="#182538"
-                    strokeWidth="15"
-                    strokeDasharray="59.7 179.1"
-                    strokeDashoffset="-71.6"
-                  />
-                  <circle
-                    cx="50"
-                    cy="50"
-                    r="38"
-                    fill="none"
-                    stroke="#38bdf8"
-                    strokeWidth="15"
-                    strokeDasharray="47.8 191.0"
-                    strokeDashoffset="-131.3"
-                  />
-                  <circle
-                    cx="50"
-                    cy="50"
-                    r="38"
-                    fill="none"
-                    stroke="#93c5fd"
-                    strokeWidth="15"
-                    strokeDasharray="35.8 203.0"
-                    strokeDashoffset="-179.1"
-                  />
-                  <circle
-                    cx="50"
-                    cy="50"
-                    r="38"
-                    fill="none"
-                    stroke="#94a3b8"
-                    strokeWidth="15"
-                    strokeDasharray="11.9 226.9"
-                    strokeDashoffset="-214.9"
-                  />
-                  <circle
-                    cx="50"
-                    cy="50"
-                    r="38"
-                    fill="none"
-                    stroke="#cbd5e1"
-                    strokeWidth="15"
-                    strokeDasharray="11.9 226.9"
-                    strokeDashoffset="-226.8"
-                  />
+                  {breakdown.rows.length === 0 ? (
+                    <circle cx="50" cy="50" r="38" fill="none" stroke="#e2e8f0" strokeWidth="15" />
+                  ) : (
+                    breakdown.rows.map((row) => (
+                      <circle
+                        key={row.category}
+                        cx="50"
+                        cy="50"
+                        r="38"
+                        fill="none"
+                        stroke={row.color}
+                        strokeWidth="15"
+                        strokeDasharray={`${row.len} ${DONUT_CIRCUMFERENCE - row.len}`}
+                        strokeDashoffset={-row.offset}
+                      >
+                        <title>{`${row.category}: ${formatPeso(row.amount)} (${row.pct}%)`}</title>
+                      </circle>
+                    ))
+                  )}
                 </svg>
 
                 <div className="wz-donut-center-text">
                   <div className="wz-donut-center-sub">Total Expenses</div>
-                  <div className="wz-donut-center-amount">₱10,000</div>
+                  <div className="wz-donut-center-amount">{formatPeso(breakdown.total)}</div>
                 </div>
               </div>
 
               {/* Category Breakdown List */}
               <div className="wz-breakdown-list">
-                <div className="wz-breakdown-row">
-                  <div className="wz-breakdown-row-left">
-                    <span className="wz-breakdown-pct-pill" style={{ background: "#ff3b5c" }}>30%</span>
-                    <span>Machinery Maintenance</span>
+                {breakdown.rows.length === 0 ? (
+                  <div style={{ fontSize: "0.8rem", color: "#94a3b8", textAlign: "center", padding: "8px 0" }}>
+                    No expenses recorded {breakdownRange.toLowerCase()}.
                   </div>
-                  <span className="wz-breakdown-amount">₱3,000</span>
-                </div>
-
-                <div className="wz-breakdown-row">
-                  <div className="wz-breakdown-row-left">
-                    <span className="wz-breakdown-pct-pill" style={{ background: "#182538" }}>25%</span>
-                    <span>Staff Salaries</span>
-                  </div>
-                  <span className="wz-breakdown-amount">₱2,500</span>
-                </div>
-
-                <div className="wz-breakdown-row">
-                  <div className="wz-breakdown-row-left">
-                    <span className="wz-breakdown-pct-pill" style={{ background: "#38bdf8" }}>20%</span>
-                    <span>Fuel</span>
-                  </div>
-                  <span className="wz-breakdown-amount">₱2,000</span>
-                </div>
-
-                <div className="wz-breakdown-row">
-                  <div className="wz-breakdown-row-left">
-                    <span className="wz-breakdown-pct-pill" style={{ background: "#93c5fd" }}>15%</span>
-                    <span>Insurance</span>
-                  </div>
-                  <span className="wz-breakdown-amount">₱1,500</span>
-                </div>
-
-                <div className="wz-breakdown-row">
-                  <div className="wz-breakdown-row-left">
-                    <span className="wz-breakdown-pct-pill" style={{ background: "#94a3b8" }}>5%</span>
-                    <span>Office Supplies</span>
-                  </div>
-                  <span className="wz-breakdown-amount">₱500</span>
-                </div>
-
-                <div className="wz-breakdown-row">
-                  <div className="wz-breakdown-row-left">
-                    <span className="wz-breakdown-pct-pill" style={{ background: "#cbd5e1", color: "#334155" }}>5%</span>
-                    <span>Marketing</span>
-                  </div>
-                  <span className="wz-breakdown-amount">₱500</span>
-                </div>
+                ) : (
+                  breakdown.rows.map((row) => (
+                    <div key={row.category} className="wz-breakdown-row">
+                      <div className="wz-breakdown-row-left">
+                        <span
+                          className="wz-breakdown-pct-pill"
+                          style={{ background: row.color, color: row.color === "#cbd5e1" || row.color === OTHER_COLOR ? "#334155" : undefined }}
+                        >
+                          {row.pct}%
+                        </span>
+                        <span>{row.category}</span>
+                      </div>
+                      <span className="wz-breakdown-amount">{formatPeso(row.amount)}</span>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </section>

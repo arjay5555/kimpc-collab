@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { api, getCachedApiData } from "../../services/api";
+import { api, getCachedApiData, onReloadLatest } from "../../services/api";
 import { computePaymentSummary } from "../../utils/paymentSummary";
 import ManagerSidebar from "../../components/ManagerSidebar";
 import ManagerSearchBar from "../../components/ManagerSearchBar";
@@ -428,6 +428,7 @@ export default function BookingApprovals() {
             startDate: updatedFields.startDateISO,
             endDate: updatedFields.endDateISO,
             isVoid: targetStatus === "Voided",
+            version: versionOf(currentRawId),
           },
         });
         if (!res.ok) {
@@ -586,6 +587,23 @@ export default function BookingApprovals() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Version of the booking as last loaded from the server; sent with every update for optimistic concurrency.
+  const versionOf = (rawId) => liveBookings.find((b) => String(b.id || b._id) === String(rawId))?.version;
+
+  // "Reload latest" after a 409: drop this booking's unsaved local overrides and pull fresh data.
+  useEffect(
+    () =>
+      onReloadLatest(({ current }) => {
+        const keys = [current?.id, current?._id, current?.displayId].filter(Boolean).map(String);
+        const dropKeys = (prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !keys.includes(k)));
+        setStatusOverrides(dropKeys);
+        setBookingOverrides(dropKeys);
+        setViewingBooking(null);
+        fetchData();
+      }),
+    []
+  );
 
   const filteredMembers = useMemo(() => {
     const q = memberSearch.trim().toLowerCase();
@@ -1267,7 +1285,7 @@ export default function BookingApprovals() {
       try {
         const res = await api(`/applications/${rawId}`, {
           method: "PATCH",
-          body: { status: newStatus },
+          body: { status: newStatus, version: versionOf(rawId) },
         });
         if (!res.ok) {
           setFeedback({ message: res.data?.error || `Failed to update status.`, isError: true });
@@ -1290,7 +1308,7 @@ export default function BookingApprovals() {
     }
     setFeedback({ message: "Granting cancellation request...", isError: false });
     try {
-      const res = await api(`/applications/${rawId}/grant-cancellation`, { method: "POST" });
+      const res = await api(`/applications/${rawId}/grant-cancellation`, { method: "POST", body: { version: versionOf(rawId) } });
       if (res.ok) {
         setFeedback({ message: "Cancellation request granted. Booking marked as Cancelled.", isError: false });
         setViewingBooking(null);
@@ -1310,7 +1328,7 @@ export default function BookingApprovals() {
     }
     setFeedback({ message: "Declining cancellation request...", isError: false });
     try {
-      const res = await api(`/applications/${rawId}/decline-cancellation`, { method: "POST" });
+      const res = await api(`/applications/${rawId}/decline-cancellation`, { method: "POST", body: { version: versionOf(rawId) } });
       if (res.ok) {
         setFeedback({ message: "Cancellation request declined. Booking reverted to Approved.", isError: false });
         setViewingBooking(null);

@@ -81,6 +81,8 @@ const accountSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    versionKey: "version",
+    optimisticConcurrency: true,
     toJSON: {
       transform(doc, ret) {
         ret.id = String(ret._id);

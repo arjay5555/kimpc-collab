@@ -9,6 +9,7 @@ const MachineryMaintenance = require("../models/MachineryMaintenance");
 const authManager = require("../middleware/authManager");
 const { logAudit } = require("../services/auditLogger");
 const { clean, cleanEmail, fail, isSameMachineryMatch } = require("./routeHelpers");
+const { conflictOrNotFound, rethrowConcurrency } = require("../utils/concurrency");
 
 /**
  * POST /api/pos-booking and /api/manager/pos-booking
@@ -114,47 +115,51 @@ const handlePosBooking = async (req, res) => {
       : `${rentalDays} day${rentalDays === 1 ? "" : "s"} @ ₱${rate}/day`;
 
     // Create walk-in application (unpaid/Pending unless explicitly marked paid by manager)
-    const app = await Application.create({
-      memberEmail: `walkin.${Date.now()}@coop.local`,
-      memberName: `${farmerName} (${coopId})`,
-      equipment,
-      machineryUnitId,
-      startDate,
-      endDate,
-      totalAmount: rentalFee,
-      ratePerHectare: rentalType === "day" ? rate : 0,
-      paymentStatus: isPaidNow ? "Paid" : "Pending",
-      paymentAmount: totalPaid,
-      paymentMethod,
-      receiptNo: txId,
-      receivedBy: isPaidNow ? posReceiver : "",
-      paymentDateTime: isPaidNow ? new Date().toISOString() : "",
-      paymentHistory: initialHistory,
-      status: "Approved",
-      isWalkIn: true,
-      farmerPhone,
-      financials: {
-        dailyRate: rate,
-        deposit: 0,
-        totalPaid,
-        paymentMethod,
-        isSettled: isPaidNow,
-      },
-    });
-
-    // Only log cash ledger revenue immediately when payment is collected upfront
-    if (isPaidNow) {
-      await Transaction.create({
-        txId,
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        farmer: farmerName,
+    // Walk-in booking and its cash ledger entry must be recorded together.
+    let app;
+    await mongoose.connection.transaction(async (session) => {
+      [app] = await Application.create([{
+        memberEmail: `walkin.${Date.now()}@coop.local`,
+        memberName: `${farmerName} (${coopId})`,
         equipment,
-        type: "Rental Fee",
-        amount: totalPaid,
+        machineryUnitId,
+        startDate,
+        endDate,
+        totalAmount: rentalFee,
+        ratePerHectare: rentalType === "day" ? rate : 0,
+        paymentStatus: isPaidNow ? "Paid" : "Pending",
+        paymentAmount: totalPaid,
         paymentMethod,
-        notes: `Walk-in Rental (${durationLabel}) - Zero Security Deposit`,
-      });
-    }
+        receiptNo: txId,
+        receivedBy: isPaidNow ? posReceiver : "",
+        paymentDateTime: isPaidNow ? new Date().toISOString() : "",
+        paymentHistory: initialHistory,
+        status: "Approved",
+        isWalkIn: true,
+        farmerPhone,
+        financials: {
+          dailyRate: rate,
+          deposit: 0,
+          totalPaid,
+          paymentMethod,
+          isSettled: isPaidNow,
+        },
+      }], { session });
+
+      // Only log cash ledger revenue immediately when payment is collected upfront
+      if (isPaidNow) {
+        await Transaction.create([{
+          txId,
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          farmer: farmerName,
+          equipment,
+          type: "Rental Fee",
+          amount: totalPaid,
+          paymentMethod,
+          notes: `Walk-in Rental (${durationLabel}) - Zero Security Deposit`,
+        }], { session });
+      }
+    });
 
     await logAudit({
       action: "POS_WALKIN_BOOKING_CREATED",
@@ -214,43 +219,55 @@ router.post("/manager/pos-settlement", authManager, async (req, res) => {
     const netRefundOrDue = initialDeposit - totalDeductions;
     const isRefund = netRefundOrDue >= 0;
 
-    // Record ledger transactions for deductions
-    if (totalLateFee > 0) {
-      await Transaction.create({
-        txId: `TX-${Date.now().toString().slice(-6)}-L`,
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        farmer: rentalId,
-        equipment: "Return Overdue",
-        type: "Late Fee",
-        amount: totalLateFee,
-        paymentMethod: "Cash",
-        notes: `${lateDays} days overdue @ ₱${lateFeePerDay}/day`,
-      });
-    }
+    // Ledger deductions and the booking status flip must land together.
+    await mongoose.connection.transaction(async (session) => {
+      // Record ledger transactions for deductions
+      if (totalLateFee > 0) {
+        await Transaction.create([{
+          txId: `TX-${Date.now().toString().slice(-6)}-L`,
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          farmer: rentalId,
+          equipment: "Return Overdue",
+          type: "Late Fee",
+          amount: totalLateFee,
+          paymentMethod: "Cash",
+          notes: `${lateDays} days overdue @ ₱${lateFeePerDay}/day`,
+        }], { session });
+      }
 
-    if (repairCost > 0) {
-      await Transaction.create({
-        txId: `TX-${Date.now().toString().slice(-6)}-R`,
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        farmer: rentalId,
-        equipment: "Damage Repair",
-        type: "Damage Charge",
-        amount: repairCost,
-        paymentMethod: "Cash",
-        notes: deductionNotes || "Repair parts deduction",
-      });
-    }
+      if (repairCost > 0) {
+        await Transaction.create([{
+          txId: `TX-${Date.now().toString().slice(-6)}-R`,
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          farmer: rentalId,
+          equipment: "Damage Repair",
+          type: "Damage Charge",
+          amount: repairCost,
+          paymentMethod: "Cash",
+          notes: deductionNotes || "Repair parts deduction",
+        }], { session });
+      }
 
-    // Update application record if valid ObjectId (do not override payment settlement status on return)
-    if (mongoose.isValidObjectId(rentalId)) {
-      await Application.findByIdAndUpdate(rentalId, {
-        status: "Returned",
-        "financials.lateFee": totalLateFee,
-        "financials.repairDeduction": repairCost,
-        "financials.fuelCharge": fuelCharge,
-        "financials.refundAmount": isRefund ? netRefundOrDue : 0,
-      });
-    }
+      // Update application record if valid ObjectId (do not override payment settlement status on return)
+      if (mongoose.isValidObjectId(rentalId)) {
+        const versionFilter = req.body.version != null && req.body.version !== "" ? { version: Number(req.body.version) } : {};
+        const updated = await Application.findOneAndUpdate(
+          { _id: rentalId, ...versionFilter },
+          {
+            $set: {
+              status: "Returned",
+              "financials.lateFee": totalLateFee,
+              "financials.repairDeduction": repairCost,
+              "financials.fuelCharge": fuelCharge,
+              "financials.refundAmount": isRefund ? netRefundOrDue : 0,
+            },
+            $inc: { version: 1 },
+          },
+          { session }
+        );
+        if (!updated && versionFilter.version !== undefined) throw await conflictOrNotFound(Application, rentalId);
+      }
+    });
 
     await logAudit({
       action: "DEPOSIT_SETTLEMENT_FINALIZED",
@@ -285,6 +302,7 @@ router.post("/manager/pos-settlement", authManager, async (req, res) => {
         : `Settlement finalized. Collect ₱${Math.abs(netRefundOrDue).toFixed(2)} balance from farmer.`,
     });
   } catch (error) {
+    rethrowConcurrency(error);
     console.error("Error finalizing POS settlement:", error);
     res.status(500).json({ error: "Failed to finalize settlement." });
   }

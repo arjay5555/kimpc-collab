@@ -588,38 +588,7 @@ export default function AdminDashboard() {
                         <circle cx="9" cy="7" r="4" />
                       </svg>
                     </div>
-                    <span>Accounts &amp; Role Permissions</span>
-                  </div>
-                  <span style={{ color: "#64748b", fontSize: "0.82rem" }}>→</span>
-                </Link>
-
-                <Link
-                  to="/admin/financial-policies"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "11px 13px",
-                    background: "#f8fafc",
-                    border: "1px solid #e2e8f0",
-                    borderRadius: "10px",
-                    textDecoration: "none",
-                    color: "#0f172a",
-                    fontWeight: 600,
-                    fontSize: "0.85rem",
-                    transition: "all 0.15s ease",
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "#f1f5f9")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "#f8fafc")}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: "#fef3c7", color: "#d97706", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <rect x="2" y="5" width="20" height="14" rx="2" />
-                        <line x1="2" y1="10" x2="22" y2="10" />
-                      </svg>
-                    </div>
-                    <span>Deposits, Payments &amp; Refunds</span>
+                    <span>Accounts &amp; Roles</span>
                   </div>
                   <span style={{ color: "#64748b", fontSize: "0.82rem" }}>→</span>
                 </Link>

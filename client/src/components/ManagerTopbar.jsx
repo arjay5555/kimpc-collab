@@ -43,17 +43,12 @@ export default function ManagerTopbar({
     },
   ]);
 
-  const [unreadMsgCount, setUnreadMsgCount] = useState(0);
-
-  // Fetch pending applications, cancellation requests, and member messages for live notifications
+  // Fetch pending applications and cancellation requests for live notifications
   useEffect(() => {
     let isMounted = true;
     const fetchAlerts = async () => {
       try {
-        const [appRes, msgRes] = await Promise.all([
-          api("/applications"),
-          api("/manager/messages"),
-        ]);
+        const appRes = await api("/applications");
 
         const incomingNotifs = [];
 
@@ -82,22 +77,6 @@ export default function ManagerTopbar({
               desc: "Members requested cancellation on approved bookings.",
               time: "Action required",
               link: "/booking-approvals",
-              read: false,
-            });
-          }
-        }
-
-        if (msgRes.ok && msgRes.data) {
-          const unreadMsgs = (msgRes.data.messages || []).filter((m) => m.status === "unread");
-          if (isMounted) setUnreadMsgCount(unreadMsgs.length);
-          if (unreadMsgs.length > 0) {
-            incomingNotifs.push({
-              id: "unread-msgs",
-              type: "info",
-              title: `${unreadMsgs.length} New Member Question${unreadMsgs.length > 1 ? "s" : ""}`,
-              desc: `Latest from ${unreadMsgs[0].memberName || "Member"}: "${unreadMsgs[0].subject || unreadMsgs[0].message?.slice(0, 30)}"`,
-              time: "Inquiry",
-              link: "/manager/messages",
               read: false,
             });
           }
@@ -192,31 +171,6 @@ export default function ManagerTopbar({
               </svg>
             </div>
           )}
-
-          {/* ================= Messages Icon (Envelope) ================= */}
-          <Link
-            to="/manager/messages"
-            className="wz-icon-btn"
-            title="Member Inquiries & Messages"
-            style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-          >
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-            {unreadMsgCount > 0 && (
-              <span
-                style={{
-                  position: "absolute",
-                  top: "2px",
-                  right: "2px",
-                  width: "8px",
-                  height: "8px",
-                  borderRadius: "50%",
-                  backgroundColor: "#0284c7",
-                }}
-              />
-            )}
-          </Link>
 
           {/* ================= Settings Icon (Gear) ================= */}
           <button
@@ -314,7 +268,7 @@ export default function ManagerTopbar({
             <div
               className="wz-user-pill"
               onClick={() => setProfileOpen((p) => !p)}
-              title="Click to view personal profile, change password, and log out"
+              title="Click to view your profile and settings"
               style={{ cursor: "pointer" }}
             >
               <div
@@ -345,7 +299,6 @@ export default function ManagerTopbar({
               isOpen={profileOpen}
               onClose={() => setProfileOpen(false)}
               onOpenSettings={() => handleOpenSettings("account")}
-              onOpenChangePassword={() => handleOpenSettings("account")}
             />
           </div>
         </div>

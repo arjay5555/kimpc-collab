@@ -1748,12 +1748,8 @@ router.post(
       account.forgotPasswordRequested = true;
       await account.save();
 
-      // Build trusted reset link (prioritizing current browser origin if available, then APP_BASE_URL)
-      const appBaseUrl = (
-        req.get("origin") ||
-        process.env.APP_BASE_URL ||
-        `${req.protocol}://${req.get("host")}`
-      ).trim().replace(/\/+$/, "");
+      // Build trusted reset link from server configuration only (Origin/Host headers are attacker-controlled)
+      const appBaseUrl = String(process.env.APP_BASE_URL || "http://localhost:5173").trim().replace(/\/+$/, "");
 
       const resetLink = `${appBaseUrl}/reset-password?token=${rawToken}`;
 
@@ -1762,7 +1758,7 @@ router.post(
       console.log(`   Account: ${account.fullName}`);
       console.log(`   Cooperative ID: ${account.cooperativeId || 'N/A'}`);
       console.log(`   Registered Email: ${account.email}`);
-      console.log(`   Reset URL: ${resetLink}`);
+      if (process.env.LOG_RESET_LINKS === "true") console.log(`   Reset URL: ${resetLink}`);
       console.log(`============================================================\n`);
 
       // Dispatch email through configured service (Resend or SMTP)
@@ -1945,26 +1941,61 @@ router.post(["/auth/reset-password", "/reset-password"], async (req, res) => {
 
 // ---------- Social Authentication (Google & Facebook) ----------
 
+async function verifyGoogleIdentity({ credential, accessToken }) {
+  const { clientId } = await getEffectiveGoogleKeys();
+  if (!clientId) return null;
+
+  if (typeof credential === "string" && credential) {
+    try {
+      const { google } = require("googleapis");
+      const ticket = await new google.auth.OAuth2(clientId).verifyIdToken({ idToken: credential, audience: clientId });
+      const p = ticket.getPayload() || {};
+      if (!p.email || p.email_verified === false) return null;
+      return { email: cleanEmail(p.email), fullName: clean(p.name || p.given_name || "Google Member") };
+    } catch (err) {
+      console.warn("Google ID token verification failed:", err.message);
+      return null;
+    }
+  }
+
+  if (typeof accessToken === "string" && accessToken) {
+    try {
+      const infoRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(accessToken)}`);
+      if (!infoRes.ok) return null;
+      const info = await infoRes.json();
+      // The token must have been issued to OUR client, for a verified email.
+      if (info.aud !== clientId && info.azp !== clientId) return null;
+      if (!info.email || String(info.email_verified) !== "true") return null;
+      let fullName = "Google Member";
+      try {
+        const profileRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (profileRes.ok) {
+          const profile = await profileRes.json();
+          fullName = clean(profile.name || profile.given_name || fullName);
+        }
+      } catch {
+        // name is optional
+      }
+      return { email: cleanEmail(info.email), fullName };
+    } catch (err) {
+      console.warn("Google access token verification failed:", err.message);
+      return null;
+    }
+  }
+  return null;
+}
+
 router.post("/auth/google", async (req, res) => {
   try {
-    let email = cleanEmail(req.body.email);
-    let fullName = clean(req.body.fullName);
-    const credential = req.body.credential;
-
-    if (credential && typeof credential === "string") {
-      try {
-        const parts = credential.split(".");
-        if (parts.length === 3) {
-          const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf-8"));
-          if (payload.email) {
-            email = cleanEmail(payload.email);
-            fullName = clean(payload.name || payload.given_name || fullName || "Google Member");
-          }
-        }
-      } catch (err) {
-        console.warn("Could not parse Google credential JWT:", err);
-      }
+    // Never trust a client-supplied email: identity must come from a token Google signed for us.
+    const verified = await verifyGoogleIdentity({ credential: req.body.credential, accessToken: req.body.accessToken });
+    if (!verified) {
+      return fail(res, 401, "Could not verify your Google sign-in. Please try again.");
     }
+    const email = verified.email;
+    const fullName = verified.fullName;
 
     const googleLoginEnabled = await getSystemSetting("googleLoginEnabled", true);
     if (!googleLoginEnabled) {
@@ -2089,26 +2120,38 @@ router.post("/auth/facebook", async (req, res) => {
       return fail(res, 403, "Log in with Facebook is currently disabled by the system administrator.");
     }
 
-    const { accessToken, userID } = req.body;
-    let email = cleanEmail(req.body.email);
-    let fullName = clean(req.body.name || req.body.fullName);
-    let fbId = clean(userID || req.body.id);
+    const accessToken = typeof req.body.accessToken === "string" ? req.body.accessToken : "";
+    if (!accessToken) {
+      return fail(res, 401, "Facebook access token is required.");
+    }
 
-    if (accessToken) {
-      try {
-        const fbUrl = `https://graph.facebook.com/me?fields=id,name,email,picture&access_token=${encodeURIComponent(accessToken)}`;
-        const fbResponse = await fetch(fbUrl);
-        if (fbResponse.ok) {
-          const fbData = await fbResponse.json();
-          if (fbData.id) fbId = fbData.id;
-          if (fbData.name) fullName = clean(fbData.name);
-          if (fbData.email) email = cleanEmail(fbData.email);
-        } else {
-          console.warn("Facebook Graph API validation returned warning:", await fbResponse.text());
-        }
-      } catch (err) {
-        console.warn("Could not reach Facebook Graph API:", err);
+    let email = "";
+    let fullName = "";
+    let fbId = "";
+    try {
+      const { appId, appSecret } = await getEffectiveFacebookKeys();
+      // 1. Confirm the token is valid and was issued to OUR app (prevents token substitution).
+      const debugUrl = `https://graph.facebook.com/debug_token?input_token=${encodeURIComponent(accessToken)}&access_token=${encodeURIComponent(`${appId}|${appSecret}`)}`;
+      const debugRes = await fetch(debugUrl);
+      const debugData = debugRes.ok ? (await debugRes.json()).data : null;
+      if (!debugData || !debugData.is_valid || String(debugData.app_id) !== String(appId)) {
+        return fail(res, 401, "Could not verify your Facebook sign-in. Please try again.");
       }
+      // 2. Identity comes only from the Graph API.
+      const fbResponse = await fetch(`https://graph.facebook.com/me?fields=id,name,email&access_token=${encodeURIComponent(accessToken)}`);
+      if (!fbResponse.ok) {
+        return fail(res, 401, "Could not verify your Facebook sign-in. Please try again.");
+      }
+      const fbData = await fbResponse.json();
+      fbId = clean(fbData.id);
+      fullName = clean(fbData.name);
+      email = cleanEmail(fbData.email);
+      if (!fbId || String(debugData.user_id) !== fbId) {
+        return fail(res, 401, "Could not verify your Facebook sign-in. Please try again.");
+      }
+    } catch (err) {
+      console.warn("Could not reach Facebook Graph API:", err.message);
+      return fail(res, 502, "Facebook verification is temporarily unavailable. Please try again.");
     }
 
     if (!email && fbId) {
@@ -2217,9 +2260,9 @@ router.post("/auth/facebook", async (req, res) => {
 // Get current authenticated user's profile information
 router.get("/auth/me", authenticate, async (req, res) => {
   try {
-    const account = await Account.findById(req.user._id).select("-passwordHash -adminPinHash").lean();
+    const account = await Account.findById(req.user._id);
     if (!account) return fail(res, 404, "Account not found.");
-    res.json(account);
+    res.json(account.toJSON());
   } catch (error) {
     console.error("Fetch current profile error:", error);
     res.status(500).json({ error: "Failed to fetch profile information." });

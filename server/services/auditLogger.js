@@ -13,12 +13,9 @@ const AuditLog = require("../models/AuditLog");
  */
 function extractIp(req) {
   if (!req) return "";
-  return (
-    req.headers?.["x-forwarded-for"]?.split(",")[0]?.trim() ||
-    req.socket?.remoteAddress ||
-    req.ip ||
-    ""
-  );
+  // req.ip honours Express "trust proxy" (set TRUST_PROXY when deployed behind a proxy);
+  // raw X-Forwarded-For is client-controlled and must not be trusted directly.
+  return req.ip || req.socket?.remoteAddress || "";
 }
 
 /**
@@ -207,7 +204,7 @@ async function logAudit({
   try {
     // Extract actor information from req if not explicitly provided
     const reqUser = req?.admin || req?.user;
-    const email = cleanEmail(actorEmail || reqUser?.email || req?.headers?.["x-admin-email"] || "system");
+    const email = cleanEmail(actorEmail || reqUser?.email || "system");
     const name = clean(actorName || reqUser?.fullName || (email !== "system" ? email.split("@")[0] : "System Administrator"));
     const role = clean(actorRole || reqUser?.role || "admin");
     const id = actorId || reqUser?._id || reqUser?.id || null;

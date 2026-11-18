@@ -10,7 +10,9 @@ const AuditLog = require("../models/AuditLog");
 const { getSystemSetting, setSystemSetting } = require("../models/SystemSetting");
 
 const { sendDeleteOtpEmail, sendDeveloperIntegrationAuthEmail } = require("../services/mailer");
-const { logAudit, logSystemEvent } = require("../services/auditLogger");
+const { logAudit, logSystemEvent, deriveModule, deriveAffectedRecord } = require("../services/auditLogger");
+const authenticate = require("../middleware/authenticate");
+const authorizeRoles = require("../middleware/authorizeRoles");
 const {
   ROLES,
   PROFILE_FIELDS,
@@ -21,6 +23,32 @@ const {
   requireAdmin,
   nextCooperativeId,
 } = require("./routeHelpers");
+const { assertVersion, saveVersioned, rethrowConcurrency } = require("../utils/concurrency");
+
+// ---------- Access guards ----------
+// Never trust actor/admin identity sent by the client: overwrite it with the authenticated user.
+function bindActorIdentity(req, res, next) {
+  const me = cleanEmail(req.user.email);
+  if (!req.body || typeof req.body !== "object") req.body = {};
+  req.body.adminEmail = me;
+  req.body.actorEmail = me;
+  req.headers["x-actor-email"] = me;
+  req.headers["x-admin-email"] = me;
+  next();
+}
+const adminOnly = [authenticate, authorizeRoles("admin"), bindActorIdentity];
+
+// Allow the account owner, or one of the given staff roles, through.
+function selfOrRoles(...roles) {
+  return (req, res, next) => {
+    const isSelf = cleanEmail(req.params.email) === cleanEmail(req.user.email);
+    if (isSelf || roles.includes(String(req.user.role || "").toLowerCase())) return next();
+    return fail(res, 403, "You can only access your own account.");
+  };
+}
+
+const HTML_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
 
 // Temporary in-memory stores for multi-factor admin deletion flow
 const deleteOtpStore = new Map(); // adminEmail -> { code, targetEmail, expiresAt, attempts }
@@ -38,7 +66,7 @@ router.get("/cooperative-id/next", async (req, res) => {
 
 // ---------- Accounts (admin directory + member profile) ----------
 
-router.get("/accounts", async (req, res) => {
+router.get("/accounts", ...adminOnly, async (req, res) => {
   try {
     res.json(await Account.find().sort({ createdAt: 1 }));
   } catch (error) {
@@ -48,7 +76,7 @@ router.get("/accounts", async (req, res) => {
 });
 
 // GET /api/accounts/:email - Retrieve one account by email address.
-router.get("/accounts/:email", async (req, res) => {
+router.get("/accounts/:email", authenticate, selfOrRoles("admin", "manager"), async (req, res) => {
   try {
     const account = await Account.findOne({ email: cleanEmail(req.params.email) });
     if (!account) return fail(res, 404, "Account not found.");
@@ -60,7 +88,7 @@ router.get("/accounts/:email", async (req, res) => {
 });
 
 // Account created by an administrator (Staff or Member, pre-verified)
-router.post("/accounts", async (req, res) => {
+router.post("/accounts", ...adminOnly, async (req, res) => {
   try {
     const fullName = clean(req.body.fullName);
     const email = cleanEmail(req.body.email);
@@ -147,12 +175,13 @@ router.post("/accounts", async (req, res) => {
 });
 
 // Admin edits an account (fullName, email, password, role)
-router.patch("/accounts/:email", async (req, res) => {
+router.patch("/accounts/:email", ...adminOnly, async (req, res) => {
   try {
     const currentEmail = cleanEmail(req.params.email);
     const adminActor = cleanEmail(req.body.actorEmail || req.headers["x-actor-email"] || "admin");
     const account = await Account.findOne({ email: currentEmail });
     if (!account) return fail(res, 404, "Account not found.");
+    assertVersion(account, req.body.version);
 
     const oldName = account.fullName;
     const oldRole = account.role;
@@ -219,18 +248,21 @@ router.patch("/accounts/:email", async (req, res) => {
       }
     }
 
-    await account.save();
+    await mongoose.connection.transaction(async (session) => {
+      await saveVersioned(account, { session });
 
-    // If email or fullName changed, keep existing equipment applications synced
-    if ((newEmail && newEmail !== currentEmail) || newFullName) {
-      await Application.updateMany(
-        { memberEmail: currentEmail },
-        {
-          memberEmail: account.email,
-          memberName: account.fullName
-        }
-      );
-    }
+      // If email or fullName changed, keep existing equipment applications synced
+      if ((newEmail && newEmail !== currentEmail) || newFullName) {
+        await Application.updateMany(
+          { memberEmail: currentEmail },
+          {
+            memberEmail: account.email,
+            memberName: account.fullName
+          },
+          { session }
+        );
+      }
+    });
 
     await logAudit({
       action: "ACCOUNT_UPDATED",
@@ -245,13 +277,14 @@ router.patch("/accounts/:email", async (req, res) => {
 
     res.json(account);
   } catch (error) {
+    rethrowConcurrency(error);
     console.error("Error updating account:", error);
     res.status(500).json({ error: "Failed to update account." });
   }
 });
 
 // Admin suspends / unsuspends an account
-router.patch("/accounts/:email/suspend", async (req, res) => {
+router.patch("/accounts/:email/suspend", ...adminOnly, async (req, res) => {
   try {
     const targetEmail = cleanEmail(req.params.email);
     const adminActor = cleanEmail(req.body.actorEmail || req.headers["x-actor-email"] || "admin");
@@ -269,7 +302,7 @@ router.patch("/accounts/:email/suspend", async (req, res) => {
     account.suspendedAt = isSuspended ? new Date() : null;
     account.suspensionReason = isSuspended ? (reason || "Suspended by administrator") : "";
 
-    await account.save();
+    await saveVersioned(account);
 
     await logAudit({
       action: isSuspended ? "ACCOUNT_SUSPENDED" : "ACCOUNT_ACTIVATED",
@@ -286,13 +319,14 @@ router.patch("/accounts/:email/suspend", async (req, res) => {
 
     res.json(account);
   } catch (error) {
+    rethrowConcurrency(error);
     console.error("Error toggling account suspension:", error);
     res.status(500).json({ error: "Failed to update account suspension." });
   }
 });
 
 // Admin archives / unarchives (restores) an account
-router.patch("/accounts/:email/archive", async (req, res) => {
+router.patch("/accounts/:email/archive", ...adminOnly, async (req, res) => {
   try {
     const targetEmail = cleanEmail(req.params.email);
     const adminActor = cleanEmail(req.body.actorEmail || req.headers["x-actor-email"] || "admin");
@@ -308,7 +342,7 @@ router.patch("/accounts/:email/archive", async (req, res) => {
     account.isArchived = isArchived;
     account.archivedAt = isArchived ? new Date() : null;
 
-    await account.save();
+    await saveVersioned(account);
 
     await logAudit({
       action: isArchived ? "ACCOUNT_ARCHIVED" : "ACCOUNT_RESTORED",
@@ -325,6 +359,7 @@ router.patch("/accounts/:email/archive", async (req, res) => {
 
     res.json(account);
   } catch (error) {
+    rethrowConcurrency(error);
     console.error("Error toggling account archive:", error);
     res.status(500).json({ error: "Failed to update account archive status." });
   }
@@ -333,9 +368,9 @@ router.patch("/accounts/:email/archive", async (req, res) => {
 // ---------- 6-DIGIT ADMIN ACTION SECURITY PIN SYSTEM ----------
 
 // 1. Get current PIN status for an admin
-router.get("/admin/pin-status", async (req, res) => {
+router.get("/admin/pin-status", ...adminOnly, async (req, res) => {
   try {
-    const email = cleanEmail(req.query.email || req.user?.email);
+    const email = cleanEmail(req.user.email);
     if (!email) return fail(res, 400, "Admin email required.");
 
     const admin = await Account.findOne({ email });
@@ -353,9 +388,9 @@ router.get("/admin/pin-status", async (req, res) => {
 });
 
 // 2. Set initial 6-digit PIN (for 1st admin or Google admins without a PIN)
-router.post("/admin/set-initial-pin", async (req, res) => {
+router.post("/admin/set-initial-pin", ...adminOnly, async (req, res) => {
   try {
-    const email = cleanEmail(req.body.email || req.user?.email);
+    const email = cleanEmail(req.user.email);
     const newPin = String(req.body.newPin ?? "").trim();
     const confirmPin = String(req.body.confirmPin ?? "").trim();
 
@@ -396,9 +431,9 @@ router.post("/admin/set-initial-pin", async (req, res) => {
 });
 
 // 3. Change One-Time Temporary PIN or update PIN
-router.post("/admin/change-pin", async (req, res) => {
+router.post("/admin/change-pin", ...adminOnly, async (req, res) => {
   try {
-    const email = cleanEmail(req.body.email || req.user?.email);
+    const email = cleanEmail(req.user.email);
     const currentPin = String(req.body.currentPin ?? "").trim();
     const newPin = String(req.body.newPin ?? "").trim();
     const confirmPin = String(req.body.confirmPin ?? "").trim();
@@ -408,10 +443,7 @@ router.post("/admin/change-pin", async (req, res) => {
     if (!admin || admin.role !== "admin") return fail(res, 403, "Administrator privileges required.");
 
     if (!admin.adminPinHash) {
-      // If no custom PIN set, allow default PIN 123456 as currentPin
-      if (currentPin !== "123456") {
-        return fail(res, 401, "Invalid current PIN. (Default PIN: 123456)");
-      }
+      return fail(res, 409, "No PIN has been set yet. Please set your initial PIN first.");
     } else {
       const match = await bcrypt.compare(currentPin, admin.adminPinHash);
       if (!match) {
@@ -465,7 +497,7 @@ const MAX_PIN_ATTEMPTS = 5;
 const PIN_LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
 
 // 4. Verify 6-digit PIN for destructive actions
-router.post("/admin/verify-pin", async (req, res) => {
+router.post("/admin/verify-pin", ...adminOnly, async (req, res) => {
   try {
     const adminEmail = cleanEmail(req.body.adminEmail);
     const pin = String(req.body.pin ?? "").trim();
@@ -499,7 +531,7 @@ router.post("/admin/verify-pin", async (req, res) => {
 
     let match = false;
     if (!admin.adminPinHash) {
-      match = (pin === "123456");
+      return fail(res, 409, "No PIN has been set yet. Please set your initial PIN first.");
     } else {
       match = await bcrypt.compare(pin, admin.adminPinHash);
     }
@@ -658,7 +690,7 @@ function renderDevAuthResultPage({ success, title, message }) {
 }
 
 // 1. Dispatch Developer Authorization Request via Email
-router.post("/admin/integrations/dev-auth/request", async (req, res) => {
+router.post("/admin/integrations/dev-auth/request", ...adminOnly, async (req, res) => {
   try {
     const adminEmail = cleanEmail(req.body.adminEmail || req.user?.email);
     const actionDescription = clean(req.body.actionDescription) || "Modify System Integrations";
@@ -670,7 +702,7 @@ router.post("/admin/integrations/dev-auth/request", async (req, res) => {
     const devEmail = cleanEmail(process.env.SYSTEM_DEVELOPER_EMAIL) || "arjaypading.me@gmail.com";
     const requestId = crypto.randomUUID();
     const token = crypto.randomBytes(32).toString("hex");
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpCode = String(crypto.randomInt(100000, 1000000));
     const expiresAt = Date.now() + 15 * 60 * 1000; // 15 minutes
 
     const record = {
@@ -729,7 +761,7 @@ router.post("/admin/integrations/dev-auth/request", async (req, res) => {
 });
 
 // 2. Poll Status of Developer Authorization Request
-router.get("/admin/integrations/dev-auth/status/:requestId", async (req, res) => {
+router.get("/admin/integrations/dev-auth/status/:requestId", ...adminOnly, async (req, res) => {
   res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.set("Pragma", "no-cache");
   res.set("Expires", "0");
@@ -755,7 +787,7 @@ router.get("/admin/integrations/dev-auth/status/:requestId", async (req, res) =>
 });
 
 // 3. Verify Developer OTP Code (Direct fallback for phone/in-person authorization)
-router.post("/admin/integrations/dev-auth/verify-otp", async (req, res) => {
+router.post("/admin/integrations/dev-auth/verify-otp", ...adminOnly, async (req, res) => {
   try {
     const requestId = String(req.body.requestId || "").trim();
     const otpCode = String(req.body.otpCode || "").trim();
@@ -779,8 +811,28 @@ router.post("/admin/integrations/dev-auth/verify-otp", async (req, res) => {
       return fail(res, 403, "This request was denied by the System Developer.");
     }
 
-    if (record.otpCode !== otpCode) {
-      return fail(res, 401, "Invalid 6-digit Developer OTP code.");
+    if (cleanEmail(record.adminEmail) !== cleanEmail(req.user.email)) {
+      return fail(res, 403, "This authorization request belongs to another administrator.");
+    }
+
+    if (record.status === "APPROVED") {
+      return res.json({ ok: true, message: "System Developer authorization already confirmed." });
+    }
+
+    record.otpAttempts = (record.otpAttempts || 0) + 1;
+    const expectedOtp = Buffer.from(String(record.otpCode || ""));
+    const givenOtp = Buffer.from(otpCode);
+    const otpOk = expectedOtp.length === givenOtp.length && crypto.timingSafeEqual(expectedOtp, givenOtp);
+    if (!otpOk) {
+      const exhausted = record.otpAttempts >= 5;
+      if (exhausted) {
+        record.status = "EXPIRED";
+        record.expiresAt = Date.now() - 1;
+      }
+      await saveDevAuthRecord(record);
+      return fail(res, 401, exhausted
+        ? "Too many invalid attempts. Please initiate a new authorization request."
+        : "Invalid 6-digit Developer OTP code.");
     }
 
     record.status = "APPROVED";
@@ -834,7 +886,7 @@ router.get("/admin/integrations/dev-auth/authorize", async (req, res) => {
   return res.send(renderDevAuthResultPage({
     success: true,
     title: "Action Successfully Authorized",
-    message: `You have authorized Admin <strong>${record.adminName}</strong> (${record.adminEmail}) to modify <strong>${record.actionDescription}</strong>. The administrator portal has automatically unlocked.`,
+    message: `You have authorized Admin <strong>${escapeHtml(record.adminName)}</strong> (${escapeHtml(record.adminEmail)}) to modify <strong>${escapeHtml(record.actionDescription)}</strong>. The administrator portal has automatically unlocked.`,
   }));
 });
 
@@ -843,7 +895,7 @@ router.get("/admin/integrations/dev-auth/deny", async (req, res) => {
   const token = String(req.query.token || "").trim();
   const record = await getDevAuthRecordByToken(token);
 
-  if (!record) {
+  if (!record || Date.now() > record.expiresAt) {
     return res.status(410).send(renderDevAuthResultPage({
       success: false,
       title: "Request Expired or Invalid",
@@ -866,14 +918,14 @@ router.get("/admin/integrations/dev-auth/deny", async (req, res) => {
   return res.send(renderDevAuthResultPage({
     success: false,
     title: "Integration Modification Denied",
-    message: `You have blocked the request by Admin <strong>${record.adminName}</strong> to modify <strong>${record.actionDescription}</strong>. The action has been blocked.`,
+    message: `You have blocked the request by Admin <strong>${escapeHtml(record.adminName)}</strong> to modify <strong>${escapeHtml(record.actionDescription)}</strong>. The action has been blocked.`,
   }));
 });
 
 // ---------- MULTI-FACTOR ACCOUNT DELETION VERIFICATION FLOW ----------
 
 // Step 2 Verification: Re-authenticate Admin (Accepts either 6-digit PIN or password)
-router.post("/admin/verify-password", async (req, res) => {
+router.post("/admin/verify-password", ...adminOnly, async (req, res) => {
   try {
     const adminEmail = cleanEmail(req.body.adminEmail);
     const passwordOrPin = String(req.body.pin || req.body.password || "").trim();
@@ -949,7 +1001,7 @@ router.post("/admin/verify-password", async (req, res) => {
 });
 
 // Step 3 Verification: Generate and send OTP to Admin Email
-router.post("/admin/request-delete-otp", async (req, res) => {
+router.post("/admin/request-delete-otp", ...adminOnly, async (req, res) => {
   try {
     const adminEmail = cleanEmail(req.body.adminEmail);
     const targetEmail = cleanEmail(req.body.targetEmail);
@@ -998,7 +1050,7 @@ router.post("/admin/request-delete-otp", async (req, res) => {
       message: emailResult.sent
         ? `A 6-digit verification code has been delivered to ${adminEmail}.`
         : `A 6-digit verification code was generated for ${adminEmail}.`,
-      demoOtp: emailResult.sent ? null : otpCode,
+      demoOtp: null,
     });
   } catch (error) {
     console.error("Error requesting delete OTP:", error);
@@ -1007,7 +1059,7 @@ router.post("/admin/request-delete-otp", async (req, res) => {
 });
 
 // Step 3 Verification (part b): Verify OTP sent to Admin Email
-router.post("/admin/verify-delete-otp", async (req, res) => {
+router.post("/admin/verify-delete-otp", ...adminOnly, async (req, res) => {
   try {
     const adminEmail = cleanEmail(req.body.adminEmail);
     const targetEmail = cleanEmail(req.body.targetEmail);
@@ -1090,7 +1142,7 @@ router.post("/admin/verify-delete-otp", async (req, res) => {
 });
 
 // Final Step: Complete Account Deletion (with verified token)
-router.delete("/accounts/:email", async (req, res) => {
+router.delete("/accounts/:email", ...adminOnly, async (req, res) => {
   try {
     const targetEmail = cleanEmail(req.params.email);
     const deleteToken = req.body?.deleteToken || req.headers["x-delete-token"];
@@ -1117,8 +1169,11 @@ router.delete("/accounts/:email", async (req, res) => {
     const fullName = account.fullName;
     const role = account.role;
 
-    await Account.deleteOne({ email: targetEmail });
-    await Application.deleteMany({ memberEmail: targetEmail });
+    // Account and its bookings go together or not at all.
+    await mongoose.connection.transaction(async (session) => {
+      await Account.deleteOne({ email: targetEmail }, { session });
+      await Application.deleteMany({ memberEmail: targetEmail }, { session });
+    });
 
     await logAudit({
       action: "ACCOUNT_DELETED",
@@ -1145,7 +1200,7 @@ router.delete("/accounts/:email", async (req, res) => {
 });
 
 // Step 1 of a profile edit: store the changes as "pending".
-router.post("/accounts/:email/profile-update", async (req, res) => {
+router.post("/accounts/:email/profile-update", authenticate, selfOrRoles("admin"), async (req, res) => {
   try {
     const ownerEmail = cleanEmail(req.params.email);
     const account = await Account.findOne({ email: ownerEmail });
@@ -1183,7 +1238,7 @@ router.post("/accounts/:email/profile-update", async (req, res) => {
 });
 
 // Step 2: the member confirms, so the pending changes are applied.
-router.post("/accounts/:email/profile-confirm", async (req, res) => {
+router.post("/accounts/:email/profile-confirm", authenticate, selfOrRoles("admin"), async (req, res) => {
   try {
     const ownerEmail = cleanEmail(req.params.email);
     const account = await Account.findOne({ email: ownerEmail });
@@ -1197,14 +1252,16 @@ router.post("/accounts/:email/profile-confirm", async (req, res) => {
     PROFILE_FIELDS.forEach((field) => {
       account[field] = pending[field];
     });
-    account.emailVerified = true;
+    if (cleanEmail(pending.email) !== ownerEmail) account.emailVerified = false;
     account.pendingUpdate = null;
-    await account.save();
-
-    await Application.updateMany(
-      { memberEmail: ownerEmail },
-      { memberEmail: account.email, memberName: account.fullName }
-    );
+    await mongoose.connection.transaction(async (session) => {
+      await saveVersioned(account, { session });
+      await Application.updateMany(
+        { memberEmail: ownerEmail },
+        { memberEmail: account.email, memberName: account.fullName },
+        { session }
+      );
+    });
 
     await logAudit({
       action: "PROFILE_UPDATED",
@@ -1218,6 +1275,7 @@ router.post("/accounts/:email/profile-confirm", async (req, res) => {
 
     res.json(account);
   } catch (error) {
+    rethrowConcurrency(error);
     console.error("Error confirming profile update:", error);
     res.status(500).json({ error: "Failed to confirm profile update." });
   }
@@ -1225,7 +1283,7 @@ router.post("/accounts/:email/profile-confirm", async (req, res) => {
 
 // ---------- AUDIT LOGS ENDPOINTS ----------
 
-router.get("/audit-logs", async (req, res) => {
+router.get("/audit-logs", ...adminOnly, async (req, res) => {
   try {
     const search = clean(req.query.search);
     const action = clean(req.query.action);
@@ -1236,10 +1294,10 @@ router.get("/audit-logs", async (req, res) => {
     if (action && action !== "ALL") query.action = action;
     if (search) {
       query.$or = [
-        { actorEmail: { $regex: search, $options: "i" } },
-        { targetEmail: { $regex: search, $options: "i" } },
-        { targetName: { $regex: search, $options: "i" } },
-        { action: { $regex: search, $options: "i" } },
+        { actorEmail: { $regex: String(search).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" } },
+        { targetEmail: { $regex: String(search).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" } },
+        { targetName: { $regex: String(search).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" } },
+        { action: { $regex: String(search).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" } },
       ];
     }
 
@@ -1321,7 +1379,7 @@ router.get("/audit-logs", async (req, res) => {
 });
 
 // DELETE /api/audit-logs - Purge audit logs and record the purge event.
-router.delete("/audit-logs", async (req, res) => {
+router.delete("/audit-logs", ...adminOnly, async (req, res) => {
   try {
     const adminEmail = cleanEmail(req.body?.adminEmail || req.headers["x-admin-email"] || "admin");
     await AuditLog.deleteMany({});
@@ -1340,6 +1398,35 @@ router.delete("/audit-logs", async (req, res) => {
 });
 
 // ---------- USER IMPERSONATION SYSTEM (ADMIN ONLY) ----------
+
+// POST /api/admin/impersonate/end - Record the end of an administrator impersonation session.
+router.post("/admin/impersonate/end", authenticate, async (req, res) => {
+  try {
+    const adminEmail = cleanEmail(req.auth?.impersonatedBy || req.user?.email || "admin");
+    const targetEmail = cleanEmail(req.body?.targetEmail);
+    const targetAccountId = req.body?.targetAccountId || "";
+
+    await logSystemEvent({
+      action: "IMPERSONATION_END",
+      actorEmail: adminEmail,
+      actorRole: "admin",
+      targetEmail: targetEmail || "session",
+      targetAccount: targetAccountId || targetEmail || "session",
+      details: {
+        message: "Admin exited user impersonation and returned to administrator dashboard",
+        targetEmail,
+        adminEmail,
+      },
+      status: "Success",
+      req,
+    });
+
+    res.json({ ok: true, message: "Impersonation session ended." });
+  } catch (error) {
+    console.error("Error ending impersonation:", error);
+    res.status(500).json({ error: "Failed to end impersonation session." });
+  }
+});
 
 router.post("/admin/impersonate/:userId", requireAdmin, async (req, res) => {
   try {
@@ -1367,11 +1454,15 @@ router.post("/admin/impersonate/:userId", requireAdmin, async (req, res) => {
       return fail(res, 400, "You cannot impersonate your own administrator account.");
     }
 
+    if (targetUser.role === "admin") {
+      return fail(res, 403, "Administrator accounts cannot be impersonated.");
+    }
+
     const token = generateUserToken(targetUser, {
       isImpersonated: true,
       impersonatedBy: admin.email,
       adminId: String(admin._id || admin.id),
-    });
+    }, { expiresIn: "30m" });
 
     await logSystemEvent({
       action: "IMPERSONATION_START",
@@ -1412,33 +1503,5 @@ router.post("/admin/impersonate/:userId", requireAdmin, async (req, res) => {
   }
 });
 
-// POST /api/admin/impersonate/end - Record the end of an administrator impersonation session.
-router.post("/admin/impersonate/end", async (req, res) => {
-  try {
-    const adminEmail = cleanEmail(req.body?.adminEmail || req.headers["x-admin-email"] || "admin");
-    const targetEmail = cleanEmail(req.body?.targetEmail);
-    const targetAccountId = req.body?.targetAccountId || "";
-
-    await logSystemEvent({
-      action: "IMPERSONATION_END",
-      actorEmail: adminEmail,
-      actorRole: "admin",
-      targetEmail: targetEmail || "session",
-      targetAccount: targetAccountId || targetEmail || "session",
-      details: {
-        message: "Admin exited user impersonation and returned to administrator dashboard",
-        targetEmail,
-        adminEmail,
-      },
-      status: "Success",
-      req,
-    });
-
-    res.json({ ok: true, message: "Impersonation session ended." });
-  } catch (error) {
-    console.error("Error ending impersonation:", error);
-    res.status(500).json({ error: "Failed to end impersonation session." });
-  }
-});
 
 module.exports = router;

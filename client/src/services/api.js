@@ -89,6 +89,33 @@ function notifyIfAuthRejected(path, status, tokenUsed, data) {
   }
 }
 
+// --- Optimistic concurrency (409 VERSION_CONFLICT) ---
+const reloadLatestHandlers = new Set();
+
+/** Pages register how to replace their local copy with the server's latest; returns an unsubscribe fn. */
+export function onReloadLatest(handler) {
+  reloadLatestHandlers.add(handler);
+  return () => reloadLatestHandlers.delete(handler);
+}
+
+/** Called by the conflict banner's "Reload latest" button. */
+export function reloadLatest(conflict) {
+  if (reloadLatestHandlers.size === 0) {
+    window.location.reload();
+    return;
+  }
+  reloadLatestHandlers.forEach((handler) => handler(conflict));
+}
+
+function notifyIfVersionConflict(path, status, data) {
+  if (status !== 409 || data?.error !== "VERSION_CONFLICT") return false;
+  handleMutationInvalidation(path);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("kimpc:version-conflict", { detail: { path, ...data } }));
+  }
+  return true;
+}
+
 export function getDashboardForRole(role) {
   if (role === "admin") return "/admin";
   if (role === "manager") return "/manager";
@@ -237,7 +264,6 @@ function handleMutationInvalidation(path) {
     invalidateApiCache("/notifications");
   } else if (p.includes("/messages")) {
     invalidateApiCache("/messages");
-    invalidateApiCache("/manager/messages");
   } else if (p.includes("/member/")) {
     invalidateApiCache("/member/");
     invalidateApiCache("/accounts/");
@@ -338,7 +364,11 @@ export async function api(path, { method = "GET", body, skipCache = false, ttl =
 
       const data = await response.json().catch(() => ({}));
       notifyIfAuthRejected(path, response.status, token, data);
-      const result = { ok: response.ok, status: response.status, data };
+      const isConflict = notifyIfVersionConflict(path, response.status, data);
+      const result = isConflict
+        ? // Existing screens show data.error, so give them the readable message and keep the code + latest doc.
+          { ok: false, status: 409, conflict: data, data: { ...data, code: data.error, error: data.message } }
+        : { ok: response.ok, status: response.status, data };
 
       if (normMethod === "GET" && response.ok) {
         setCachedEntry(cacheKey, data, response.status, ttl);

@@ -84,18 +84,8 @@ function buildKpiCards(reportData) {
   const { metrics = {}, reportType } = reportData;
 
   if (reportType === "booking") {
-    const overdue = metrics.overdueReturns || 0;
     return [
-      { label: "Total Bookings", value: metrics.totalBookings || 0, sub: "In selected period" },
-      { label: "Completed", value: metrics.completed || 0, sub: "Successfully returned" },
       { label: "Active / Ongoing", value: metrics.ongoing || 0, sub: "Approved & in-field" },
-      {
-        label: "Overdue Returns",
-        value: overdue,
-        sub: overdue > 0 ? "Requires action" : "On schedule",
-        tone: overdue > 0 ? "danger" : "default",
-      },
-      { label: "Rental Volume", value: formatPeso(metrics.totalRentalValue), sub: "Gross booking value" },
     ];
   }
 

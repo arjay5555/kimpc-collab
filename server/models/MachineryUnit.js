@@ -242,7 +242,7 @@ const machineryUnitSchema = new mongoose.Schema(
     isArchived: { type: Boolean, default: false, index: true },
     archivedAt: { type: Date, default: null }
   },
-  { timestamps: true }
+  { timestamps: true, versionKey: "version", optimisticConcurrency: true }
 );
 
 // Unique serial number when provided (allows blank/empty strings without uniqueness collision)

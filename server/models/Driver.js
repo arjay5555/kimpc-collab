@@ -59,7 +59,7 @@ const driverSchema = new mongoose.Schema(
       default: [],
     },
   },
-  { timestamps: true }
+  { timestamps: true, versionKey: "version", optimisticConcurrency: true }
 );
 
 module.exports = mongoose.model("Driver", driverSchema);
