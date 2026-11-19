@@ -37,9 +37,16 @@ function generateUserToken(account, extra = {}, options = {}) {
     {
       id: String(accObj._id || accObj.id),
       email: accObj.email,
-      role: accObj.role,
+      role: Account.effectiveRole(accObj),
       fullName: accObj.fullName,
       tokenVersion: typeof accObj.tokenVersion === "number" ? accObj.tokenVersion : 0,
+      // Covering members carry their feature access so the client can shape the portal.
+      ...(Account.hasActiveManagerCover(accObj)
+        ? {
+            coverPermissions: accObj.managerCover.permissions || {},
+            coverAt: new Date(accObj.managerCover.assignedAt).getTime() || 0,
+          }
+        : {}),
       ...extra,
     },
     JWT_SECRET,

@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { getCoverPermissions, accessFor } from "../services/coverAccess";
 
 export default function ManagerSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const currentPath = location.pathname;
+  const coverPerms = getCoverPermissions();
+  const can = (feature) => Boolean(accessFor(feature, coverPerms));
 
   const isFinancialsActive =
     currentPath.startsWith("/manager/financials") ||
@@ -58,6 +61,7 @@ export default function ManagerSidebar() {
       {/* Navigation Links */}
       <nav className="wz-nav">
         {/* Dashboard */}
+        {can("dashboard") && (
         <Link
           to="/manager"
           className={`wz-nav-item ${isDashboardActive ? "active" : ""}`}
@@ -79,8 +83,10 @@ export default function ManagerSidebar() {
           </svg>
           <span>Dashboard</span>
         </Link>
+        )}
 
         {/* Bookings */}
+        {can("bookings") && (
         <Link
           to="/booking-approvals"
           className={`wz-nav-item ${isBookingsActive ? "active" : ""}`}
@@ -100,8 +106,10 @@ export default function ManagerSidebar() {
           </svg>
           <span>Bookings</span>
         </Link>
+        )}
 
         {/* Units */}
+        {can("units") && (
         <Link
           to="/manager/units"
           className={`wz-nav-item ${isUnitsActive ? "active" : ""}`}
@@ -122,8 +130,10 @@ export default function ManagerSidebar() {
           </svg>
           <span>Units</span>
         </Link>
+        )}
 
         {/* Calendar */}
+        {can("calendar") && (
         <Link
           to="/manager/calendar"
           className={`wz-nav-item ${isCalendarActive ? "active" : ""}`}
@@ -145,8 +155,10 @@ export default function ManagerSidebar() {
           </svg>
           <span>Calendar</span>
         </Link>
+        )}
 
         {/* Drivers */}
+        {can("drivers") && (
         <Link
           to="/manager/drivers"
           className={`wz-nav-item ${isDriversActive ? "active" : ""}`}
@@ -167,9 +179,10 @@ export default function ManagerSidebar() {
           </svg>
           <span>Drivers</span>
         </Link>
+        )}
 
         {/* Financials (Dropdown) */}
-        <div
+        {(can("payments") || can("expenses")) && <div
           className={`wz-nav-parent ${financialsOpen ? "active-parent" : ""}`}
           onClick={() => setFinancialsOpen((prev) => !prev)}
         >
@@ -194,26 +207,31 @@ export default function ManagerSidebar() {
           <span className="wz-nav-chevron">
             {financialsOpen ? "▲" : "▼"}
           </span>
-        </div>
+        </div>}
 
         {financialsOpen && (
           <div className="wz-nav-submenu">
-            <Link
-              to="/manager/financials/payments"
-              className={`wz-nav-subitem ${isPaymentsActive ? "active" : ""}`}
-            >
-              Payments
-            </Link>
-            <Link
-              to="/manager/financials/expenses"
-              className={`wz-nav-subitem ${isExpensesActive ? "active" : ""}`}
-            >
-              Expenses
-            </Link>
+            {can("payments") && (
+              <Link
+                to="/manager/financials/payments"
+                className={`wz-nav-subitem ${isPaymentsActive ? "active" : ""}`}
+              >
+                Payments
+              </Link>
+            )}
+            {can("expenses") && (
+              <Link
+                to="/manager/financials/expenses"
+                className={`wz-nav-subitem ${isExpensesActive ? "active" : ""}`}
+              >
+                Expenses
+              </Link>
+            )}
           </div>
         )}
 
         {/* Reports */}
+        {can("reports") && (
         <Link
           to="/manager/reports"
           className={`wz-nav-item ${isReportsActive ? "active" : ""}`}
@@ -236,6 +254,21 @@ export default function ManagerSidebar() {
           </svg>
           <span>Reports</span>
         </Link>
+        )}
+
+        {/* Audit Logs: only for staff covering for the manager who were granted it */}
+        {coverPerms?.auditLogs && (
+          <Link
+            to="/manager/audit-logs"
+            className={`wz-nav-item ${currentPath === "/manager/audit-logs" ? "active" : ""}`}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2l8 4v6c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6l8-4z" />
+              <line x1="9" y1="12" x2="15" y2="12" />
+            </svg>
+            <span>Audit Logs</span>
+          </Link>
+        )}
 
       </nav>
     </aside>

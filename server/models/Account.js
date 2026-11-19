@@ -47,6 +47,14 @@ const accountSchema = new mongoose.Schema(
     isSuspended: { type: Boolean, default: false },
     suspendedAt: { type: Date, default: null },
     suspensionReason: { type: String, default: "" },
+    // Admin-granted temporary manager access for a member while the manager is on leave.
+    managerCover: {
+      until: { type: Date, default: null },
+      assignedBy: { type: String, default: "" },
+      assignedAt: { type: Date, default: null },
+      // { feature: "view" | "edit" }, see config/managerCoverAccess.js
+      permissions: { type: mongoose.Schema.Types.Mixed, default: {} },
+    },
     // 6-digit administrative action PIN
     adminPinHash: { type: String, default: null },
     mustChangePin: { type: Boolean, default: false },
@@ -109,5 +117,19 @@ const accountSchema = new mongoose.Schema(
     }
   }
 );
+
+const hasActiveManagerCover = (acc, now = new Date()) =>
+  acc?.role === "member" && Boolean(acc.managerCover?.until) && new Date(acc.managerCover.until) > now;
+
+// Role the account acts with right now: a member with active cover acts as manager.
+accountSchema.statics.effectiveRole = (acc, now) => (hasActiveManagerCover(acc, now) ? "manager" : acc?.role);
+accountSchema.statics.hasActiveManagerCover = hasActiveManagerCover;
+// Filter for "everyone who should get manager booking notifications", including covering members with bookings access.
+accountSchema.statics.activeManagersFilter = () => ({
+  $or: [
+    { role: "manager" },
+    { role: "member", "managerCover.until": { $gt: new Date() }, "managerCover.permissions.bookings": { $exists: true } },
+  ],
+});
 
 module.exports = mongoose.model("Account", accountSchema);

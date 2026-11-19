@@ -3,6 +3,7 @@ import { useAuth } from "../../context/AuthContext";
 import { api, getCachedApiData } from "../../services/api";
 import AdminSidebar from "../../components/AdminSidebar";
 import AdminTopbar from "../../components/AdminTopbar";
+import { COVER_FEATURES } from "../../services/coverAccess";
 import "../../styles/admin-kimpc.css";
 
 export default function AccountManagement() {
@@ -139,6 +140,59 @@ export default function AccountManagement() {
       fetchAccounts();
       setTimeout(() => setFeedback({ message: "", isError: false }), 4000);
     }
+  };
+
+  // Manager cover: temporary manager access for a member while the manager is on leave
+  const closedCoverModal = { open: false, account: null, until: "", permissions: {} };
+  const [coverModal, setCoverModal] = useState(closedCoverModal);
+  const hasActiveCover = (acc) =>
+    acc.role === "member" && Boolean(acc.managerCover?.until) && new Date(acc.managerCover.until) > new Date();
+  const toLocalInput = (d) => {
+    const date = new Date(d);
+    return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  };
+  const openCoverModal = (acc) =>
+    setCoverModal(
+      hasActiveCover(acc)
+        ? { open: true, account: acc, until: toLocalInput(acc.managerCover.until), permissions: { ...(acc.managerCover.permissions || {}) } }
+        : { ...closedCoverModal, open: true, account: acc }
+    );
+  const setCoverLevel = (feature, level) =>
+    setCoverModal((m) => {
+      const permissions = { ...m.permissions };
+      if (level) permissions[feature] = level;
+      else delete permissions[feature];
+      return { ...m, permissions };
+    });
+  const coverReady = Boolean(coverModal.until) && Object.keys(coverModal.permissions).length > 0;
+
+  const handleAssignCover = async () => {
+    const { account, until, permissions } = coverModal;
+    if (!account || !coverReady) return;
+    const res = await api(`/admin/accounts/${encodeURIComponent(account.email)}/manager-cover`, {
+      method: "PUT",
+      body: { until: new Date(until).toISOString(), permissions },
+    });
+    if (!res.ok) {
+      setFeedback({ message: res.data?.error || `Failed to assign manager access (HTTP ${res.status}).`, isError: true });
+      return;
+    }
+    setCoverModal(closedCoverModal);
+    setFeedback({
+      message: `"${account.fullName}" can manage the manager portal until ${new Date(until).toLocaleString()}. They must sign in again to switch portals.`,
+      isError: false,
+    });
+    fetchAccounts();
+  };
+
+  const handleRevokeCover = async (account) => {
+    const res = await api(`/admin/accounts/${encodeURIComponent(account.email)}/manager-cover`, { method: "DELETE" });
+    if (!res.ok) {
+      setFeedback({ message: res.data?.error || `Failed to revoke manager access (HTTP ${res.status}).`, isError: true });
+      return;
+    }
+    setFeedback({ message: `Manager access for "${account.fullName}" has been revoked.`, isError: false });
+    fetchAccounts();
   };
 
   // Legacy helper for toggle
@@ -709,6 +763,11 @@ export default function AccountManagement() {
                             >
                               {acc.role || "member"}
                             </span>
+                            {hasActiveCover(acc) && (
+                              <div style={{ fontSize: "0.7rem", color: "#0369a1", fontWeight: 700, marginTop: "3px" }}>
+                                Acting manager until {new Date(acc.managerCover.until).toLocaleString()}
+                              </div>
+                            )}
                           </td>
                           <td>
                             <span
@@ -899,6 +958,39 @@ export default function AccountManagement() {
                                     <span>{isSelf ? "Self (Protected)" : isDeactivated ? "Deactivated" : "Deactivate"}</span>
                                   </button>
 
+                                  {/* Action 4: Manager cover (members only) */}
+                                  {acc.role === "member" && isActive && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOpenMenuEmail(null);
+                                        openCoverModal(acc);
+                                      }}
+                                      style={{
+                                        width: "100%",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "8px",
+                                        padding: "8px 12px",
+                                        borderRadius: "6px",
+                                        border: "none",
+                                        background: "transparent",
+                                        color: "#0369a1",
+                                        fontSize: "0.82rem",
+                                        fontWeight: 600,
+                                        cursor: "pointer",
+                                        textAlign: "left",
+                                      }}
+                                      onMouseEnter={(e) => (e.currentTarget.style.background = "#f0f9ff")}
+                                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                                    >
+                                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <path d="M12 2l8 4v6c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6l8-4z" />
+                                      </svg>
+                                      <span>{hasActiveCover(acc) ? "Edit Manager Access" : "Assign as Acting Manager"}</span>
+                                    </button>
+                                  )}
+
 
                                 </div>
                               )}
@@ -913,6 +1005,108 @@ export default function AccountManagement() {
             </div>
           </div>
       </main>
+
+      {/* Assign Acting Manager Modal Dialog */}
+      {coverModal.open && (
+        <div className="wz-modal-overlay">
+          <div className="wz-modal-content" style={{ maxWidth: "440px", padding: "24px" }}>
+            <h3 style={{ margin: "0 0 8px", fontSize: "1.1rem", fontWeight: 800, color: "var(--wz-text, #0f172a)" }}>
+              {hasActiveCover(coverModal.account) ? "Edit Manager Access" : "Assign Acting Manager"}
+            </h3>
+            <p style={{ fontSize: "0.82rem", color: "#64748b", margin: "0 0 14px", lineHeight: 1.4 }}>
+              <strong>{coverModal.account?.fullName}</strong> ({coverModal.account?.email}) will use the Manager portal
+              instead of the Member portal until the date below, with only the access you choose.
+            </p>
+            <div className="wz-form-group">
+              <label className="wz-form-label" htmlFor="cover-until">Access ends on</label>
+              <input
+                id="cover-until"
+                type="datetime-local"
+                className="wz-form-input"
+                value={coverModal.until}
+                onChange={(e) => setCoverModal({ ...coverModal, until: e.target.value })}
+              />
+            </div>
+
+            <div className="wz-form-group" style={{ marginTop: "12px" }}>
+              <span className="wz-form-label">Feature access</span>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "4px" }}>
+                {COVER_FEATURES.map((f) => {
+                  const level = coverModal.permissions[f.key] || "";
+                  const levels = f.viewOnly ? [["", "None"], ["view", "View"]] : [["", "None"], ["view", "View"], ["edit", "Edit"]];
+                  return (
+                    <div key={f.key} role="radiogroup" aria-label={`${f.label} access`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                      <span style={{ fontSize: "0.82rem", color: "var(--wz-text, #334155)", fontWeight: 600 }}>{f.label}</span>
+                      <div style={{ display: "inline-flex", border: "1px solid #cbd5e1", borderRadius: "6px", overflow: "hidden" }}>
+                        {levels.map(([value, text]) => (
+                          <button
+                            key={value || "none"}
+                            type="button"
+                            role="radio"
+                            aria-checked={level === value}
+                            onClick={() => setCoverLevel(f.key, value)}
+                            style={{
+                              padding: "4px 10px",
+                              border: "none",
+                              fontSize: "0.74rem",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              background: level === value ? (value === "edit" ? "#0369a1" : value === "view" ? "#e0f2fe" : "#f1f5f9") : "#ffffff",
+                              color: level === value ? (value === "edit" ? "#ffffff" : value === "view" ? "#0369a1" : "#475569") : "#94a3b8",
+                            }}
+                          >
+                            {text}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "16px" }}>
+              {hasActiveCover(coverModal.account) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const acc = coverModal.account;
+                    setCoverModal(closedCoverModal);
+                    handleRevokeCover(acc);
+                  }}
+                  style={{ marginRight: "auto", padding: "7px 14px", background: "#ffffff", border: "1px solid #fca5a5", color: "#dc2626", borderRadius: "6px", fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" }}
+                >
+                  Revoke Access
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setCoverModal(closedCoverModal)}
+                style={{ padding: "7px 14px", background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "0.8rem", cursor: "pointer" }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleAssignCover}
+                disabled={!coverReady}
+                style={{
+                  padding: "7px 16px",
+                  background: coverReady ? "#0369a1" : "#94a3b8",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: "6px",
+                  fontSize: "0.8rem",
+                  fontWeight: 700,
+                  cursor: coverReady ? "pointer" : "default",
+                }}
+              >
+                Save Access
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Decline Account Modal Dialog */}
       {declineModal.open && (

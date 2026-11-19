@@ -440,7 +440,7 @@ router.post("/applications", authenticate, async (req, res) => {
 
     // Notify managers in-app about new member booking
     try {
-      const managers = await Account.find({ role: "manager" }).select("email").lean();
+      const managers = await Account.find(Account.activeManagersFilter()).select("email").lean();
       if (managers.length > 0) {
         await Notification.insertMany(
           managers.map((m) => ({
@@ -1168,7 +1168,7 @@ router.delete("/applications/:id", authenticate, async (req, res) => {
       await saveVersioned(existing);
 
       // Notify managers
-      const managers = await Account.find({ role: "manager" }).select("email").lean();
+      const managers = await Account.find(Account.activeManagersFilter()).select("email").lean();
       if (managers.length > 0) {
         await Notification.insertMany(
           managers.map((m) => ({
@@ -1313,7 +1313,7 @@ router.post("/applications/:id/request-cancellation", authenticate, async (req, 
     });
 
     // Notify managers
-    const managers = await Account.find({ role: "manager" }).select("email").lean();
+    const managers = await Account.find(Account.activeManagersFilter()).select("email").lean();
     if (managers.length > 0) {
       await Notification.insertMany(
         managers.map((m) => ({

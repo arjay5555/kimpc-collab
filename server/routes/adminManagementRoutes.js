@@ -8,6 +8,7 @@ const authenticate = require("../middleware/authenticate");
 const AuditLog = require("../models/AuditLog");
 const { logAudit, deriveModule, deriveAffectedRecord } = require("../services/auditLogger");
 const { fail, clean, cleanEmail, requireAdmin } = require("./routeHelpers");
+const { sanitizePermissions } = require("../config/managerCoverAccess");
 
 const router = express.Router();
 
@@ -25,6 +26,79 @@ router.use(
 );
 
 const getAdminEmail = (req) => req.admin?.email || req.user?.email || cleanEmail(req.headers["x-admin-email"]) || "admin";
+
+// ============================================================================
+// 0. MANAGER COVER: let a member act as manager while the manager is on leave
+// ============================================================================
+
+router.put("/admin/accounts/:email/manager-cover", async (req, res) => {
+  try {
+    const targetEmail = cleanEmail(req.params.email);
+    const until = new Date(req.body?.until);
+    if (Number.isNaN(until.getTime()) || until <= new Date()) {
+      return fail(res, 400, "Choose an end date and time in the future.");
+    }
+    const permissions = sanitizePermissions(req.body?.permissions);
+    if (Object.keys(permissions).length === 0) {
+      return fail(res, 400, "Give access to at least one feature.");
+    }
+    const adminEmail = getAdminEmail(req);
+
+    const account = await Account.findOneAndUpdate(
+      { email: targetEmail, role: "member", isSuspended: false, isArchived: { $ne: true } },
+      {
+        $set: { managerCover: { until, permissions, assignedBy: adminEmail, assignedAt: new Date() } },
+        $inc: { version: 1 },
+      },
+      { new: true }
+    );
+    if (!account) return fail(res, 404, "Only active member accounts can be assigned manager access.");
+
+    await logAudit({
+      action: "MANAGER_COVER_ASSIGNED",
+      actorEmail: adminEmail,
+      actorRole: "admin",
+      targetEmail: account.email,
+      targetName: account.fullName,
+      targetRole: account.role,
+      details: `Administrator granted "${account.fullName}" (${account.email}) temporary manager access until ${until.toISOString()}: ${Object.entries(permissions).map(([f, l]) => `${f}=${l}`).join(", ")}.`,
+      req,
+    });
+    res.json({ ok: true, account });
+  } catch (error) {
+    console.error("Manager cover assign error:", error);
+    res.status(500).json({ error: "Failed to assign manager access." });
+  }
+});
+
+router.delete("/admin/accounts/:email/manager-cover", async (req, res) => {
+  try {
+    const targetEmail = cleanEmail(req.params.email);
+    const adminEmail = getAdminEmail(req);
+
+    const account = await Account.findOneAndUpdate(
+      { email: targetEmail, role: "member" },
+      { $set: { "managerCover.until": null }, $inc: { version: 1 } },
+      { new: true }
+    );
+    if (!account) return fail(res, 404, "Member account not found.");
+
+    await logAudit({
+      action: "MANAGER_COVER_REVOKED",
+      actorEmail: adminEmail,
+      actorRole: "admin",
+      targetEmail: account.email,
+      targetName: account.fullName,
+      targetRole: account.role,
+      details: `Administrator revoked temporary manager access for "${account.fullName}" (${account.email}).`,
+      req,
+    });
+    res.json({ ok: true, account });
+  } catch (error) {
+    console.error("Manager cover revoke error:", error);
+    res.status(500).json({ error: "Failed to revoke manager access." });
+  }
+});
 
 // ============================================================================
 // 1. ACCOUNT VERIFICATION & ACTIVATION MANAGEMENT

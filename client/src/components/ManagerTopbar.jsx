@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+import { getCoverPermissions, featureForPath, accessFor } from "../services/coverAccess";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../services/api";
 import ProfileDropdown from "./ProfileDropdown";
@@ -13,6 +14,10 @@ export default function ManagerTopbar({
   searchPlaceholder = "Search...",
 }) {
   const { user } = useAuth();
+  const { pathname } = useLocation();
+  const coverPerms = getCoverPermissions();
+  const pageFeature = featureForPath(pathname);
+  const isViewOnly = Boolean(coverPerms && pageFeature && accessFor(pageFeature, coverPerms) === "view");
 
   // Dropdowns / Modals
   const [profileOpen, setProfileOpen] = useState(false);
@@ -128,7 +133,17 @@ export default function ManagerTopbar({
       <header className="wz-topbar">
         {/* Title */}
         <div>
-          <h1 className="wz-topbar-title">{title}</h1>
+          <h1 className="wz-topbar-title">
+            {title}
+            {isViewOnly && (
+              <span
+                title="An administrator gave you view-only access to this page. Changes will be refused."
+                style={{ marginLeft: "8px", padding: "2px 8px", borderRadius: "10px", fontSize: "0.7rem", fontWeight: 700, background: "#fef3c7", color: "#92400e", verticalAlign: "middle" }}
+              >
+                View only
+              </span>
+            )}
+          </h1>
           {subtitle && (
             <p style={{ margin: "2px 0 0", fontSize: "0.8rem", color: "#64748b" }}>
               {subtitle}

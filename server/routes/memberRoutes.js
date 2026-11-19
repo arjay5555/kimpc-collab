@@ -376,7 +376,7 @@ router.post(["/member/support-request", "/member/messages"], async (req, res) =>
   });
 
   // Notify all managers in-app
-  const managers = await Account.find({ role: "manager" }).select("email").lean();
+  const managers = await Account.find(Account.activeManagersFilter()).select("email").lean();
   if (managers.length > 0) {
     await Notification.insertMany(
       managers.map((m) => ({

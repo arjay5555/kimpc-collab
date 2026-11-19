@@ -1,10 +1,12 @@
 import React from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { getDashboardForRole } from "../services/api";
+import { getCoverPermissions, featureForPath, accessFor, firstAllowedPath } from "../services/coverAccess";
 
 export default function ProtectedRoute({ children, allowedRoles }) {
   const { user, loading, isAuthenticated } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -20,6 +22,14 @@ export default function ProtectedRoute({ children, allowedRoles }) {
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
     return <Navigate to={getDashboardForRole(user.role)} replace />;
+  }
+
+  // Covering staff only reach the manager pages the admin granted them.
+  const perms = user.role === "manager" ? getCoverPermissions() : null;
+  const feature = perms ? featureForPath(location.pathname) : null;
+  if (feature && !accessFor(feature, perms)) {
+    const fallback = firstAllowedPath(perms);
+    if (fallback !== location.pathname) return <Navigate to={fallback} replace />;
   }
 
   return children;

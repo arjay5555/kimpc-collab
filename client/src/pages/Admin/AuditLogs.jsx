@@ -2,9 +2,16 @@ import React, { useState, useEffect, useMemo } from "react";
 import { api, getCachedApiData } from "../../services/api";
 import AdminSidebar from "../../components/AdminSidebar";
 import AdminTopbar from "../../components/AdminTopbar";
+import ManagerSidebar from "../../components/ManagerSidebar";
+import ManagerTopbar from "../../components/ManagerTopbar";
+import { useAuth } from "../../context/AuthContext";
 import "../../styles/admin-kimpc.css";
 
 export default function AuditLogs() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  const Sidebar = isAdmin ? AdminSidebar : ManagerSidebar;
+  const Topbar = isAdmin ? AdminTopbar : ManagerTopbar;
   const [logs, setLogs] = useState(() => {
     const cached = getCachedApiData("/admin/audit-logs?limit=500");
     return cached?.logs || (Array.isArray(cached) ? cached : []);
@@ -146,12 +153,12 @@ export default function AuditLogs() {
   return (
     <div className="wz-dashboard-container">
       {/* ================= Left Navigation Sidebar ================= */}
-      <AdminSidebar />
+      <Sidebar />
 
       {/* ================= Center Content Area ================= */}
       <main className="wz-content-wrapper">
         {/* Top Header Bar */}
-        <AdminTopbar
+        <Topbar
           title="System Audit Logs"
           subtitle="Complete chronological audit trail recording administrative actions, security modifications, and operational events."
           searchQuery={searchQuery}
@@ -353,8 +360,8 @@ export default function AuditLogs() {
                 </svg>
               </button>
 
-              {/* Purge Logs Button */}
-              <button
+              {/* Purge Logs Button (admins only; covering staff are view-only) */}
+              {isAdmin && <button
                 type="button"
                 onClick={handlePurgeLogs}
                 style={{
@@ -373,7 +380,7 @@ export default function AuditLogs() {
                 title="Purge all audit logs"
               >
                 <span>Purge</span>
-              </button>
+              </button>}
             </div>
           </div>
 

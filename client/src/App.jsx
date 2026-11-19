@@ -345,6 +345,15 @@ export default function App() {
           </ProtectedRoute>
         }
       />
+      {/* Read-only audit logs for staff covering for the manager */}
+      <Route
+        path="/manager/audit-logs"
+        element={
+          <ProtectedRoute allowedRoles={["manager"]}>
+            <AuditLogs />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/admin/integrations"
         element={

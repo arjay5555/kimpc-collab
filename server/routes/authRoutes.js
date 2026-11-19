@@ -1646,6 +1646,7 @@ router.post("/login", async (req, res) => {
 
   const rememberMe = Boolean(req.body.rememberMe);
   const responseData = account.toJSON ? account.toJSON() : (account.toObject ? account.toObject() : account);
+  responseData.role = Account.effectiveRole(account);
   responseData.token = generateUserToken(account, {}, { expiresIn: rememberMe ? "30d" : "8h" });
   responseData.rememberMe = rememberMe;
   res.json(responseData);
@@ -2097,6 +2098,7 @@ router.post("/auth/google", async (req, res) => {
     });
 
     const responseData = account.toJSON ? account.toJSON() : (account.toObject ? account.toObject() : account);
+    responseData.role = Account.effectiveRole(account);
     responseData.token = generateUserToken(account);
     res.json(responseData);
   } catch (error) {
@@ -2247,6 +2249,7 @@ router.post("/auth/facebook", async (req, res) => {
     });
 
     const responseData = account.toJSON ? account.toJSON() : (account.toObject ? account.toObject() : account);
+    responseData.role = Account.effectiveRole(account);
     responseData.token = generateUserToken(account);
     res.json(responseData);
   } catch (error) {
